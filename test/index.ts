@@ -141,6 +141,7 @@ import {
 import {
   testCollectEvidenceAgentCommands,
   testCollectEvidenceAgentDuplicatesAllowlist,
+  testCollectEvidenceAppScoped,
   testCollectEvidenceFailingCommand,
   testCollectEvidenceInvalidEntry,
   testCollectEvidenceNoConfig,
@@ -151,6 +152,11 @@ import {
   testReadEvidenceConfigInvalid,
   testReadEvidenceConfigMissing,
   testReadEvidenceConfigValid,
+  testResolveEvidencePathAppScoped,
+  testResolveEvidencePathCustomConfigWins,
+  testResolveEvidencePathEmptyFallsBackToRoot,
+  testResolveEvidencePathMissingAppFileFallsBackToRoot,
+  testResolveEvidencePathMixedFallsBackToRoot,
 } from "./mcp/evidence.test.js";
 import {
   testEndToEndPipeline,
@@ -246,10 +252,16 @@ import {
 import {
   testMemTemplateCentralCopyMovedIntoFapony,
   testMemTemplateConfigStillWins,
+  testMemTemplateInitAtMonorepoRoot,
+  testMemTemplateMonorepoLegacyLog,
   testMemTemplateMonorepoMigratedApp,
   testMemTemplateMonorepoUnmigratedApp,
+  testMemTemplatePackagesApp,
   testMemTemplateScaffolded,
   testMemTemplateScaffoldedIgnoresRootConfig,
+  testMemTemplateSingleRepoCentralDefaultsToFapony,
+  testMemTemplateSingleRepoLegacyLog,
+  testMemTemplateSingleRepoWithPackagesDir,
   testMemTemplateUnknownAppFails,
 } from "./memory-template.test.js";
 import {
@@ -457,10 +469,16 @@ export async function cmdTest(): Promise<void> {
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
   testMemTemplateMonorepoMigratedApp();
+  testMemTemplateMonorepoLegacyLog();
+  testMemTemplateSingleRepoCentralDefaultsToFapony();
+  testMemTemplateSingleRepoLegacyLog();
+  testMemTemplatePackagesApp();
+  testMemTemplateSingleRepoWithPackagesDir();
   testMemTemplateMonorepoUnmigratedApp();
   testMemTemplateConfigStillWins();
   testMemTemplateCentralCopyMovedIntoFapony();
   testMemTemplateScaffolded();
+  testMemTemplateInitAtMonorepoRoot();
   testMemTemplateScaffoldedIgnoresRootConfig();
   testMemTemplateUnknownAppFails();
   testClaimMemoryFailGracefully();
@@ -648,6 +666,12 @@ export async function cmdTest(): Promise<void> {
   testCollectEvidenceTimeout();
   testCollectEvidenceRefusesDangerousCommand();
   testCollectEvidenceInvalidEntry();
+  testResolveEvidencePathAppScoped();
+  testResolveEvidencePathMixedFallsBackToRoot();
+  testResolveEvidencePathEmptyFallsBackToRoot();
+  testResolveEvidencePathMissingAppFileFallsBackToRoot();
+  testResolveEvidencePathCustomConfigWins();
+  testCollectEvidenceAppScoped();
   // Verification report tool tests
   testVerificationReportMissingArgs();
   testVerificationReportRunNotFound();

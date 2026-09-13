@@ -14,7 +14,7 @@
 
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { type Config, evidenceFile, safetyDeny } from "../db/index.js";
 import { assertSafe } from "../safety.js";
 import type { EvidenceItem, EvidenceStatus } from "./primitives.js";
@@ -37,13 +37,62 @@ const TOTAL_TIMEOUT_MS = 180_000;
 const VERIFIED_PROVENANCE = { verified: true, source: "fapony_cli" } as const;
 const AGENT_PROVENANCE = { verified: false, source: "agent_report" } as const;
 
+// --- App-scoped resolution ---
+
+// Monorepo group dirs — same order as templates/mem/store.ts (first hit wins there;
+// here every file must already agree on one group+app, so order never matters).
+const APP_GROUPS = ["apps", "packages", "services"];
+
+function relOf(worktree: string, f: string): string {
+  const r = f.startsWith(`${worktree}/`) ? relative(worktree, f) : f;
+  return r.replace(/^\.\//, "").replace(/\\/g, "/");
+}
+
+/**
+ * Which evidence.json applies to this report — pure over (worktree, files).
+ *
+ * No new fields: the app is inferred from changed files already present in
+ * the report facts (precedent: activeSession.ts infers model from spans
+ * instead of asking the caller). Every file must sit under the same
+ * <group>/<app>/ and that app must have its own .fapony/evidence.json —
+ * otherwise (mixed apps, no files[], missing file) the root allowlist
+ * applies, exactly the old behavior. A declared paths.evidenceFile always
+ * wins: config beats guessing.
+ */
+export function resolveEvidencePath(
+  worktree: string,
+  files: string[] = [],
+  config?: Config,
+): string {
+  if (config?.paths?.evidenceFile)
+    return join(worktree, config.paths.evidenceFile);
+  const rels = files
+    .filter((f) => typeof f === "string" && f.trim())
+    .map((f) => relOf(worktree, f));
+  if (rels.length > 0) {
+    const heads = rels.map((r) => r.split("/"));
+    const [group, app] = heads[0];
+    if (
+      group &&
+      app &&
+      APP_GROUPS.includes(group) &&
+      heads.every(([g, a]) => g === group && a === app)
+    ) {
+      const candidate = join(worktree, group, app, ".fapony", "evidence.json");
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return join(worktree, evidenceFile(config));
+}
+
 // --- Allowlist reader ---
 
 export function readEvidenceConfig(
   worktree: string,
   config?: Config,
+  files: string[] = [],
 ): EvidenceConfig | null {
-  const configPath = join(worktree, evidenceFile(config));
+  const configPath = resolveEvidencePath(worktree, files, config);
   if (!existsSync(configPath)) return null;
 
   try {
@@ -148,6 +197,8 @@ export interface CollectOptions {
   worktree: string;
   /** Agent-proposed commands — recorded as unverified, never executed. */
   agentCommands?: string[];
+  /** Changed files (repo-relative) — infers the app-scoped allowlist. */
+  files?: string[];
   /** Config for safetyDeny(); omit for built-in defaults. */
   config?: Config;
 }
@@ -162,12 +213,15 @@ export interface CollectOptions {
  * as note (surfaced, never silent, never crashing the report).
  */
 export function collectEvidence(options: CollectOptions): EvidenceItem[] {
-  const { worktree, agentCommands, config } = options;
+  const { worktree, agentCommands, files, config } = options;
   const items: EvidenceItem[] = [];
 
   const deny = safetyDeny(config);
-  const evidencePath = evidenceFile(config);
-  const evidenceConfig = readEvidenceConfig(worktree, config);
+  const evidencePath = relative(
+    worktree,
+    resolveEvidencePath(worktree, files ?? [], config),
+  );
+  const evidenceConfig = readEvidenceConfig(worktree, config, files ?? []);
   const totalStart = Date.now();
 
   const totalTimeoutItem = (

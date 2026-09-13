@@ -2,7 +2,8 @@
 
 // append-only memory log. ห้ามแก้บรรทัดเก่า — ปิดงาน = close (tombstone), git = ประวัติ
 // log อยู่ข้างไฟล์นี้เสมอเมื่อถูกวางโดย `fapony init` (<project>/.fapony/.memory/log.jsonl);
-// สำเนากลางใน monorepo (โค้ดชุดเดียวที่ root) ยังแยก log ราย app: apps/<app>/.memory/log.jsonl
+// สำเนากลางใน monorepo (โค้ดชุดเดียวที่ root) ยังแยก log ราย app: apps/<app>/.fapony/.memory/log.jsonl
+// (repo ที่ยังไม่ย้ายซึ่งมี log เก่าที่ apps/<app>/.memory/log.jsonl จะอ่านที่เดิมต่อ)
 //
 // CLI entry point — all logic lives in:
 //   store.ts       (types + config + rows/put)

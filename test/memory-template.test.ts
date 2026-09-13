@@ -70,6 +70,8 @@ export function testMemTemplateMonorepoMigratedApp(): void {
   withFixture(
     (repo) => {
       mkdirSync(join(repo, "apps/vela/.fapony/plan"), { recursive: true });
+      // โฟลเดอร์ .memory ว่างเปล่า (ไม่มี log.jsonl) ต้องไม่ล็อกไว้กับ layout เก่า —
+      // fallback เช็ค log.jsonl ไม่ใช่ dir
       mkdirSync(join(repo, "apps/vela/.memory"), { recursive: true });
       centralCopy(repo, {});
     },
@@ -77,10 +79,95 @@ export function testMemTemplateMonorepoMigratedApp(): void {
       const p = resolve(repo, join(repo, ".memory"), "vela");
       assert.equal(p.plan, join(repo, "apps/vela/.fapony/plan"));
       assert.equal(p.done, join(repo, "apps/vela/.fapony/done"));
-      assert.equal(p.dir, join(repo, "apps/vela/.memory"));
+      assert.equal(p.dir, join(repo, "apps/vela/.fapony/.memory"));
     },
   );
   console.log("  ✓ memory template → app migrated into .fapony/ uses it");
+}
+
+// Repo ที่ยังไม่ย้าย (มี log เก่าอยู่จริง) ต้องอ่าน/เขียนที่เดิมต่อ — ไม่สร้าง log ใหม่เงียบๆ
+export function testMemTemplateMonorepoLegacyLog(): void {
+  withFixture(
+    (repo) => {
+      mkdirSync(join(repo, "apps/vela/.fapony/plan"), { recursive: true });
+      mkdirSync(join(repo, "apps/vela/.memory"), { recursive: true });
+      writeFileSync(join(repo, "apps/vela/.memory/log.jsonl"), "");
+      centralCopy(repo, {});
+    },
+    (repo) => {
+      const p = resolve(repo, join(repo, ".memory"), "vela");
+      assert.equal(p.dir, join(repo, "apps/vela/.memory"));
+    },
+  );
+  console.log(
+    "  ✓ memory template → monorepo with legacy log.jsonl keeps .memory/",
+  );
+}
+
+// Repo เดี่ยว: สำเนากลางที่ .memory/ เดิมซึ่งยังไม่มี log ต้องชี้ไป .fapony/.memory ที่เป็น default ใหม่
+export function testMemTemplateSingleRepoCentralDefaultsToFapony(): void {
+  withFixture(
+    (repo) => {
+      centralCopy(repo);
+    },
+    (repo) => {
+      const p = resolve(repo, join(repo, ".memory"));
+      assert.equal(p.dir, join(repo, ".fapony/.memory"));
+    },
+  );
+  console.log(
+    "  ✓ memory template → single-repo central copy without legacy log uses .fapony/.memory",
+  );
+}
+
+// Repo เดี่ยว legacy: มี log เก่าที่ .memory/ ต้องเขียนที่เดิมต่อ
+export function testMemTemplateSingleRepoLegacyLog(): void {
+  withFixture(
+    (repo) => {
+      const memDir = centralCopy(repo);
+      writeFileSync(join(memDir, "log.jsonl"), "");
+    },
+    (repo) => {
+      const p = resolve(repo, join(repo, ".memory"));
+      assert.equal(p.dir, join(repo, ".memory"));
+    },
+  );
+  console.log(
+    "  ✓ memory template → single repo with legacy log.jsonl keeps .memory/",
+  );
+}
+
+// Monorepo ที่วาง app ใต้ packages/ (ไม่ใช่ apps/) ต้อง resolve ไป packages/<app>/.fapony/…
+export function testMemTemplatePackagesApp(): void {
+  withFixture(
+    (repo) => {
+      mkdirSync(join(repo, "packages/shop/.fapony/plan"), { recursive: true });
+      centralCopy(repo, {});
+    },
+    (repo) => {
+      const p = resolve(repo, join(repo, ".memory"), "shop");
+      assert.equal(p.dir, join(repo, "packages/shop/.fapony/.memory"));
+      assert.equal(p.plan, join(repo, "packages/shop/.fapony/plan"));
+    },
+  );
+  console.log("  ✓ memory template → app under packages/ resolves into it");
+}
+
+// Repo เดี่ยวที่มี packages/ (ไลบรารี ไม่ใช่ app) ต้องใช้ root เหมือนเดิม ไม่ error
+export function testMemTemplateSingleRepoWithPackagesDir(): void {
+  withFixture(
+    (repo) => {
+      mkdirSync(join(repo, "packages/utils"), { recursive: true });
+      centralCopy(repo);
+    },
+    (repo) => {
+      const p = resolve(repo, join(repo, ".memory"));
+      assert.equal(p.dir, join(repo, ".fapony/.memory"));
+    },
+  );
+  console.log(
+    "  ✓ memory template → single repo with a packages/ dir still uses the root",
+  );
 }
 
 // The regression this guards: paths.planDir is single-valued, so declaring it for one app
@@ -134,7 +221,7 @@ export function testMemTemplateCentralCopyMovedIntoFapony(): void {
     },
     (repo) => {
       const p = resolve(repo, join(repo, ".fapony/.memory"), "vela");
-      assert.equal(p.dir, join(repo, "apps/vela/.memory"));
+      assert.equal(p.dir, join(repo, "apps/vela/.fapony/.memory"));
       assert.equal(p.plan, join(repo, "apps/vela/.fapony/plan"));
     },
   );
@@ -198,4 +285,25 @@ export function testMemTemplateUnknownAppFails(): void {
     },
   );
   console.log("  ✓ memory template → unknown app exits instead of guessing");
+}
+
+// `fapony init <monorepo root>` วางสำเนาไว้ที่ root เหมือนสำเนากลางเป๊ะ ๆ — ต่างกันแค่เดา app
+// ไม่ได้ ถ้าเงื่อนไข central ดูแค่ว่ามี apps/ ไหม สำเนานี้จะถูกตัดสินว่าไม่ scaffolded แล้วตายที่
+// guard `unknown app` ตั้งแต่คำสั่งแรก ทั้งที่ plan ของมันอยู่ข้าง ๆ
+export function testMemTemplateInitAtMonorepoRoot(): void {
+  withFixture(
+    (repo) => {
+      mkdirSync(join(repo, "apps/vela"), { recursive: true });
+      cpSync(TEMPLATE, join(repo, ".fapony/.memory"), { recursive: true });
+      mkdirSync(join(repo, ".fapony/plan"), { recursive: true });
+    },
+    (repo) => {
+      const p = resolve(repo, join(repo, ".fapony/.memory"));
+      assert.equal(p.dir, join(repo, ".fapony/.memory"));
+      assert.equal(p.plan, join(repo, ".fapony/plan"));
+    },
+  );
+  console.log(
+    "  ✓ memory template → `fapony init` at a monorepo root stays self-relative",
+  );
 }

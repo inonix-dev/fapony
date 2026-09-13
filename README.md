@@ -88,6 +88,12 @@ fapony install --platform codex           # adds fapony to Codex (edits ~/.codex
 fapony init /path/to/your-worktree
 #    .fapony/evidence.json lists the commands the evidence collector may run —
 #    edit the placeholder cmds to your real test/typecheck commands
+#    commit it: the allowlist is a security boundary your whole team shares.
+#    If your .gitignore ignores .fapony/ wholesale, re-include it (dir before file):
+#      **/.fapony/*
+#      !**/.fapony/evidence.json
+#    Monorepo: give an app its own apps/<app>/.fapony/evidence.json and reports whose
+#    changed files all sit under that app use it; anything else uses the root one.
 ```
 
 With `.fapony/evidence.json` in place, ask your agent to verify its own work:

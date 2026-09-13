@@ -207,6 +207,7 @@ export function toolVerificationReport(
     ? collectEvidence({
         worktree: resolvedWorktree,
         agentCommands: agentCmds,
+        files: facts.files ?? [],
         config: loadConfig(),
       })
     : [];
