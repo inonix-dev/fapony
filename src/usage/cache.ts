@@ -40,6 +40,13 @@ export interface CacheEntry {
     tokens_cache_write: number;
     cost: number;
   }[];
+  /**
+   * Why this client's row is empty, when it is. Absent on a healthy scan.
+   *
+   * Carried so usage-web can tell "this client was never used" apart from
+   * "this client's log could not be read" — both are zero rows otherwise.
+   */
+  error?: string;
 }
 
 export interface CacheMeta {

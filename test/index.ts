@@ -257,6 +257,7 @@ import {
   testMemTemplateMonorepoMigratedApp,
   testMemTemplateMonorepoUnmigratedApp,
   testMemTemplatePackagesApp,
+  testMemTemplatePerAgentLogs,
   testMemTemplateScaffolded,
   testMemTemplateScaffoldedIgnoresRootConfig,
   testMemTemplateSingleRepoCentralDefaultsToFapony,
@@ -278,6 +279,7 @@ import {
 } from "./report-html.test.js";
 import { testAssertSafe } from "./safety.test.js";
 import {
+  testBeginSnapshotOnlyUnderWal,
   testMergeBytesByToolSumsAcrossClients,
   testReadClaudeCodeUsageFilterByWorktree,
   testReadClaudeCodeUsageNoDir,
@@ -298,6 +300,7 @@ import {
   testSessionDetailMatchesRawSql,
   testSessionDetailSkipsUnknownType,
   testSessionDetailStepTokensNotSummed,
+  testSessionReadFailureReportsErrorCode,
   testSessionWorktreeScopeUsesSessionDirectory,
 } from "./session.test.js";
 import {
@@ -407,6 +410,7 @@ import {
   testRenderHtmlModelNames,
   testRenderHtmlNoData,
   testRenderHtmlNoPollInterval,
+  testRenderHtmlReadErrorBadge,
   testRenderHtmlShareSection,
   testRenderHtmlStructure,
   testRenderHtmlSummaryCards,
@@ -479,6 +483,7 @@ export async function cmdTest(): Promise<void> {
   testMemTemplateCentralCopyMovedIntoFapony();
   testMemTemplateScaffolded();
   testMemTemplateInitAtMonorepoRoot();
+  testMemTemplatePerAgentLogs();
   testMemTemplateScaffoldedIgnoresRootConfig();
   testMemTemplateUnknownAppFails();
   testClaimMemoryFailGracefully();
@@ -713,6 +718,8 @@ export async function cmdTest(): Promise<void> {
   testSessionDetailStepTokensNotSummed();
   testSessionDetailMatchesRawSql();
   testMergeBytesByToolSumsAcrossClients();
+  testSessionReadFailureReportsErrorCode();
+  testBeginSnapshotOnlyUnderWal();
   testReadZcodeUsageNoDb();
   testReadZcodeUsagePrimaryPath();
   testReadZcodeUsageDetail();
@@ -774,6 +781,7 @@ export async function cmdTest(): Promise<void> {
   testRenderHtmlModelNames();
   testRenderHtmlTokenValues();
   testRenderHtmlNoData();
+  testRenderHtmlReadErrorBadge();
   testRenderHtmlSummaryCards();
   testRenderHtmlCostWide();
   testRenderHtmlFreshnessBar();

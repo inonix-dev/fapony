@@ -307,3 +307,59 @@ export function testMemTemplateInitAtMonorepoRoot(): void {
     "  ✓ memory template → `fapony init` at a monorepo root stays self-relative",
   );
 }
+
+// แยกไฟล์ต่อคนเพื่อไม่ให้ merge ชน แต่ต้องอ่านกลับมาเป็น log เดียว เรียงตาม ts —
+// และต้องไม่ดูด log.YYYY-MM-DD.jsonl ที่ rotate เพิ่งย้ายออกไปกลับเข้ามา ไม่งั้น rotate ไม่ลดอะไรเลย
+export function testMemTemplatePerAgentLogs(): void {
+  withFixture(
+    (repo) => {
+      cpSync(TEMPLATE, join(repo, ".fapony/.memory"), { recursive: true });
+      const d = join(repo, ".fapony/.memory");
+      const row = (ts: string, id: string, text: string) =>
+        `${JSON.stringify({ ts, agent: "x", id, kind: "note", text })}\n`;
+      writeFileSync(
+        join(d, "log.jsonl"),
+        row("2026-01-02T00:00:00Z", "b", "เก่า"),
+      );
+      writeFileSync(
+        join(d, "log.somchai.jsonl"),
+        row("2026-01-03T00:00:00Z", "c", "somchai"),
+      );
+      writeFileSync(
+        join(d, "log.claude-code.jsonl"),
+        row("2026-01-01T00:00:00Z", "a", "claude"),
+      );
+      writeFileSync(
+        join(d, "log.2026-01-09.jsonl"),
+        row("2026-01-09T00:00:00Z", "z", "archive"),
+      );
+    },
+    (repo) => {
+      const out = execSync(
+        `bun -e 'const s = await import(process.env.S); console.log(JSON.stringify({ids: s.rows().map((r) => r.id), log: s.LOG}))'`,
+        {
+          cwd: repo,
+          env: {
+            ...process.env,
+            S: join(repo, ".fapony/.memory/store.ts"),
+            MEM_AGENT: "som chai/2",
+          },
+          encoding: "utf8",
+        },
+      );
+      const got = JSON.parse(out.trim().split("\n").at(-1) as string) as {
+        ids: string[];
+        log: string;
+      };
+      assert.deepEqual(
+        got.ids,
+        ["a", "b", "c"],
+        "รวมทุกไฟล์ เรียงตาม ts และข้าม archive",
+      );
+      assert.equal(got.log, join(repo, ".fapony/.memory/log.som-chai-2.jsonl"));
+    },
+  );
+  console.log(
+    "  ✓ memory template → per-agent logs merge on read, archives stay out",
+  );
+}

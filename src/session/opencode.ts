@@ -8,7 +8,9 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+  beginSnapshot,
   buildWhereClause,
+  endSnapshot,
   readDetailFromDb,
   readTimingFromDb,
 } from "./helpers.js";
@@ -48,9 +50,11 @@ export function readPassiveUsage(
   }
 
   let db: Database | null = null;
+  let snapshot = false;
   try {
     db = new Database(dbPath, { readonly: true });
     db.run("PRAGMA query_only = ON");
+    snapshot = beginSnapshot(db);
 
     // OpenCode's `project.worktree` is the repo ROOT, so a git worktree under it
     // (…/fapony/wt-fapony) never matches and every per-project query came back
@@ -146,15 +150,18 @@ export function readPassiveUsage(
         });
       } catch {
         // Timing is additive signal — a part-table shape mismatch must
-        // never break totals/detail that already succeeded.
+        // never break totals/detail that already succeeded. Say so instead of
+        // letting a silent null read as "this client records no timing".
         result.detail.timing = null;
+        result.error = "opencode_timing_read_failed";
       }
     }
 
     return result;
   } catch {
-    return EMPTY_RESULT;
+    return { ...EMPTY_RESULT, error: "opencode_read_failed" };
   } finally {
+    if (db) endSnapshot(db, snapshot);
     db?.close();
   }
 }

@@ -50,7 +50,15 @@ function toCacheEntry(
       tokens_cache_write: m.tokens_cache_write,
       cost: m.cost,
     })),
+    ...(result.error ? { error: result.error } : {}),
   };
+}
+
+/** Surface a per-client problem without aborting the scan of the others. */
+function warn(scope: string, detail: string, isTTY: boolean): void {
+  process.stderr.write(
+    isTTY ? `\n  ⚠ ${scope}: ${detail}\n` : `  warn: ${scope}: ${detail}\n`,
+  );
 }
 
 function progress(msg: string, isTTY: boolean): void {
@@ -140,15 +148,17 @@ export function cmdUsageScan(rawArgs: string[]): void {
 
       try {
         const result = scanFn();
-        if (result.session_count > 0) {
+        // A failed read returns zeros WITH a code — the same shape as "no
+        // sessions", so it gets dropped below and would otherwise leave the
+        // cache silently short one client. Say it out loud instead.
+        if (result.error) warn(scopeLabel, result.error, isTTY);
+        // A broken client is cached too, precisely because it has no sessions
+        // to speak for it — otherwise it just vanishes from usage-web.
+        if (result.session_count > 0 || result.error) {
           entries.push(toCacheEntry(clientKey, result, wt));
         }
       } catch (err) {
-        if (isTTY) {
-          process.stderr.write(`\n  ⚠ ${scopeLabel}: ${err}\n`);
-        } else {
-          process.stderr.write(`  warn: ${scopeLabel}: ${err}\n`);
-        }
+        warn(scopeLabel, String(err), isTTY);
       }
     }
   }

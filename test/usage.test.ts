@@ -337,3 +337,20 @@ export function testRenderHtmlShareSection(): void {
   assert.ok(html.includes("share-legend"), "share legend present");
   console.log("  ✓ renderUsageHtml → context share section present");
 }
+
+export function testRenderHtmlReadErrorBadge(): void {
+  // Zero sessions because the log could not be read — must NOT look the same
+  // as a client nobody used.
+  const broken = { ...EMPTY_RESULT, error: "opencode_read_failed" };
+  const html = renderGlobal(broken);
+  assert.ok(html.includes("could not read"), "badge text present");
+  assert.ok(html.includes("opencode_read_failed"), "shows the code");
+  assert.ok(html.includes("read-error"), "badge is styled, not bare text");
+
+  // A healthy-but-unused client stays clean.
+  const quiet = renderGlobal(EMPTY_RESULT);
+  assert.ok(!quiet.includes("could not read"), "no badge without an error");
+  console.log(
+    "  ✓ renderUsageHtml → flags a client whose log could not be read",
+  );
+}

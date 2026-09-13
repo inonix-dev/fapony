@@ -9,7 +9,9 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+  beginSnapshot,
   buildWhereClause,
+  endSnapshot,
   readDetailFromDb,
   readTimingFromDb,
 } from "./helpers.js";
@@ -40,9 +42,11 @@ export function readZcodeUsage(
   if (!existsSync(dbPath)) return EMPTY_RESULT;
 
   let db: Database | null = null;
+  let snapshot = false;
   try {
     db = new Database(dbPath, { readonly: true });
     db.run("PRAGMA query_only = ON");
+    snapshot = beginSnapshot(db);
 
     const filter = buildWhereClause("s.directory", worktree, since, until);
 
@@ -130,15 +134,18 @@ export function readZcodeUsage(
           limit: full ? false : undefined,
         });
       } catch {
-        // Timing is additive signal — never break totals/detail.
+        // Timing is additive signal — never break totals/detail. The code
+        // distinguishes "ZCode records no timing" from "we could not read it".
         result.detail.timing = null;
+        result.error = "zcode_timing_read_failed";
       }
     }
 
     return result;
   } catch {
-    return EMPTY_RESULT;
+    return { ...EMPTY_RESULT, error: "zcode_read_failed" };
   } finally {
+    if (db) endSnapshot(db, snapshot);
     db?.close();
   }
 }

@@ -187,6 +187,15 @@ function totalsRow(data: PassiveUsageResult | null): string {
     </tr>`;
 }
 
+/**
+ * Badge for a client whose log could not be read. Without it the row is zeros,
+ * which reads as "never used" — the wrong conclusion, and an invisible one.
+ */
+function errorBadge(data: PassiveUsageResult | null): string {
+  if (!data?.error) return "";
+  return ` <span class="read-error" title="fapony could not read this client's session log \u2014 usually schema drift after a client update">could not read: ${esc(data.error)}</span>`;
+}
+
 function clientTable(
   id: string,
   name: string,
@@ -194,7 +203,7 @@ function clientTable(
   data: PassiveUsageResult | null,
 ): string {
   return `
-<h2 style="color:${color}">${name} <span class="sample">(${data?.session_count ?? 0} sessions)</span></h2>
+<h2 style="color:${color}">${name} <span class="sample">(${data?.session_count ?? 0} sessions)</span>${errorBadge(data)}</h2>
 <table id="${id}">
   <thead>
     <tr>
@@ -318,7 +327,15 @@ export function renderUsageHtml(
     const pCx = calcMetrics(data.codex);
     const totalSessions =
       pOc.sessions + pZc.sessions + pCc.sessions + pCx.sessions;
-    if (totalSessions === 0 && !isGlobal) return "";
+    // A project with no sessions is noise — unless the reason it has none is
+    // that every client failed to read, which is exactly what must be shown.
+    const anyError = [
+      data.opencode,
+      data.zcode,
+      data.claude_code,
+      data.codex,
+    ].some((d) => d?.error);
+    if (totalSessions === 0 && !isGlobal && !anyError) return "";
 
     const heading = isGlobal ? "All projects" : shortWt(label);
 
@@ -409,6 +426,7 @@ ${clientTable(`t-cx-${label}`, "Codex", "var(--accent)", data.codex)}`;
   .bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 0.15rem; overflow: hidden; }
   .bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
   .share-section { margin-bottom: 1.5rem; }
+  .read-error { font-size: 0.7rem; font-weight: 600; color: var(--red); border: 1px solid var(--red); border-radius: 4px; padding: 0.1rem 0.4rem; vertical-align: middle; }
   .share-title { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.4rem; }
   .share-bar { display: flex; height: 20px; border-radius: 4px; overflow: hidden; background: var(--border); }
   .share-seg { height: 100%; transition: width 0.3s; min-width: 1px; }
