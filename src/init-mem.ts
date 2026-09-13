@@ -1,5 +1,7 @@
 // src/init-mem.ts — scaffold the canonical .memory/ system into a new worktree.
-// Source of truth lives in fapony/templates/memory/.
+// Source of truth lives in fapony/templates/mem/ — named after the CLI it implements
+// (`mem`), not after where it lands; the destination keeps the .memory name because that
+// is where the log lives.
 // Destination is <worktree>/.fapony/.memory/ (plans/specs/memory all live under
 // .fapony/; run state stays in ~/.config/fapony/state.db, never in the worktree).
 // Re-run to re-sync after editing the template — not automatic, on purpose.
@@ -39,7 +41,7 @@ export function cmdInitMem(args: string[]): void {
     process.exit(1);
   }
 
-  const templateDir = join(import.meta.dir, "..", "templates", "memory");
+  const templateDir = join(import.meta.dir, "..", "templates", "mem");
   const memEntry = memoryEntry(config);
   const destDir = join(worktree, dirname(memEntry));
   const destFile = join(worktree, memEntry);

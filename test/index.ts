@@ -244,6 +244,7 @@ import {
   testMemoryExplicitConfigWins,
 } from "./memory.test.js";
 import {
+  testMemTemplateCentralCopyMovedIntoFapony,
   testMemTemplateConfigStillWins,
   testMemTemplateMonorepoMigratedApp,
   testMemTemplateMonorepoUnmigratedApp,
@@ -458,6 +459,7 @@ export async function cmdTest(): Promise<void> {
   testMemTemplateMonorepoMigratedApp();
   testMemTemplateMonorepoUnmigratedApp();
   testMemTemplateConfigStillWins();
+  testMemTemplateCentralCopyMovedIntoFapony();
   testMemTemplateScaffolded();
   testMemTemplateScaffoldedIgnoresRootConfig();
   testMemTemplateUnknownAppFails();

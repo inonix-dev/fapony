@@ -95,7 +95,7 @@ export function initProject(targetPath: string, config?: Config): void {
       `${join(targetPath, memEntry)} already exists — delete it first if you want a fresh copy.`,
     );
   }
-  const templateDir = join(import.meta.dir, "..", "templates", "memory");
+  const templateDir = join(import.meta.dir, "..", "templates", "mem");
   const files = copyDir(templateDir, memoryDir);
 
   console.log(`scaffolded ${targetPath}/`);

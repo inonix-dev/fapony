@@ -59,25 +59,27 @@ const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"])
 const app = process.env.MEM_APP ?? basename(root).replace(/^wt-/, "");
 const monorepo = existsSync(`${root}/apps/${app}`);
 
+// สำเนาที่ `fapony init` วางไว้ อยู่ใน <project>/.fapony/.memory/ — log กับ plan ของมัน
+// ต้องอิงโฟลเดอร์ตัวเอง ไม่ใช่ git root: เคสที่พังจริงคือ apps/<x>/.fapony/.memory/ ใน monorepo
+// ซึ่ง heuristic ด้านล่างจะชี้ไป apps/<ชื่อ worktree>/.memory = เขียน log ปนโปรเจกต์อื่น
+// แต่สำเนากลางที่ย้ายเข้า .fapony/.memory ที่ root ของ monorepo เอง (โค้ดชุดเดียว, log แยกราย
+// app — เช่น vela) ต้อง "ไม่" ถือเป็น scaffolded แม้ path จะแมตช์เหมือนกัน เพราะยังต้องเดา app
+// จาก monorepo อยู่ — เงื่อนไขนี้เกิดเฉพาะตอนอยู่ *ตรง* root/.fapony/.memory ในโปรเจกต์ที่มี apps/
+// จริง (repo เดี่ยวที่ไม่มี apps/ เลย ยังถือว่า scaffolded ตามเดิม อิงโฟลเดอร์ตัวเอง)
+const centralAtMonorepoRoot =
+  import.meta.dir === `${root}/.fapony/.memory` && existsSync(`${root}/apps`);
+const scaffolded =
+  import.meta.dir.includes("/.fapony/.memory") && !centralAtMonorepoRoot;
+
 // มี apps/ แต่ไม่มี apps/<app> = เดา app ผิด (worktree ชื่อไม่ตรง / typo ใน MEM_APP) — ตายตรงนี้
 // ดีกว่า fallback เงียบ ๆ ไปเขียน log ที่ root ซึ่งจะกลายเป็น log กำพร้าที่ไม่มีใครอ่าน
-// (สำเนาที่ scaffold ไว้ใน .fapony/.memory/ อิงโฟลเดอร์ตัวเอง ไม่ต้องเดา จึงไม่เข้าเงื่อนไขนี้)
-if (
-  !import.meta.dir.includes("/.fapony/.memory") &&
-  !monorepo &&
-  existsSync(`${root}/apps`)
-) {
+// (สำเนาที่ scaffold ไว้ใต้ apps/<x>/.fapony/.memory/ อิงโฟลเดอร์ตัวเอง ไม่ต้องเดา จึงไม่เข้าเงื่อนไขนี้)
+if (!scaffolded && !monorepo && existsSync(`${root}/apps`)) {
   console.error(
     `unknown app (guessed "${app}" from ${basename(root)}) — pass MEM_APP=<app>`,
   );
   process.exit(1);
 }
-
-// สำเนาที่ `fapony init` วางไว้ อยู่ใน <project>/.fapony/.memory/ — log กับ plan ของมัน
-// ต้องอิงโฟลเดอร์ตัวเอง ไม่ใช่ git root: เคสที่พังจริงคือ apps/<x>/.fapony/.memory/ ใน monorepo
-// ซึ่ง heuristic ด้านบนจะชี้ไป apps/<ชื่อ worktree>/.memory = เขียน log ปนโปรเจกต์อื่น
-// (สำเนากลางแบบ vela — โค้ดชุดเดียวที่ root, log แยกราย app — ไม่เข้าเงื่อนไขนี้ ใช้ทางเดิม)
-const scaffolded = import.meta.dir.includes("/.fapony/.memory");
 const dir = scaffolded
   ? import.meta.dir
   : monorepo
