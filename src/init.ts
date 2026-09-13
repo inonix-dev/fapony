@@ -49,6 +49,32 @@ const EVIDENCE_JSON = `{
 }
 `;
 
+// Rules snippet for the user's own agent-rules file. Printed, never written:
+// nothing writes log.<person>.jsonl on its own — an agent does, because the rules
+// file it already reads says to. That file is the user's (CLAUDE.md / AGENTS.md /
+// opencode.json instructions), so fapony hands over the text and stays out of it.
+// Not in SERVER_INSTRUCTIONS either: that reaches every MCP session of every user,
+// and most of them never ran `fapony init` — it would tell them to run a command
+// that does not exist.
+const RULES_SNIPPET = (
+  memEntry: string,
+) => `## Memory: ${dirname(memEntry)}/log.<you>.jsonl (append-only)
+
+The log is this project's shared brain — it lives in git, so anyone who clones the
+repo gets every decision, bug and note with it. The filename comes from
+\`git config user.name\`, one file per person, so there is nothing to merge.
+
+Log as you work — do not wait to be asked. Nothing writes it for you:
+
+    bun ${memEntry} kickoff <plan.md>      # start a session with this
+    bun ${memEntry} add decision "what was locked, and why"
+    bun ${memEntry} add bug "what is broken"
+    bun ${memEntry} add note "state the next session needs"
+    bun ${memEntry} close <id> "fixed in <sha>"
+    bun ${memEntry} find "<text>"
+
+Write each entry standalone — it is read months later with no chat to refer to.`;
+
 export function initProject(targetPath: string, config?: Config): void {
   // Create target root
   mkdirSync(targetPath, { recursive: true });
@@ -120,6 +146,10 @@ export function initProject(targetPath: string, config?: Config): void {
     `  ${relative(targetPath, memoryDir)}/ — ${files.length} files from template`,
   );
   console.log(`\nNext: add "${targetPath}" to fapony.config.json worktrees`);
+  console.log(
+    `\nThen paste this into your agent-rules file (CLAUDE.md / AGENTS.md / opencode.json\ninstructions) — the memory log only fills up if the rules your agent already reads\ntell it to write:\n`,
+  );
+  console.log(RULES_SNIPPET(memEntry));
 }
 
 export function cmdInit(args: string[]): void {
