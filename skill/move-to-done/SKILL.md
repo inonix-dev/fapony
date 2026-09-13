@@ -15,9 +15,27 @@ You are about to move a PLAN that has been shipped to the archive.
 1. **PLAN must have shipped header** — regex: `^> ✅ \*\*.*shipped.*\*\*$`
    If missing, add it yourself, don't ask — invoking this skill *is* the ship claim (the user
    has already verified the work landed; this step is paperwork). Replace the plan's
-   status/header line with `> ✅ **shipped** (<hash>)`, `<hash>` = `git rev-parse --short HEAD`.
+   status/header line with `> ✅ **shipped <YYYY-MM-DD>** (<hash>)` — today's date plus
+   `git rev-parse --short HEAD`. The date is load-bearing: step 4 names the archived file after it.
    Say in the summary that you stamped it, so a wrong HEAD is visible and correctable.
    STOP only if there's no git repo / no commits to hash from.
+
+1b. **A plan can also leave `plan/` without shipping** — it got absorbed into another plan, or the
+   redesign deleted the thing it planned. That is normal during a UI/UX sweep and is the main
+   reason `plan/` grows forever: there is no state for "dead" so it just sits there. Archive it
+   the same way, with two differences — header `> ⛔ **superseded by [PLAN-bar.md](PLAN-bar.md)**
+   (<date>)` instead of the shipped header, and frontmatter on the successor's side left alone
+   while this file gets:
+   ```yaml
+   status: superseded
+   superseded_by: PLAN-bar.md
+   ```
+   Then skip step 7 — no work shipped, so there is no verdict to record. Never archive a plan as
+   superseded on your own reading; the user says which plan replaced it.
+
+   A plan that is merely *waiting* (on a person, a customer, a decision) is **not** dead and does
+   not move — mark it `status: blocked` + `blocked_by: <what you are waiting for>` and leave it in
+   `plan/`, where `plan_list` will report it as blocked instead of as backlog.
 
 2. **Rewrite relative links first** — `.fapony/plan/done/` is 1 level deeper than `.fapony/plan/`
    - Normalize first (remove stacked `../`)
@@ -29,14 +47,17 @@ You are about to move a PLAN that has been shipped to the archive.
    ```
    If fewer than 5 → fix yourself · If more → report
 
-4. **Prefix the filename with its Created date, then `git mv` (not rm + add)** — preserves
-   history and makes `ls .fapony/plan/done/` sort chronologically without a git log lookup.
-   Date = the plan's own `**Created:** YYYY-MM-DD` line, not today's date:
+4. **Prefix the filename with its ship date, then `git mv` (not rm + add)** — preserves history
+   and makes `ls .fapony/plan/done/` read as "what finished on which day", which is the question
+   an archive is actually asked. Date = the date in the shipped header (step 1 stamped it; for a
+   superseded plan, the date you archived it) — **not** the plan's `**Created:**` line, which
+   stays inside the file and in git history where it is already available:
    ```bash
-   git mv .fapony/plan/PLAN-foo.md .fapony/plan/done/2026-09-05-PLAN-foo.md
+   git mv .fapony/plan/PLAN-foo.md .fapony/plan/done/2026-09-13-PLAN-foo.md
    ```
    Already has a date prefix (re-archiving, or the source file was already named that way) →
-   don't double it. If git refuses ("not under version control" — `.fapony/` is gitignored in
+   don't double it — and if that existing prefix is a creation date, replace it with the ship
+   date rather than keeping both. If git refuses ("not under version control" — `.fapony/` is gitignored in
    this repo), plain `mv` instead; there's nothing to commit for an untracked path, so skip
    step 6 in that case.
 
@@ -76,13 +97,13 @@ You are about to move a PLAN that has been shipped to the archive.
 ## Example
 
 ```
-Input: .fapony/plan/PLAN-kickoff.md with header "> ✅ **shipped** (a1b2c3)", Created: 2026-09-05
+Input: .fapony/plan/PLAN-kickoff.md with header "> ✅ **shipped 2026-09-13** (a1b2c3)", Created: 2026-09-05
 Steps:
 1. normalize links: [templates/](../templates/) → [../templates/](../templates/)
 2. inbound: README.md, .fapony/plan/PLAN-loop.md
-3. git mv .fapony/plan/PLAN-kickoff.md .fapony/plan/done/2026-09-05-PLAN-kickoff.md
+3. git mv .fapony/plan/PLAN-kickoff.md .fapony/plan/done/2026-09-13-PLAN-kickoff.md   # ship date, not Created
 4. commit
-5. verdict_submit(verdict="pass", reason_code="other", regime="code", worktree="/Users/you/Project/fapony/wt-fapony", plan=".fapony/plan/done/2026-09-05-PLAN-kickoff.md", files=["src/kickoff.ts"])
+5. verdict_submit(verdict="pass", reason_code="other", regime="code", worktree="/Users/you/Project/fapony/wt-fapony", plan=".fapony/plan/done/2026-09-13-PLAN-kickoff.md", files=["src/kickoff.ts"])
    — clean ship, so no note
 ```
 

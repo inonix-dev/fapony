@@ -38,8 +38,11 @@ export function testPlanListRequiresWorktree(): void {
 export function testPlanListMissingDir(): void {
   const wt = mkdtempSync(join(tmpdir(), "fapony-plans-empty-"));
   const result = toolPlanList({ worktree: wt });
-  const data = parseToolResult(result) as { pending: unknown[]; done: number };
-  assert.deepEqual(data.pending, []);
+  const data = parseToolResult(result) as {
+    untouched: unknown[];
+    done: number;
+  };
+  assert.deepEqual(data.untouched, []);
   assert.equal(data.done, 0);
   console.log("  ✓ plan_list handles missing plan dir");
 }
@@ -53,14 +56,14 @@ export function testPlanListNeverAttempted(): void {
     );
     const result = toolPlanList({ worktree: wt });
     const data = parseToolResult(result) as {
-      pending: { file: string; title: string; runs: number; last: string }[];
+      untouched: { file: string; title: string; runs: number; last: string }[];
       done: number;
     };
-    assert.equal(data.pending.length, 1);
-    assert.equal(data.pending[0].file, "PLAN-foo.md");
-    assert.equal(data.pending[0].title, "Foo plan");
-    assert.equal(data.pending[0].runs, 0);
-    assert.equal(data.pending[0].last, "never attempted");
+    assert.equal(data.untouched.length, 1);
+    assert.equal(data.untouched[0].file, "PLAN-foo.md");
+    assert.equal(data.untouched[0].title, "Foo plan");
+    assert.equal(data.untouched[0].runs, 0);
+    assert.equal(data.untouched[0].last, "never attempted");
     assert.equal(data.done, 0);
   });
   console.log("  ✓ plan_list reports never-attempted plans");
@@ -79,10 +82,10 @@ export function testPlanListJoinsRunHistory(): void {
 
     const result = toolPlanList({ worktree: wt });
     const data = parseToolResult(result) as {
-      pending: { file: string; runs: number; last: string }[];
+      active: { file: string; runs: number; last: string }[];
       done: number;
     };
-    const bar = data.pending.find((p) => p.file === "PLAN-bar.md");
+    const bar = data.active.find((p) => p.file === "PLAN-bar.md");
     assert.ok(bar);
     assert.equal(bar?.runs, 1);
     assert.equal(bar?.last, "fail(spec_gap)");
@@ -103,11 +106,101 @@ export function testPlanListUsesWorktreeConfigPaths(): void {
 
     const result = toolPlanList({ worktree: wt });
     const data = parseToolResult(result) as {
-      pending: { file: string }[];
+      untouched: { file: string }[];
       error?: string;
     };
     assert.equal(data.error, undefined);
-    assert.equal(data.pending[0]?.file, "PLAN-x.md");
+    assert.equal(data.untouched[0]?.file, "PLAN-x.md");
   });
   console.log("  ✓ plan_list honors worktree-local paths.planDir");
+}
+
+export function testPlanListGroupsByFrontmatter(): void {
+  withTempDb(() => {
+    const wt = makeWorktree();
+    const dir = join(wt, ".fapony", "plan");
+    const w = (f: string, body: string) => writeFileSync(join(dir, f), body);
+    w("PLAN-v1.md", "---\nkind: tracker\n---\n# V1 tracker");
+    w(
+      "PLAN-attendance.md",
+      "---\nstatus: blocked\nblocked_by: PLAN-mdl.md\n---\n# Attendance",
+    );
+    w(
+      "PLAN-calendar.md",
+      "---\nstatus: active\nblocks: PLAN-export.md\n---\n# Calendar",
+    );
+    w("PLAN-export.md", "---\nstatus: active\n---\n# Export");
+    w(
+      "PLAN-old.md",
+      "---\nstatus: superseded\nsuperseded_by: PLAN-v1.md\n---\n# Old",
+    );
+    w("PLAN-bare.md", "# Bare");
+
+    const data = parseToolResult(toolPlanList({ worktree: wt })) as Record<
+      string,
+      { file: string; blocks?: string[] }[]
+    >;
+    assert.deepEqual(
+      data.trackers.map((p) => p.file),
+      ["PLAN-v1.md"],
+    );
+    assert.deepEqual(
+      data.blocked.map((p) => p.file),
+      ["PLAN-attendance.md"],
+    );
+    assert.deepEqual(
+      data.superseded.map((p) => p.file),
+      ["PLAN-old.md"],
+    );
+    assert.deepEqual(
+      data.untouched.map((p) => p.file),
+      ["PLAN-bare.md"],
+    );
+    // What unblocks something else sorts ahead of what doesn't.
+    assert.deepEqual(
+      data.active.map((p) => p.file),
+      ["PLAN-calendar.md", "PLAN-export.md"],
+    );
+  });
+  console.log("  ✓ plan_list groups by frontmatter and orders by blocks");
+}
+
+export function testPlanListProgressAndMarkdown(): void {
+  withTempDb(() => {
+    const wt = makeWorktree();
+    const dir = join(wt, ".fapony", "plan");
+    writeFileSync(
+      join(dir, "PLAN-calendar.md"),
+      [
+        "---",
+        "status: active",
+        "blocks: PLAN-export.md",
+        "spec: SPEC-calendar.md",
+        "---",
+        "",
+        "# PLAN — calendar",
+        "",
+        "## TL;DR",
+        "- **what:** month view",
+        "- [x] chunk 1",
+        "- [ ] chunk 2",
+        "",
+        "## 6. Steps",
+        "- [ ] a step deep in the body must not count as status",
+        "- [ ] neither must this one",
+      ].join("\n"),
+    );
+    const data = parseToolResult(toolPlanList({ worktree: wt })) as {
+      active: { progress?: string; spec?: string }[];
+    };
+    assert.equal(data.active[0].progress, "1/2");
+    assert.equal(data.active[0].spec, "SPEC-calendar.md");
+
+    const md = toolPlanList({ worktree: wt, format: "markdown" }).content[0]
+      .text;
+    assert.ok(md.includes("## active — in order (1)"));
+    assert.ok(md.includes("PLAN-calendar — 1/2 · unblocks PLAN-export.md"));
+    assert.ok(md.includes("done: 0 archived"));
+  });
+  console.log("  ✓ plan_list counts summary checkboxes and renders markdown");
 }
