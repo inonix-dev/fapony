@@ -105,16 +105,24 @@ const dir = scaffolded
   : existsSync(`${legacyDir}/log.jsonl`)
     ? legacyDir
     : newDir;
-// ชื่อคนเขียน ต้องมาก่อน LOG เพราะ log แยกไฟล์ตามคน
-const agent = (process.env.MEM_AGENT || process.env.USER || "unknown").replace(
-  /[^A-Za-z0-9._-]/g,
-  "-",
-);
+// ใครเขียนแถวนี้ — client ตั้ง MEM_AGENT ทับได้ ("claude-code", "opencode")
+const agent = process.env.MEM_AGENT || process.env.USER || "unknown";
+
+// ชื่อไฟล์ = *คน* ไม่ใช่ client ตั้งใจให้ต่างจาก agent ข้างบน: ถ้าใช้ MEM_AGENT ตั้งชื่อไฟล์
+// สองคนที่เปิด Claude Code จะกลับไปเขียน log.claude-code.jsonl ใบเดียวกัน = ชนเหมือนเดิม
+// git user.name มีอยู่แล้วทุกเครื่องที่ commit ได้ จึงไม่ต้องตั้ง env และไม่ต้องเพิ่ม config
+const person = (
+  Bun.spawnSync(["git", "config", "user.name"]).stdout.toString().trim() ||
+  process.env.USER ||
+  "unknown"
+)
+  .toLowerCase()
+  .replace(/[^a-z0-9._-]+/g, "-")
+  .replace(/^-+|-+$/g, "");
 
 // เขียนไฟล์ของตัวเอง อ่านของทุกคน — สองคนไม่เคยแตะไฟล์เดียวกัน = merge conflict
 // เป็นศูนย์โดยโครงสร้าง ไม่ต้องพึ่ง merge=union หรือให้ GitHub ทำตัวดีตอน merge PR
-// ponytail: ไม่เพิ่ม config field — ชื่อไฟล์ derive จาก MEM_AGENT ที่ทุกแถวใช้อยู่แล้ว
-const LOG = `${dir}/log.${agent}.jsonl`;
+const LOG = `${dir}/log.${person || "unknown"}.jsonl`;
 
 // log.jsonl = ของเดิมก่อนแยกไฟล์ (ยังอ่านตลอดไป ไม่ต้อง migrate)
 // ข้าม log.YYYY-MM-DD.jsonl ที่ rotate สร้าง ไม่งั้น rotate จะไม่ลดอะไรเลยเพราะอ่านกลับเข้ามา
@@ -266,6 +274,7 @@ export {
   LOG,
   memCmd,
   nextId,
+  person,
   planBase,
   planDir,
   put,
