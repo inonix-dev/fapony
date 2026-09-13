@@ -49,7 +49,7 @@ if (cmd === "analyze") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|stats|telemetry|init|install|report|report-web|usage-scan|usage-web|analyze|mcp|test> [args]",
+    "usage: fapony <setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|analyze|mcp|test> [args]",
   );
   process.exit(1);
 }

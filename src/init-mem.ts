@@ -25,14 +25,14 @@ export function copyDir(src: string, dest: string): string[] {
 }
 
 export function cmdInitMem(args: string[]): void {
-  const worktreeKey = args[0];
-  if (!worktreeKey) {
-    console.error("usage: fapony init-mem <worktree-key>");
-    process.exit(1);
-  }
-
+  const update = args.includes("--update");
+  const worktreeKey = args.find((x) => !x.startsWith("-"));
   const config = loadConfig();
-  const worktree = config.worktrees[worktreeKey];
+
+  // ไม่ระบุ key = repo ที่ยืนอยู่ตอนนี้ — ทำให้ `fapony init-mem --update` รันในโปรเจกต์ของใครก็ได้
+  // โดยไม่ต้องลงทะเบียน worktree ก่อน (loadConfig อ่าน fapony.config.json ของ cwd อยู่แล้ว
+  // จึงได้ paths.memoryEntry ของโปรเจกต์นั้นมาเอง)
+  const worktree = worktreeKey ? config.worktrees[worktreeKey] : process.cwd();
   if (!worktree) {
     console.error(`unknown worktree key: ${worktreeKey}`);
     console.error(`available: ${Object.keys(config.worktrees).join(", ")}`);
@@ -44,14 +44,23 @@ export function cmdInitMem(args: string[]): void {
   const destDir = join(worktree, dirname(memEntry));
   const destFile = join(worktree, memEntry);
 
-  if (existsSync(destFile)) {
+  if (existsSync(destFile) && !update) {
     console.error(
-      `${destFile} already exists — re-running would overwrite local edits.\nDelete it first if you want a fresh copy from the template.`,
+      `${destFile} already exists — re-running would overwrite local edits.\nRun \`fapony init-mem --update\` to refresh it from the template (log.jsonl is kept).`,
     );
+    process.exit(1);
+  }
+  if (update && !existsSync(destFile)) {
+    console.error(`${destFile} not found — run \`fapony init\` first.`);
     process.exit(1);
   }
 
   const files = copyDir(templateDir, destDir);
+  if (update) {
+    console.log(`updated ${files.length} files in ${destDir}`);
+    console.log(`(log.jsonl and other data files left untouched)`);
+    return;
+  }
   console.log(`scaffolded ${files.length} files into ${destDir}`);
   console.log(`\nAdd to fapony.config.json:`);
   console.log(

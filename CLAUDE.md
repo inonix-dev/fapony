@@ -55,7 +55,7 @@ fapony/
       index.ts         # barrel re-export
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
     init.ts            # fapony init — scaffold .fapony/{plan,done,spec,.memory,evidence.json}
-    init-mem.ts        # init-mem command (legacy, superseded by init)
+    init-mem.ts        # init-mem — scaffold/refresh (`--update`) the memory copy; `init` reuses its copyDir
     stats/                # fapony stats — KPI across runs
       data.ts             # getStatsData() + StatsData type + computeEfficiency() + reason_code/plan/escalation/best-passing queries
       format.ts           # formatStatsText() — CLI + MCP text mode
@@ -220,6 +220,7 @@ events(
 | `.fapony/.memory/` ที่ `fapony init` วาง แต่ log ไปโผล่ที่อื่น | store.ts เดิมหา dir จาก **git root + เดาว่า monorepo ไหม** ไม่ได้ดูว่าตัวเองอยู่ไหน — repo เดี่ยว: โค้ดอยู่ `.fapony/.memory/` log ไป `<root>/.memory/` · เคสที่พังจริง: `apps/<x>/.fapony/.memory/` ใน monorepo → เขียนลง log ของ **อีกแอปหนึ่ง** (root=wt-vela, app=vela) · แก้ด้วย `import.meta.dir.includes("/.fapony/.memory")` = สำเนาที่ scaffold มา อิงโฟลเดอร์ตัวเอง ส่วนสำเนากลางแบบ vela (โค้ดชุดเดียวที่ root, log แยกราย app) ยังใช้ heuristic เดิม |
 | `mem plan-sweep` / `plan-check` ไม่เคยทำงานเลยสำหรับคนที่ใช้ `fapony init` | `commands/plan.ts` hardcode `apps/<app>/plan` **10 จุด** ทั้งที่ `store.ts` มี fallback repo เดี่ยวอยู่แล้ว → พิมพ์ "ไม่มี plan/" ทุกครั้งเงียบ ๆ · รวมศูนย์ไว้ที่ `store.ts` ที่เดียว (export `planDir`/`doneDir`) |
 | โมโนเรโปมีหลาย app แต่ `paths.planDir` มีค่าเดียว | ประกาศ `planDir` ให้ app หนึ่ง = **ทุก app ที่เหลือชี้ไป plan ของ app นั้น** (vela ประกาศ `apps/vela/plan` → `MEM_APP=canalis plan-check` ไปอ่านของ vela) · แก้ด้วยการ**ไม่เพิ่ม field** แต่ให้ default รู้จักเอง: `existsSync(<planBase>/.fapony)` → ใช้ `.fapony/{plan,done}` ไม่งั้นใช้ `plan/` + legacy `plan/done/` เดิม — แต่ละ app จึงย้ายเข้า `.fapony/` ทีละตัวได้โดยไม่แตะ config และ config ที่ประกาศไว้ยังชนะเหมือนเดิม ([test/memory-template.test.ts](test/memory-template.test.ts) คุมทั้ง 6 รูป) |
+| สำเนา `.memory` ในโปรเจกต์อื่นตกรุ่นเมื่อ template แก้บั๊ก | `fapony init-mem --update` — อ่าน `paths.memoryEntry` ของ repo ที่ยืนอยู่ (ไม่ต้องลงทะเบียน worktree) แล้ว copy ทับเฉพาะไฟล์ที่มีใน template · `log.jsonl` และไฟล์ข้อมูลอื่นไม่ถูกแตะเพราะ template ไม่มีไฟล์ชื่อนั้น · ไม่มี flag = ยัง refuse เหมือนเดิม กันทับของที่แก้เอง |
 | template เดา path เอาเองทั้งที่ `fapony.config.json` ประกาศไว้แล้ว | **config ชนะการเดาเสมอ** — `store.ts` อ่าน `paths.planDir`/`doneDir` (vela ประกาศ `apps/vela/plan` ไว้ตรง ๆ) heuristic `planBase` เหลือเป็นแค่ default ตอนไม่มีไฟล์ · อ่าน config **ที่ระดับโปรเจกต์เท่านั้น**: สำเนาที่ scaffold ใน `apps/<x>/.fapony/` ต้องไม่หยิบ config ของ monorepo ที่ root มาใช้ (นั่นเป็น path ของอีกโปรเจกต์) · `doneDir` ไม่ประกาศ → ใช้ `<base>/done` เว้นแต่มี `plan/done/` เก่าอยู่จริง (vela วันนี้ยังใช้ของเก่า ไม่ถูกบังคับย้าย) |
 | เขียนข้อความเป็นไทยหรืออังกฤษดี | **แยกตามว่าใครอ่าน ไม่ใช่ตามว่าใครเขียน** — (1) machine surface (frontmatter key/value, checkbox syntax, enum) = EN เสมอ เพราะ tool parse · (2) artifact ที่แจกออกไป (README, SKILL.md, templates, examples, `SERVER_INSTRUCTIONS`, **ทุก string ที่ `templates/memory` print**) = EN เพราะ `fapony init` ส่งให้คนทั้งโลก · (3) prose ใน plan/spec + **code comment** = ภาษาที่ dev อ่าน (ไทย) เพราะอ่านโดยคนที่แก้ repo นี้เท่านั้น |
 | PLAN ที่ ship แล้วแต่ `plan-sweep` มองไม่เห็น | detection เดิมเช็ก `^> ✅` ที่ **บรรทัดแรกที่ไม่ว่าง** — format ปัจจุบันขึ้นด้วย frontmatter แล้ว `# title` header จึงไม่เคยอยู่บรรทัดแรกอีกเลย · `hasShippedHeader()` เช็ก 2KB แรกด้วย regex `/m` แทน |
@@ -362,6 +363,7 @@ fapony usage-scan                    # scan session logs → usage-cache.jsonl (
 fapony usage-web [port]              # live usage comparison dashboard from cache (no session log access)
 fapony stats                        # KPIs: pass/stall rate, by-model, by-grade
 fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
+fapony init-mem [--update]          # re-copy templates/memory/ into this repo's memory dir (path from paths.memoryEntry) — data files (log.jsonl) untouched
 fapony install --platform opencode|claude|zcode|codex  # wire mcp.fapony into an MCP client (+ symlink skills for claude/opencode)
 fapony setup                        # interactive wizard: config + scaffold in one step
 fapony update                       # self-update via git pull
