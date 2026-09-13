@@ -8,7 +8,7 @@ Measurement + verification layer for coding agents, shipped as an MCP server (`f
 
 **Runtime:** Bun-only, zero runtime dependency — ใช้แค่ `bun:sqlite`, `node:fs`, `node:child_process`
 **State:** SQLite ที่ `~/.config/fapony/state.db` (WAL mode) — `FAPONY_STATE_DIR` env ย้ายได้
-**Topology:** `fapony/` = main (คุณแตะคนเดียว) · `fapony/wt-fapony/` = dev (agents ทำงานที่นี่เท่านั้น) — worktree อยู่ใน repo จึงต้อง gitignore `wt-*/` ก่อน
+**Topology:** `fapony/` = main checkout (คุณแตะคนเดียว) · `fapony/cl-fapony/` = dev (clone คนละ `.git` — agents ทำงานที่นี่เท่านั้น) — clone อยู่ใน repo จึงต้อง gitignore `cl-*/` ก่อน
 **License:** MIT, public ตั้งแต่ commit แรก
 
 ---
