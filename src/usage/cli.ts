@@ -32,6 +32,7 @@ function cacheToResult(entry: CacheEntry | undefined): PassiveUsageResult {
     by_model: entry.by_model.map((m) => ({
       ...m,
     })),
+    ...(entry.error ? { error: entry.error } : {}),
   };
 }
 

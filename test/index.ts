@@ -410,6 +410,7 @@ import {
   testRenderHtmlModelNames,
   testRenderHtmlNoData,
   testRenderHtmlNoPollInterval,
+  testRenderHtmlReadErrorBadge,
   testRenderHtmlShareSection,
   testRenderHtmlStructure,
   testRenderHtmlSummaryCards,
@@ -780,6 +781,7 @@ export async function cmdTest(): Promise<void> {
   testRenderHtmlModelNames();
   testRenderHtmlTokenValues();
   testRenderHtmlNoData();
+  testRenderHtmlReadErrorBadge();
   testRenderHtmlSummaryCards();
   testRenderHtmlCostWide();
   testRenderHtmlFreshnessBar();

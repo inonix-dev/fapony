@@ -50,6 +50,7 @@ function toCacheEntry(
       tokens_cache_write: m.tokens_cache_write,
       cost: m.cost,
     })),
+    ...(result.error ? { error: result.error } : {}),
   };
 }
 
@@ -151,7 +152,9 @@ export function cmdUsageScan(rawArgs: string[]): void {
         // sessions", so it gets dropped below and would otherwise leave the
         // cache silently short one client. Say it out loud instead.
         if (result.error) warn(scopeLabel, result.error, isTTY);
-        if (result.session_count > 0) {
+        // A broken client is cached too, precisely because it has no sessions
+        // to speak for it — otherwise it just vanishes from usage-web.
+        if (result.session_count > 0 || result.error) {
           entries.push(toCacheEntry(clientKey, result, wt));
         }
       } catch (err) {
