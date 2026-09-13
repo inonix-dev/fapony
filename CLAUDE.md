@@ -24,7 +24,7 @@ fapony/
                                 # skill/<name>/, so a link out of that dir is dead on install
     plan-with-pony/             # draft plan + spec จาก conversation (pipe to any agent's stdin)
     review-pony/                # review as verification + known patterns before, verdict after
-    move-to-done/               # archive PLAN หลัง ship
+    move-to-done/               # archive PLAN เข้า .fapony/done/ หลัง ship
     git-commit-conventional/    # commit แยก concern + conventional message
     git-ship/                   # push branch, open PR, merge, reset branch onto base
   templates/
@@ -54,7 +54,7 @@ fapony/
       projectHealth.ts # buildProjectHealthContext() — pure over StatsData, ~15 lines max
       index.ts         # barrel re-export
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
-    init.ts            # fapony init — scaffold .fapony/{plan,spec,.memory,evidence.json}
+    init.ts            # fapony init — scaffold .fapony/{plan,done,spec,.memory,evidence.json}
     init-mem.ts        # init-mem command (legacy, superseded by init)
     stats/                # fapony stats — KPI across runs
       data.ts             # getStatsData() + StatsData type + computeEfficiency() + reason_code/plan/escalation/best-passing queries
@@ -152,7 +152,7 @@ events(
     "kickoff": ["bun", ".fapony/.memory/mem.ts", "kickoff"]
   },
   "telemetry": { "enabled": false, "endpoint": "https://your-server/ingest" },
-  "paths": { "stateDir": "~/.config/fapony", "planDir": ".fapony/plan", "specDir": ".fapony/spec", "memoryEntry": ".fapony/.memory/mem.ts" },
+  "paths": { "stateDir": "~/.config/fapony", "planDir": ".fapony/plan", "doneDir": ".fapony/done", "specDir": ".fapony/spec", "memoryEntry": ".fapony/.memory/mem.ts" },
   "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] },
   "usageWeb": { "port": 8080, "hostname": "127.0.0.1" }
 }
@@ -329,8 +329,16 @@ what/why/order, spec = how in detail** — ห้ามแปะ API shape/schem
 40 บรรทัดแรกแทนที่จะดูดทั้งไฟล์ 140KB เข้า context · `plan_list` นับ checkbox ของ **section `##` แรก
 เท่านั้น** (ไม่ผูกกับคำว่า TL;DR จึงใช้ได้ทุกภาษา) และ render เป็น master checklist ได้ — **ห้ามสร้างไฟล์
 MASTER.md** ทุกบรรทัดของมัน derive จาก frontmatter + checkbox อยู่แล้ว ไฟล์ที่ maintain เองจะตกรุ่นเสมอ
-· `done/` ตั้งชื่อด้วย**วันที่ ship** (`YYYY-MM-DD-PLAN-x.md`) ไม่ใช่วันที่สร้าง — คลังของงานที่จบ ตอบคำถาม
-"วันนั้นจบอะไรบ้าง"
+
+**Layout `.fapony/{plan,done,spec}` (2026-09-13):** `done/` อยู่**ข้าง ๆ** `plan/` ไม่ใช่ข้างใน —
+ไฟล์ที่ archive จึงลึกเท่าเดิม ลิงก์ relative ในไฟล์ (`../spec/...`) รอดทั้งหมด การ archive เหลือ `git mv`
+ชื่อเดิม + sed ลิงก์ plan→plan เท่านั้น (กฎ normalize link หายไปทั้งข้อ) · **ไม่เติมวันที่หน้าชื่อไฟล์** —
+วันที่อยู่ใน header `> ✅ **shipped YYYY-MM-DD**` อยู่แล้ว เอามาแปะชื่อไฟล์อีก = เก็บค่าเดียวกันสองที่
+เพื่อให้ `ls` เรียงได้ แลกกับการต้องแก้ inbound link ทุกครั้งที่ ship ตลอดไป — "วันนั้นจบอะไร" ให้ derive
+(`grep -h shipped .fapony/done/*.md | sort`) · **spec ไม่ archive เลย** ไม่มี `spec/done/` เพราะ spec คือ
+ห้องสมุด ("ของนี้ทำงานยังไง" ถูกถามหลัง ship นานหลายเดือน) และ spec ที่ไม่ย้าย = ลิงก์ที่ไม่พัง ·
+`paths.doneDir` default `.fapony/done` · `plan_list` fallback ไปอ่าน `plan/done/` ถ้า `done/` ไม่มี
+(repo เก่าจะได้ไม่เห็นเลข archive เป็น 0 เงียบ ๆ)
 
 Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)`) — ทำให้เป็น graph สองทาง ไม่ต้องมี tooling
 เพิ่ม แค่ markdown link ที่ skill `move-to-done` เดินหา inbound link ด้วย grep เอง (ไม่มี CLI enforcement
