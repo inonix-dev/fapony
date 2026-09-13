@@ -141,6 +141,7 @@ import {
 import {
   testCollectEvidenceAgentCommands,
   testCollectEvidenceAgentDuplicatesAllowlist,
+  testCollectEvidenceAppScoped,
   testCollectEvidenceFailingCommand,
   testCollectEvidenceInvalidEntry,
   testCollectEvidenceNoConfig,
@@ -151,6 +152,11 @@ import {
   testReadEvidenceConfigInvalid,
   testReadEvidenceConfigMissing,
   testReadEvidenceConfigValid,
+  testResolveEvidencePathAppScoped,
+  testResolveEvidencePathCustomConfigWins,
+  testResolveEvidencePathEmptyFallsBackToRoot,
+  testResolveEvidencePathMissingAppFileFallsBackToRoot,
+  testResolveEvidencePathMixedFallsBackToRoot,
 } from "./mcp/evidence.test.js";
 import {
   testEndToEndPipeline,
@@ -658,6 +664,12 @@ export async function cmdTest(): Promise<void> {
   testCollectEvidenceTimeout();
   testCollectEvidenceRefusesDangerousCommand();
   testCollectEvidenceInvalidEntry();
+  testResolveEvidencePathAppScoped();
+  testResolveEvidencePathMixedFallsBackToRoot();
+  testResolveEvidencePathEmptyFallsBackToRoot();
+  testResolveEvidencePathMissingAppFileFallsBackToRoot();
+  testResolveEvidencePathCustomConfigWins();
+  testCollectEvidenceAppScoped();
   // Verification report tool tests
   testVerificationReportMissingArgs();
   testVerificationReportRunNotFound();

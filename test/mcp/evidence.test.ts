@@ -10,7 +10,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectEvidence, readEvidenceConfig } from "../../src/mcp/evidence.js";
+import {
+  collectEvidence,
+  readEvidenceConfig,
+  resolveEvidencePath,
+} from "../../src/mcp/evidence.js";
 
 function makeTmpWorktree(): string {
   const dir = mkdtempSync(join(tmpdir(), "fapony-evidence-"));
@@ -278,6 +282,140 @@ export function testCollectEvidenceInvalidEntry(): void {
     console.log(
       "  ✓ collectEvidence flags invalid allowlist entries as not_run",
     );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// --- App-scoped resolution ---
+
+// Monorepo fixture: apps/a and apps/b with different allowlists + a root fallback.
+function makeAppWorktree(): string {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-evidence-app-"));
+  for (const [app, cmd] of [
+    ["a", "echo a-ok"],
+    ["b", "echo b-ok"],
+  ] as const) {
+    mkdirSync(join(dir, `apps/${app}/.fapony`), { recursive: true });
+    writeFileSync(
+      join(dir, `apps/${app}/.fapony/evidence.json`),
+      JSON.stringify({ commands: [{ name: "test", cmd, timeout_ms: 5000 }] }),
+    );
+  }
+  mkdirSync(join(dir, ".fapony"), { recursive: true });
+  writeFileSync(
+    join(dir, ".fapony/evidence.json"),
+    JSON.stringify({
+      commands: [{ name: "test", cmd: "echo root-ok", timeout_ms: 5000 }],
+    }),
+  );
+  return dir;
+}
+
+export function testResolveEvidencePathAppScoped(): void {
+  const dir = makeAppWorktree();
+  try {
+    assert.equal(
+      resolveEvidencePath(dir, ["apps/b/src/x.ts", "apps/b/test/x.test.ts"]),
+      join(dir, "apps/b/.fapony/evidence.json"),
+    );
+    console.log("  ✓ resolveEvidencePath picks the app allowlist");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function testResolveEvidencePathMixedFallsBackToRoot(): void {
+  const dir = makeAppWorktree();
+  try {
+    assert.equal(
+      resolveEvidencePath(dir, ["apps/a/a.ts", "apps/b/b.ts"]),
+      join(dir, ".fapony/evidence.json"),
+    );
+    console.log("  ✓ resolveEvidencePath falls back to root on mixed apps");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function testResolveEvidencePathEmptyFallsBackToRoot(): void {
+  const dir = makeAppWorktree();
+  try {
+    assert.equal(
+      resolveEvidencePath(dir, []),
+      join(dir, ".fapony/evidence.json"),
+    );
+    assert.equal(resolveEvidencePath(dir), join(dir, ".fapony/evidence.json"));
+    console.log("  ✓ resolveEvidencePath falls back to root without files[]");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function testResolveEvidencePathMissingAppFileFallsBackToRoot(): void {
+  const dir = makeAppWorktree();
+  try {
+    mkdirSync(join(dir, "apps/c/src"), { recursive: true });
+    assert.equal(
+      resolveEvidencePath(dir, ["apps/c/src/y.ts"]),
+      join(dir, ".fapony/evidence.json"),
+    );
+    console.log(
+      "  ✓ resolveEvidencePath falls back to root when the app has no allowlist",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function testResolveEvidencePathCustomConfigWins(): void {
+  const dir = makeAppWorktree();
+  try {
+    mkdirSync(join(dir, "config"), { recursive: true });
+    writeFileSync(
+      join(dir, "config/evidence.json"),
+      JSON.stringify({
+        commands: [{ name: "test", cmd: "echo custom-ok", timeout_ms: 5000 }],
+      }),
+    );
+    const config = {
+      worktrees: {},
+      review: { maxRounds: 2 },
+      memory: null,
+      paths: { evidenceFile: "config/evidence.json" },
+    };
+    assert.equal(
+      resolveEvidencePath(dir, ["apps/b/src/x.ts"], config),
+      join(dir, "config/evidence.json"),
+    );
+    console.log(
+      "  ✓ resolveEvidencePath honours a declared paths.evidenceFile",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function testCollectEvidenceAppScoped(): void {
+  const dir = makeAppWorktree();
+  try {
+    // Report touching only apps/b must run b's allowlist, not a's or root's.
+    const items = collectEvidence({
+      worktree: dir,
+      files: ["apps/b/src/x.ts", "apps/b/test/x.test.ts"],
+    });
+    assert.equal(items.length, 1);
+    assert.equal(items[0].command, "echo b-ok");
+    assert.equal(items[0].status, "passed");
+    assert.equal(items[0].provenance.verified, true);
+    // Mixed apps → root allowlist, the old behavior.
+    const mixed = collectEvidence({
+      worktree: dir,
+      files: ["apps/a/a.ts", "apps/b/b.ts"],
+    });
+    assert.equal(mixed.length, 1);
+    assert.equal(mixed[0].command, "echo root-ok");
+    console.log("  ✓ collectEvidence runs the app allowlist, root on mixed");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

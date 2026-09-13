@@ -22,6 +22,14 @@ const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
 # links inside it keep working.
 # memory lives in .fapony/.memory/, the evidence allowlist in .fapony/evidence.json.
 #
+# evidence.json SHOULD be committed — it is the shared allowlist that decides
+# which commands verification_report may run, and the team must run the same
+# set. If your .gitignore ignores .fapony/ wholesale, re-include it:
+#   **/.fapony/*
+#   !**/.fapony/evidence.json
+# (dir before file — git cannot re-include a file inside an excluded dir;
+# patterns with a mid-string slash anchor at the repo root, so keep the **/).
+#
 # state.db is NOT here by design — it lives in ~/.config/fapony/ where agents
 # running in this worktree cannot rewrite run state / audit trail.
 #
