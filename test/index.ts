@@ -161,9 +161,11 @@ import {
   testRegimeCodesAreLocked,
 } from "./mcp/helpers.test.js";
 import {
+  testPlanListGroupsByFrontmatter,
   testPlanListJoinsRunHistory,
   testPlanListMissingDir,
   testPlanListNeverAttempted,
+  testPlanListProgressAndMarkdown,
   testPlanListRequiresWorktree,
   testPlanListUsesWorktreeConfigPaths,
 } from "./mcp/plans.test.js";
@@ -593,6 +595,8 @@ export async function cmdTest(): Promise<void> {
   testPlanListNeverAttempted();
   testPlanListJoinsRunHistory();
   testPlanListUsesWorktreeConfigPaths();
+  testPlanListGroupsByFrontmatter();
+  testPlanListProgressAndMarkdown();
   testEndToEndPipeline();
   testExtractMultiFieldNone();
   testExtractMultiFieldSingle();
