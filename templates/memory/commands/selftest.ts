@@ -15,6 +15,7 @@ import { claimsOf, openRows, rotateKeep } from "../selectors.js";
 import type { LogRow } from "../store.js";
 import {
   countPlainTextMentions,
+  hasShippedHeader,
   rewriteMarkdownLinks,
   rewriteMovedFileLinks,
 } from "./plan.js";
@@ -360,12 +361,12 @@ const runPlanCheckTests = () => {
     );
     writeFileSync(join(planDir, "PLAN-active.md"), "# active plan\n");
 
-    // Check shippedNotMoved via direct file inspection
-    const SHIPPED = /^>\s*✅/;
-    const firstLine = (f: string) =>
-      readFileSync(f, "utf8")
-        .split("\n")
-        .find((l) => l.trim()) ?? "";
+    // plan ที่เขียนด้วย format ปัจจุบัน: frontmatter + title มาก่อน header ✅ shipped
+    writeFileSync(
+      join(planDir, "PLAN-frontmatter.md"),
+      "---\nkind: unit\n---\n\n# shipped with frontmatter\n\n> ✅ **shipped 2026-09-13** (abc1234)\n",
+    );
+
     const mdFilesLocal = (dir: string): string[] =>
       existsSync(dir)
         ? readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
@@ -380,14 +381,18 @@ const runPlanCheckTests = () => {
     const activeFiles = mdFilesLocal(planDir).filter(
       (f) => !f.includes("/done/"),
     );
-    const shipped = activeFiles.filter((f) => SHIPPED.test(firstLine(f)));
+    const shipped = activeFiles.filter(hasShippedHeader);
     assert(
-      shipped.length === 1,
-      `E1: should find 1 shipped-not-moved, got ${shipped.length}`,
+      shipped.length === 2,
+      `E1: should find 2 shipped-not-moved, got ${shipped.length}`,
     );
     assert(
-      shipped[0]?.includes("PLAN-shipped.md") === true,
+      shipped.some((f) => f.includes("PLAN-shipped.md")),
       "E1: should detect PLAN-shipped.md",
+    );
+    assert(
+      shipped.some((f) => f.includes("PLAN-frontmatter.md")),
+      "E1: header below frontmatter + title must still count as shipped",
     );
 
     // E2: broken link detection
