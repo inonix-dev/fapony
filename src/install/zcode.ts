@@ -6,6 +6,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { agentsSkillsDir, linkSkills, reportSkills } from "./skills.js";
 import {
   defaultExit,
   type InstallDeps,
@@ -112,4 +113,6 @@ export function cmdInstallZcode(dryRun: boolean, deps: InstallDeps = {}): void {
     console.error(`  (fallback path: ~/.agents/mcp.json)`);
   }
   console.error(`  restart ZCode to load the MCP server`);
+  const skillsDir = agentsSkillsDir(getHome);
+  reportSkills(linkSkills(skillsDir, dryRun), skillsDir, dryRun);
 }

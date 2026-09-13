@@ -1,11 +1,13 @@
 // src/install.ts — `fapony install --platform opencode|claude|zcode|codex` command.
 // opencode: adds mcp.fapony config to ~/.config/opencode/opencode.json or opencode.jsonc.
 // claude: shells out to `claude mcp add` (never parses/writes ~/.claude.json directly).
-// zcode: reads/writes ~/.zcode/cli/config.json (fallback ~/.agents/mcp.json) directly.
+// zcode: reads/writes ~/.zcode/cli/config.json (fallback ~/.agents/mcp.json) directly,
+//        and symlinks skills into ~/.agents/skills.
 // codex: reads/writes ~/.codex/config.toml directly.
 // All platforms are idempotent + support --dry-run.
 // Claude/OpenCode also get skill/<name>/ symlinked into ~/.claude/skills so
 // `fapony update` reaches them without a second copy to keep in sync.
+// ZCode gets skill/<name>/ symlinked into ~/.agents/skills.
 
 import { cmdInstallClaude } from "./install/claude.js";
 import { cmdInstallCodex } from "./install/codex.js";
@@ -21,7 +23,11 @@ export {
 } from "./install/claude.js";
 export { cmdInstallCodex } from "./install/codex.js";
 export { cmdInstallOpencode } from "./install/opencode.js";
-export { claudeSkillsDir, linkSkills } from "./install/skills.js";
+export {
+  agentsSkillsDir,
+  claudeSkillsDir,
+  linkSkills,
+} from "./install/skills.js";
 export {
   type ClaudeRunResult,
   defaultExit,

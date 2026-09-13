@@ -22,6 +22,10 @@ export function claudeSkillsDir(getHome: () => string): string {
   return join(getHome(), ".claude", "skills");
 }
 
+export function agentsSkillsDir(getHome: () => string): string {
+  return join(getHome(), ".agents", "skills");
+}
+
 /**
  * Link every skill/<name>/ into `skillsDir`.
  *
