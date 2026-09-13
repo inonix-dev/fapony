@@ -257,7 +257,7 @@ import {
   testMemTemplateMonorepoMigratedApp,
   testMemTemplateMonorepoUnmigratedApp,
   testMemTemplatePackagesApp,
-  testMemTemplatePerAgentLogs,
+  testMemTemplatePerPersonLogs,
   testMemTemplateScaffolded,
   testMemTemplateScaffoldedIgnoresRootConfig,
   testMemTemplateSingleRepoCentralDefaultsToFapony,
@@ -483,7 +483,7 @@ export async function cmdTest(): Promise<void> {
   testMemTemplateCentralCopyMovedIntoFapony();
   testMemTemplateScaffolded();
   testMemTemplateInitAtMonorepoRoot();
-  testMemTemplatePerAgentLogs();
+  testMemTemplatePerPersonLogs();
   testMemTemplateScaffoldedIgnoresRootConfig();
   testMemTemplateUnknownAppFails();
   testClaimMemoryFailGracefully();

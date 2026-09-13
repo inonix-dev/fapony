@@ -310,10 +310,11 @@ export function testMemTemplateInitAtMonorepoRoot(): void {
 
 // แยกไฟล์ต่อคนเพื่อไม่ให้ merge ชน แต่ต้องอ่านกลับมาเป็น log เดียว เรียงตาม ts —
 // และต้องไม่ดูด log.YYYY-MM-DD.jsonl ที่ rotate เพิ่งย้ายออกไปกลับเข้ามา ไม่งั้น rotate ไม่ลดอะไรเลย
-export function testMemTemplatePerAgentLogs(): void {
+export function testMemTemplatePerPersonLogs(): void {
   withFixture(
     (repo) => {
       cpSync(TEMPLATE, join(repo, ".fapony/.memory"), { recursive: true });
+      execSync('git config user.name "Som Chai/2"', { cwd: repo });
       const d = join(repo, ".fapony/.memory");
       const row = (ts: string, id: string, text: string) =>
         `${JSON.stringify({ ts, agent: "x", id, kind: "note", text })}\n`;
@@ -356,10 +357,12 @@ export function testMemTemplatePerAgentLogs(): void {
         ["a", "b", "c"],
         "รวมทุกไฟล์ เรียงตาม ts และข้าม archive",
       );
+      // ชื่อไฟล์มาจาก git user.name ของ fixture ไม่ใช่ MEM_AGENT — ไม่งั้นสองคนที่เปิด
+      // Claude Code จะเขียนไฟล์เดียวกันแล้วชนกันเหมือนเดิม
       assert.equal(got.log, join(repo, ".fapony/.memory/log.som-chai-2.jsonl"));
     },
   );
   console.log(
-    "  ✓ memory template → per-agent logs merge on read, archives stay out",
+    "  ✓ memory template → per-person logs merge on read, archives stay out",
   );
 }

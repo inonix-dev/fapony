@@ -1,6 +1,6 @@
 ---
 name: review-pony
-description: Review a plan, PR, diff, or design doc as a verification rather than an opinion — scope first, walk the real path, break it on paper, cite everything. Wired to fapony; pulls known failure patterns from run history before reviewing and records the verdict after. Trigger on /review-pony and proactively whenever the user asks to review, audit, scrutinize, sanity-check, or get a second opinion on a plan, PR, diff, design doc, or proposed code change.
+description: Review a plan, PR, diff, or design doc as a verification rather than an opinion — scope first, walk the real path, break it on paper, cite everything. Takes optional effort (low|medium|high|max, widens the walk only, never skips a pass) and --fix (apply CONFIRMED blocker/major findings after the report). Wired to fapony; pulls known failure patterns from run history before reviewing and records the verdict after. Trigger on /review-pony and proactively whenever the user asks to review, audit, scrutinize, sanity-check, or get a second opinion on a plan, PR, diff, design doc, or proposed code change.
 ---
 
 # Review Pony
@@ -9,6 +9,14 @@ description: Review a plan, PR, diff, or design doc as a verification rather tha
 something you feel about the code — and feelings are what make reviews long and useless.
 
 Four passes. Run them in order. Each one is allowed to end the review early.
+
+**Args:** `effort` (`low|medium|high|max`, default `medium`) — widens or narrows pass 2's walk
+only. Passes 1, 3, and 4 run in full at every level; effort never skips verification, it only
+changes how far you walk before writing findings down. There is no `ultra` here — that's
+multi-agent cloud review; point the user at `/code-review ultra` instead.
+`--fix` — after the report, apply the fix for every `blocker`/`major` `CONFIRMED` finding to the
+working tree (never nits, never `PLAUSIBLE`), then say what was applied and what wasn't in one
+line each. `--comment` is not supported here — that's PR-posting, already `/code-review --comment`.
 
 ## The four passes
 
@@ -74,6 +82,17 @@ The diff is where you enter, not what you review.
 
 Write down every place the walk surprises you. Surprises outrank style; chase them first.
 
+**Effort controls how far this walk goes, nothing else:**
+
+- `low` — direct callers only, one hop. No test reading unless the diff touches a test file.
+- `medium` (default) — as written above: full path, callers, tests on the path.
+- `high` — also second-degree callers, and read the tests that exercise them, not just the path.
+- `max` — also run `get_impact_radius_tool` (or grep if the graph isn't wired) on every changed
+  file and re-open every `deferred` line from the last review of this scope, if fapony has one.
+
+Whatever level stopped you, say so in the one-line coverage note (rule below) — "walked to 1 hop"
+is honest, "walked" alone at `low` is not.
+
 ## Pass 3 — A finding needs a failing input
 
 Before a finding reaches the report, try to kill it yourself.
@@ -126,6 +145,23 @@ blocker · hedging that does not change the verdict.
 
 Finding nothing is a valid result. Then the whole report is the verdict line plus one line
 naming what you walked, so the reader can judge the coverage — not a tour of it.
+
+## --fix (optional)
+
+Only with the `--fix` arg, only after the report is shown. For each `blocker`/`major` finding
+labeled `CONFIRMED`: apply the `fix:` line to the working tree. Skip every nit and every
+`PLAUSIBLE` — a fix you weren't sure was a bug is a bug you're introducing on purpose.
+
+Report what happened in one line per finding, no more:
+
+```
+fixed: 1, 2 · skipped: 3 (PLAUSIBLE — could not reach the failing state)
+```
+
+Fixing changes what actually shipped, not what the review found — re-run pass 4's citation
+check on the new state before calling it done, but don't re-run the whole review. Submit the
+verdict on what you found, not on the post-fix state (`verdict_submit`'s `note` can say the fix
+was applied).
 
 ## After: record the verdict (fapony)
 
