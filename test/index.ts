@@ -72,6 +72,7 @@ import {
   testInitCreatesDirectories,
   testInitIdempotent,
   testInitNoArgs,
+  testInitSnippetPathMatchesScaffold,
 } from "./init.test.js";
 import {
   testClaudeAddUsesAbsolutePath,
@@ -469,6 +470,7 @@ export async function cmdTest(): Promise<void> {
   testInitCreatesDirectories();
   testInitIdempotent();
   testInitNoArgs();
+  testInitSnippetPathMatchesScaffold();
   testMemoryDefaultWiringWithFile();
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
