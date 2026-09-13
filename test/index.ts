@@ -246,10 +246,15 @@ import {
 import {
   testMemTemplateCentralCopyMovedIntoFapony,
   testMemTemplateConfigStillWins,
+  testMemTemplateMonorepoLegacyLog,
   testMemTemplateMonorepoMigratedApp,
   testMemTemplateMonorepoUnmigratedApp,
+  testMemTemplatePackagesApp,
   testMemTemplateScaffolded,
   testMemTemplateScaffoldedIgnoresRootConfig,
+  testMemTemplateSingleRepoCentralDefaultsToFapony,
+  testMemTemplateSingleRepoLegacyLog,
+  testMemTemplateSingleRepoWithPackagesDir,
   testMemTemplateUnknownAppFails,
 } from "./memory-template.test.js";
 import {
@@ -457,6 +462,11 @@ export async function cmdTest(): Promise<void> {
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
   testMemTemplateMonorepoMigratedApp();
+  testMemTemplateMonorepoLegacyLog();
+  testMemTemplateSingleRepoCentralDefaultsToFapony();
+  testMemTemplateSingleRepoLegacyLog();
+  testMemTemplatePackagesApp();
+  testMemTemplateSingleRepoWithPackagesDir();
   testMemTemplateMonorepoUnmigratedApp();
   testMemTemplateConfigStillWins();
   testMemTemplateCentralCopyMovedIntoFapony();

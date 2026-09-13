@@ -53,21 +53,30 @@ type LogRow = WorkRow | CloseRow | ClaimRow | ReleaseRow | SyncedRow;
 const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"])
   .stdout.toString()
   .trim();
-// ponytail: worktree ชื่อ wt-<app> = monorepo scope (apps/<app>/.memory).
-// fapony template: repo เดี่ยว (ไม่มี apps/) → fallback ไป .memory ที่ root ตรงๆ
+// ponytail: worktree ชื่อ wt-<app> = monorepo scope (apps/<app>/.fapony/.memory).
+// fapony template: repo เดี่ยว (ไม่มี apps/) → fallback ไป .fapony/.memory ที่ root ตรงๆ
 // ไม่ต้อง config/flag ทั้งสองแบบ
 const app = process.env.MEM_APP ?? basename(root).replace(/^wt-/, "");
-const monorepo = existsSync(`${root}/apps/${app}`);
+// โฟลเดอร์รวม app หาจาก {apps,packages,services}/<app> ตัวแรกที่มีจริง — ลำดับคงที่
+// apps → packages → services ตัวแรกที่เจอชนะ (ลำดับคือสัญญา ไม่ใช่บังเอิญ)
+// guard `unknown app` ข้างล่างยังผูกกับ apps/ เหมือนเดิม — ไม่ขยายในรอบนี้
+const appBase: string | undefined = ["apps", "packages", "services"]
+  .map((d) => `${root}/${d}/${app}`)
+  .find((p) => existsSync(p));
+const monorepo = appBase !== undefined;
 
 // สำเนาที่ `fapony init` วางไว้ อยู่ใน <project>/.fapony/.memory/ — log กับ plan ของมัน
 // ต้องอิงโฟลเดอร์ตัวเอง ไม่ใช่ git root: เคสที่พังจริงคือ apps/<x>/.fapony/.memory/ ใน monorepo
-// ซึ่ง heuristic ด้านล่างจะชี้ไป apps/<ชื่อ worktree>/.memory = เขียน log ปนโปรเจกต์อื่น
+// ซึ่ง heuristic ด้านล่างจะชี้ไป apps/<ชื่อ worktree>/.fapony/.memory = เขียน log ปนโปรเจกต์อื่น
 // แต่สำเนากลางที่ย้ายเข้า .fapony/.memory ที่ root ของ monorepo เอง (โค้ดชุดเดียว, log แยกราย
 // app — เช่น vela) ต้อง "ไม่" ถือเป็น scaffolded แม้ path จะแมตช์เหมือนกัน เพราะยังต้องเดา app
-// จาก monorepo อยู่ — เงื่อนไขนี้เกิดเฉพาะตอนอยู่ *ตรง* root/.fapony/.memory ในโปรเจกต์ที่มี apps/
-// จริง (repo เดี่ยวที่ไม่มี apps/ เลย ยังถือว่า scaffolded ตามเดิม อิงโฟลเดอร์ตัวเอง)
+// จาก monorepo อยู่ — เงื่อนไขนี้เกิดเฉพาะตอนอยู่ *ตรง* root/.fapony/.memory ในโปรเจกต์ที่มี
+// โฟลเดอร์รวม app จริง (repo เดี่ยวที่ไม่มีเลย ยังถือว่า scaffolded ตามเดิม อิงโฟลเดอร์ตัวเอง)
 const centralAtMonorepoRoot =
-  import.meta.dir === `${root}/.fapony/.memory` && existsSync(`${root}/apps`);
+  import.meta.dir === `${root}/.fapony/.memory` &&
+  (existsSync(`${root}/apps`) ||
+    existsSync(`${root}/packages`) ||
+    existsSync(`${root}/services`));
 const scaffolded =
   import.meta.dir.includes("/.fapony/.memory") && !centralAtMonorepoRoot;
 
@@ -80,20 +89,24 @@ if (!scaffolded && !monorepo && existsSync(`${root}/apps`)) {
   );
   process.exit(1);
 }
+// default ใหม่: log อยู่ใต้ .fapony/.memory — fallback ไป .memory/ เดิมเมื่อมี log เก่าอยู่จริง
+// เช็ค log.jsonl ไม่ใช่ dir: โฟลเดอร์ว่างที่ใครเผลอ mkdir ทิ้งไว้ต้องไม่ล็อก repo ไว้กับ layout เก่า
+const newDir = appBase
+  ? `${appBase}/.fapony/.memory`
+  : `${root}/.fapony/.memory`;
+const legacyDir = appBase ? `${appBase}/.memory` : `${root}/.memory`;
 const dir = scaffolded
   ? import.meta.dir
-  : monorepo
-    ? `${root}/apps/${app}/.memory`
-    : `${root}/.memory`;
+  : existsSync(`${legacyDir}/log.jsonl`)
+    ? legacyDir
+    : newDir;
 const LOG = `${dir}/log.jsonl`;
 
 // โฟลเดอร์ที่ plan/ กับ done/ ของโปรเจกต์นี้อยู่ใต้มัน — จุดเดียวที่ประกอบ path เหล่านี้
 // (ก่อนหน้านี้ commands/plan.ts hardcode `apps/<app>/plan` 10 จุด = ตายสนิทกับ repo เดี่ยว)
 const planBase = scaffolded
   ? dirname(import.meta.dir) // <project>/.fapony
-  : monorepo
-    ? `${root}/apps/${app}`
-    : root;
+  : (appBase ?? root);
 
 // fapony.config.json คือ *ข้อตกลง* ว่า plan อยู่ไหน ส่วน planBase ข้างบนเป็นแค่การเดา —
 // มีไฟล์เมื่อไหร่ต้องชนะการเดาเสมอ (vela ประกาศ `apps/vela/plan` ไว้ตรง ๆ บังเอิญตรงกับที่เดาได้
