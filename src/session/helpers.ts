@@ -564,3 +564,42 @@ export function readTimingFromDb(
     ),
   );
 }
+
+// ─── Read snapshot ─────────────────────────────────────────────────────
+
+/**
+ * Pin ONE read snapshot for a multi-query read, but only under WAL.
+ *
+ * A client writes its session log while we read it, so totals, detail and
+ * timing can each land on a different state of the DB and disagree with each
+ * other. A deferred read transaction gives every query below the same
+ * snapshot.
+ *
+ * ponytail: WAL only. Without WAL the SHARED lock this takes can make the
+ * *client's own* write fail with SQLITE_BUSY — consistent numbers are never
+ * worth breaking the thing we are measuring. Non-WAL just reads unpinned,
+ * exactly as before. Returns whether a transaction was opened; pass that to
+ * endSnapshot() in a finally.
+ */
+export function beginSnapshot(db: Database): boolean {
+  try {
+    const row = db.prepare("PRAGMA journal_mode").get() as {
+      journal_mode?: string;
+    } | null;
+    if (row?.journal_mode?.toLowerCase() !== "wal") return false;
+    db.run("BEGIN DEFERRED");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** End a beginSnapshot() transaction. No-op when none was opened. */
+export function endSnapshot(db: Database, open: boolean): void {
+  if (!open) return;
+  try {
+    db.run("COMMIT");
+  } catch {
+    // Read-only transaction — nothing to roll back, and we are closing anyway.
+  }
+}

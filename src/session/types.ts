@@ -89,6 +89,16 @@ export interface PassiveUsageResult {
   zcode?: PassiveUsageResult | null;
   /** Claude Code sessions, when available. Absent when projects dir not found. */
   claude_code?: PassiveUsageResult | null;
+  /**
+   * Why this read came back short, when it did. Absent on success.
+   *
+   * Zeros with no `error` mean "no sessions matched"; zeros WITH an error mean
+   * "could not read the client's log" — most often schema drift after the
+   * client updated. The two used to be indistinguishable: a renamed column
+   * made the query throw, the catch-all swallowed it, and the numbers just
+   * quietly went missing.
+   */
+  error?: string;
 }
 
 export const EMPTY_RESULT: PassiveUsageResult = {
