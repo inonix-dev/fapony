@@ -13,6 +13,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  doneDir,
   type Event,
   loadConfig,
   openDb,
@@ -166,7 +167,11 @@ export function toolPlanList(args: Record<string, unknown>): ToolResult {
     ? loadConfig(localConfig)
     : loadConfig();
   const dir = join(worktree, planDir(config));
-  const doneDir = join(dir, "done");
+  // Archive lives beside plan/, so a plan keeps its depth (and its relative
+  // links) when it is archived. Repos from before that layout keep theirs:
+  // fall back to plan/done/ rather than silently reporting 0 archived.
+  const configured = join(worktree, doneDir(config));
+  const archive = existsSync(configured) ? configured : join(dir, "done");
   const empty = {
     active: [],
     blocked: [],
@@ -179,8 +184,8 @@ export function toolPlanList(args: Record<string, unknown>): ToolResult {
   }
 
   const pendingFiles = readdirSync(dir).filter((f) => f.endsWith(".md"));
-  const doneCount = existsSync(doneDir)
-    ? readdirSync(doneDir).filter((f) => f.endsWith(".md")).length
+  const doneCount = existsSync(archive)
+    ? readdirSync(archive).filter((f) => f.endsWith(".md")).length
     : 0;
 
   const db = openDb();

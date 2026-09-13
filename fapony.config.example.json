@@ -9,6 +9,7 @@
   "telemetry": null,
   "paths": {
     "planDir": ".fapony/plan",
+    "doneDir": ".fapony/done",
     "specDir": ".fapony/spec",
     "memoryEntry": ".fapony/.memory/mem.ts",
     "evidenceFile": ".fapony/evidence.json"

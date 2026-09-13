@@ -1,5 +1,5 @@
 // src/init.ts — scaffold fapony project structure at a target path.
-// Creates .fapony/plan/, .fapony/spec/, .fapony/.memory/ (from template).
+// Creates .fapony/plan/, .fapony/done/, .fapony/spec/, .fapony/.memory/ (from template).
 // state.db stays in ~/.config/fapony/ by design (security boundary — see db.ts),
 // never inside the worktree where agents have full write access.
 
@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import {
   type Config,
+  doneDir,
   evidenceFile,
   memoryEntry,
   planDir,
@@ -15,14 +16,17 @@ import {
 import { copyDir } from "./init-mem.js";
 
 const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
-# Plans live in .fapony/plan/, specs in .fapony/spec/, memory in .fapony/.memory/.
+# plan/ holds live plans, done/ the shipped ones, spec/ every spec (specs are a
+# reference library — they are not archived). done/ sits beside plan/ rather
+# than inside it so archiving never changes a file's depth, and the relative
+# links inside it keep working.
+# memory lives in .fapony/.memory/, the evidence allowlist in .fapony/evidence.json.
+#
 # state.db is NOT here by design — it lives in ~/.config/fapony/ where agents
 # running in this worktree cannot rewrite run state / audit trail.
 #
-# Usage:
-#   fapony init <path>         — scaffold (this directory is created here)
-#   fapony kickoff <key>       — auto-detect pending plan and run
-#   fapony run <key> --plan X  — explicit plan path
+# Ask your agent for the plan picture instead of listing these by hand:
+#   "run plan_list" — what is active, blocked, untouched, archived
 `;
 
 // Static template — deliberately NOT derived from the repo (reading package.json
@@ -66,6 +70,13 @@ export function initProject(targetPath: string, config?: Config): void {
   }
   mkdirSync(planDirAbs, { recursive: true });
 
+  // --- done/ (archive, sibling of plan/) ---
+  const doneDirAbs = join(targetPath, doneDir(config));
+  if (existsSync(doneDirAbs)) {
+    throw new Error(`${doneDirAbs} already exists — not overwriting.`);
+  }
+  mkdirSync(doneDirAbs, { recursive: true });
+
   // --- spec/ ---
   const specDirAbs = join(targetPath, specDir(config));
   if (existsSync(specDirAbs)) {
@@ -91,7 +102,8 @@ export function initProject(targetPath: string, config?: Config): void {
   console.log(
     `  .fapony/         — project dir (plans, specs, memory, evidence)`,
   );
-  console.log(`  ${planDir(config)}/    — plan files`);
+  console.log(`  ${planDir(config)}/    — live plan files`);
+  console.log(`  ${doneDir(config)}/    — shipped plans (archive)`);
   console.log(`  ${specDir(config)}/    — spec files`);
   console.log(
     `  ${evidenceFile(config)}    — allowlist for verification_report (edit the cmds!)`,
