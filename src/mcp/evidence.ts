@@ -217,9 +217,10 @@ export function collectEvidence(options: CollectOptions): EvidenceItem[] {
   const items: EvidenceItem[] = [];
 
   const deny = safetyDeny(config);
-  const evidencePath =
-    relative(worktree, resolveEvidencePath(worktree, files ?? [], config)) ||
-    evidenceFile(config);
+  const evidencePath = relative(
+    worktree,
+    resolveEvidencePath(worktree, files ?? [], config),
+  );
   const evidenceConfig = readEvidenceConfig(worktree, config, files ?? []);
   const totalStart = Date.now();
 
