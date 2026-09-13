@@ -328,6 +328,7 @@ fapony stats                             # KPIs: pass/stall rate, by-model, by-g
 
 # Setup & maintenance
 fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/evidence)
+fapony init-mem [--update]               # refresh the memory scaffold from the template
 fapony install --platform opencode       # add mcp.fapony to opencode config
 fapony install --platform claude         # add fapony to Claude Code (user scope)
 fapony install --platform zcode          # add fapony to ZCode (user scope)
