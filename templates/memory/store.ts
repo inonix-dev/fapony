@@ -1,7 +1,7 @@
 // store.ts — types + config + read/write primitives for the append-only memory log
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 // --- types ---
 
@@ -58,8 +58,58 @@ const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"])
 // ไม่ต้อง config/flag ทั้งสองแบบ
 const app = process.env.MEM_APP ?? basename(root).replace(/^wt-/, "");
 const monorepo = existsSync(`${root}/apps/${app}`);
-const dir = monorepo ? `${root}/apps/${app}/.memory` : `${root}/.memory`;
+
+// สำเนาที่ `fapony init` วางไว้ อยู่ใน <project>/.fapony/.memory/ — log กับ plan ของมัน
+// ต้องอิงโฟลเดอร์ตัวเอง ไม่ใช่ git root: เคสที่พังจริงคือ apps/<x>/.fapony/.memory/ ใน monorepo
+// ซึ่ง heuristic ด้านบนจะชี้ไป apps/<ชื่อ worktree>/.memory = เขียน log ปนโปรเจกต์อื่น
+// (สำเนากลางแบบ vela — โค้ดชุดเดียวที่ root, log แยกราย app — ไม่เข้าเงื่อนไขนี้ ใช้ทางเดิม)
+const scaffolded = import.meta.dir.includes("/.fapony/.memory");
+const dir = scaffolded
+  ? import.meta.dir
+  : monorepo
+    ? `${root}/apps/${app}/.memory`
+    : `${root}/.memory`;
 const LOG = `${dir}/log.jsonl`;
+
+// โฟลเดอร์ที่ plan/ กับ done/ ของโปรเจกต์นี้อยู่ใต้มัน — จุดเดียวที่ประกอบ path เหล่านี้
+// (ก่อนหน้านี้ commands/plan.ts hardcode `apps/<app>/plan` 10 จุด = ตายสนิทกับ repo เดี่ยว)
+const planBase = scaffolded
+  ? dirname(import.meta.dir) // <project>/.fapony
+  : monorepo
+    ? `${root}/apps/${app}`
+    : root;
+
+// fapony.config.json คือ *ข้อตกลง* ว่า plan อยู่ไหน ส่วน planBase ข้างบนเป็นแค่การเดา —
+// มีไฟล์เมื่อไหร่ต้องชนะการเดาเสมอ (vela ประกาศ `apps/vela/plan` ไว้ตรง ๆ บังเอิญตรงกับที่เดาได้
+// แต่ repo ที่วาง plan ไว้ที่อื่นจะพังเงียบ ๆ ถ้าไม่อ่าน)
+// อ่านที่ระดับโปรเจกต์เท่านั้น: สำเนาที่ scaffold ใน apps/<x>/.fapony/ ต้องไม่หยิบ config ของ
+// monorepo ที่ root มาใช้ เพราะนั่นเป็น path ของอีกโปรเจกต์หนึ่ง
+const configDir = scaffolded ? dirname(planBase) : root;
+
+const configPaths = ((): Record<string, string> => {
+  try {
+    const raw = readFileSync(`${configDir}/fapony.config.json`, "utf8");
+    return (JSON.parse(raw)?.paths ?? {}) as Record<string, string>;
+  } catch {
+    // ไม่มีไฟล์ / JSON เสีย → ใช้ค่าที่เดาได้ ไม่ใช่ error: memory ต้องทำงานได้โดยไม่มี fapony
+    return {};
+  }
+})();
+
+const fromConfig = (key: string): string | null =>
+  typeof configPaths[key] === "string"
+    ? join(configDir, configPaths[key])
+    : null;
+
+const planDir = fromConfig("planDir") ?? `${planBase}/plan`;
+
+// done/ อยู่ข้าง plan/ (ย้ายแล้วลึกเท่าเดิม ลิงก์ relative ในไฟล์รอด) — repo ที่ยัง layout เก่า
+// เก็บ plan/done/ ไว้ ก็ใช้ของเดิมต่อ ไม่ต้องย้ายก่อนถึงจะ sweep ได้
+const doneDir =
+  fromConfig("doneDir") ??
+  (!existsSync(`${planBase}/done`) && existsSync(`${planDir}/done`)
+    ? `${planDir}/done`
+    : `${planBase}/done`);
 
 const agent = process.env.MEM_AGENT || process.env.USER || "unknown";
 
@@ -131,4 +181,19 @@ export type {
   WorkKind,
   WorkRow,
 };
-export { agent, app, appendRaw, dir, KINDS, LOG, nextId, put, root, rows };
+export {
+  agent,
+  app,
+  appendRaw,
+  configDir,
+  dir,
+  doneDir,
+  KINDS,
+  LOG,
+  nextId,
+  planBase,
+  planDir,
+  put,
+  root,
+  rows,
+};

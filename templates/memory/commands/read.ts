@@ -4,7 +4,7 @@ import { doneLines, fmtClose, fmtRow, printOpenRows } from "../render.js";
 import { claimsOf, openRows, staleReport } from "../selectors.js";
 import type { CloseRow, WorkRow } from "../store.js";
 import { app, rows } from "../store.js";
-import { shippedNotMoved } from "./plan.js";
+import { planSweepCmd, shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
 
 const rotateLine = (n: number) =>
@@ -15,9 +15,9 @@ const rotateLine = (n: number) =>
 const planSweepLine = () => {
   const pending = shippedNotMoved();
   return pending.length
-    ? `\n## 📦 plan/done (${pending.length})\n` +
-        pending.map((n) => `- plan/${n}`).join("\n") +
-        `\n(ย้าย: bun .memory/mem.ts plan-sweep <ไฟล์.md> --apply)`
+    ? `\n## 📦 shipped ยังไม่ย้ายเข้า done/ (${pending.length})\n` +
+        pending.map((n) => `- ${n}`).join("\n") +
+        `\n(ย้าย: ${planSweepCmd} <ไฟล์.md> --apply)`
     : "";
 };
 
