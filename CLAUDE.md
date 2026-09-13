@@ -323,6 +323,15 @@ Show HN **นัดเดียว อย่าเผา**
 what/why/order, spec = how in detail** — ห้ามแปะ API shape/schema/wireframe/edge-case ลงใน plan section 7
 ตรงๆ ให้ link ไปที่ spec แทน
 
+**Frontmatter + TL;DR (เพิ่ม 2026-09-13):** หัวไฟล์มี `kind`/`status`/`blocked_by`/`blocks`/
+`superseded_by`/`spec` (ค่าเป็น EN เสมอ — เป็น enum ที่ tool อ่าน) แล้วตามด้วย `## TL;DR` ≤15 บรรทัด
+ที่เป็น**ส่วนเดียวที่เปลี่ยนได้ระหว่างทำงาน** (ติ๊ก checkbox + แปะ sha) — ทำให้ "สถานะตอนนี้" อ่านได้จาก
+40 บรรทัดแรกแทนที่จะดูดทั้งไฟล์ 140KB เข้า context · `plan_list` นับ checkbox ของ **section `##` แรก
+เท่านั้น** (ไม่ผูกกับคำว่า TL;DR จึงใช้ได้ทุกภาษา) และ render เป็น master checklist ได้ — **ห้ามสร้างไฟล์
+MASTER.md** ทุกบรรทัดของมัน derive จาก frontmatter + checkbox อยู่แล้ว ไฟล์ที่ maintain เองจะตกรุ่นเสมอ
+· `done/` ตั้งชื่อด้วย**วันที่ ship** (`YYYY-MM-DD-PLAN-x.md`) ไม่ใช่วันที่สร้าง — คลังของงานที่จบ ตอบคำถาม
+"วันนั้นจบอะไรบ้าง"
+
 Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)`) — ทำให้เป็น graph สองทาง ไม่ต้องมี tooling
 เพิ่ม แค่ markdown link ที่ skill `move-to-done` เดินหา inbound link ด้วย grep เอง (ไม่มี CLI enforcement
 แล้ว — ดู History ด้านบน)
@@ -354,7 +363,7 @@ fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime depen
 
 | Tool | Purpose |
 |------|---------|
-| `plan_list` | Pending `.fapony/plan/*.md` files joined with run history (title, run count, last verdict) — not a raw `ls` |
+| `plan_list` | Pending plan files grouped by state (`active` / `blocked` / `untouched` / `superseded` / `trackers`) + progress tally, joined with run history — not a raw `ls`. State comes from optional 4-key frontmatter; `format:"markdown"` renders the generated master checklist |
 | `handoff_collect` | Get machine facts from git (diff stat, commits, branch) |
 | `handoff_check` | Verify handoff conformance against facts |
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) + required `regime` (`code\|fix\|review\|plan`) — the task-shape axis |

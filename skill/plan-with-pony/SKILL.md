@@ -105,6 +105,42 @@ directory nobody reads.
 `ls <planDir>/` and check `PLAN-<feature>.md` doesn't already exist. If it does, don't overwrite
 it — pick a more specific name (e.g. `PLAN-<feature>-v2.md`) or ask which one is stale.
 
+**Open the file with frontmatter, then a TL;DR** — the two things that let every later question
+about this plan be answered from the first 40 lines instead of from 40KB:
+
+```yaml
+---
+kind: unit                        # `tracker` = a checklist that never finishes; omit = unit of work
+status: active                    # active | blocked | superseded (omit = not started)
+blocked_by: PLAN-mdl-documents.md # or a sentence — required when status: blocked
+blocks: PLAN-export-xlsx.md       # plans that cannot start until this one lands (comma-separated)
+spec: SPEC-calendar.md            # if Phase 4 produced one
+---
+```
+
+```markdown
+## TL;DR
+- **What:** …
+- **Why:** … (the decision or the pain, not the implementation)
+- **Done when:** … (testable)
+- **Order:** what this waits on / what it unblocks
+- **Progress:**
+  - [ ] chunk 1 — …
+  - [ ] chunk 2 — …
+```
+
+Only write the frontmatter keys you know. A new plan usually has `kind: unit` and nothing else;
+`blocks` goes in whenever the conversation said "this has to come before X" — that sentence is the
+ordering, and frontmatter is the only place it stays true.
+
+**The TL;DR is 15 lines, hard cap, and is the only part that changes while the work is in flight**
+(tick a box, stamp a short sha). Everything below it is the agreement. A TL;DR allowed to grow
+becomes a second copy of the plan within two months, and then neither copy can be trusted.
+
+`plan_list` tallies the checkboxes in the **first `##` section only**, whichever it is — so the
+progress count follows the TL;DR in any language, and the step list in section 6 stays detail
+rather than becoming status.
+
 Section 6 — every step must be verifiable. Section 8 — must link back to anything it came from.
 **Plan = what/why/order, spec = how in detail**: never paste API shapes, schemas, wireframes, or
 edge-case tables into section 7; link to the spec instead. The full template with per-section
@@ -112,7 +148,9 @@ prompts lives at `templates/PLAN.md` in the fapony repo.
 
 Write the plan in whatever language the dev has been using in this conversation — they have to read
 it. If they asked for a different one, use that instead. Section headings stay as the template has
-them.
+them, and **frontmatter keys and values stay English** (`status: blocked`, not a translation) —
+they are an enum a tool reads, not prose. Bullet labels inside the TL;DR are prose: translate them
+freely, the checkbox tally does not care what the section is called.
 
 ## Phase 3 — Hand back the guesses, not the plan
 
@@ -176,6 +214,8 @@ Then draft `<specDir>/SPEC-<feature>.md` (same config lookup as Phase 2) by:
 7. **Every output is a file** — not chat (so git can track it)
 8. **Plan must have all eight sections** — `_TBD_` is a legitimate value, a missing heading is not
 9. **Never overwrite an existing PLAN-<feature>.md** — check first, pick a different name
+10. **Ordering and blockers go in frontmatter, not only in prose** — "ต้องอยู่ก่อน X" buried in
+    paragraph 2 of a 40KB file is invisible to every later question about what to do next
 
 ## Piping into a non-MCP agent
 

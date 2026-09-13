@@ -4,10 +4,28 @@
 > for AI Agents for the rules each plan must pass before an agent may execute it.
 
 ```markdown
+---
+kind: unit                        # `tracker` for a checklist that never finishes; omit = unit of work
+status: active                    # active | blocked | superseded · omit = not started
+blocked_by: <plan or sentence>    # required when status: blocked
+blocks: PLAN-<other>.md           # plans that cannot start until this one lands (comma-separated)
+superseded_by: PLAN-<other>.md    # required when status: superseded
+spec: SPEC-<feature>.md           # if any
+---
+
 # PLAN-<feature>.md — <short name>
 
 > **Status:** 🚧 in-progress · **Owner:** <dev> · **Created:** <YYYY-MM-DD>
 > **Source spec:** [spec/<feature>.md](../spec/<feature>.md) — if any
+
+## TL;DR
+- **What:** one line
+- **Why:** one line — the decision or the pain, not the implementation
+- **Done when:** one line, testable
+- **Order:** what this waits on / what it unblocks (mirrors the frontmatter)
+- **Progress:**
+  - [x] chunk 1 — <what landed>  `<short sha>` <YYYY-MM-DD>
+  - [ ] chunk 2 — <what is next>
 
 ---
 
@@ -42,6 +60,19 @@ anything longer belongs in the spec file, not here.
 - link back to related files
 ```
 
+**Two rules that keep the file cheap to read:**
+- **The TL;DR is 15 lines, hard cap.** It is the only part that changes while the work is in
+  flight (tick a box, stamp a sha); everything below it is the agreement and changes only when
+  scope changes. That contract is what lets a reader trust the first 40 lines instead of pulling
+  100KB into context.
+- **`plan_list` counts the checkboxes in the first `##` section only** — whatever that section is
+  called, so the tally works in any language, and a step list deeper in the file stays detail
+  instead of becoming status.
+
+**Language:** frontmatter keys and values are English always (they are an enum a tool reads);
+headings stay as this template has them; everything else is written in whatever language the dev
+reads, because the plan is for them.
+
 **4 iron rules:**
 - Sections 1–4 are mandatory — if missing = plan is immature, agent must not execute
 - Section 6 each step must be verifiable — if you can't tell it passed = not clear yet
@@ -49,8 +80,7 @@ anything longer belongs in the spec file, not here.
 - **Plan is "what/why/order", spec is "how in detail"** — API shapes, schemas,
   wireframes, edge-case tables go in [spec/](../spec/), the plan only links to
   them. A plan that keeps growing past ~200 lines is spec content leaking in,
-  not a plan getting more thorough — split it out. (`fapony run` warns on this
-  automatically, see [CLAUDE.md](../CLAUDE.md) § Plan Core.)
+  not a plan getting more thorough — split it out.
 
 Use [templates/SPEC.md](SPEC.md) for the spec file itself — it links back to
 every plan that uses it, so the relationship reads both ways.
