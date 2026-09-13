@@ -11,6 +11,7 @@ import {
   newRun,
   setStatus,
 } from "../src/db/index.js";
+import { EMPTY_RESULT } from "../src/session/index.js";
 import {
   countPendingPlans,
   formatStatsText,
@@ -867,4 +868,50 @@ export function testStatsTokensCountSessionOnce(): void {
   console.log(
     "  ✓ getStatsData: a session's tokens are charged once, cache included",
   );
+}
+
+// The real Claude Code shape: `input_tokens` holds only the uncached remainder,
+// so printing it alone showed 750k in / 64.6M out — a coding agent reading less
+// than it wrote, which cannot happen. Cache read/write are input and must be in
+// the total; they stay separate in the data because they bill at other rates.
+export function testStatsUsageCountsCacheAsInput(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
+    setStatus(db, runId, "passed");
+
+    const data = getStatsData();
+    data.claudeCodeUsage = {
+      ...EMPTY_RESULT,
+      total_tokens_input: 750_000,
+      total_tokens_output: 64_000_000,
+      total_tokens_cache_read: 12_000_000_000,
+      total_tokens_cache_write: 900_000_000,
+      session_count: 827,
+      by_model: [
+        {
+          provider: "anthropic",
+          model: "claude-opus-5",
+          session_count: 218,
+          tokens_input: 164_722,
+          tokens_output: 16_860_080,
+          tokens_reasoning: 0,
+          tokens_cache_read: 2_135_000_000,
+          tokens_cache_write: 663_473,
+          cost: 0,
+        },
+      ],
+    };
+
+    const text = formatStatsText(data);
+    assert.ok(
+      text.includes("12,900,750,000 in (12,900,000,000 cached)"),
+      "total input = input + cache read + cache write, with the cached part shown",
+    );
+    assert.ok(
+      text.includes("2,135,828,195 in (2,135,663,473 cached)"),
+      "per-model line counts cache too",
+    );
+  });
+  console.log("  ✓ stats usage counts cache read/write as input");
 }

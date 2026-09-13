@@ -11,12 +11,29 @@ import type { StatsData } from "./data.js";
  * row can legitimately be all zeros — 145 big-pickle sessions recorded no
  * tokens at all — and without it a 0/0 line reads like a parse failure.
  */
+/**
+ * Input tokens as actually billed. Cache reads and cache writes ARE input —
+ * `tokens_input` alone is only the uncached remainder, and printing it renders a
+ * coding agent as having read less than it wrote (Claude Code showed 750k in /
+ * 64.6M out, which is impossible). The three stay separate in the readers on
+ * purpose: they bill at different rates, so pricing needs them apart. Summing
+ * belongs here, at the point of display.
+ */
+function fmtIn(input: number, cacheRead: number, cacheWrite: number): string {
+  const cached = cacheRead + cacheWrite;
+  const total = input + cached;
+  return cached > 0
+    ? `${total.toLocaleString()} in (${cached.toLocaleString()} cached)`
+    : `${total.toLocaleString()} in`;
+}
+
 function modelLine(m: ModelBreakdown, withCost: boolean): string {
   const name = `${m.provider ? `${m.provider}/` : ""}${m.model || "(no model id)"}`;
   const cost = withCost ? ` ($${m.cost.toFixed(4)})` : "";
   return (
     `    ${name}: ${m.session_count} sessions, ` +
-    `${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out${cost}`
+    `${fmtIn(m.tokens_input, m.tokens_cache_read, m.tokens_cache_write)} / ` +
+    `${m.tokens_output.toLocaleString()} out${cost}`
   );
 }
 
@@ -216,7 +233,7 @@ export function formatStatsText(data: StatsData): string {
   if (data.usage.session_count > 0) {
     lines.push("\nusage:");
     lines.push(
-      `  total: ${data.usage.total_tokens_input} input / ${data.usage.total_tokens_output} output / ${data.usage.total_tokens_reasoning} reasoning tokens over ${data.usage.session_count} sessions ($${data.usage.total_cost.toFixed(4)})`,
+      `  total: ${fmtIn(data.usage.total_tokens_input, data.usage.total_tokens_cache_read, data.usage.total_tokens_cache_write)} / ${data.usage.total_tokens_output.toLocaleString()} out / ${data.usage.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${data.usage.session_count} sessions ($${data.usage.total_cost.toFixed(4)})`,
     );
     if (data.usage.by_model.length > 0) {
       lines.push("  by model:");
@@ -229,7 +246,7 @@ export function formatStatsText(data: StatsData): string {
     const zu = data.zcodeUsage;
     lines.push("\nzcode usage:");
     lines.push(
-      `  total: ${zu.total_tokens_input} in / ${zu.total_tokens_output} out / ${zu.total_tokens_reasoning} reasoning tokens over ${zu.session_count} sessions`,
+      `  total: ${fmtIn(zu.total_tokens_input, zu.total_tokens_cache_read, zu.total_tokens_cache_write)} / ${zu.total_tokens_output.toLocaleString()} out / ${zu.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${zu.session_count} sessions`,
     );
     if (zu.by_model.length > 0) {
       lines.push("  by model:");
@@ -242,7 +259,7 @@ export function formatStatsText(data: StatsData): string {
     const cc = data.claudeCodeUsage;
     lines.push("\nclaude code usage:");
     lines.push(
-      `  total: ${cc.total_tokens_input.toLocaleString()} in / ${cc.total_tokens_output.toLocaleString()} out / ${cc.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${cc.session_count} sessions`,
+      `  total: ${fmtIn(cc.total_tokens_input, cc.total_tokens_cache_read, cc.total_tokens_cache_write)} / ${cc.total_tokens_output.toLocaleString()} out / ${cc.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${cc.session_count} sessions`,
     );
     if (cc.by_model.length > 0) {
       lines.push("  by model:");
@@ -255,7 +272,7 @@ export function formatStatsText(data: StatsData): string {
     const cx = data.codexUsage;
     lines.push("\ncodex usage:");
     lines.push(
-      `  total: ${cx.total_tokens_input.toLocaleString()} in / ${cx.total_tokens_output.toLocaleString()} out / ${cx.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${cx.session_count} sessions`,
+      `  total: ${fmtIn(cx.total_tokens_input, cx.total_tokens_cache_read, cx.total_tokens_cache_write)} / ${cx.total_tokens_output.toLocaleString()} out / ${cx.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${cx.session_count} sessions`,
     );
     if (cx.by_model.length > 0) {
       lines.push("  by model:");

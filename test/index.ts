@@ -339,6 +339,7 @@ import {
   testStatsTokensCountSessionOnce,
   testStatsTokensInByModel,
   testStatsUsageByModelIdentity,
+  testStatsUsageCountsCacheAsInput,
   testStatsVerdictNotesNotCappedAtDisplayLimit,
 } from "./stats.test.js";
 // Telemetry tests (split into test/telemetry/)
@@ -710,6 +711,7 @@ export async function cmdTest(): Promise<void> {
   testStatsByModelGroupsByClientProviderAgent();
   testStatsSpawnModelWinsOverSessionId();
   testStatsByPlanModeSplit();
+  testStatsUsageCountsCacheAsInput();
   testStatsByRegimeSplit();
   testStatsTokensInByModel();
   testStatsTokensCountSessionOnce();
