@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 
 // append-only memory log. ห้ามแก้บรรทัดเก่า — ปิดงาน = close (tombstone), git = ประวัติ
-// log แยกต่อ app: apps/<app>/.memory/log.jsonl  → worktree ต่างกันไม่เคยแตะไฟล์เดียวกัน
+// log อยู่ข้างไฟล์นี้เสมอเมื่อถูกวางโดย `fapony init` (<project>/.fapony/.memory/log.jsonl);
+// สำเนากลางใน monorepo (โค้ดชุดเดียวที่ root) ยังแยก log ราย app: apps/<app>/.memory/log.jsonl
 //
 // CLI entry point — all logic lives in:
 //   store.ts       (types + config + rows/put)

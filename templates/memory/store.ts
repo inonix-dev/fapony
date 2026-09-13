@@ -1,7 +1,7 @@
 // store.ts — types + config + read/write primitives for the append-only memory log
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { basename, dirname } from "node:path";
 
 // --- types ---
 
@@ -58,8 +58,26 @@ const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"])
 // ไม่ต้อง config/flag ทั้งสองแบบ
 const app = process.env.MEM_APP ?? basename(root).replace(/^wt-/, "");
 const monorepo = existsSync(`${root}/apps/${app}`);
-const dir = monorepo ? `${root}/apps/${app}/.memory` : `${root}/.memory`;
+
+// สำเนาที่ `fapony init` วางไว้ อยู่ใน <project>/.fapony/.memory/ — log กับ plan ของมัน
+// ต้องอิงโฟลเดอร์ตัวเอง ไม่ใช่ git root: เคสที่พังจริงคือ apps/<x>/.fapony/.memory/ ใน monorepo
+// ซึ่ง heuristic ด้านบนจะชี้ไป apps/<ชื่อ worktree>/.memory = เขียน log ปนโปรเจกต์อื่น
+// (สำเนากลางแบบ vela — โค้ดชุดเดียวที่ root, log แยกราย app — ไม่เข้าเงื่อนไขนี้ ใช้ทางเดิม)
+const scaffolded = import.meta.dir.includes("/.fapony/.memory");
+const dir = scaffolded
+  ? import.meta.dir
+  : monorepo
+    ? `${root}/apps/${app}/.memory`
+    : `${root}/.memory`;
 const LOG = `${dir}/log.jsonl`;
+
+// โฟลเดอร์ที่ plan/ กับ done/ ของโปรเจกต์นี้อยู่ใต้มัน — จุดเดียวที่ประกอบ path เหล่านี้
+// (ก่อนหน้านี้ commands/plan.ts hardcode `apps/<app>/plan` 10 จุด = ตายสนิทกับ repo เดี่ยว)
+const planBase = scaffolded
+  ? dirname(import.meta.dir) // <project>/.fapony
+  : monorepo
+    ? `${root}/apps/${app}`
+    : root;
 
 const agent = process.env.MEM_AGENT || process.env.USER || "unknown";
 
@@ -131,4 +149,16 @@ export type {
   WorkKind,
   WorkRow,
 };
-export { agent, app, appendRaw, dir, KINDS, LOG, nextId, put, root, rows };
+export {
+  agent,
+  app,
+  appendRaw,
+  dir,
+  KINDS,
+  LOG,
+  nextId,
+  planBase,
+  put,
+  root,
+  rows,
+};
