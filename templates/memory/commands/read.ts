@@ -3,21 +3,21 @@
 import { doneLines, fmtClose, fmtRow, printOpenRows } from "../render.js";
 import { claimsOf, openRows, staleReport } from "../selectors.js";
 import type { CloseRow, WorkRow } from "../store.js";
-import { app, rows } from "../store.js";
+import { app, memCmd, rows } from "../store.js";
 import { planSweepCmd, shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
 
 const rotateLine = (n: number) =>
   n >= THRESHOLD
-    ? `\n## 🗜 log ${n} rows (≥ ${THRESHOLD}) — รัน: bun .memory/mem.ts rotate --apply`
+    ? `\n## 🗜 log ${n} rows (≥ ${THRESHOLD}) — run: ${memCmd} rotate --apply`
     : "";
 
 const planSweepLine = () => {
   const pending = shippedNotMoved();
   return pending.length
-    ? `\n## 📦 shipped ยังไม่ย้ายเข้า done/ (${pending.length})\n` +
+    ? `\n## 📦 shipped but not archived into done/ (${pending.length})\n` +
         pending.map((n) => `- ${n}`).join("\n") +
-        `\n(ย้าย: ${planSweepCmd} <ไฟล์.md> --apply)`
+        `\n(move: ${planSweepCmd} <file.md> --apply)`
     : "";
 };
 
@@ -29,7 +29,7 @@ export const cmdNow = () => {
   const decisionN = openRows(all).filter((r) => r.kind === "decision").length;
   const noteN = openRows(all).filter((r) => r.kind === "note").length;
   console.log(
-    `\n## decision ${decisionN} · note ${noteN} — ค้นด้วย: bun .memory/mem.ts find <คำ>`,
+    `\n## decision ${decisionN} · note ${noteN} — search: ${memCmd} find <word>`,
   );
   const stale = staleReport(all);
   if (stale.length)
@@ -56,7 +56,7 @@ export const cmdFind = (a: string[]) => {
   // mem find <คำ> — grep text/spec ไม่สนตัวพิมพ์เล็กใหญ่, ล่าสุดก่อน, จำกัด 20 แถว
   const q = a.join(" ").toLowerCase();
   if (!q) {
-    console.error("ใช้: bun .memory/mem.ts find <คำ>");
+    console.error(`usage: ${memCmd} find <word>`);
     process.exit(1);
   }
   const hits = rows()
@@ -77,7 +77,7 @@ export const cmdFind = (a: string[]) => {
     console.log(
       `- [${r.id}] ${r.ts.slice(0, 10)} ${r.kind} ${r.text}${r.spec ? ` → ${r.spec}` : ""}`,
     );
-  if (!hits.length) console.log("(ไม่เจอ)");
+  if (!hits.length) console.log("(no matches)");
 };
 
 export const cmdKickoff = (a: string[]) => {
@@ -89,7 +89,7 @@ export const cmdKickoff = (a: string[]) => {
     // ไม่มี args = now + section "ล่าสุด" = closes 10 รายการล่าสุด
     console.log(`# ${app} — ${all.length} entries`);
     printOpenRows(all, { showHold: true });
-    console.log(`\n## ล่าสุด\n${doneLines(all, 10).join("\n")}`);
+    console.log(`\n## recent\n${doneLines(all, 10).join("\n")}`);
     const stale = staleReport(all);
     if (stale.length)
       console.log(
@@ -132,7 +132,7 @@ export const cmdKickoff = (a: string[]) => {
       );
     }
     if (!specRows.length && !specDecisions.length && !specCloses.length) {
-      console.log("(ไม่มีข้อมูลสำหรับ spec นี้)");
+      console.log("(no entries for this spec)");
     }
   } else {
     // id = brief ของงานนั้น
@@ -140,7 +140,7 @@ export const cmdKickoff = (a: string[]) => {
     const byId = new Map(workAll.map((r) => [r.id, r] as const));
     const target = byId.get(arg);
     if (!target) {
-      console.error(`ไม่มี id "${arg}" ใน log`);
+      console.error(`no id "${arg}" in the log`);
       process.exit(1);
     }
     const claims = claimsOf(all);

@@ -19,13 +19,13 @@ export const cmdRotate = (a: string[]) => {
 
   if (!apply) {
     console.log(
-      `${all.length} rows (threshold ${THRESHOLD})${over ? " — เกินแล้ว, รัน --apply" : " — ยังไม่ถึง"}`,
+      `${all.length} rows (threshold ${THRESHOLD})${over ? " — over the threshold, run --apply" : " — under the threshold"}`,
     );
     return;
   }
   if (!over && !process.env.MEM_FORCE) {
     console.log(
-      `${all.length}/${THRESHOLD} rows — ยังไม่ถึง threshold ไม่ต้อง rotate (MEM_FORCE=1 ถ้าอยากทำเลย)`,
+      `${all.length}/${THRESHOLD} rows — under the threshold, no rotate needed (MEM_FORCE=1 to do it anyway)`,
     );
     return;
   }
@@ -35,7 +35,7 @@ export const cmdRotate = (a: string[]) => {
   const archived = join(dir, `log.${stamp}.jsonl`);
   if (existsSync(archived)) {
     console.error(
-      `${archived} มีอยู่แล้ว (rotate ไปแล้ววันนี้?) — ลบ/ย้ายไฟล์เก่าก่อนถ้าอยากรันซ้ำ`,
+      `${archived} already exists (rotated today?) — remove or move it first to run again`,
     );
     process.exit(1);
   }
@@ -45,7 +45,7 @@ export const cmdRotate = (a: string[]) => {
   const mv = Bun.spawnSync(["git", "mv", LOG, archived]);
   if (mv.exitCode !== 0) {
     console.error(
-      `git mv ล้มเหลว (${mv.stderr.toString().trim()}) — rotate ไม่สำเร็จ`,
+      `git mv failed (${mv.stderr.toString().trim()}) — rotate aborted`,
     );
     process.exit(1);
   }
@@ -54,6 +54,6 @@ export const cmdRotate = (a: string[]) => {
   for (const r of keep) appendRaw(LOG, r);
 
   console.log(
-    `rotated: ${all.length} rows → archive ${archived.replace(`${dir}/`, "")} (git history อยู่ครบ), เหลือ ${keep.length} แถว (open + active claim) ใน log.jsonl`,
+    `rotated: ${all.length} rows → archive ${archived.replace(`${dir}/`, "")} (git history intact), ${keep.length} row(s) left in log.jsonl (open + active claims)`,
   );
 };

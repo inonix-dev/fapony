@@ -15,15 +15,7 @@ import {
 import { dirname, join, relative, resolve } from "node:path";
 
 import { openRows } from "../selectors.js";
-import {
-  doneDir,
-  dir as memDir,
-  nextId,
-  planDir,
-  put,
-  root,
-  rows,
-} from "../store.js";
+import { doneDir, memCmd, nextId, planDir, put, rel, rows } from "../store.js";
 
 const SHIPPED = /^>\s*✅/m;
 
@@ -32,11 +24,6 @@ const SHIPPED = /^>\s*✅/m;
 export const hasShippedHeader = (file: string): boolean =>
   SHIPPED.test(readFileSync(file, "utf8").slice(0, 2048));
 
-// path ที่เอาไว้โชว์/บันทึกลง log — อิง repo root เสมอ (`apps/vela/plan`, `.fapony/plan`)
-const rel = (p: string) => relative(root, p) || ".";
-
-// คำสั่งที่บอกให้ผู้ใช้พิมพ์ ต้องเป็น path ของ mem.ts ตัวที่กำลังรันอยู่จริง ไม่ใช่ค่าคงที่
-const memCmd = `bun ${rel(memDir)}/mem.ts`;
 export const planSweepCmd = `${memCmd} plan-sweep`;
 
 const mdFiles = (dir: string): string[] =>
@@ -144,7 +131,7 @@ export const shippedNotMoved = (): string[] => {
 export const cmdPlanSweep = (a: string[]) => {
   const dir = planDir;
   if (!existsSync(dir)) {
-    console.log(`ไม่มี ${rel(dir)}/ — ไม่มีอะไรให้ sweep`);
+    console.log(`no ${rel(dir)}/ — nothing to sweep`);
     return;
   }
   const candidates = shippedNotMoved();
@@ -154,36 +141,38 @@ export const cmdPlanSweep = (a: string[]) => {
 
   if (!target) {
     if (!candidates.length) {
-      console.log(`ไม่มี PLAN ที่มี header ✅ shipped ค้างอยู่นอก ${rel(doneDir)}/`);
+      console.log(
+        `no PLAN with a ✅ shipped header is sitting outside ${rel(doneDir)}/`,
+      );
       return;
     }
     const all = rows();
     console.log(
-      `# plan-sweep — ${candidates.length} ไฟล์มี header shipped แต่ยังไม่ย้าย\n`,
+      `# plan-sweep — ${candidates.length} file(s) marked shipped but not archived\n`,
     );
     for (const name of candidates) {
       const spec = `${rel(dir)}/${name}`;
       const openN = openRows(all).filter((r) => r.spec === spec).length;
       const warn = openN
-        ? `  ⚠ ${openN} แถวเปิดอยู่ (next/bug/hold/decision/note) — เช็คก่อนย้าย`
+        ? `  ⚠ ${openN} open row(s) (next/bug/hold/decision/note) — check before moving`
         : "";
       console.log(`- ${rel(dir)}/${name}${warn}`);
     }
-    console.log(`\nย้าย: ${planSweepCmd} <ไฟล์.md> --apply`);
+    console.log(`\nmove: ${planSweepCmd} <file.md> --apply`);
     return;
   }
 
   const src = join(dir, target);
   if (!existsSync(src)) {
-    console.error(`ไม่พบ ${rel(src)}`);
+    console.error(`${rel(src)} not found`);
     process.exit(1);
   }
   const shipped = hasShippedHeader(src);
   if (!apply) {
     console.log(
       shipped
-        ? `${target}: มี header ✅ shipped — พร้อมย้าย (เพิ่ม --apply)`
-        : `${target}: ไม่มี header ✅ shipped ที่หัวไฟล์ — ตรวจก่อนว่าจบทั้งไฟล์จริงไหม`,
+        ? `${target}: has a ✅ shipped header — ready to move (add --apply)`
+        : `${target}: no ✅ shipped header at the top — check the whole file is actually done`,
     );
     return;
   }
@@ -192,7 +181,7 @@ export const cmdPlanSweep = (a: string[]) => {
   // แต่รัน --apply ตรง ๆ ข้ามได้หมด → เสี่ยงเวลา agent ship เองอัตโนมัติไม่มีคนเช็ค แก้เป็น hard block
   if (!shipped && !process.env.MEM_FORCE) {
     console.error(
-      `${target}: ไม่มี header ✅ shipped ที่หัวไฟล์ — ห้ามย้าย (MEM_FORCE=1 ถ้าจำเป็นจริง ๆ)`,
+      `${target}: no ✅ shipped header at the top — refusing to move (MEM_FORCE=1 to override)`,
     );
     process.exit(1);
   }
@@ -200,7 +189,7 @@ export const cmdPlanSweep = (a: string[]) => {
   const openN = openRows(rows()).filter((r) => r.spec === openSpec);
   if (openN.length && !process.env.MEM_FORCE) {
     console.error(
-      `${target}: ยังมี ${openN.length} แถวเปิดอยู่ (next/bug/hold/decision/note) — ปิดหรือย้าย spec ก่อน (MEM_FORCE=1 ถ้าจำเป็นจริง ๆ):\n` +
+      `${target}: still has ${openN.length} open row(s) (next/bug/hold/decision/note) — close them or move the spec first (MEM_FORCE=1 to override):\n` +
         openN.map((r) => `  [${r.id}] ${r.kind} ${r.text}`).join("\n"),
     );
     process.exit(1);
@@ -208,7 +197,7 @@ export const cmdPlanSweep = (a: string[]) => {
 
   const dst = join(doneDir, target);
   if (existsSync(dst)) {
-    console.error(`มี ${rel(dst)} อยู่แล้ว`);
+    console.error(`${rel(dst)} already exists`);
     process.exit(1);
   }
 
@@ -218,9 +207,7 @@ export const cmdPlanSweep = (a: string[]) => {
   Bun.spawnSync(["git", "add", src]);
   const mv = Bun.spawnSync(["git", "mv", src, dst]);
   if (mv.exitCode !== 0) {
-    console.error(
-      `git mv ล้มเหลว (${mv.stderr.toString().trim()}) — ย้ายไม่สำเร็จ`,
-    );
+    console.error(`git mv failed (${mv.stderr.toString().trim()}) — not moved`);
     process.exit(1);
   }
 
@@ -240,14 +227,14 @@ export const cmdPlanSweep = (a: string[]) => {
     }
   }
 
-  console.log(`ย้าย ${rel(src)} → ${rel(dst)}`);
+  console.log(`moved ${rel(src)} → ${rel(dst)}`);
   console.log(
     nested
-      ? `แก้ลิงก์ในไฟล์เอง: ${ownLinks}`
-      : `แก้ลิงก์ในไฟล์เอง: 0 (ย้ายลึกเท่าเดิม ลิงก์เดิมยังถูก)`,
+      ? `links rewritten inside the file: ${ownLinks}`
+      : `links rewritten inside the file: 0 (same depth, existing links still resolve)`,
   );
   console.log(
-    `แก้ inbound link: ${inbound} ลิงก์ ใน ${inboundFiles} ไฟล์ (สแกนแค่ ${rel(dir)}/**)`,
+    `inbound links rewritten: ${inbound} in ${inboundFiles} file(s) (scanned ${rel(dir)}/** only)`,
   );
 
   // log decision — record ship event (reuse existing kind, ไม่ต้อง schema ใหม่)
@@ -274,7 +261,7 @@ export const cmdPlanSweep = (a: string[]) => {
   }
   if (plainTextTotal > 0) {
     console.log(
-      `⚠ plain-text mention ${plainTextTotal} จุด ใน ${plainTextFiles.length} ไฟล์ (ใน ${rel(dir)}/) — แก้เอง grep แล้วอัปเดต path:\n${plainTextFiles.join("\n")}`,
+      `⚠ ${plainTextTotal} plain-text mention(s) in ${plainTextFiles.length} file(s) under ${rel(dir)}/ — grep and update the paths yourself:\n${plainTextFiles.join("\n")}`,
     );
   }
 
@@ -293,7 +280,7 @@ export const cmdPlanSweep = (a: string[]) => {
     .trim();
   if (grep)
     console.log(
-      `⚠ ไฟล์นอก ${rel(dir)}/ ยังพูดถึง "${target}" — เช็คเอง (ไม่ auto-fix):\n${grep}`,
+      `⚠ files outside ${rel(dir)}/ still mention "${target}" — check them yourself (not auto-fixed):\n${grep}`,
     );
 };
 
@@ -303,7 +290,7 @@ export const cmdPlanCheck = (a: string[]) => {
   const quiet = a.includes("--quiet");
   const dir = planDir;
   if (!existsSync(dir)) {
-    if (!quiet) console.log(`ไม่มี ${rel(dir)}/ — skip`);
+    if (!quiet) console.log(`no ${rel(dir)}/ — skip`);
     return;
   }
 
@@ -312,14 +299,14 @@ export const cmdPlanCheck = (a: string[]) => {
   // 1) List active PLANs
   const active = mdFiles(dir).filter((f) => !f.includes("/done/"));
   if (!quiet) {
-    console.log(`${rel(dir)}/ — ${active.length} ไฟล์ (active)\n`);
+    console.log(`${rel(dir)}/ — ${active.length} file(s) (active)\n`);
   }
 
   // 2) Shipped-not-moved check
   const shipped = shippedNotMoved();
   for (const name of shipped) {
     issues.push(
-      `${name} — shipped header แต่ยังไม่ย้าย\n   fix: ${planSweepCmd} ${name} --apply`,
+      `${name} — has a shipped header but was never archived\n   fix: ${planSweepCmd} ${name} --apply`,
     );
   }
 
@@ -344,7 +331,7 @@ export const cmdPlanCheck = (a: string[]) => {
         const rel = f.replace(`${dir}/`, "");
         const line = src.slice(0, m.index).split("\n").length;
         issues.push(
-          `${rel}:${line} — broken link → ${target} (ไม่มีไฟล์นี้ใน plan/)\n   fix: แก้ path หรือสร้างไฟล์ที่ ref`,
+          `${rel}:${line} — broken link → ${target} (no such file in plan/)\n   fix: correct the path or create the file it points at`,
         );
       }
     }
