@@ -147,7 +147,7 @@ Everything in between is the agent's own business.
 ## The 8 tools
 
 ```
-discover: plan_list (pending plan files joined with their run history)
+discover: plan_list (plans grouped by state, joined with their run history)
 measure:  handoff_collect ── fapony_stats ── fapony_usage
 verify:   handoff_check ── verdict_submit ── verification_report
 recall:   project_health_context (what failed in these files before — optional, never required)
@@ -156,7 +156,7 @@ recall:   project_health_context (what failed in these files before — optional
 
 | Tool | Tier | Purpose |
 |------|------|---------|
-| `plan_list` | discover | Pending `.fapony/plan/*.md` files joined with run history (title, run count, last verdict) — not a raw `ls` |
+| `plan_list` | discover | Plan files grouped by state — active / blocked / untouched / superseded / trackers — with a progress tally and each one's run history. Not a raw `ls`; see [Plans your agent can answer questions about](#plans-your-agent-can-answer-questions-about) |
 | `handoff_collect` | measure | Machine facts from git (diff stat, commits, branch) |
 | `fapony_stats` | measure | KPIs across runs: by-model (gates, fail rate, quality, tokens), by-grade, planned vs dove-in, regime x model, per-file risk; `group_by: reason_code\|plan\|file` for top-N slices |
 | `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
@@ -168,6 +168,65 @@ recall:   project_health_context (what failed in these files before — optional
 Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
 
 Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](docs/mcp-handcheck.md).
+
+## Plans your agent can answer questions about
+
+Plans stay markdown files in your repo — nothing moves into a database. Four optional
+frontmatter keys are enough to make a folder of them queryable:
+
+```yaml
+---
+kind: unit                     # tracker = a checklist that never finishes
+status: blocked                # active | blocked | superseded
+blocked_by: PLAN-documents.md  # a plan, or a sentence
+blocks: PLAN-export.md         # ordering, stated once instead of buried in prose
+---
+
+# PLAN — month view in /quick
+
+## TL;DR                       # 15 lines; the only part that changes mid-flight
+- **Why:** two menu entries for the same data at different granularity
+- [x] chunk 1 — month grid   `a1b2c3` 2026-09-13
+- [ ] chunk 2 — move overdue out
+```
+
+Then ask your agent *"what's left, and what's blocked?"* — `plan_list` answers from the
+frontmatter and from fapony's own run history, without reading a single 100KB plan body into
+context (`format: "markdown"`):
+
+```
+## active — in order (2)
+- [ ] PLAN-calendar — 1/3 · unblocks PLAN-export
+- [ ] PLAN-export — never attempted
+## blocked (1)
+- [ ] PLAN-attendance — waiting: PLAN-documents.md
+## untouched (14) · trackers (3)
+done: 63 archived
+```
+
+**Plans with no frontmatter still work** — they are grouped by run history alone (attempted =
+active, never attempted = untouched), so an existing folder of plans is queryable before anyone
+annotates anything. Two details that keep it honest over years:
+
+- The progress tally counts checkboxes in the **first `##` section only**, anchored by position
+  rather than by the word "TL;DR" — so it works in any language, and a step list deeper in the
+  file stays detail instead of becoming status.
+- **There is no `MASTER.md`.** Every line of the list above is derived from frontmatter and
+  checkboxes, so it cannot drift; a hand-kept master file always does.
+
+The layout, and why archiving is a plain `git mv`:
+
+```
+.fapony/plan/PLAN-calendar.md    live
+.fapony/done/PLAN-calendar.md    shipped — same name, same depth, so every relative
+                                 link inside the file survives the move untouched
+.fapony/spec/SPEC-calendar.md    specs are a reference library; they are never archived
+```
+
+Ship dates live in the plan's own header (`> ✅ **shipped 2026-09-13** (a1b2c3)`), not in the
+filename — `grep -h shipped .fapony/done/*.md | sort` answers "what landed when" without paying
+to rewrite every inbound link on every ship. Example plans, including an un-annotated one and an
+archived one: [examples/](examples/).
 
 ## Why measure from the outside
 
@@ -197,7 +256,7 @@ Code expects, so a client can symlink the directory rather than copy the file:
 |-------|---------|---------|
 | `skill/plan-with-pony/` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-pony` |
 | `skill/review-pony/` | Review as verification, wired to fapony: known patterns before, verdict after | `/review-pony` |
-| `skill/move-to-done/` | Archive PLAN to .fapony/plan/done/ after ship | `/move-to-done` |
+| `skill/move-to-done/` | Archive a shipped PLAN into .fapony/done/ | `/move-to-done` |
 | `skill/git-commit-conventional/` | Commit split by concern + conventional message | `/git-commit` |
 | `skill/git-ship/` | Push branch, open PR with drafted title/body, merge, reset branch onto base | `/ship`, `/pr` |
 
@@ -286,7 +345,7 @@ fapony test                              # self-check
 - `worktrees` — name → absolute path mapping
 - `review.maxRounds` — round cap enforced by the gate
 - `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when `.fapony/.memory/mem.ts` exists
-- `paths` (`planDir`/`specDir`/`memoryEntry`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
+- `paths` (`planDir`/`doneDir`/`specDir`/`memoryEntry`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
 - `usageWeb` — optional `{ port, hostname }` for `fapony usage-web` server defaults. Run `fapony usage-scan` first to populate the cache.
 
 Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases are documented in [CLAUDE.md](CLAUDE.md) — this README intentionally doesn't duplicate them.

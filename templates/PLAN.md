@@ -69,6 +69,10 @@ anything longer belongs in the spec file, not here.
   called, so the tally works in any language, and a step list deeper in the file stays detail
   instead of becoming status.
 
+**Where files live:** `.fapony/plan/` live · `.fapony/done/` shipped (a sibling, so archiving is a
+plain `git mv` that keeps every relative link working) · `.fapony/spec/` every spec, never archived.
+See [examples/](../examples/) for the whole layout with one file per shape.
+
 **Language:** frontmatter keys and values are English always (they are an enum a tool reads);
 headings stay as this template has them; everything else is written in whatever language the dev
 reads, because the plan is for them.

@@ -25,7 +25,8 @@ function withTempDb(fn: () => void): void {
 
 function makeWorktree(): string {
   const wt = mkdtempSync(join(tmpdir(), "fapony-plans-wt-"));
-  mkdirSync(join(wt, ".fapony", "plan", "done"), { recursive: true });
+  mkdirSync(join(wt, ".fapony", "plan"), { recursive: true });
+  mkdirSync(join(wt, ".fapony", "done"), { recursive: true });
   return wt;
 }
 
@@ -74,7 +75,7 @@ export function testPlanListJoinsRunHistory(): void {
     const wt = makeWorktree();
     const planPath = join(wt, ".fapony", "plan", "PLAN-bar.md");
     writeFileSync(planPath, "# Bar plan\n\nbody");
-    writeFileSync(join(wt, ".fapony", "plan", "done", "PLAN-old.md"), "# Old");
+    writeFileSync(join(wt, ".fapony", "done", "PLAN-old.md"), "# Old");
 
     const db = openDb();
     const runId = newRun(db, "myproj", planPath, null, "abc123");
@@ -203,4 +204,19 @@ export function testPlanListProgressAndMarkdown(): void {
     assert.ok(md.includes("done: 0 archived"));
   });
   console.log("  ✓ plan_list counts summary checkboxes and renders markdown");
+}
+
+export function testPlanListLegacyArchiveLocation(): void {
+  withTempDb(() => {
+    // Repos scaffolded before done/ moved beside plan/ keep plan/done/ — their
+    // archive count must not silently drop to zero.
+    const wt = mkdtempSync(join(tmpdir(), "fapony-plans-legacy-"));
+    mkdirSync(join(wt, ".fapony", "plan", "done"), { recursive: true });
+    writeFileSync(join(wt, ".fapony", "plan", "done", "PLAN-old.md"), "# Old");
+    const data = parseToolResult(toolPlanList({ worktree: wt })) as {
+      done: number;
+    };
+    assert.equal(data.done, 1);
+  });
+  console.log("  ✓ plan_list falls back to the legacy plan/done/ archive");
 }

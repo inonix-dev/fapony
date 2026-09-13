@@ -163,6 +163,7 @@ import {
 import {
   testPlanListGroupsByFrontmatter,
   testPlanListJoinsRunHistory,
+  testPlanListLegacyArchiveLocation,
   testPlanListMissingDir,
   testPlanListNeverAttempted,
   testPlanListProgressAndMarkdown,
@@ -597,6 +598,7 @@ export async function cmdTest(): Promise<void> {
   testPlanListUsesWorktreeConfigPaths();
   testPlanListGroupsByFrontmatter();
   testPlanListProgressAndMarkdown();
+  testPlanListLegacyArchiveLocation();
   testEndToEndPipeline();
   testExtractMultiFieldNone();
   testExtractMultiFieldSingle();

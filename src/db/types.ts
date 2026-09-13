@@ -58,6 +58,7 @@ export interface Config {
     // plan/spec/memory layout inside each worktree (relative to worktree root).
     planDir?: string;
     specDir?: string;
+    doneDir?: string;
     memoryEntry?: string;
     evidenceFile?: string;
   } | null;

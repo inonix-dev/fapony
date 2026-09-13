@@ -98,7 +98,8 @@ edits instead of a re-draft.
 
 **Resolve where plans live first — never assume `.fapony/plan/`.** Read
 `<worktree>/fapony.config.json` and use `paths.planDir` / `paths.specDir`; if the file or those
-keys are missing, fall back to `.fapony/plan` / `.fapony/spec`. Repos that keep plans beside the
+keys are missing, fall back to `.fapony/plan` / `.fapony/spec` (shipped plans sit in
+`paths.doneDir`, default `.fapony/done` — check it too when looking for a name collision). Repos that keep plans beside the
 app (e.g. `apps/<app>/plan`) are normal — writing to the default there scatters plans into a
 directory nobody reads.
 
