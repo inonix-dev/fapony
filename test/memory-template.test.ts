@@ -1,4 +1,4 @@
-// test/memory-template.test.ts — path resolution inside templates/memory/store.ts.
+// test/memory-template.test.ts — path resolution inside templates/mem/store.ts.
 //
 // store.ts resolves planDir/doneDir at import time from git root + its own location +
 // fapony.config.json, so it can only be exercised by importing it inside a real fixture
@@ -21,7 +21,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const TEMPLATE = join(import.meta.dir, "..", "templates", "memory");
+const TEMPLATE = join(import.meta.dir, "..", "templates", "mem");
 
 type Paths = { dir: string; plan: string; done: string };
 

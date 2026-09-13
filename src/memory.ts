@@ -13,7 +13,7 @@ import {
 import { assertSafe } from "./safety.js";
 import { templateArgs } from "./util.js";
 
-/** Default memory commands — matches templates/memory/mem.ts CLI. */
+/** Default memory commands — matches templates/mem/mem.ts CLI. */
 export const DEFAULT_MEMORY: Config["memory"] = {
   claim: ["bun", DEFAULT_MEMORY_ENTRY, "claim", "{id}"],
   close: ["bun", DEFAULT_MEMORY_ENTRY, "close", "{id}", "{msg}"],
