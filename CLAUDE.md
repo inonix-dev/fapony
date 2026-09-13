@@ -274,6 +274,35 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 
 ---
 
+## Memory: `.fapony/.memory/log.<คุณ>.jsonl` (append-only)
+
+log คือ **สมองส่วนกลางของโปรเจกต์** — มันอยู่ใน git ฉะนั้นใครก็ตามที่ clone repo นี้ได้
+`decision` / `bug` / `note` ทั้งหมดติดมาด้วยทันที นั่นคือเหตุผลที่มันอยู่ในนี้ ไม่ใช่ใน
+`~/.config/fapony/state.db` (ของเครื่องใครเครื่องมัน clone ไม่ติด) · ชื่อไฟล์มาจาก
+`git config user.name` — คนละใบต่อคน จึงไม่มีอะไรให้ merge ชน
+
+**บันทึกระหว่างทำงาน ไม่ต้องรอให้สั่ง** — ไม่มีกลไกไหนเขียนให้ มีแต่ agent ที่รันเอง:
+
+```bash
+bun .fapony/.memory/mem.ts kickoff .fapony/plan/PLAN-x.md   # เปิด session ด้วยอันนี้
+bun .fapony/.memory/mem.ts add decision "ตัดสินอะไร เพราะอะไร" .fapony/plan/PLAN-x.md
+bun .fapony/.memory/mem.ts add bug "อะไรพัง"
+bun .fapony/.memory/mem.ts add note "สถานะที่ session หน้าต้องรู้"
+bun .fapony/.memory/mem.ts close <id> "แก้แล้ว <sha>"        # ปิด bug ที่แก้เสร็จ
+bun .fapony/.memory/mem.ts find "usage-web"                  # grep text/spec
+```
+
+เขียนแต่ละแถวให้ **standalone** — มันถูกอ่านอีกทีในอีกหลายเดือนโดยไม่มีบทสนทนานี้ให้ย้อนดู ·
+`close` เป็นตัวเดียวที่ปิด `bug` ไม่มีมัน list จะโตอย่างเดียว · `next`/`claim`/`synced`/`stale`
+เลิกใช้แล้ว (ดู vela CLAUDE.md ว่าทำไม)
+
+**ทำไมไม่ยัดกฎนี้ลง `SERVER_INSTRUCTIONS`:** mem.ts เป็นของ *โปรเจกต์* ไม่ใช่ของ fapony และมี
+เฉพาะคนที่รัน `fapony init` · `SERVER_INSTRUCTIONS` จ่ายทุก session ของทุกคนที่ต่อ MCP —
+คนส่วนใหญ่ไม่มีไฟล์นี้ ข้อความจะกลายเป็นคำสั่งให้รันคำสั่งที่พัง · habit นี้จึงอยู่ในไฟล์กฎของ repo
+ที่มันมีจริง และ `fapony init` แค่**พิมพ์ snippet ให้ไปแปะ** ([src/init.ts](src/init.ts))
+
+---
+
 ## Moat — สามข้อที่ต้องถืออย่างน้อยสอง
 
 ภัยคุกคามที่ฆ่า fapony ได้จริงมีแบบเดียว: **client เจ้าของ model ทำเอง** (Claude Code/Cursor ออกฟีเจอร์
