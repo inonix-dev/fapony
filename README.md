@@ -255,7 +255,7 @@ Verification produces a quality grade, not just pass/fail:
 
 ## Skills
 
-fapony ships six portable skills, each as `skill/<name>/SKILL.md` — the layout Claude
+fapony ships five portable skills, each as `skill/<name>/SKILL.md` — the layout Claude
 Code expects, so a client can symlink the directory rather than copy the file:
 
 | Skill | Purpose | Trigger |
@@ -265,7 +265,6 @@ Code expects, so a client can symlink the directory rather than copy the file:
 | `skill/move-to-done/` | Archive a shipped PLAN into .fapony/done/ | `/move-to-done` |
 | `skill/git-commit-conventional/` | Commit split by concern + conventional message | `/git-commit` |
 | `skill/git-ship/` | Push branch, open PR with drafted title/body, merge, reset branch onto base | `/ship`, `/pr` |
-| `skill/close-memory-claims/` | Close or release every memory claim before the session ends | `/close-memory-claims` |
 
 ### When to call what
 
