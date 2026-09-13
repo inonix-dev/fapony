@@ -122,6 +122,27 @@ export function testMemTemplateConfigStillWins(): void {
   );
 }
 
+// The central copy (vela's shape) moved from `.memory/` into `.fapony/.memory/` at the
+// monorepo root — must keep splitting by app, not collapse into "own folder" like a real
+// scaffolded copy would (that's apps/<x>/.fapony/.memory/, a different path shape below).
+export function testMemTemplateCentralCopyMovedIntoFapony(): void {
+  withFixture(
+    (repo) => {
+      mkdirSync(join(repo, "apps/vela/.fapony/plan"), { recursive: true });
+      mkdirSync(join(repo, "apps/vela/.memory"), { recursive: true });
+      cpSync(TEMPLATE, join(repo, ".fapony/.memory"), { recursive: true });
+    },
+    (repo) => {
+      const p = resolve(repo, join(repo, ".fapony/.memory"), "vela");
+      assert.equal(p.dir, join(repo, "apps/vela/.memory"));
+      assert.equal(p.plan, join(repo, "apps/vela/.fapony/plan"));
+    },
+  );
+  console.log(
+    "  ✓ memory template → central copy moved into root .fapony/.memory still splits by app",
+  );
+}
+
 export function testMemTemplateScaffolded(): void {
   withFixture(
     (repo) => {
