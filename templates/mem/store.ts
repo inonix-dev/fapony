@@ -1,6 +1,12 @@
 // store.ts — types + config + read/write primitives for the append-only memory log
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+} from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 
 // --- types ---
@@ -99,7 +105,31 @@ const dir = scaffolded
   : existsSync(`${legacyDir}/log.jsonl`)
     ? legacyDir
     : newDir;
-const LOG = `${dir}/log.jsonl`;
+// ชื่อคนเขียน ต้องมาก่อน LOG เพราะ log แยกไฟล์ตามคน
+const agent = (process.env.MEM_AGENT || process.env.USER || "unknown").replace(
+  /[^A-Za-z0-9._-]/g,
+  "-",
+);
+
+// เขียนไฟล์ของตัวเอง อ่านของทุกคน — สองคนไม่เคยแตะไฟล์เดียวกัน = merge conflict
+// เป็นศูนย์โดยโครงสร้าง ไม่ต้องพึ่ง merge=union หรือให้ GitHub ทำตัวดีตอน merge PR
+// ponytail: ไม่เพิ่ม config field — ชื่อไฟล์ derive จาก MEM_AGENT ที่ทุกแถวใช้อยู่แล้ว
+const LOG = `${dir}/log.${agent}.jsonl`;
+
+// log.jsonl = ของเดิมก่อนแยกไฟล์ (ยังอ่านตลอดไป ไม่ต้อง migrate)
+// ข้าม log.YYYY-MM-DD.jsonl ที่ rotate สร้าง ไม่งั้น rotate จะไม่ลดอะไรเลยเพราะอ่านกลับเข้ามา
+const isLogFile = (f: string): boolean =>
+  f === "log.jsonl" ||
+  (/^log\.[A-Za-z0-9._-]+\.jsonl$/.test(f) &&
+    !/^log\.\d{4}-\d{2}-\d{2}\.jsonl$/.test(f));
+
+const logFiles = (): string[] =>
+  existsSync(dir)
+    ? readdirSync(dir)
+        .filter(isLogFile)
+        .sort()
+        .map((f) => join(dir, f))
+    : [];
 
 // โฟลเดอร์ที่ plan/ กับ done/ ของโปรเจกต์นี้อยู่ใต้มัน — จุดเดียวที่ประกอบ path เหล่านี้
 // (ก่อนหน้านี้ commands/plan.ts hardcode `apps/<app>/plan` 10 จุด = ตายสนิทกับ repo เดี่ยว)
@@ -152,15 +182,14 @@ const rel = (p: string) => relative(root, p) || ".";
 // สำเนาที่ `fapony init` วางไว้อยู่ที่ .fapony/.memory/ ไม่ใช่ .memory/ ที่ help text เดิม hardcode
 const memCmd = `bun ${rel(dir)}/mem.ts`;
 
-const agent = process.env.MEM_AGENT || process.env.USER || "unknown";
-
 const KINDS: WorkKind[] = ["next", "bug", "decision", "note", "hold"];
 
 // --- core ---
 
 const rows = (): LogRow[] =>
-  existsSync(LOG)
-    ? readFileSync(LOG, "utf8")
+  logFiles()
+    .flatMap((f) =>
+      readFileSync(f, "utf8")
         .split("\n")
         .filter(Boolean)
         .flatMap((l: string, i: number) => {
@@ -168,11 +197,15 @@ const rows = (): LogRow[] =>
             return [JSON.parse(l) as LogRow];
           } catch {
             // ponytail: 1 บรรทัดพัง (escape เสีย) ไม่ควรทำให้ทั้ง log อ่านไม่ได้ — ข้ามแล้วเตือน
-            console.error(`[mem] skipped line ${i + 1} (bad JSON)`);
+            console.error(
+              `[mem] skipped ${basename(f)} line ${i + 1} (bad JSON)`,
+            );
             return [];
           }
-        })
-    : [];
+        }),
+    )
+    // หลายไฟล์ต่อกันแล้วลำดับเวลาสลับ — ทุก selector อ่านจากบนลงล่างโดยถือว่าเรียงตาม ts
+    .sort((a, b) => a.ts.localeCompare(b.ts));
 
 function put(r: Omit<WorkRow, "ts" | "agent">): void;
 function put(r: Omit<CloseRow, "ts" | "agent">): void;
