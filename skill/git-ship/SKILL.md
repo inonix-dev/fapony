@@ -1,11 +1,12 @@
 ---
 name: git-ship
-description: Ship a branch end to end — push it, open a PR with an AI-drafted title/body, merge it, then reset a long-lived branch onto the base. Stops at the PR for team review with `pr`, lands an approved one with `land`. Use with Claude Code. Trigger on /git-ship, /ship, /pr, and when the user asks to open a PR, ship a branch, or merge for them.
+description: Ship a branch end to end — push it, open a PR with an AI-drafted title/body, merge it, then bring the branch back in line with the base. Stops at the PR for team review with `pr`, lands an approved one with `land`. Use with Claude Code. Trigger on /git-ship, /ship, /pr, and when the user asks to open a PR, ship a branch, or merge for them.
 ---
 
-# Git Ship — push, PR, merge, reset
+# Git Ship — push, PR, merge, realign
 
-You are shipping a branch: push it, open a PR with a drafted title/body, merge it, reset it.
+You are shipping a branch: push it, open a PR with a drafted title/body, merge it, put the
+branch back in line with the base.
 Commits should already be split by concern — see [git-commit-conventional](../git-commit-conventional/SKILL.md)
 if they aren't yet.
 
@@ -15,9 +16,9 @@ The argument picks the stop point. Everything else on this page is identical in 
 
 | Invocation | Does | For |
 |---|---|---|
-| `/git-ship` | push → PR → merge → reset | working solo, or a branch nobody else reviews |
+| `/git-ship` | push → PR → merge → realign | working solo, or a branch nobody else reviews |
 | `/git-ship pr` | push → PR, then **stop** and report the URL | a team — someone else reviews and merges |
-| `/git-ship land` | the PR exists and is approved → merge → reset | a team, after approval lands |
+| `/git-ship land` | the PR exists and is approved → merge → realign | a team, after approval lands |
 
 No argument, and the repo's default branch requires a review to merge
 (`gh api repos/{owner}/{repo}/branches/<default> --jq '.protection.required_pull_request_reviews'`
@@ -25,10 +26,10 @@ returns anything but `null`)? Treat it as `pr` and say why — merging is not yo
 repo says a human must approve first. `--admin` stays off the table either way.
 
 For `pr`, stop after `gh pr create` and report the URL, plus who needs to review if the repo
-declares owners. Don't merge, don't reset — the branch must stay as the reviewer sees it.
+declares owners. Don't merge, don't realign — the branch must stay as the reviewer sees it.
 
 For `land`, skip drafting: the PR is already written. Start at the CI gate below, then merge and
-reset. Re-read the PR body first and say in one line whether it still matches the commits, since
+realign. Re-read the PR body first and say in one line whether it still matches the commits, since
 review may have added some.
 
 ## Before anything
@@ -51,8 +52,21 @@ review may have added some.
   Name the agent you actually are — Claude Code, Codex, opencode, ZCode — not a hardcoded one.
   If your harness already gave you an exact attribution line to use, use that verbatim instead;
   it wins over this template.
-- **Merge method**: squash, unless the branch already has meaningful separate commits worth
-  keeping — then a regular merge. Ask if genuinely unclear.
+- **Merge method**: default to a regular merge (`--merge`). Squash only when the branch is
+  throwaway *and* its commits are noise — `wip`, `fix typo`, `try again`. Two reasons the
+  default runs this way:
+  - **Squash throws away the split.** If the commits are already one concern each, squashing
+    collapses them into a single commit on the base, and `git blame` then answers every line
+    with a message about the whole branch. The work of splitting them is undone at merge time,
+    every time.
+  - **Squash puts a step you can forget in the critical path.** It writes a *new* commit on the
+    base, so the branch's own commits are never ancestors of it — the two diverge, and every
+    later PR opens with a conflict nobody caused. A regular merge carries the commits over as
+    they are, so there is nothing to remember.
+
+  A long-lived branch (`dev`, `develop`) that someone keeps checked out is the strongest case
+  for `--merge`: it is exactly where a forgotten realign hurts, and it never gets deleted, so
+  the divergence compounds.
 
 ## Confirm once, then run
 
@@ -67,9 +81,15 @@ git status --porcelain   # re-check right before pushing, not just at the start 
                           # don't push around it and don't commit someone else's changes yourself.
 git push -u origin <branch>
 gh pr create --title "<title>" --body "<body>"
-gh pr merge --squash   # or --merge, per the chosen method
+gh pr merge --merge   # or --squash, per the chosen method
 
-# post-merge — ALWAYS, for a long-lived branch (dev, develop) that was squash-merged:
+# post-merge, after --merge: the branch is already an ancestor of the base, so just
+# catch it up. No force, nothing to destroy.
+git fetch origin
+git merge --ff-only origin/<default-branch>
+git push origin <branch>
+
+# post-merge, after --squash ONLY — and then it is mandatory, not optional:
 git fetch origin
 git reset --hard origin/<default-branch>
 git push --force-with-lease origin <branch>
@@ -79,12 +99,19 @@ git push --force-with-lease origin <branch>
 git -C <primary-checkout> pull --ff-only
 ```
 
-The post-merge reset is not optional. Squashing rewrites the commits, so the branch keeps
-originals the base will never have — the two diverge a little more every ship, and GitHub answers
-every later PR with *"Can't automatically merge"* even when the content is identical. Resetting
-the branch onto the freshly merged base makes them the same commit again, so the next PR is clean.
-Skip it only for a throwaway feature branch you're about to delete. It force-pushes, so say so —
-and check `git status --porcelain` is clean first (uncommitted work would be destroyed).
+Either way the branch must end up pointing at the merged base — that is what keeps the next PR
+clean. How much work that takes is decided by the merge method, which is the practical reason the
+default is `--merge`: it is a fast-forward, no force, nothing that can go wrong if you get
+distracted.
+
+After a squash it is a `reset --hard`, and it is **not optional**. Squashing rewrites the commits,
+so the branch keeps originals the base will never have — the two diverge a little more every ship,
+and GitHub answers every later PR with *"Can't automatically merge"* even when the content is
+identical. Skip it only for a throwaway feature branch you're about to delete. It force-pushes, so
+say so — and check `git status --porcelain` is clean first (uncommitted work would be destroyed).
+
+Verify before claiming either is done: `git merge-base --is-ancestor origin/<branch>
+origin/<default-branch>` exits 0 when the branch holds nothing the base lacks.
 
 The primary-checkout pull matters when anything outside the repo points *into* it — symlinked
 skills, an editor workspace, a tool resolving its root from that path. Ship from a worktree and
@@ -108,8 +135,8 @@ otherwise, it isn't the branch you were asked to ship.
 - `gh pr create` warns *"Can't automatically merge"* → that's the base's problem, not `gh`'s.
   The PR still gets created. Don't stop there — go verify it as the next bullet says.
 - Merge conflict with base branch → STOP, report, don't resolve unilaterally. Exception: a
-  long-lived branch that skipped the post-merge reset above — then the "conflict" is squash
-  history mismatch, not divergent content. Verify: `git diff origin/<base> HEAD --stat` versus
+  long-lived branch squash-merged earlier that skipped the reset above — then the "conflict" is
+  squash history mismatch, not divergent content. Verify: `git diff origin/<base> HEAD --stat` versus
   the diff of the branch's own unmerged commits (`git diff <first-unmerged>~1 HEAD --stat`).
   Identical means base holds nothing the branch lacks, so `git merge origin/<base> -X ours` is
   safe (branch wins every textual conflict, content is a strict superset) — say so, merge, then
