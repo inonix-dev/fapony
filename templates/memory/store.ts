@@ -1,7 +1,7 @@
 // store.ts — types + config + read/write primitives for the append-only memory log
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 
 // --- types ---
 
@@ -111,6 +111,13 @@ const doneDir =
     ? `${planDir}/done`
     : `${planBase}/done`);
 
+// path ที่เอาไว้โชว์/บันทึกลง log — อิง repo root เสมอ (`apps/vela/plan`, `.fapony/plan`)
+const rel = (p: string) => relative(root, p) || ".";
+
+// คำสั่งที่บอกให้ผู้ใช้พิมพ์ ต้องเป็น path ของ mem.ts ตัวที่กำลังรันอยู่จริง ไม่ใช่ค่าคงที่ —
+// สำเนาที่ `fapony init` วางไว้อยู่ที่ .fapony/.memory/ ไม่ใช่ .memory/ ที่ help text เดิม hardcode
+const memCmd = `bun ${rel(dir)}/mem.ts`;
+
 const agent = process.env.MEM_AGENT || process.env.USER || "unknown";
 
 const KINDS: WorkKind[] = ["next", "bug", "decision", "note", "hold"];
@@ -127,7 +134,7 @@ const rows = (): LogRow[] =>
             return [JSON.parse(l) as LogRow];
           } catch {
             // ponytail: 1 บรรทัดพัง (escape เสีย) ไม่ควรทำให้ทั้ง log อ่านไม่ได้ — ข้ามแล้วเตือน
-            console.error(`[mem] ข้ามบรรทัดที่ ${i + 1} (JSON เสีย)`);
+            console.error(`[mem] skipped line ${i + 1} (bad JSON)`);
             return [];
           }
         })
@@ -190,10 +197,12 @@ export {
   doneDir,
   KINDS,
   LOG,
+  memCmd,
   nextId,
   planBase,
   planDir,
   put,
+  rel,
   root,
   rows,
 };

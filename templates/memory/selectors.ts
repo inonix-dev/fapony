@@ -87,7 +87,7 @@ export const staleReport = (all: LogRow[]): string[] => {
       const base = Math.max(gitDates.get(r.spec) ?? 0, mark[r.spec] ?? 0);
       if (base < Date.parse(r.ts))
         out.push(
-          `STALE ${r.spec}: decision ${r.ts.slice(0, 10)} ยังไม่เข้า spec — "${r.text}"`,
+          `STALE ${r.spec}: decision ${r.ts.slice(0, 10)} never made it into the spec — "${r.text}"`,
         );
     }
   }
@@ -99,7 +99,7 @@ export const staleReport = (all: LogRow[]): string[] => {
       // ไม่มี grace = SUSPECT ขึ้นทุกแผนที่เพิ่งเขียน แล้วทุกคนเรียนรู้ที่จะเลื่อนผ่าน stale ทั้งบล็อก
       if (gitDate && gitDate > Date.parse(r.ts) + 86_400_000)
         out.push(
-          `SUSPECT [${r.id}] ${r.spec} ถูกแก้หลัง ${r.kind} นี้ (${r.ts.slice(0, 10)}) — ตรวจว่าปิดไปแล้วหรือยัง`,
+          `SUSPECT [${r.id}] ${r.spec} changed after this ${r.kind} (${r.ts.slice(0, 10)}) — check whether it is already done`,
         );
     }
   }
@@ -108,7 +108,7 @@ export const staleReport = (all: LogRow[]): string[] => {
     const ageH = (Date.now() - Date.parse(c.ts)) / 3_600_000;
     if (ageH > 4) {
       out.push(
-        `SUSPECT claim [${ref}] โดย ${c.agent} ${c.ts.slice(0, 10)} ยังไม่ close/release — agent อาจตายกลางงาน`,
+        `SUSPECT claim [${ref}] by ${c.agent} ${c.ts.slice(0, 10)} never closed/released — the agent may have died mid-task`,
       );
     }
   }

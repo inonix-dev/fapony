@@ -2,20 +2,22 @@
 
 import { claimsOf, openRows } from "../selectors.js";
 import type { WorkKind } from "../store.js";
-import { KINDS, nextId, put, root, rows } from "../store.js";
+import { KINDS, memCmd, nextId, put, root, rows } from "../store.js";
 
 export const cmdAdd = async (a: string[]) => {
   // mem add <next|bug|decision|note|hold> "<text>" [path/to/SPEC.md]
   // mem add <kind> --stdin [spec.md]   ← read text from stdin (avoids shell metachar issues)
   // ponytail: kind ผิด = แถวนั้นหายจาก view เงียบๆ — ตายตั้งแต่ตรงนี้ดีกว่า
   if (!KINDS.includes(a[0] as WorkKind)) {
-    console.error(`kind ต้องเป็น ${KINDS.join("|")} — ได้ "${a[0] ?? ""}"`);
+    console.error(
+      `kind must be one of ${KINDS.join("|")} — got "${a[0] ?? ""}"`,
+    );
     process.exit(1);
   }
   // hold บังคับ spec
   if (a[0] === "hold" && !a.at(-1)?.endsWith(".md")) {
     console.error(
-      `hold บังคับ spec — ใช้: bun .memory/mem.ts add hold "..." <spec.md>`,
+      `hold requires a spec — usage: ${memCmd} add hold "..." <spec.md>`,
     );
     process.exit(1);
   }
@@ -27,14 +29,14 @@ export const cmdAdd = async (a: string[]) => {
   if (useStdin) {
     text = (await Bun.stdin.text()).trim();
     if (!text) {
-      console.error("stdin ว่าง — ต้องมีข้อความ");
+      console.error("stdin was empty — text is required");
       process.exit(1);
     }
   } else {
     // ต้องมีข้อความ
     if (!filtered.length || (filtered.length === 0 && !spec)) {
       console.error(
-        'ต้องมีข้อความ — ใช้: bun .memory/mem.ts add <kind> "<text>" [spec.md]',
+        `text is required — usage: ${memCmd} add <kind> "<text>" [spec.md]`,
       );
       process.exit(1);
     }
@@ -49,7 +51,7 @@ export const cmdAdd = async (a: string[]) => {
     const openNext = openRows(all).filter((r) => r.kind === "next").length;
     if (openNext >= CAP) {
       console.error(
-        `open next ${openNext}/${CAP} เต็มแล้ว — close ของเก่าก่อน (หรือ MEM_FORCE=1 ถ้าจำเป็นจริงๆ)`,
+        `open next ${openNext}/${CAP} is full — close an old one first (or MEM_FORCE=1 if you really must)`,
       );
       process.exit(1);
     }
@@ -58,7 +60,7 @@ export const cmdAdd = async (a: string[]) => {
     const openHold = openRows(all).filter((r) => r.kind === "hold").length;
     if (openHold >= CAP_HOLD) {
       console.error(
-        `open hold ${openHold}/${CAP_HOLD} เต็มแล้ว — close/release ของเก่าก่อน (หรือ MEM_FORCE=1)`,
+        `open hold ${openHold}/${CAP_HOLD} is full — close/release an old one first (or MEM_FORCE=1)`,
       );
       process.exit(1);
     }
@@ -73,11 +75,11 @@ export const cmdClose = async (a: string[]) => {
   // mem close <id> "<ทำอะไร / commit>" — tombstone ทำให้ claim void เอง
   // mem close <id> --stdin ← read text from stdin
   if (!a[0]) {
-    console.error('ต้องระบุ id — ใช้: bun .memory/mem.ts close <id> "<ข้อความ>"');
+    console.error(`id is required — usage: ${memCmd} close <id> "<text>"`);
     process.exit(1);
   }
   if (!rows().some((r) => "id" in r && r.id === a[0])) {
-    console.error(`ไม่มี id "${a[0]}" ใน log`);
+    console.error(`no id "${a[0]}" in the log`);
     process.exit(1);
   }
   const rest = a.slice(1);
@@ -94,7 +96,7 @@ export const cmdClose = async (a: string[]) => {
 export const cmdClaim = (a: string[]) => {
   // mem claim <id> — ต้องมี id จริง, open, kind=next|bug, ไม่มี active claim ค้าง
   if (!a[0]) {
-    console.error("ต้องระบุ id — ใช้: bun .memory/mem.ts claim <id>");
+    console.error(`id is required — usage: ${memCmd} claim <id>`);
     process.exit(1);
   }
   const all = rows();
@@ -104,19 +106,23 @@ export const cmdClaim = (a: string[]) => {
     const exists = all.find((r) => "id" in r && r.id === a[0]);
     console.error(
       exists
-        ? `id "${a[0]}" มีอยู่แต่ปิดไปแล้ว (close tombstone)`
-        : `ไม่มี id "${a[0]}" ใน log`,
+        ? `id "${a[0]}" exists but is already closed (close tombstone)`
+        : `no id "${a[0]}" in the log`,
     );
     process.exit(1);
   }
   if (target.kind !== "next" && target.kind !== "bug") {
-    console.error(`claim ได้เฉพาะ next/bug — id "${a[0]}" เป็น ${target.kind}`);
+    console.error(
+      `only next/bug can be claimed — id "${a[0]}" is ${target.kind}`,
+    );
     process.exit(1);
   }
   const claims = claimsOf(all);
   if (claims.has(a[0])) {
     const c = claims.get(a[0])!;
-    console.error(`id "${a[0]}" ถูก claim โดย ${c.agent} แล้ว — release ก่อน`);
+    console.error(
+      `id "${a[0]}" is already claimed by ${c.agent} — release it first`,
+    );
     process.exit(1);
   }
   put({ kind: "claim", ref: a[0] });
@@ -127,13 +133,13 @@ export const cmdRelease = async (a: string[]) => {
   // mem release <id> "<เหตุผล>?"
   // mem release <id> --stdin ← read text from stdin
   if (!a[0]) {
-    console.error("ต้องระบุ id — ใช้: bun .memory/mem.ts release <id> [เหตุผล]");
+    console.error(`id is required — usage: ${memCmd} release <id> [reason]`);
     process.exit(1);
   }
   const all = rows();
   const claims = claimsOf(all);
   if (!claims.has(a[0])) {
-    console.error(`id "${a[0]}" ไม่มี active claim`);
+    console.error(`id "${a[0]}" has no active claim`);
     process.exit(1);
   }
   const rest = a.slice(1);

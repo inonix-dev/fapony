@@ -64,26 +64,26 @@ const runSelectorTests = () => {
   // (1) a1 claim → active
   assert(
     claims.has("a1") && claims.get("a1")?.agent === "agent-1",
-    "claim active ผิด",
+    "claim active is wrong",
   );
   // (2) a3 release → inactive
-  assert(!claims.has("a3"), "release ไม่ void claim");
+  assert(!claims.has("a3"), "release did not void the claim");
   // (3) a4 close → inactive
   assert(!claims.has("a4"), "close void claim");
   // (4) a5 double claim → agent-3 ชนะ
   assert(
     claims.has("a5") && claims.get("a5")?.agent === "agent-3",
-    "double claim หลังชนะ",
+    "double claim after the winner",
   );
   // a2 closed → ไม่ควรอยู่ใน open
-  assert(!open.some((r) => r.id === "a2"), "tombstone พัง");
+  assert(!open.some((r) => r.id === "a2"), "tombstone broken");
   // open = a1, a3 (released but still open), a5
   assert(
     open
       .map((r) => r.id)
       .sort()
       .join() === "a1,a3,a5",
-    "open rows ผิด",
+    "open rows are wrong",
   );
 };
 
@@ -131,35 +131,35 @@ const runRotateTests = () => {
   const kept = rotateKeep(t);
   assert(
     kept.some((r) => "id" in r && r.id === "r1" && r.kind === "next"),
-    "rotateKeep: ต้องเก็บ open work row",
+    "rotateKeep: must keep an open work row",
   );
   assert(
     kept.some((r) => r.kind === "claim" && "ref" in r && r.ref === "r1"),
-    "rotateKeep: ต้องเก็บ active claim ของ open row",
+    "rotateKeep: must keep an active claim on an open row",
   );
   assert(
     !kept.some((r) => "id" in r && r.id === "r2"),
-    "rotateKeep: ห้ามเก็บ work row ที่ปิดแล้ว",
+    "rotateKeep: must not keep a closed work row",
   );
   assert(
     !kept.some((r) => r.kind === "claim" && "ref" in r && r.ref === "r2"),
-    "rotateKeep: ห้ามเก็บ claim ของ ref ที่ปิดแล้ว",
+    "rotateKeep: must not keep a claim on a closed ref",
   );
   assert(
     !kept.some((r) => r.kind === "close"),
-    "rotateKeep: ห้ามเก็บ close tombstone",
+    "rotateKeep: must not keep a close tombstone",
   );
   assert(
     !kept.some((r) => "id" in r && r.id === "r3"),
-    "rotateKeep: decision ที่ spec synced หลังแล้ว → resolved, ไม่เก็บ",
+    "rotateKeep: decision whose spec synced afterwards is resolved — drop it",
   );
   assert(
     kept.some((r) => "id" in r && r.id === "r4"),
-    "rotateKeep: decision ใหม่กว่า synced ล่าสุด → ยัง relevant, ต้องเก็บ",
+    "rotateKeep: decision newer than the last sync is still relevant — keep it",
   );
   assert(
     kept.some((r) => "id" in r && r.id === "r5"),
-    "rotateKeep: note ไม่มี spec → เก็บไว้เสมอ",
+    "rotateKeep: a note with no spec is always kept",
   );
 };
 
