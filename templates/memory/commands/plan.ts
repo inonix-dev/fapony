@@ -15,7 +15,15 @@ import {
 import { dirname, join, relative, resolve } from "node:path";
 
 import { openRows } from "../selectors.js";
-import { dir as memDir, nextId, planBase, put, root, rows } from "../store.js";
+import {
+  doneDir,
+  dir as memDir,
+  nextId,
+  planDir,
+  put,
+  root,
+  rows,
+} from "../store.js";
 
 const SHIPPED = /^>\s*✅/m;
 
@@ -23,17 +31,6 @@ const SHIPPED = /^>\s*✅/m;
 // แล้วตามด้วย `# title` (ดู templates/PLAN.md) เช็กหัวไฟล์แทนที่จะเช็กบรรทัดแรกบรรทัดเดียว
 export const hasShippedHeader = (file: string): boolean =>
   SHIPPED.test(readFileSync(file, "utf8").slice(0, 2048));
-
-const planDir = () => join(planBase, "plan");
-
-// done/ อยู่ข้าง plan/ (ย้ายแล้วลึกเท่าเดิม ลิงก์ relative ในไฟล์รอด) — repo ที่ยัง layout เก่า
-// เก็บ plan/done/ ไว้ ก็ใช้ของเดิมต่อ ไม่ต้องย้ายก่อนถึงจะ sweep ได้
-const doneDirOf = (dir: string): string => {
-  const sibling = join(planBase, "done");
-  return existsSync(sibling) || !existsSync(join(dir, "done"))
-    ? sibling
-    : join(dir, "done");
-};
 
 // path ที่เอาไว้โชว์/บันทึกลง log — อิง repo root เสมอ (`apps/vela/plan`, `.fapony/plan`)
 const rel = (p: string) => relative(root, p) || ".";
@@ -136,7 +133,7 @@ export const countPlainTextMentions = (
 
 // ใช้ร่วมกับ dashboard (now/kickoff) — ไฟล์ plan/ ที่มี header shipped แต่ยังไม่ย้ายเข้า done/
 export const shippedNotMoved = (): string[] => {
-  const dir = planDir();
+  const dir = planDir;
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
     .filter((e) => e.isFile() && e.name.endsWith(".md"))
@@ -145,12 +142,11 @@ export const shippedNotMoved = (): string[] => {
 };
 
 export const cmdPlanSweep = (a: string[]) => {
-  const dir = planDir();
+  const dir = planDir;
   if (!existsSync(dir)) {
     console.log(`ไม่มี ${rel(dir)}/ — ไม่มีอะไรให้ sweep`);
     return;
   }
-  const doneDir = doneDirOf(dir);
   const candidates = shippedNotMoved();
 
   const target = a.find((x) => x.endsWith(".md"));
@@ -289,7 +285,8 @@ export const cmdPlanSweep = (a: string[]) => {
     "-l",
     target,
     "--",
-    rel(planBase),
+    // ขอบเขต "ไฟล์นอก plan/" = โฟลเดอร์ที่ plan/ อยู่ใต้มัน (apps/vela, .fapony, …)
+    rel(dirname(planDir)),
     `:!${rel(dir)}`,
   ])
     .stdout.toString()
@@ -304,7 +301,7 @@ export const cmdPlanSweep = (a: string[]) => {
 // exit 0 = clean, 1 = issues found
 export const cmdPlanCheck = (a: string[]) => {
   const quiet = a.includes("--quiet");
-  const dir = planDir();
+  const dir = planDir;
   if (!existsSync(dir)) {
     if (!quiet) console.log(`ไม่มี ${rel(dir)}/ — skip`);
     return;
