@@ -2,6 +2,7 @@
 node_modules/
 *.db*
 wt-*/
+cl-*/
 *-TEMP.md
 
 # Personal machine config — see fapony.config.example.json
