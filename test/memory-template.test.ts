@@ -286,3 +286,24 @@ export function testMemTemplateUnknownAppFails(): void {
   );
   console.log("  ✓ memory template → unknown app exits instead of guessing");
 }
+
+// `fapony init <monorepo root>` วางสำเนาไว้ที่ root เหมือนสำเนากลางเป๊ะ ๆ — ต่างกันแค่เดา app
+// ไม่ได้ ถ้าเงื่อนไข central ดูแค่ว่ามี apps/ ไหม สำเนานี้จะถูกตัดสินว่าไม่ scaffolded แล้วตายที่
+// guard `unknown app` ตั้งแต่คำสั่งแรก ทั้งที่ plan ของมันอยู่ข้าง ๆ
+export function testMemTemplateInitAtMonorepoRoot(): void {
+  withFixture(
+    (repo) => {
+      mkdirSync(join(repo, "apps/vela"), { recursive: true });
+      cpSync(TEMPLATE, join(repo, ".fapony/.memory"), { recursive: true });
+      mkdirSync(join(repo, ".fapony/plan"), { recursive: true });
+    },
+    (repo) => {
+      const p = resolve(repo, join(repo, ".fapony/.memory"));
+      assert.equal(p.dir, join(repo, ".fapony/.memory"));
+      assert.equal(p.plan, join(repo, ".fapony/plan"));
+    },
+  );
+  console.log(
+    "  ✓ memory template → `fapony init` at a monorepo root stays self-relative",
+  );
+}

@@ -70,13 +70,12 @@ const monorepo = appBase !== undefined;
 // ซึ่ง heuristic ด้านล่างจะชี้ไป apps/<ชื่อ worktree>/.fapony/.memory = เขียน log ปนโปรเจกต์อื่น
 // แต่สำเนากลางที่ย้ายเข้า .fapony/.memory ที่ root ของ monorepo เอง (โค้ดชุดเดียว, log แยกราย
 // app — เช่น vela) ต้อง "ไม่" ถือเป็น scaffolded แม้ path จะแมตช์เหมือนกัน เพราะยังต้องเดา app
-// จาก monorepo อยู่ — เงื่อนไขนี้เกิดเฉพาะตอนอยู่ *ตรง* root/.fapony/.memory ในโปรเจกต์ที่มี
-// โฟลเดอร์รวม app จริง (repo เดี่ยวที่ไม่มีเลย ยังถือว่า scaffolded ตามเดิม อิงโฟลเดอร์ตัวเอง)
+// จาก monorepo อยู่ — ตัวแยกคือ "เดา app ได้ไหม" (`monorepo`) ไม่ใช่ "มีโฟลเดอร์รวม app ไหม":
+// แค่มี apps/ อยู่ที่ root ไม่ได้แปลว่าสำเนานี้เป็นสำเนากลาง — `fapony init <monorepo root>` ก็วาง
+// .fapony/.memory ที่ root เหมือนกัน แล้วมันต้องอิงโฟลเดอร์ตัวเอง ไม่งั้นตายที่ guard ข้างล่าง
+// ตั้งแต่คำสั่งแรกทั้งที่ plan ของมันอยู่ข้าง ๆ นั่นเอง
 const centralAtMonorepoRoot =
-  import.meta.dir === `${root}/.fapony/.memory` &&
-  (existsSync(`${root}/apps`) ||
-    existsSync(`${root}/packages`) ||
-    existsSync(`${root}/services`));
+  import.meta.dir === `${root}/.fapony/.memory` && monorepo;
 const scaffolded =
   import.meta.dir.includes("/.fapony/.memory") && !centralAtMonorepoRoot;
 
