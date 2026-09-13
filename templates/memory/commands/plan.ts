@@ -18,11 +18,21 @@ import { openRows } from "../selectors.js";
 import { doneDir, memCmd, nextId, planDir, put, rel, rows } from "../store.js";
 
 const SHIPPED = /^>\s*✅/m;
+const FRONT = /^---\r?\n([\s\S]*?)\r?\n---/;
+const HELD = /^status:\s*(blocked|superseded)\b/m;
 
 // header ✅ shipped ไม่ได้อยู่บรรทัดแรกอีกแล้ว — plan format ปัจจุบันขึ้นต้นด้วย frontmatter
 // แล้วตามด้วย `# title` (ดู templates/PLAN.md) เช็กหัวไฟล์แทนที่จะเช็กบรรทัดแรกบรรทัดเดียว
-export const hasShippedHeader = (file: string): boolean =>
-  SHIPPED.test(readFileSync(file, "utf8").slice(0, 2048));
+//
+// frontmatter ชนะ header ✅ เสมอ: plan ที่ ship ไปบาง chunk แล้วติดรอของข้างนอก (VPS, คนใช้,
+// การตัดสินใจ) เขียน `status: blocked` ไว้ = ตั้งใจให้อยู่ใน plan/ ต่อ ไม่ใช่ของที่ลืมย้าย
+// ถ้าไม่ดูตรงนี้ plan แบบนั้นจะขึ้น "shipped but never archived" ทุกครั้งไปตลอด แล้วคนก็เลิกอ่าน
+// รายการนี้ทั้งรายการ — ซึ่งเป็นอาการเดียวกับที่ทำให้ done/ ไม่เคยขยับตั้งแต่แรก
+export const hasShippedHeader = (file: string): boolean => {
+  const head = readFileSync(file, "utf8").slice(0, 2048);
+  if (!SHIPPED.test(head)) return false;
+  return !HELD.test(FRONT.exec(head)?.[1] ?? "");
+};
 
 export const planSweepCmd = `${memCmd} plan-sweep`;
 

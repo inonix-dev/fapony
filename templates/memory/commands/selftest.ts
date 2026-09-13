@@ -367,6 +367,12 @@ const runPlanCheckTests = () => {
       "---\nkind: unit\n---\n\n# shipped with frontmatter\n\n> ✅ **shipped 2026-09-13** (abc1234)\n",
     );
 
+    // ship ไปบาง chunk แล้วติดรอของข้างนอก — frontmatter บอกว่าตั้งใจให้อยู่ต่อ ห้ามนับว่าลืมย้าย
+    writeFileSync(
+      join(planDir, "PLAN-blocked.md"),
+      "---\nstatus: blocked\nblocked_by: VPS#2\n---\n\n# partly shipped\n\n> ✅ **chunk 1 shipped 2026-09-13** (abc1234)\n",
+    );
+
     const mdFilesLocal = (dir: string): string[] =>
       existsSync(dir)
         ? readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
@@ -393,6 +399,10 @@ const runPlanCheckTests = () => {
     assert(
       shipped.some((f) => f.includes("PLAN-frontmatter.md")),
       "E1: header below frontmatter + title must still count as shipped",
+    );
+    assert(
+      !shipped.some((f) => f.includes("PLAN-blocked.md")),
+      "E1: status: blocked must beat the ✅ header — it is held on purpose, not forgotten",
     );
 
     // E2: broken link detection
