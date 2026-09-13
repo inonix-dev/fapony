@@ -244,6 +244,14 @@ import {
   testMemoryExplicitConfigWins,
 } from "./memory.test.js";
 import {
+  testMemTemplateConfigStillWins,
+  testMemTemplateMonorepoMigratedApp,
+  testMemTemplateMonorepoUnmigratedApp,
+  testMemTemplateScaffolded,
+  testMemTemplateScaffoldedIgnoresRootConfig,
+  testMemTemplateUnknownAppFails,
+} from "./memory-template.test.js";
+import {
   testFixtureGuard,
   testParseGateEventData,
   testQualityScore,
@@ -447,6 +455,12 @@ export async function cmdTest(): Promise<void> {
   testMemoryDefaultWiringWithFile();
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
+  testMemTemplateMonorepoMigratedApp();
+  testMemTemplateMonorepoUnmigratedApp();
+  testMemTemplateConfigStillWins();
+  testMemTemplateScaffolded();
+  testMemTemplateScaffoldedIgnoresRootConfig();
+  testMemTemplateUnknownAppFails();
   testClaimMemoryFailGracefully();
   // ponytail: real ~15s execSync timeout regression test — skip in the fast
   // dev loop, keep it for CI/pre-commit (bun fapony.ts test, no SKIP_SLOW).

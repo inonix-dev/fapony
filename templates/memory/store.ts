@@ -59,6 +59,20 @@ const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"])
 const app = process.env.MEM_APP ?? basename(root).replace(/^wt-/, "");
 const monorepo = existsSync(`${root}/apps/${app}`);
 
+// มี apps/ แต่ไม่มี apps/<app> = เดา app ผิด (worktree ชื่อไม่ตรง / typo ใน MEM_APP) — ตายตรงนี้
+// ดีกว่า fallback เงียบ ๆ ไปเขียน log ที่ root ซึ่งจะกลายเป็น log กำพร้าที่ไม่มีใครอ่าน
+// (สำเนาที่ scaffold ไว้ใน .fapony/.memory/ อิงโฟลเดอร์ตัวเอง ไม่ต้องเดา จึงไม่เข้าเงื่อนไขนี้)
+if (
+  !import.meta.dir.includes("/.fapony/.memory") &&
+  !monorepo &&
+  existsSync(`${root}/apps`)
+) {
+  console.error(
+    `unknown app (guessed "${app}" from ${basename(root)}) — pass MEM_APP=<app>`,
+  );
+  process.exit(1);
+}
+
 // สำเนาที่ `fapony init` วางไว้ อยู่ใน <project>/.fapony/.memory/ — log กับ plan ของมัน
 // ต้องอิงโฟลเดอร์ตัวเอง ไม่ใช่ git root: เคสที่พังจริงคือ apps/<x>/.fapony/.memory/ ใน monorepo
 // ซึ่ง heuristic ด้านบนจะชี้ไป apps/<ชื่อ worktree>/.memory = เขียน log ปนโปรเจกต์อื่น
@@ -101,15 +115,21 @@ const fromConfig = (key: string): string | null =>
     ? join(configDir, configPaths[key])
     : null;
 
-const planDir = fromConfig("planDir") ?? `${planBase}/plan`;
+// app ที่ย้าย plan เข้า .fapony/ แล้วให้ใช้ของใหม่ ที่ยังไม่ย้ายใช้ของเดิม — โมโนเรโปจึงย้ายทีละ app ได้
+// โดยไม่ต้องแตะ config (config มี planDir ค่าเดียว ประกาศเมื่อไหร่ app อื่นก็ชี้ผิดตามไปด้วย)
+const base = existsSync(`${planBase}/.fapony`)
+  ? `${planBase}/.fapony`
+  : planBase;
+
+const planDir = fromConfig("planDir") ?? `${base}/plan`;
 
 // done/ อยู่ข้าง plan/ (ย้ายแล้วลึกเท่าเดิม ลิงก์ relative ในไฟล์รอด) — repo ที่ยัง layout เก่า
 // เก็บ plan/done/ ไว้ ก็ใช้ของเดิมต่อ ไม่ต้องย้ายก่อนถึงจะ sweep ได้
 const doneDir =
   fromConfig("doneDir") ??
-  (!existsSync(`${planBase}/done`) && existsSync(`${planDir}/done`)
+  (!existsSync(`${base}/done`) && existsSync(`${planDir}/done`)
     ? `${planDir}/done`
-    : `${planBase}/done`);
+    : `${base}/done`);
 
 // path ที่เอาไว้โชว์/บันทึกลง log — อิง repo root เสมอ (`apps/vela/plan`, `.fapony/plan`)
 const rel = (p: string) => relative(root, p) || ".";
