@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  agentsSkillsDir,
   type ClaudeRunResult,
   claudeAddArgs,
   claudeGetArgs,
@@ -466,6 +467,31 @@ export function testInstallZcodeDryRunNoWrite(): void {
     assert.ok(err.includes("dry-run"), `got: ${err}`);
     assert.ok(err.includes("mcp.servers.fapony"), `got: ${err}`);
     console.log("  ✓ install zcode dry-run → no write");
+  });
+}
+
+export function testInstallZcodeLinksSkillsIntoAgentsDir(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".zcode", "cli");
+    mkdirSync(configDir, { recursive: true });
+    writeJson(join(configDir, "config.json"), {});
+
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallZcode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const dir = agentsSkillsDir(() => home);
+    assert.equal(dir, join(home, ".agents", "skills"));
+    const names = skillNames();
+    assert.ok(names.length > 0, "repo should ship at least one skill");
+    for (const name of names) {
+      assert.ok(
+        lstatSync(join(dir, name)).isSymbolicLink(),
+        `${name} should be symlinked into ~/.agents/skills`,
+      );
+    }
+    console.log("  ✓ install zcode → symlinks skills into ~/.agents/skills");
   });
 }
 

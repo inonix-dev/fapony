@@ -103,6 +103,7 @@ import {
   testInstallZcodeAlreadyConfiguredNoOp,
   testInstallZcodeDryRunNoWrite,
   testInstallZcodeFallbackPath,
+  testInstallZcodeLinksSkillsIntoAgentsDir,
   testInstallZcodeNoConfigFails,
   testInstallZcodePrimaryPath,
   testLinkSkillsCreatesSymlinks,
@@ -581,6 +582,7 @@ export async function cmdTest(): Promise<void> {
   testInstallZcodeFallbackPath();
   testInstallZcodeAlreadyConfiguredNoOp();
   testInstallZcodeDryRunNoWrite();
+  testInstallZcodeLinksSkillsIntoAgentsDir();
   testCmdInstallDispatchesZcode();
   // MCP handcheck tests
   testMcpInitialize();
