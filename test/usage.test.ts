@@ -1,9 +1,10 @@
 // test/usage.test.ts — unit tests for src/usage/format.ts + render.ts + cache.ts
 
 import assert from "node:assert";
-import { rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { PriceTable } from "../src/price/fetch.js";
 import type { PassiveUsageResult } from "../src/session/types.js";
 import { EMPTY_RESULT } from "../src/session/types.js";
 import {
@@ -24,18 +25,42 @@ import { renderUsageHtml } from "../src/usage/render.js";
 const NOW = new Date().toISOString();
 
 // Helper: wrap old per-client args into the new project-grouped Map signature.
+// render อ่าน prices.json เองเมื่อไม่ส่ง arg ที่ 4 — pin FAPONY_STATE_DIR ไปที่
+// temp ว่างทุกครั้งกันเลขจริงบนเครื่องหลุดเข้าเทสต์ (non-determinism)
 function renderGlobal(
   oc: PassiveUsageResult,
   zc: PassiveUsageResult | null = null,
   cc: PassiveUsageResult | null = null,
   cx: PassiveUsageResult | null = null,
   scannedAt: string = NOW,
+  prices?: PriceTable | null,
 ): string {
-  const data = new Map([
-    ["__global__", { opencode: oc, zcode: zc, claude_code: cc, codex: cx }],
-  ]);
-  return renderUsageHtml(data, scannedAt);
+  const dir = mkdtempSync(join(tmpdir(), "fapony-render-"));
+  const prev = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = dir;
+  try {
+    const data = new Map([
+      ["__global__", { opencode: oc, zcode: zc, claude_code: cc, codex: cx }],
+    ]);
+    return renderUsageHtml(data, scannedAt, undefined, prices);
+  } finally {
+    if (prev === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = prev;
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
+
+const fixturePrices: PriceTable = {
+  fetched_at: "2026-09-14T00:00:00.000Z",
+  models: {
+    "mock/mimo-v2.5": {
+      input: 0.000001,
+      output: 0.000002,
+      cacheRead: 0.0000001,
+      cacheWrite: null,
+    },
+  },
+};
 
 // ─── fmtTokens ────────────────────────────────────────────────────────
 
@@ -353,4 +378,25 @@ export function testRenderHtmlReadErrorBadge(): void {
   console.log(
     "  ✓ renderUsageHtml → flags a client whose log could not be read",
   );
+}
+
+export function testRenderHtmlImputedCost(): void {
+  const zeroCost: PassiveUsageResult = {
+    ...sampleData,
+    total_cost: 0,
+    by_model: sampleData.by_model.map((m) => ({ ...m, cost: 0 })),
+  };
+  const html = renderGlobal(zeroCost, null, null, null, NOW, fixturePrices);
+  assert.ok(html.includes("list-price equivalent"), "imputed note present");
+  assert.ok(html.includes("~$"), "imputed cost shown for zero-cost row");
+  // รุ่นที่ map ไม่ได้ต้องโผล่ใน unpriced ไม่ใช่หายเข้า 0
+  assert.ok(html.includes("unpriced"), "unpriced bucket visible");
+  console.log("  ✓ renderUsageHtml → imputed cost + unpriced note");
+}
+
+export function testRenderHtmlNoPricesHint(): void {
+  // pin STATE_DIR ว่าง + ส่ง null ชัดเจน = ไม่มีราคา → hint ให้ price-scan
+  const html = renderGlobal(sampleData, null, null, null, NOW, null);
+  assert.ok(html.includes("fapony price-scan"), "hint to price-scan present");
+  console.log("  ✓ renderUsageHtml → missing prices shows hint, not throw");
 }

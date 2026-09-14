@@ -273,6 +273,20 @@ import {
   testQualityScore,
 } from "./parse.test.js";
 import {
+  testCalcCostCacheWriteFallsBackToInput,
+  testCalcCostUsesCacheReadRate,
+  testFetchPriceTableStub,
+  testImputeBuckets,
+  testLoadPricesMissingIsNull,
+  testMergeKeepsOldIds,
+  testParsePricesStripsTildeAndKeepsFreeIds,
+  testResolveBareSlugAndLocal,
+  testResolveDirectAndOpenrouterPrefix,
+  testResolveUnpricedIsNotZero,
+  testResolveVendorPrefixAndFreeSuffix,
+  testWriteLoadRoundtrip,
+} from "./price.test.js";
+import {
   testReportHtmlByModelHasAttributionColumns,
   testReportHtmlByModelProjectColumn,
   testReportHtmlCanonicalQuality,
@@ -410,9 +424,11 @@ import {
   testMergeEntriesDedup,
   testRenderHtmlCostWide,
   testRenderHtmlFreshnessBar,
+  testRenderHtmlImputedCost,
   testRenderHtmlModelNames,
   testRenderHtmlNoData,
   testRenderHtmlNoPollInterval,
+  testRenderHtmlNoPricesHint,
   testRenderHtmlReadErrorBadge,
   testRenderHtmlShareSection,
   testRenderHtmlStructure,
@@ -782,6 +798,19 @@ export async function cmdTest(): Promise<void> {
   testCacheMetaCalculatesOldest();
   testCacheMetaProjectDimension();
   testWriteCacheCreatesStateDir();
+  // Imputed-price tests (PLAN-imputed-price — no network, fixture only)
+  testParsePricesStripsTildeAndKeepsFreeIds();
+  testResolveDirectAndOpenrouterPrefix();
+  testResolveVendorPrefixAndFreeSuffix();
+  testResolveBareSlugAndLocal();
+  testResolveUnpricedIsNotZero();
+  testCalcCostUsesCacheReadRate();
+  testCalcCostCacheWriteFallsBackToInput();
+  testMergeKeepsOldIds();
+  testLoadPricesMissingIsNull();
+  testWriteLoadRoundtrip();
+  await testFetchPriceTableStub();
+  testImputeBuckets();
   // Render tests
   testRenderHtmlStructure();
   testRenderHtmlModelNames();
@@ -793,5 +822,7 @@ export async function cmdTest(): Promise<void> {
   testRenderHtmlFreshnessBar();
   testRenderHtmlNoPollInterval();
   testRenderHtmlShareSection();
+  testRenderHtmlImputedCost();
+  testRenderHtmlNoPricesHint();
   console.log("\nall tests passed ✓");
 }
