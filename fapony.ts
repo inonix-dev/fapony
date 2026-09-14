@@ -27,7 +27,7 @@ if (cmd === "analyze") {
 } else if (cmd === "init-mem") {
   cmdInitMem(a);
 } else if (cmd === "init") {
-  cmdInit(a);
+  await cmdInit(a);
 } else if (cmd === "install") {
   cmdInstall(a);
 } else if (cmd === "setup") {

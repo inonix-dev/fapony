@@ -3,8 +3,9 @@
 // state.db stays in ~/.config/fapony/ by design (security boundary — see db.ts),
 // never inside the worktree where agents have full write access.
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { createInterface } from "node:readline";
 import {
   type Config,
   doneDir,
@@ -14,6 +15,7 @@ import {
   specDir,
 } from "./db/index.js";
 import { copyDir } from "./init-mem.js";
+import { isAffirmative } from "./util.js";
 
 const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
 # plan/ holds live plans, done/ the shipped ones, spec/ every spec (specs are a
@@ -152,7 +154,19 @@ export function initProject(targetPath: string, config?: Config): void {
   console.log(RULES_SNIPPET(memEntry));
 }
 
-export function cmdInit(args: string[]): void {
+const AGENT_RULE_FILES = ["CLAUDE.md", "AGENTS.md"];
+
+function ask(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(`${question} `, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+export async function cmdInit(args: string[]): Promise<void> {
   const targetPath = args[0];
   if (!targetPath) {
     console.error("usage: fapony init <path>");
@@ -163,5 +177,22 @@ export function cmdInit(args: string[]): void {
   } catch (e) {
     console.error((e as Error).message);
     process.exit(1);
+  }
+
+  const found = AGENT_RULE_FILES.map((f) => join(targetPath, f)).filter(
+    existsSync,
+  );
+  if (found.length === 0) return;
+
+  const answer = await ask(
+    `\nAppend the memory-logging rules above to ${found.map((f) => relative(targetPath, f)).join(" and ")}? [y/N]`,
+  );
+  if (!isAffirmative(answer)) return;
+
+  const memEntry = memoryEntry();
+  const snippet = `\n\n${RULES_SNIPPET(memEntry)}\n`;
+  for (const f of found) {
+    appendFileSync(f, snippet);
+    console.log(`  appended to ${relative(targetPath, f)}`);
   }
 }
