@@ -111,12 +111,9 @@ function metric(
   </div>`;
 }
 
+// caller filters m.sessions === 0 out before calling — a card with no
+// sessions has nothing to show, so it's hidden rather than rendered empty
 function summaryCard(name: string, color: string, m: SummaryMetrics): string {
-  if (m.sessions === 0)
-    return `<div class="card" style="border-left-color:${color}">
-      <div class="card-title" style="color:${color}">${name}</div>
-      <div class="card-empty">no sessions</div>
-    </div>`;
   const maxInput = Math.max(m.input, m.output, m.reasoning, 1);
   return `<div class="card" style="border-left-color:${color}">
   <div class="card-title" style="color:${color}">${name} <span class="sample">(${m.sessions} sessions)</span></div>
@@ -178,6 +175,7 @@ function totalsRow(data: PassiveUsageResult | null): string {
     return '    <tr class="totals"><td>Totals</td><td class="muted" colspan="8">no data</td></tr>';
   return `    <tr class="totals">
       <td>Totals</td>
+      <td></td>
       <td>${fmtTokens(data.total_tokens_input)}</td>
       <td>${fmtTokens(data.total_tokens_output)}</td>
       <td>${fmtTokens(data.total_tokens_cache_read)}</td>
@@ -340,7 +338,7 @@ function withImputed(
   });
   const realTotal = data.total_cost > 0 ? data.total_cost : s.total_imputed;
   const parts = [
-    `~$${s.total_imputed.toFixed(4)} est. over ${s.priced_sessions} priced sessions`,
+    `~$${s.total_imputed.toFixed(4)} over ${s.priced_sessions} priced sessions`,
   ];
   if (s.free_sessions > 0) parts.push(`${s.free_sessions} free`);
   if (s.unpriced_sessions > 0)
@@ -397,13 +395,21 @@ export function renderUsageHtml(
 
     const heading = isGlobal ? "All projects" : shortWt(label);
 
+    // การ์ดที่ไม่มี session เลยไม่มีอะไรให้ดู — ซ่อนแทนที่จะโชว์ "no sessions"
+    const cards = [
+      ["OpenCode", "var(--green)", pOc],
+      ["ZCode", "var(--accent)", pZc],
+      ["Claude Code", "var(--yellow)", pCc],
+      ["Codex", "var(--accent)", pCx],
+    ] as const;
+
     return `
 <h2 style="color:var(--accent)">${esc(heading)} <span class="sample">(${totalSessions} sessions)</span></h2>
 <div class="cards">
-${summaryCard("OpenCode", "var(--green)", pOc)}
-${summaryCard("ZCode", "var(--accent)", pZc)}
-${summaryCard("Claude Code", "var(--yellow)", pCc)}
-${summaryCard("Codex", "var(--accent)", pCx)}
+${cards
+  .filter(([, , m]) => m.sessions > 0)
+  .map(([name, color, m]) => summaryCard(name, color, m))
+  .join("\n")}
 </div>
 
 ${shareSection(pOc, pZc, pCc, pCx)}
@@ -475,7 +481,6 @@ ${clientTable(`t-cx-${label}`, "Codex", "var(--accent)", cx.view, cx.note)}`;
   .cards { display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 1.5rem; }
   .card { background: #161b22; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 0.8rem 1rem; }
   .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
-  .card-empty { color: var(--muted); font-size: 0.85rem; }
   .card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; }
   .card-metric { font-size: 0.8rem; }
   .card-metric.wide { grid-column: span 2; }
