@@ -29,9 +29,9 @@ const NOW = new Date().toISOString();
 // temp ว่างทุกครั้งกันเลขจริงบนเครื่องหลุดเข้าเทสต์ (non-determinism)
 function renderGlobal(
   oc: PassiveUsageResult,
-  zc: PassiveUsageResult | null = null,
-  cc: PassiveUsageResult | null = null,
-  cx: PassiveUsageResult | null = null,
+  zc: PassiveUsageResult = EMPTY_RESULT,
+  cc: PassiveUsageResult = EMPTY_RESULT,
+  cx: PassiveUsageResult = EMPTY_RESULT,
   scannedAt: string = NOW,
   prices?: PriceTable | null,
 ): string {
@@ -407,7 +407,14 @@ export function testRenderHtmlImputedCost(): void {
     total_cost: 0,
     by_model: sampleData.by_model.map((m) => ({ ...m, cost: 0 })),
   };
-  const html = renderGlobal(zeroCost, null, null, null, NOW, fixturePrices);
+  const html = renderGlobal(
+    zeroCost,
+    EMPTY_RESULT,
+    EMPTY_RESULT,
+    EMPTY_RESULT,
+    NOW,
+    fixturePrices,
+  );
   assert.ok(html.includes("list-price equivalent"), "imputed note present");
   assert.ok(html.includes("~$"), "imputed cost shown for zero-cost row");
   // รุ่นที่ map ไม่ได้ต้องโผล่ใน unpriced ไม่ใช่หายเข้า 0
@@ -417,7 +424,14 @@ export function testRenderHtmlImputedCost(): void {
 
 export function testRenderHtmlNoPricesHint(): void {
   // pin STATE_DIR ว่าง + ส่ง null ชัดเจน = ไม่มีราคา → hint ให้ price-scan
-  const html = renderGlobal(sampleData, null, null, null, NOW, null);
+  const html = renderGlobal(
+    sampleData,
+    EMPTY_RESULT,
+    EMPTY_RESULT,
+    EMPTY_RESULT,
+    NOW,
+    null,
+  );
   assert.ok(html.includes("fapony price-scan"), "hint to price-scan present");
   console.log("  ✓ renderUsageHtml → missing prices shows hint, not throw");
 }

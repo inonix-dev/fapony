@@ -86,9 +86,9 @@ export function cmdUsageWeb(rawArgs: string[]): void {
     string,
     {
       opencode: PassiveUsageResult;
-      zcode: PassiveUsageResult | null;
-      claude_code: PassiveUsageResult | null;
-      codex: PassiveUsageResult | null;
+      zcode: PassiveUsageResult;
+      claude_code: PassiveUsageResult;
+      codex: PassiveUsageResult;
     }
   >();
 
@@ -96,19 +96,9 @@ export function cmdUsageWeb(rawArgs: string[]): void {
     const byClient = new Map(clientEntries.map((e) => [e.client, e]));
     const data = {
       opencode: cacheToResult(byClient.get("opencode")),
-      zcode:
-        byClient.get("zcode") && (byClient.get("zcode")?.session_count ?? 0) > 0
-          ? cacheToResult(byClient.get("zcode"))
-          : null,
-      claude_code:
-        byClient.get("claude_code") &&
-        (byClient.get("claude_code")?.session_count ?? 0) > 0
-          ? cacheToResult(byClient.get("claude_code"))
-          : null,
-      codex:
-        byClient.get("codex") && (byClient.get("codex")?.session_count ?? 0) > 0
-          ? cacheToResult(byClient.get("codex"))
-          : null,
+      zcode: cacheToResult(byClient.get("zcode")),
+      claude_code: cacheToResult(byClient.get("claude_code")),
+      codex: cacheToResult(byClient.get("codex")),
     };
     projectData.set(key, data);
   }
