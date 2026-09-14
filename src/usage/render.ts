@@ -251,9 +251,9 @@ function freshnessBar(scannedAt: string): string {
 
 type ClientData = {
   opencode: PassiveUsageResult;
-  zcode: PassiveUsageResult | null;
-  claude_code: PassiveUsageResult | null;
-  codex: PassiveUsageResult | null;
+  zcode: PassiveUsageResult;
+  claude_code: PassiveUsageResult;
+  codex: PassiveUsageResult;
 };
 
 /** Context-share bar: proportion of input+output tokens per client. */
