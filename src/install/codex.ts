@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { CODEX_MCP_ENTRY, defaultExit, type InstallDeps } from "./types.js";
 
-function findCodexConfig(getHome: () => string): string | null {
+export function findCodexConfig(getHome: () => string): string | null {
   const p = join(getHome(), ".codex", "config.toml");
   return existsSync(p) ? p : null;
 }

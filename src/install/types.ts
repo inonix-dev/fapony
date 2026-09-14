@@ -41,6 +41,11 @@ export interface InstallDeps {
   exit?: (code: number) => never;
   /** Override os.homedir() for tests. */
   homedir?: () => string;
+  /** Prompt the user (question → answer). Injected in tests; when absent,
+   *  detect/prompt path prints results and exits instead of asking. */
+  ask?: (question: string, defaultVal?: string) => Promise<string>;
+  /** Check if a command is on PATH. Defaults to `command -v` with allowlist. */
+  checkCmd?: (cmd: string) => boolean;
 }
 
 /** Default process exit. Shared by all providers — do not duplicate. */

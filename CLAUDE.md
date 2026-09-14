@@ -15,97 +15,24 @@ Measurement + verification layer for coding agents, shipped as an MCP server (`f
 
 ## Architecture
 
+แผนที่ราย**ไฟล์** อยู่ที่ [docs/architecture.md](docs/architecture.md) — อ่านตอนหาที่วางโค้ดใหม่
+ไม่ใช่ทุก session ระดับโฟลเดอร์พอสำหรับการรู้ว่าอะไรอยู่ไหน:
+
 ```
-fapony/
-  fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|usage-scan|usage-web|analyze|setup|stats|telemetry|test|update
-  fapony.config.json  # runtime config (worktrees, review.maxRounds, memory, paths, safety) — optional, gitignored
-  skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
-                                # each SKILL.md is self-contained — the symlink ships only
-                                # skill/<name>/, so a link out of that dir is dead on install
-    plan-with-pony/             # draft plan + spec จาก conversation (pipe to any agent's stdin)
-    review-pony/                # review as verification + known patterns before, verdict after
-    move-to-done/               # archive PLAN เข้า .fapony/done/ หลัง ship
-    git-commit-conventional/    # commit แยก concern + conventional message
-    git-ship/                   # push branch, open PR, merge, reset branch onto base
-  templates/
-    PLAN.md / SPEC.md / mem/     # plan+spec templates, memory scaffold for `fapony init`
-                                 # (ชื่อโฟลเดอร์ = ชื่อ CLI ที่มันเป็น (`mem`) ไม่ใช่ปลายทางที่ไปวาง (.memory/))
-  src/
-    db/               # SQLite + config
-      store.ts        # openDb + schema/migration (PRAGMA user_version) + CRUD
-      load.ts         # loadConfig()
-      getters.ts      # getters รวมศูนย์ — ห้าม hardcode ที่ call site
-      types.ts        # Config / Row types
-      defaults.ts     # DEFAULT_* constants (safety deny list, …)
-      index.ts        # re-export
-    gates.ts          # per-round gate enrichment — model + session tokens per gate; carries `sessionId` so callers can dedupe
-    parse.ts          # parseGateVerdict() + qualityScore()
-    memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY
-    safety.ts         # assertSafe() deny-list (checked before any config-sourced shell cmd runs)
-    session/           # passive usage readers — OpenCode (SQLite), ZCode (SQLite), Claude Code (JSONL), Codex (JSONL)
-      activeSession.ts # loadSessionSpans/findSessionAt — which client session was live in a worktree at time T (model attribution without asking the caller)
-      index.ts         # re-exports (backward compat)
-      types.ts         # ModelBreakdown, SessionDetail, UsageDetail, StepTimingSummary, PassiveUsageResult
-      helpers.ts       # buildWhereClause(), aggregateDetail(), readDetailFromDb(), parseTimeMs()/extractPartTiming()/summarizeTiming()/collectTiming()/readTimingFromDb()
-      opencode.ts      # readPassiveUsage() — OpenCode session DB
-      zcode.ts         # readZcodeUsage() — ZCode session DB
-      claude-code.ts   # readClaudeCodeUsage() — Claude Code JSONL files
-      codex.ts         # readCodexUsage() — Codex JSONL files
-    context/           # project-health context block, keyed by files[] (any caller)
-      projectHealth.ts # buildProjectHealthContext() — pure over StatsData, ~15 lines max
-      index.ts         # barrel re-export
-    math.ts            # minutesBetween(), avg() — shared pure numeric helpers
-    init.ts            # fapony init — scaffold .fapony/{plan,done,spec,.memory,evidence.json}
-    init-mem.ts        # init-mem — scaffold/refresh (`--update`) the memory copy; `init` reuses its copyDir
-    stats/                # fapony stats — KPI across runs
-      data.ts             # getStatsData() + StatsData type + computeEfficiency() + reason_code/plan/escalation/best-passing queries
-      format.ts           # formatStatsText() — CLI + MCP text mode
-      cli.ts              # cmdStats()
-      index.ts            # barrel re-export
-    web/                  # shared HTML helpers (report-web + usage-web)
-      html.ts             # esc(), DARK_THEME_CSS, TABLE_CSS
-      index.ts            # barrel re-export
-    report/               # fapony report / report-web — verification report
-      cli.ts              # cmdReport (per-run), cmdReportWeb (aggregate HTML)
-      render.ts           # renderReportHtml(stats, generated_at) — renders from StatsData
-      format.ts           # fmtRate, fmtUsd, fmtMinutes, insufficientData
-      index.ts            # barrel re-export
-    usage/                # fapony usage-web — live usage comparison dashboard
-      cli.ts              # cmdUsageWeb + Bun.serve routes (/, /data, /favicon.ico)
-      render.ts           # renderUsageHtml() — HTML with summary cards + per-client tables
-      format.ts           # fmtTokens(), fmtCost(), fmtDelta(), shortModel() — re-exports esc() from web/
-      index.ts            # barrel re-export
-    telemetry.ts        # opt-in payload (runs/events allowlist เท่านั้น)
-    setup.ts            # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
-    install.ts          # barrel — re-exports src/install/ (fapony install --platform …)
-    install/            # one file per client + shared pieces
-      claude.ts         # `claude mcp add` (never writes ~/.claude.json directly)
-      opencode.ts       # ~/.config/opencode/opencode.json(c)
-      zcode.ts          # ~/.zcode/cli/config.json (fallback ~/.agents/mcp.json)
-      codex.ts          # ~/.codex/config.toml
-      skills.ts         # linkSkills() — symlinks skill/<name>/ into ~/.claude/skills, never overwrites
-      types.ts          # InstallDeps / ClaudeRunResult / defaultExit
-      utils.ts          # shared JSON(C) helpers
-    update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
-    util.ts               # templateArgs / fillPrompt / isAffirmative
-    mcp/                   # MCP server — stdio JSON-RPC, 8 tools
-      index.ts             # MCP entry point + tool registration
-      transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn the grading habit without editing their own rules file
-      evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
-      types.ts             # MCP type definitions
-      tools/
-        collect.ts         # handoff_collect — git facts
-        check.ts           # handoff_check — conformance
-        verdict.ts         # verdict_submit — 6-grade verdict storage
-        stats.ts           # fapony_stats — KPI query
-        usage.ts           # fapony_usage — passive OpenCode session usage
-        report.ts          # verification_report — facts + checks + evidence + verdict, one call
-        plans.ts           # plan_list — pending plan files joined with run history
-        context.ts         # project_health_context — known patterns by files[]
-    test.ts               # self-check ตัวเอง (thin wrapper → test/index.ts)
-  test/
-    *.test.ts              # one file per src module
-    mcp/                   # MCP tool tests
+fapony.ts       CLI dispatch
+skill/          <name>/SKILL.md — symlink เข้า client โดย `fapony install`
+                (self-contained — link ออกนอก skill/<name>/ ตายตอน install)
+templates/      PLAN.md / SPEC.md / mem/ — ของที่ `fapony init` วาง
+src/db/         SQLite + config (store/load/getters/types/defaults)
+src/session/    passive usage reader ราย client + activeSession (model attribution)
+src/stats/      getStatsData() + format — KPI ข้าม run
+src/report/     fapony report / report-web
+src/usage/      fapony usage-web — อ่าน cache ไม่แตะ session log
+src/context/    project-health block keyed by files[]
+src/install/    หนึ่งไฟล์ต่อ client + skills.ts
+src/mcp/        MCP server — transport (SERVER_INSTRUCTIONS), evidence allowlist, tools/ 8 ตัว
+src/*.ts        gates · parse · memory · safety · math · init · init-mem · telemetry · setup · update · util · analyze
+test/           หนึ่งไฟล์ต่อ src module + test/mcp/
 ```
 
 ---
@@ -199,35 +126,10 @@ events(
 
 ## Edge Cases ที่จัดการแล้ว
 
-| Edge Case | วิธีจัดการ |
-|-----------|-----------|
-| Dangerous shell commands (memory claim/close/add, evidence collector cmds, `install`'s `claude mcp add`) | `assertSafe()` deny-list ([src/safety.ts](src/safety.ts)) เรียกก่อนทุก shell spawn ที่มาจาก config — เป็นโค้ด ไม่ใช่ข้อความ |
-| fapony เขียนไฟล์ worktree | ห้ามเด็ดขาด — db อยู่ ~/.config/fapony/ เท่านั้น |
-| `fapony update` รันจาก src/ | ROOT = `join(import.meta.dir, "..")` — ถ้าพลาดเป็น `import.meta.dir` ตรงๆ git pathspec (`-- bun.lock`) จะ relative กับ src/ → lockfile change ตรวจจับไม่เจอ และ version อ่านจาก package.json ไม่เจอบอก "unknown" (มี tripwire test ใน update.test.ts) |
-| ~/.config/fapony/ ไม่มี | mkdirSync(recursive) ก่อนเปิด db |
-| `fapony init` ซ้ำ | เช็คทุก dir (plan/spec/memory/evidence.json) → error ถ้าเจอของเก่า ห้ามทับ |
-| memory: null + .fapony/.memory/mem.ts มี | default-wiring ใช้ claim/close/add อัตโนมัติ |
-| Evidence cmd ที่ agent เสนอเองนอก allowlist | ไม่รันเด็ดขาด — รายงานเป็น *proposed — not executed* ([src/mcp/evidence.ts](src/mcp/evidence.ts)) |
-| AI สร้าง plan filename ซ้ำทับของเก่า | `skill/plan-with-pony/SKILL.md` กฎเหล็ก #7 — `ls .fapony/plan/` เช็คชื่อชนก่อนเขียนเสมอ |
-| `usage-web` ช้าครั้งแรกเมื่อ OpenCode/ZCode part table ใหญ่ (แสนกว่าแถว) | แก้แล้ว — `usage-web` อ่าน cache (`~/.config/fapony/usage-cache.jsonl`) ไม่แตะ session log · scan เกิดตอนคนสั่ง `fapony usage-scan` เท่านั้น · `--full` ย้ายไปเป็น flag ของ `usage-scan` |
-| `usage-web` ไม่มี cache | แสดงข้อความให้รัน `fapony usage-scan` ก่อน — ไม่ scan เองเด็ดขาด (done criteria #5) |
-| gate event ไม่มี `session_id` → `by model` เป็น `—` ทั้งแถว (15/17 บนเครื่องจริง) | อย่าขอ field เพิ่ม — **infer ตอนอ่าน**: ทุก client บันทึก directory + ช่วงเวลาของ session อยู่แล้ว [activeSession.ts](src/session/activeSession.ts) หา span ที่ *ครอบ* ts ของ gate (ไม่ใช่ span ล่าสุด) แคบสุดชนะเมื่อซ้อนกัน · ติดป้าย `modelSource: "inferred"` เสมอ ห้ามแสดงเป็นค่าที่ผู้เรียกประกาศเอง · ทำงานย้อนหลังกับ row เก่าโดยไม่ต้องเขียนอะไรใหม่ (2 declared → 18 attributed) |
-| ผู้ใช้คนอื่นต้องแปะกฎ 7 ลง CLAUDE.md ของตัวเองไหม | **ไม่** — MCP `initialize` ตอบ `instructions` กลับไป ([transport.ts](src/mcp/transport.ts) `SERVER_INSTRUCTIONS`) client ฉีดเข้า context ให้เอง = ครอบทุก client โดยไม่แตะไฟล์กฎของใคร · กฎ 7 ใน CLAUDE.md นี้เป็นแค่การย้ำสำหรับ repo ตัวเอง ไม่ใช่กลไก · ข้อความนี้ถูกจ่ายทุก session ของทุกคน — **สั้นไว้ ห้ามยัดเพิ่ม** |
-| cost/efficiency ใน `stats`/`report`/telemetry ว่างเปล่าตลอด | **ลบทิ้งแล้ว** — declared cost ทั้งสาย (spawn event + `pricing` + ES/CPQ + avgValue) derive จาก `beginSpawn`/`endSpawn` ที่ถูกลบไปพร้อม execute→review loop (ดู History) ไม่มี writer เหลืออยู่เลย ตัวเลขจึงเป็น `—` ตลอดกาล · cost ที่เหลือมีเส้นเดียว: passive session log ของ client เอง (`fapony_usage`, `usage-web`) — OpenCode บันทึก cost จริง, ZCode/Claude Code/Codex บันทึก 0 |
-| token ของ Claude Code ดูน้อยผิดปกติ (`4.2k in / 1.1M out`) | **cache คือ input เกือบทั้งหมด** — `input_tokens` เปล่า ๆ ไม่ใช่ input จริง ทุก reader ต้องบวก cache read + cache write ด้วย (`sumInput()` ใน [findModel.ts](src/session/findModel.ts) เป็นตัวเดียวที่ทุก client ใช้) · สัญญาณว่า accounting พัง: coding agent ที่ input < output เป็นไปไม่ได้ · หมายเหตุ: catch-all รอบ query ของ session reader กลืน schema mismatch เป็น `null` เงียบ ๆ — เพิ่มคอลัมน์ใน SQL แล้ว fixture เก่าไม่มี = ไม่ error แต่ค่าหาย |
-| token ต่อ model บวมผิดส่วน | token เป็นค่า **ราย session** แต่ gate เป็นราย round — 58 gate มาจาก 35 session (session เดียวคุมได้ถึง 5 gate) บวกตรง ๆ = คูณไม่เท่ากันในแต่ละ model = อันดับผิด · `GateWindow.sessionId` มีไว้ dedupe, `addSessionTokens()` ใน [stats/data.ts](src/stats/data.ts) charge session ละครั้งต่อ bucket |
-| เทสต์ที่เทียบ output สองครั้งแล้วแดงสุ่ม | ไม่ใช่ flake ลอย ๆ — passive reader อ่าน session log **ที่ agent กำลังเขียนอยู่ระหว่างเทสต์รัน** เลขขยับระหว่างสอง render · pin `FAPONY_OPENCODE_DB` / `FAPONY_ZCODE_DB` / `FAPONY_CLAUDE_PROJECTS_DIR` / `FAPONY_CODEX_SESSIONS_DIR` ไปที่ path ที่ไม่มีจริง ให้ usage ว่างทั้งคู่ |
-| PR ใหม่ขึ้น *"This branch has conflicts"* ทั้งที่ไม่มีใครแก้ชนกัน | รอบก่อน `dev` ถูก **squash merge** — squash เขียน commit ใหม่ commit เดิมบน dev เลยไม่เป็นบรรพบุรุษของ `main` git เห็นเป็น "สองฝั่งแก้บรรทัดเดียวกัน" ทั้งที่เป็นงานชิ้นเดียวกัน · **repo นี้ใช้ `gh pr merge --merge` เสมอ ห้าม `--squash`/`--rebase`** — ทั้งคู่เขียน commit ใหม่ = divergence แบบเดียวกัน · เหตุผลสองชั้น: (1) commit ที่นี่แยก concern อยู่แล้วตามกฎข้อ 3 squash ก็คือการทิ้งงานนั้นทุกครั้งที่ merge — `git blame` จะตอบทุกบรรทัดด้วยข้อความของทั้ง branch (2) squash เพิ่มขั้นตอนที่ลืมได้เข้าไปในทางวิกฤต ส่วน `--merge` ไม่มีอะไรให้ลืมเพราะ dev เป็นบรรพบุรุษของ main อยู่แล้ว เหลือแค่ `git merge --ff-only origin/main` (ไม่ต้อง force) · ถ้า squash ไปแล้ว ต้อง `git reset --hard origin/main` ที่ dev ทันทีหลัง merge ไม่ใช่ทางเลือก ([skill/git-ship](skill/git-ship/SKILL.md)) · เช็คว่าเรียบร้อยจริง: `git merge-base --is-ancestor origin/dev origin/main` exit 0 · พิสูจน์ว่า conflict ปลอมก่อนแก้: `git diff <merge commit บน main> <จุดที่ตัด PR ไป>` ว่าง = ไม่มีอะไรบน main ให้เอามา แล้วปิดด้วย `git merge -s ours origin/main` (ยืนยัน tree hash ก่อน/หลังเท่ากัน) · `main` จึงเป็นกราฟที่มีเส้นแตกทุก PR ตั้งใจให้เป็นแบบนั้น — อ่านระดับ PR ด้วย `git log --oneline --first-parent main` |
-| `.fapony/.memory/` ที่ `fapony init` วาง แต่ log ไปโผล่ที่อื่น | store.ts เดิมหา dir จาก **git root + เดาว่า monorepo ไหม** ไม่ได้ดูว่าตัวเองอยู่ไหน — repo เดี่ยว: โค้ดอยู่ `.fapony/.memory/` log ไป `<root>/.memory/` · เคสที่พังจริง: `apps/<x>/.fapony/.memory/` ใน monorepo → เขียนลง log ของ **อีกแอปหนึ่ง** (root=wt-vela, app=vela) · แก้ด้วย `import.meta.dir.includes("/.fapony/.memory")` = สำเนาที่ scaffold มา อิงโฟลเดอร์ตัวเอง · สำเนากลาง (โค้ดชุดเดียวที่ root, log แยกราย app) default ไป `<app>/.fapony/.memory` fallback ไป `.memory/` เดิมเมื่อมี `log.jsonl` อยู่จริง (เช็คไฟล์ ไม่ใช่ dir) · app หาจาก `{apps,packages,services}/<app>` ตัวแรกที่มีจริง แต่ guard `unknown app` ยังผูกกับ `apps/` เท่านั้น · ตัวแยก "สำเนากลาง vs สำเนาที่ scaffold" ที่ root คือ **เดา app ได้ไหม** ไม่ใช่ "มีโฟลเดอร์รวม app ไหม" — `fapony init <monorepo root>` วางไฟล์ที่ path เดียวกับสำเนากลางเป๊ะ ๆ ถ้าดูแค่ว่ามี `apps/` จะตายที่ guard ตั้งแต่คำสั่งแรกทั้งที่ plan อยู่ข้าง ๆ |
-| `git mv` log เข้า `.fapony/` แล้ว log หลุด track เงียบๆ | `.gitignore` ที่ ignore `.fapony/` ทั้งก้อน (`**/.fapony/*` + negation ราย dir) — ย้ายไฟล์เข้าไปโดยไม่เพิ่ม negation ก่อน = untrack เงียบ · negation ต้องเป็น `!**/.fapony/.memory/` (**dir ก่อน** — git re-include ไฟล์ในโฟลเดอร์ที่ถูก exclude ไม่ได้) และต้องขึ้นต้น `**/` (pattern ที่มี slash กลาง string จะ anchor ที่ repo root ไม่ match `apps/<x>/.fapony`) · ลำดับ: เพิ่ม negation → commit → ค่อย `git mv` → เช็ค `git ls-files` ทันที |
-| `verification_report` ของ app หนึ่งรัน test ของอีก app / ทีมไม่มี allowlist | allowlist เป็นราย worktree ใบเดียว (`join(worktree, evidenceFile)`) ทั้งที่โมโนเรโปมีหลาย app คนละ test command · แก้ด้วย `resolveEvidencePath(worktree, files[])` ใน [evidence.ts](src/mcp/evidence.ts): ทุกไฟล์ใต้ `<group>/<app>/` เดียวกัน + มี `<app>/.fapony/evidence.json` → ใช้ใบนั้น ไม่งั้นใบ root (ห้ามเพิ่ม field `app` — infer จาก fact ที่มีอยู่แล้ว) · evidence.json **ต้อง commit** (allowlist คือ security boundary ที่ทีมต้องใช้ชุดเดียวกัน) อย่าให้ติด ignore — negation `!**/.fapony/evidence.json` ([test/mcp/evidence.test.ts](test/mcp/evidence.test.ts) คุม app/mixed/empty/missing/custom) |
-| `mem plan-sweep` / `plan-check` ไม่เคยทำงานเลยสำหรับคนที่ใช้ `fapony init` | `commands/plan.ts` hardcode `apps/<app>/plan` **10 จุด** ทั้งที่ `store.ts` มี fallback repo เดี่ยวอยู่แล้ว → พิมพ์ "ไม่มี plan/" ทุกครั้งเงียบ ๆ · รวมศูนย์ไว้ที่ `store.ts` ที่เดียว (export `planDir`/`doneDir`) |
-| โมโนเรโปมีหลาย app แต่ `paths.planDir` มีค่าเดียว | ประกาศ `planDir` ให้ app หนึ่ง = **ทุก app ที่เหลือชี้ไป plan ของ app นั้น** (vela ประกาศ `apps/vela/plan` → `MEM_APP=canalis plan-check` ไปอ่านของ vela) · แก้ด้วยการ**ไม่เพิ่ม field** แต่ให้ default รู้จักเอง: `existsSync(<planBase>/.fapony)` → ใช้ `.fapony/{plan,done}` ไม่งั้นใช้ `plan/` + legacy `plan/done/` เดิม — แต่ละ app จึงย้ายเข้า `.fapony/` ทีละตัวได้โดยไม่แตะ config และ config ที่ประกาศไว้ยังชนะเหมือนเดิม ([test/memory-template.test.ts](test/memory-template.test.ts) คุม 12 รูป) |
-| สำเนา `.memory` ในโปรเจกต์อื่นตกรุ่นเมื่อ template แก้บั๊ก | `fapony init-mem --update` — อ่าน `paths.memoryEntry` ของ repo ที่ยืนอยู่ (ไม่ต้องลงทะเบียน worktree) แล้ว copy ทับเฉพาะไฟล์ที่มีใน template · `log.jsonl` และไฟล์ข้อมูลอื่นไม่ถูกแตะเพราะ template ไม่มีไฟล์ชื่อนั้น · ไม่มี flag = ยัง refuse เหมือนเดิม กันทับของที่แก้เอง |
-| template เดา path เอาเองทั้งที่ `fapony.config.json` ประกาศไว้แล้ว | **config ชนะการเดาเสมอ** — `store.ts` อ่าน `paths.planDir`/`doneDir` (vela ประกาศ `apps/vela/plan` ไว้ตรง ๆ) heuristic `planBase` เหลือเป็นแค่ default ตอนไม่มีไฟล์ · อ่าน config **ที่ระดับโปรเจกต์เท่านั้น**: สำเนาที่ scaffold ใน `apps/<x>/.fapony/` ต้องไม่หยิบ config ของ monorepo ที่ root มาใช้ (นั่นเป็น path ของอีกโปรเจกต์) · `doneDir` ไม่ประกาศ → ใช้ `<base>/done` เว้นแต่มี `plan/done/` เก่าอยู่จริง (vela วันนี้ยังใช้ของเก่า ไม่ถูกบังคับย้าย) |
-| เขียนข้อความเป็นไทยหรืออังกฤษดี | **แยกตามว่าใครอ่าน ไม่ใช่ตามว่าใครเขียน** — (1) machine surface (frontmatter key/value, checkbox syntax, enum) = EN เสมอ เพราะ tool parse · (2) artifact ที่แจกออกไป (README, SKILL.md, templates, examples, `SERVER_INSTRUCTIONS`, **ทุก string ที่ `templates/mem` print**) = EN เพราะ `fapony init` ส่งให้คนทั้งโลก · (3) prose ใน plan/spec + **code comment** = ภาษาที่ dev อ่าน (ไทย) เพราะอ่านโดยคนที่แก้ repo นี้เท่านั้น |
-| PLAN ที่ ship แล้วแต่ `plan-sweep` มองไม่เห็น | detection เดิมเช็ก `^> ✅` ที่ **บรรทัดแรกที่ไม่ว่าง** — format ปัจจุบันขึ้นด้วย frontmatter แล้ว `# title` header จึงไม่เคยอยู่บรรทัดแรกอีกเลย · `hasShippedHeader()` เช็ก 2KB แรกด้วย regex `/m` แทน |
-| test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
+ย้ายไปที่ [docs/edge-cases.md](docs/edge-cases.md) — **`grep` ที่นั่นตอนเจอพฤติกรรมแปลก
+ที่ดูเหมือนเคยเจอ** (ทุกแถวคือกับดักที่เคยเสียเวลาไปแล้วจริง) มันเป็น lookup ที่ 90% ของ
+session ไม่ได้ใช้สักแถว เลยไม่ควรถูกจ่ายเข้า context ทุกครั้ง — กฎที่ต้องรู้ตลอดเวลา
+อยู่ที่ *Rules for AI Agents* ด้านล่าง
 
 ---
 
@@ -267,6 +169,13 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
    (ตรวจไม่ได้ → `uncertain` ห้ามเดา pass) · `note` ต้อง standalone ห้ามอ้างอิงบทสนทนา
    · ห้ามทิ้ง run ค้าง — run ที่ไม่ terminal ดูด verdict อื่นของ worktree นั้นมาเกาะ
    ([store.ts findOpenRunWithNullPlan](src/db/store.ts))
+   · **การ *ขอ* ไม่พอ — มี Stop hook บังคับแล้ว** ([src/hook.ts](src/hook.ts), ติดตั้งโดย
+   `fapony install --platform claude`): จบเทิร์นที่มี commit แต่ไม่มี verdict = ถูก block
+   หนึ่งครั้งพร้อมเหตุผล · hook **ไม่ตัดสินเกรดแทน** (มันไม่เห็นว่างานผ่านหรือพัง) —
+   แยก "ใครตัดสิน" ออกจาก "ใครบังคับให้ตัดสิน" อันหลังเท่านั้นที่ automate ได้ ·
+   สัญญาณคือ **commit ไม่ใช่ dirty tree** (dirty = กำลังทำอยู่, commit = หน่วยงานจบ) ·
+   ทุกกรณีที่พิสูจน์ไม่ได้ (ไม่ใช่ git repo / ไม่มี transcript / hook ยิงไปแล้ว) = ปล่อยผ่าน
+   hook ที่เดาผิดแล้วขัง agent แย่กว่าไม่มี hook
 8. **`project_health_context` ไม่ใช่ reflex ก่อนแก้ไฟล์อีกแล้ว** — วัดกับ repo จริงแล้ว: ไฟล์ที่
    ship แล้วกลับมาโดน `fix:` ใน 14 วัน = 1% (canalis 66/8,760) / 9% (fapony 21/226) base rate
    ต่ำขนาดนี้แปลว่าเวลาจะแตะไฟล์หนึ่ง history แทบไม่มีอะไรจะเตือน · tool ยังอยู่ เรียกได้ถ้าอยาก
@@ -276,10 +185,17 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 
 ## Memory: `.fapony/.memory/log.<คุณ>.jsonl` (append-only)
 
-log คือ **สมองส่วนกลางของโปรเจกต์** — มันอยู่ใน git ฉะนั้นใครก็ตามที่ clone repo นี้ได้
-`decision` / `bug` / `note` ทั้งหมดติดมาด้วยทันที นั่นคือเหตุผลที่มันอยู่ในนี้ ไม่ใช่ใน
+log ออกแบบให้เป็น **สมองส่วนกลางของโปรเจกต์** — วางไว้ในรีโป ไม่ใช่ใน
 `~/.config/fapony/state.db` (ของเครื่องใครเครื่องมัน clone ไม่ติด) · ชื่อไฟล์มาจาก
-`git config user.name` — คนละใบต่อคน จึงไม่มีอะไรให้ merge ชน
+`git config user.name` — คนละใบต่อคน จึงไม่มีอะไรให้ merge ชน ฉะนั้นถ้า repo ไหน commit มัน
+`decision`/`bug`/`note` จะติดไปกับ clone ทันที
+
+**แต่ "อยู่ในรีโป" ไม่เท่ากับ "อยู่ใน git" — ขึ้นกับ `.gitignore` ของแต่ละ repo และ
+repo นี้จงใจไม่ commit:** `.gitignore` ที่นี่ ignore `.fapony/` ทั้งก้อน (public repo — mem/plan
+เป็นบันทึกภายใน ไม่เอาขึ้น GitHub) ฉะนั้น**ในรีโปนี้ log อ่านได้จากเครื่องตัวเองเท่านั้น
+ไม่ใช่ของที่แชร์ผ่าน clone** · ผลพลอยได้ที่ต้องรู้: `.fapony/evidence.json` ก็ไม่ถูก commit ด้วย
+ทั้งที่กฎ evidence บอกว่าต้อง commit — ข้อยกเว้นนี้ใช้ได้เพราะที่นี่มีคนแก้คนเดียว
+repo ที่มีหลายคนต้องเพิ่ม negation เอง (ดูตารางแถว `git mv` ด้านบน + README quick start)
 
 **บันทึกระหว่างทำงาน ไม่ต้องรอให้สั่ง** — ไม่มีกลไกไหนเขียนให้ มีแต่ agent ที่รันเอง:
 
@@ -396,6 +312,7 @@ Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)
 
 ```bash
 fapony mcp                          # MCP server — stdio JSON-RPC, 8 tools
+fapony hook-stop                    # Claude Code Stop hook (stdin JSON) — blocks a turn that has ungraded commits
 fapony report <run-id>              # verification report for a run
 fapony report-web [file]            # static HTML report page
 fapony usage-scan                    # scan session logs → usage-cache.jsonl (incremental, progress bar)
@@ -403,7 +320,10 @@ fapony usage-web [port]              # live usage comparison dashboard from cach
 fapony stats                        # KPIs: pass/stall rate, by-model, by-grade
 fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
 fapony init-mem [--update]          # re-copy templates/mem/ into this repo's memory dir (path from paths.memoryEntry) — data files (log.jsonl) untouched
-fapony install --platform opencode|claude|zcode|codex  # wire mcp.fapony into an MCP client (+ symlink skills for claude/opencode)
+fapony install                            # detect installed clients, prompt to wire each
+fapony install --all                      # wire all detected clients without prompting
+fapony install --platform <name>          # force a specific client (bypasses detection)
+fapony install --dry-run                  # show what would happen without writing files
 fapony setup                        # interactive wizard: config + scaffold in one step
 fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md

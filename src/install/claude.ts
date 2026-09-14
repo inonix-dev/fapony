@@ -146,6 +146,9 @@ export function cmdInstallClaude(
 
   // Wire statusline: copy script + update settings.json.
   installStatusline(dryRun, deps);
+
+  // Wire the Stop hook that refuses to end a turn with ungraded commits.
+  installStopHook(dryRun, deps);
 }
 
 /**
@@ -255,5 +258,67 @@ function installStatusline(dryRun: boolean, deps: InstallDeps): void {
   }
   console.error(
     `  statusline: ${dryRun ? "would write" : "wrote"} statusLine → ${settingsPath}`,
+  );
+}
+
+/**
+ * Register `fapony hook-stop` as a Claude Code Stop hook in
+ * ~/.claude/settings.json. Same policy as installStatusline: never touch a
+ * hook someone else registered, never fail the install over it.
+ *
+ * ทำไมต้องมี: SERVER_INSTRUCTIONS ขอให้ agent ยิง verdict_submit เอง แต่ fill rate
+ * จริงบอกว่าการ *ขอ* ไม่พอ hook ไม่ตัดสินแทน — แค่ไม่ให้จบเทิร์นจนกว่าจะตัดสิน
+ */
+function installStopHook(dryRun: boolean, deps: InstallDeps): void {
+  const home = deps.homedir ? deps.homedir() : homedir();
+  const claudeDir = join(home, ".claude");
+  const settingsPath = join(claudeDir, "settings.json");
+  const command = `bun ${join(INSTALL_ROOT, "fapony.ts")} hook-stop`;
+
+  let settings: Record<string, unknown> = {};
+  if (existsSync(settingsPath)) {
+    try {
+      settings = JSON.parse(readFileSync(settingsPath, "utf-8")) as Record<
+        string,
+        unknown
+      >;
+    } catch {
+      console.error(
+        `  stop hook: ${settingsPath} is unreadable or malformed — skipping`,
+      );
+      return;
+    }
+  }
+
+  const hooks = (settings.hooks ?? {}) as Record<string, unknown>;
+  const stop = Array.isArray(hooks.Stop) ? (hooks.Stop as unknown[]) : [];
+  if (JSON.stringify(stop).includes("hook-stop")) {
+    console.error(
+      `  stop hook: already configured in settings.json — no change`,
+    );
+    return;
+  }
+
+  // Append rather than replace: other tools register Stop hooks too, and
+  // Claude Code runs every matcher in the array.
+  stop.push({ hooks: [{ type: "command", command }] });
+  hooks.Stop = stop;
+  settings.hooks = hooks;
+
+  if (!dryRun) {
+    try {
+      if (!existsSync(claudeDir)) mkdirSync(claudeDir, { recursive: true });
+      writeFileSync(
+        settingsPath,
+        `${JSON.stringify(settings, null, 2)}\n`,
+        "utf-8",
+      );
+    } catch (e) {
+      console.error(`  stop hook: failed to write — ${(e as Error).message}`);
+      return;
+    }
+  }
+  console.error(
+    `  stop hook: ${dryRun ? "would write" : "wrote"} hooks.Stop → ${settingsPath}`,
   );
 }

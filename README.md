@@ -14,8 +14,16 @@ runs on the history already sitting on your disk.
 </p>
 
 ```bash
+fapony usage-scan       # read the session logs already on your disk
+fapony price-scan       # fetch the price table (needed once, for cost)
 fapony usage-web        # every session you already have, all clients, one page
 ```
+
+**Cost is the part your client probably isn't logging.** Of the four, only OpenCode writes a real
+dollar figure into its session log — Claude Code, ZCode and Codex record `0`. fapony prices those
+sessions at published list rates and labels the number `imputed`, so a figure you can compare
+across clients exists at all. A model it can't find a rate for stays `unpriced`: nothing is
+quietly counted as free.
 
 <details>
 <summary>full usage-web dashboard preview</summary>
@@ -71,10 +79,9 @@ bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
 #    from a second checkout silently repoints the command there. Re-run it in the one you want.
 
 # 2. Wire it into your MCP client
-fapony install --platform opencode        # adds mcp.fapony to your opencode config
-fapony install --platform claude          # adds fapony to Claude Code (user scope, via `claude mcp add`)
-fapony install --platform zcode           # adds fapony to ZCode (user scope, edits ~/.zcode/cli/config.json)
-fapony install --platform codex           # adds fapony to Codex (edits ~/.codex/config.toml)
+fapony install                            # detects installed clients, asks which to wire
+fapony install --all                      # skip the prompt, wire everything detected
+#    use --platform <name> to force a specific client (bypasses detection)
 #    zcode/codex need their config to exist first — open the app once if you never have
 #    claude/opencode also symlink skill/<name>/ into ~/.claude/skills — an existing
 #    skill of the same name is reported, never overwritten
@@ -82,6 +89,10 @@ fapony install --platform codex           # adds fapony to Codex (edits ~/.codex
 # { "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }
 
 # 3. Measure — zero per-project setup
+fapony usage-scan                         # scan the session logs already on disk → cache
+fapony price-scan                         # fetch the OpenRouter price table → ~/.config/fapony/prices.json
+fapony usage-web                          # dashboard; re-run the scans to refresh
+#    both scans are manual by design — nothing fetches or re-reads session logs behind your back
 #    ask your agent: "Run fapony_stats and fapony_usage — what has it cost me, per model?"
 
 # 4. Verify (optional, per project) — scaffold the evidence allowlist
@@ -329,16 +340,17 @@ fapony mcp                               # MCP server (stdio JSON-RPC — 8 tool
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
+fapony price-scan                        # fetch model price table → prices.json (cache; query never fetches)
 fapony usage-web [port]                   # live usage comparison dashboard from cache
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
 
 # Setup & maintenance
 fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/evidence)
 fapony init-mem [--update]               # refresh the memory scaffold from the template
-fapony install --platform opencode       # add mcp.fapony to opencode config
-fapony install --platform claude         # add fapony to Claude Code (user scope)
-fapony install --platform zcode          # add fapony to ZCode (user scope)
-fapony install --platform codex          # add fapony to Codex (edits ~/.codex/config.toml)
+fapony install                            # detect installed clients, prompt to wire each
+fapony install --all                      # wire all detected clients without prompting
+fapony install --platform <name>          # force a specific client (bypasses detection)
+fapony install --dry-run                  # show what would happen without writing files
 fapony setup                             # interactive wizard: config + scaffold in one step
 fapony update                            # self-update via git pull
 fapony telemetry show|send               # opt-in only, default off — see TELEMETRY.md
@@ -371,7 +383,6 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 - Bun-only, zero runtime dependency (`bun:sqlite` for run state, WAL mode)
 
 **Not supported (yet):**
-- DeepSeek prefilter (not wired; no config slot — the loop-era `review.prefilter` key was removed)
 - Distributed runs across multiple machines
 - Memory migration from `.fapony/.memory/log.jsonl`
 
