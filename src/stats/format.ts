@@ -72,7 +72,7 @@ function imputedLines(
   const s = imputeResult(result, prices);
   for (const m of s.by_model) map.set(`${m.provider}\0${m.model}`, m);
   const parts = [
-    `~$${s.total_imputed.toFixed(4)} est. over ${s.priced_sessions} priced sessions`,
+    `~$${s.total_imputed.toFixed(4)} over ${s.priced_sessions} priced sessions`,
   ];
   if (s.free_sessions > 0) parts.push(`${s.free_sessions} free`);
   if (s.unpriced_sessions > 0)

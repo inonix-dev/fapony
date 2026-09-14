@@ -38,7 +38,7 @@ function imputedTextLines(
   if (!imp)
     return [`  ${label}list-price equivalent: — (run \`fapony price-scan\`)`];
   const parts = [
-    `~$${imp.total_imputed.toFixed(4)} est. over ${imp.priced_sessions} priced sessions`,
+    `~$${imp.total_imputed.toFixed(4)} over ${imp.priced_sessions} priced sessions`,
   ];
   if (imp.free_sessions > 0) parts.push(`${imp.free_sessions} free`);
   if (imp.unpriced_sessions > 0)

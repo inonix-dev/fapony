@@ -424,6 +424,7 @@ import {
   testMergeEntriesDedup,
   testRenderHtmlCostWide,
   testRenderHtmlFreshnessBar,
+  testRenderHtmlHidesEmptyCard,
   testRenderHtmlImputedCost,
   testRenderHtmlModelNames,
   testRenderHtmlNoData,
@@ -434,6 +435,7 @@ import {
   testRenderHtmlStructure,
   testRenderHtmlSummaryCards,
   testRenderHtmlTokenValues,
+  testRenderHtmlTotalsColumnCount,
   testShortModelEmptyString,
   testShortModelJsonId,
   testShortModelJsonNoId,
@@ -820,9 +822,11 @@ export async function cmdTest(): Promise<void> {
   testRenderHtmlSummaryCards();
   testRenderHtmlCostWide();
   testRenderHtmlFreshnessBar();
+  testRenderHtmlHidesEmptyCard();
   testRenderHtmlNoPollInterval();
   testRenderHtmlShareSection();
   testRenderHtmlImputedCost();
   testRenderHtmlNoPricesHint();
+  testRenderHtmlTotalsColumnCount();
   console.log("\nall tests passed ✓");
 }

@@ -96,9 +96,9 @@ export function testFmtCostZero(): void {
 }
 
 export function testFmtCostPositive(): void {
-  assert.equal(fmtCost(0.0042), "~$0.0042 est.");
-  assert.equal(fmtCost(100), "~$100.0000 est.");
-  console.log("  ✓ fmtCost positive → ~$X.XXXX est.");
+  assert.equal(fmtCost(0.0042), "~$0.0042");
+  assert.equal(fmtCost(100), "~$100.0000");
+  console.log("  ✓ fmtCost positive → ~$X.XXXX");
 }
 
 // ─── fmtDelta ─────────────────────────────────────────────────────────
@@ -333,6 +333,27 @@ export function testRenderHtmlSummaryCards(): void {
   console.log("  ✓ renderUsageHtml → summary cards with all metrics");
 }
 
+export function testRenderHtmlHidesEmptyCard(): void {
+  // เฉพาะ opencode มี session — zcode/claude/codex ไม่มีเลย การ์ดของมันต้องไม่โผล่
+  // (ตารางยังโผล่เสมอต่างจากการ์ด — h2 ของตารางมีชื่อ client เหมือนกัน
+  // เทียบแค่บล็อก <div class="cards">...</div> เพื่อไม่ชนกับ h2 ของตาราง)
+  const html = renderGlobal(sampleData);
+  const cardsBlock = html.match(
+    /<div class="cards">([\s\S]*?)<div class="share-section">/,
+  )?.[1];
+  assert.ok(cardsBlock, "has a cards block");
+  assert.ok(cardsBlock!.includes("OpenCode"), "OpenCode card present");
+  assert.ok(
+    !cardsBlock!.includes("ZCode"),
+    "ZCode card hidden when it has zero sessions",
+  );
+  assert.ok(
+    !cardsBlock!.includes("Claude Code"),
+    "Claude Code card hidden when it has zero sessions",
+  );
+  console.log("  ✓ renderUsageHtml → hides summary card with zero sessions");
+}
+
 export function testRenderHtmlCostWide(): void {
   const html = renderGlobal(sampleData);
   assert.ok(html.includes("card-metric wide"), "cost metric has wide class");
@@ -399,4 +420,25 @@ export function testRenderHtmlNoPricesHint(): void {
   const html = renderGlobal(sampleData, null, null, null, NOW, null);
   assert.ok(html.includes("fapony price-scan"), "hint to price-scan present");
   console.log("  ✓ renderUsageHtml → missing prices shows hint, not throw");
+}
+
+/**
+ * Totals row ต้องมีจำนวน <td> เท่ากับ <th> ของ header เสมอ ไม่งั้นตัวเลข
+ * เลื่อนคอลัมน์ (เคยพัง: totals ขาด placeholder ของคอลัมน์ Provider ทำให้
+ * In/Out/Cache/Sess/Cost ทั้งแถวเลื่อนซ้าย 1 ช่อง)
+ */
+export function testRenderHtmlTotalsColumnCount(): void {
+  const html = renderGlobal(sampleData);
+  const headerMatch = html.match(/<thead>[\s\S]*?<\/thead>/);
+  const footerMatch = html.match(/<tfoot>[\s\S]*?<\/tfoot>/);
+  assert.ok(headerMatch, "has a thead");
+  assert.ok(footerMatch, "has a tfoot");
+  const thCount = (headerMatch![0].match(/<th>/g) ?? []).length;
+  const tdCount = (footerMatch![0].match(/<td/g) ?? []).length;
+  assert.equal(
+    tdCount,
+    thCount,
+    `totals row has ${tdCount} cells, header has ${thCount} — columns would misalign`,
+  );
+  console.log("  ✓ renderUsageHtml → totals row column count matches header");
 }

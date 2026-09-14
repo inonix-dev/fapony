@@ -9,7 +9,7 @@ export function fmtTokens(n: number): string {
 }
 
 export function fmtCost(n: number | null): string {
-  return n !== null && n > 0 ? `~$${n.toFixed(4)} est.` : "—";
+  return n !== null && n > 0 ? `~$${n.toFixed(4)}` : "—";
 }
 
 export function fmtDelta(prev: number, curr: number): string {
