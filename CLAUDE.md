@@ -169,6 +169,13 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
    (ตรวจไม่ได้ → `uncertain` ห้ามเดา pass) · `note` ต้อง standalone ห้ามอ้างอิงบทสนทนา
    · ห้ามทิ้ง run ค้าง — run ที่ไม่ terminal ดูด verdict อื่นของ worktree นั้นมาเกาะ
    ([store.ts findOpenRunWithNullPlan](src/db/store.ts))
+   · **การ *ขอ* ไม่พอ — มี Stop hook บังคับแล้ว** ([src/hook.ts](src/hook.ts), ติดตั้งโดย
+   `fapony install --platform claude`): จบเทิร์นที่มี commit แต่ไม่มี verdict = ถูก block
+   หนึ่งครั้งพร้อมเหตุผล · hook **ไม่ตัดสินเกรดแทน** (มันไม่เห็นว่างานผ่านหรือพัง) —
+   แยก "ใครตัดสิน" ออกจาก "ใครบังคับให้ตัดสิน" อันหลังเท่านั้นที่ automate ได้ ·
+   สัญญาณคือ **commit ไม่ใช่ dirty tree** (dirty = กำลังทำอยู่, commit = หน่วยงานจบ) ·
+   ทุกกรณีที่พิสูจน์ไม่ได้ (ไม่ใช่ git repo / ไม่มี transcript / hook ยิงไปแล้ว) = ปล่อยผ่าน
+   hook ที่เดาผิดแล้วขัง agent แย่กว่าไม่มี hook
 8. **`project_health_context` ไม่ใช่ reflex ก่อนแก้ไฟล์อีกแล้ว** — วัดกับ repo จริงแล้ว: ไฟล์ที่
    ship แล้วกลับมาโดน `fix:` ใน 14 วัน = 1% (canalis 66/8,760) / 9% (fapony 21/226) base rate
    ต่ำขนาดนี้แปลว่าเวลาจะแตะไฟล์หนึ่ง history แทบไม่มีอะไรจะเตือน · tool ยังอยู่ เรียกได้ถ้าอยาก
@@ -305,6 +312,7 @@ Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)
 
 ```bash
 fapony mcp                          # MCP server — stdio JSON-RPC, 8 tools
+fapony hook-stop                    # Claude Code Stop hook (stdin JSON) — blocks a turn that has ungraded commits
 fapony report <run-id>              # verification report for a run
 fapony report-web [file]            # static HTML report page
 fapony usage-scan                    # scan session logs → usage-cache.jsonl (incremental, progress bar)
