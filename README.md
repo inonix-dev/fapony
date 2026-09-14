@@ -79,10 +79,9 @@ bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
 #    from a second checkout silently repoints the command there. Re-run it in the one you want.
 
 # 2. Wire it into your MCP client
-fapony install --platform opencode        # adds mcp.fapony to your opencode config
-fapony install --platform claude          # adds fapony to Claude Code (user scope, via `claude mcp add`)
-fapony install --platform zcode           # adds fapony to ZCode (user scope, edits ~/.zcode/cli/config.json)
-fapony install --platform codex           # adds fapony to Codex (edits ~/.codex/config.toml)
+fapony install                            # detects installed clients, asks which to wire
+fapony install --all                      # skip the prompt, wire everything detected
+#    use --platform <name> to force a specific client (bypasses detection)
 #    zcode/codex need their config to exist first — open the app once if you never have
 #    claude/opencode also symlink skill/<name>/ into ~/.claude/skills — an existing
 #    skill of the same name is reported, never overwritten
@@ -348,10 +347,10 @@ fapony stats                             # KPIs: pass/stall rate, by-model, by-g
 # Setup & maintenance
 fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/evidence)
 fapony init-mem [--update]               # refresh the memory scaffold from the template
-fapony install --platform opencode       # add mcp.fapony to opencode config
-fapony install --platform claude         # add fapony to Claude Code (user scope)
-fapony install --platform zcode          # add fapony to ZCode (user scope)
-fapony install --platform codex          # add fapony to Codex (edits ~/.codex/config.toml)
+fapony install                            # detect installed clients, prompt to wire each
+fapony install --all                      # wire all detected clients without prompting
+fapony install --platform <name>          # force a specific client (bypasses detection)
+fapony install --dry-run                  # show what would happen without writing files
 fapony setup                             # interactive wizard: config + scaffold in one step
 fapony update                            # self-update via git pull
 fapony telemetry show|send               # opt-in only, default off — see TELEMETRY.md

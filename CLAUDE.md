@@ -320,7 +320,10 @@ fapony usage-web [port]              # live usage comparison dashboard from cach
 fapony stats                        # KPIs: pass/stall rate, by-model, by-grade
 fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
 fapony init-mem [--update]          # re-copy templates/mem/ into this repo's memory dir (path from paths.memoryEntry) — data files (log.jsonl) untouched
-fapony install --platform opencode|claude|zcode|codex  # wire mcp.fapony into an MCP client (+ symlink skills for claude/opencode)
+fapony install                            # detect installed clients, prompt to wire each
+fapony install --all                      # wire all detected clients without prompting
+fapony install --platform <name>          # force a specific client (bypasses detection)
+fapony install --dry-run                  # show what would happen without writing files
 fapony setup                        # interactive wizard: config + scaffold in one step
 fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md
