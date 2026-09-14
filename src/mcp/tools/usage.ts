@@ -4,6 +4,7 @@ import {
   type ImputeSummary,
   imputeResult,
   loadPrices,
+  type PriceTable,
 } from "../../price/index.js";
 import {
   mergeBytesByTool,
@@ -18,19 +19,22 @@ import { jsonResult, type ToolResult } from "../types.js";
 /** สรุป list-price ต่อ client — additive ไม่แตะบรรทัดเดิม */
 function imputationOf(
   result: PassiveUsageResult,
+  prices: PriceTable | null,
 ): (ImputeSummary & { prices_fetched_at: string }) | null {
-  if (result.session_count === 0) return null;
-  const prices = loadPrices();
-  if (!prices) return null;
+  if (result.session_count === 0 || !prices) return null;
   return {
     ...imputeResult(result, prices),
     prices_fetched_at: prices.fetched_at,
   };
 }
 
-function imputedTextLines(label: string, result: PassiveUsageResult): string[] {
+function imputedTextLines(
+  label: string,
+  result: PassiveUsageResult,
+  prices: PriceTable | null,
+): string[] {
   if (result.session_count === 0) return [];
-  const imp = imputationOf(result);
+  const imp = imputationOf(result, prices);
   if (!imp)
     return [`  ${label}list-price equivalent: — (run \`fapony price-scan\`)`];
   const parts = [
@@ -82,21 +86,27 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
   // Codex data is always fetched when the sessions dir exists
   const codexData = readCodexUsage(worktree, since, until, detail);
 
+  // ราคา list จาก cache อย่างเดียว — อ่านครั้งเดียวต่อ call ไม่ใช่ต่อ section
+  const prices = loadPrices();
+
   if (args.json === true) {
     return jsonResult({
       ...data,
-      imputation: imputationOf(data),
+      imputation: imputationOf(data, prices),
       zcode:
         zcodeData.session_count > 0
-          ? { ...zcodeData, imputation: imputationOf(zcodeData) }
+          ? { ...zcodeData, imputation: imputationOf(zcodeData, prices) }
           : null,
       claude_code:
         claudeCodeData.session_count > 0
-          ? { ...claudeCodeData, imputation: imputationOf(claudeCodeData) }
+          ? {
+              ...claudeCodeData,
+              imputation: imputationOf(claudeCodeData, prices),
+            }
           : null,
       codex:
         codexData.session_count > 0
-          ? { ...codexData, imputation: imputationOf(codexData) }
+          ? { ...codexData, imputation: imputationOf(codexData, prices) }
           : null,
     });
   }
@@ -115,7 +125,7 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
   lines.push(`Cache Read: ${data.total_tokens_cache_read.toLocaleString()}`);
   lines.push(`Cache Write: ${data.total_tokens_cache_write.toLocaleString()}`);
   lines.push(`Total Cost: $${data.total_cost.toFixed(4)}`);
-  lines.push(...imputedTextLines("", data));
+  lines.push(...imputedTextLines("", data, prices));
 
   if (data.by_model.length > 0) {
     lines.push("");
@@ -191,7 +201,7 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
 
   // ZCode usage section
   if (zcodeData.session_count > 0) {
-    const zImp = imputationOf(zcodeData);
+    const zImp = imputationOf(zcodeData, prices);
     lines.push("");
     lines.push("zcode usage:");
     lines.push(
@@ -209,12 +219,12 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
         );
       }
     }
-    lines.push(...imputedTextLines("", zcodeData));
+    lines.push(...imputedTextLines("", zcodeData, prices));
   }
 
   // Claude Code usage section
   if (claudeCodeData.session_count > 0) {
-    const ccImp = imputationOf(claudeCodeData);
+    const ccImp = imputationOf(claudeCodeData, prices);
     lines.push("");
     lines.push("claude code usage:");
     lines.push(
@@ -232,12 +242,12 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
         );
       }
     }
-    lines.push(...imputedTextLines("", claudeCodeData));
+    lines.push(...imputedTextLines("", claudeCodeData, prices));
   }
 
   // Codex usage section
   if (codexData.session_count > 0) {
-    const cxImp = imputationOf(codexData);
+    const cxImp = imputationOf(codexData, prices);
     lines.push("");
     lines.push("codex usage:");
     lines.push(
@@ -255,7 +265,7 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
         );
       }
     }
-    lines.push(...imputedTextLines("", codexData));
+    lines.push(...imputedTextLines("", codexData, prices));
   }
 
   return { content: [{ type: "text", text: lines.join("\n") }] };
