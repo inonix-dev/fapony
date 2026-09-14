@@ -31,7 +31,7 @@ if (cmd === "analyze") {
 } else if (cmd === "init") {
   await cmdInit(a);
 } else if (cmd === "install") {
-  cmdInstall(a);
+  await cmdInstall(a);
 } else if (cmd === "setup") {
   await cmdSetup();
 } else if (cmd === "update") {

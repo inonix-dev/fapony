@@ -69,6 +69,11 @@ import {
   testGateOnceUncertain,
 } from "./gate.test.js";
 import {
+  testDecideStopAllowsEveryUnknown,
+  testDecideStopBlocksUngradedCommits,
+  testUtcStampMatchesSqliteFormat,
+} from "./hook.test.js";
+import {
   testInitCreatesDirectories,
   testInitIdempotent,
   testInitNoArgs,
@@ -81,7 +86,15 @@ import {
   testCmdInstallDispatchesCodex,
   testCmdInstallDispatchesOpencode,
   testCmdInstallDispatchesZcode,
+  testCmdInstallNoClientsFoundPrintsHelp,
+  testCmdInstallNonTtyNoAllSkipsInstall,
+  testCmdInstallNoPlatformAllFlag,
+  testCmdInstallNoPlatformDryRunNoWrite,
+  testCmdInstallNoPlatformPromptsDetected,
   testCmdInstallRejectsUnknownPlatform,
+  testDetectClientsAllFound,
+  testDetectClientsMixed,
+  testDetectClientsNoneFound,
   testInstallClaudeAbsentAdds,
   testInstallClaudeAddFailureHintsHelp,
   testInstallClaudeAlreadyConfiguredNoOp,
@@ -91,6 +104,7 @@ import {
   testInstallClaudeForeignStatuslineRefusesOverwrite,
   testInstallClaudeMissingBinary,
   testInstallClaudeStatuslineWiresSettings,
+  testInstallClaudeStopHookAppendsOnceAndKeepsForeign,
   testInstallCodexAlreadyConfiguredNoOp,
   testInstallCodexAppendsEntry,
   testInstallCodexDryRunNoWrite,
@@ -453,6 +467,9 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeEmptyDir();
   testAnalyzeBlastRadius();
   testAnalyzeIsTestFile();
+  testDecideStopBlocksUngradedCommits();
+  testDecideStopAllowsEveryUnknown();
+  testUtcStampMatchesSqliteFormat();
   testDbLifecycle();
   testSchemaVersionStamped();
   testLegacyDbStampedWithoutDataLoss();
@@ -574,6 +591,7 @@ export async function cmdTest(): Promise<void> {
   testInstallClaudeAlreadyConfiguredNoOp();
   testInstallClaudeDifferentCommandRefusesOverwrite();
   testInstallClaudeForeignStatuslineRefusesOverwrite();
+  testInstallClaudeStopHookAppendsOnceAndKeepsForeign();
   testInstallClaudeForeignScriptRefusesOverwrite();
   testInstallClaudeStatuslineWiresSettings();
   testInstallClaudeDryRunNeverAdds();
@@ -602,6 +620,15 @@ export async function cmdTest(): Promise<void> {
   testInstallZcodeDryRunNoWrite();
   testInstallZcodeLinksSkillsIntoAgentsDir();
   testCmdInstallDispatchesZcode();
+  // detect + prompt tests
+  testDetectClientsAllFound();
+  testDetectClientsNoneFound();
+  testDetectClientsMixed();
+  await testCmdInstallNoPlatformPromptsDetected();
+  await testCmdInstallNoPlatformAllFlag();
+  await testCmdInstallNonTtyNoAllSkipsInstall();
+  testCmdInstallNoClientsFoundPrintsHelp();
+  await testCmdInstallNoPlatformDryRunNoWrite();
   // MCP handcheck tests
   testMcpInitialize();
   testMcpToolsList();

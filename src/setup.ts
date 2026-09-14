@@ -9,7 +9,7 @@ import { DEFAULT_MEMORY_ENTRY } from "./db/index.js";
 import { initProject } from "./init.js";
 import { isAffirmative } from "./util.js";
 
-function ask(
+export function ask(
   rl: ReturnType<typeof createInterface>,
   question: string,
   defaultVal?: string,
@@ -35,7 +35,7 @@ function defaultDetectGitRoot(): string | null {
   }
 }
 
-function defaultCheckCmd(cmd: string): boolean {
+export function defaultCheckCmd(cmd: string): boolean {
   // Allowlist first: cmd names are hardcoded at every call site, so anything
   // outside [word chars, dot, dash] is rejected before touching a shell.
   if (!/^[A-Za-z0-9_.-]+$/.test(cmd)) return false;

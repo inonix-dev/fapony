@@ -9,7 +9,7 @@ import { claudeSkillsDir, linkSkills, reportSkills } from "./skills.js";
 import { defaultExit, type InstallDeps, MCP_CONFIG, MCP_KEY } from "./types.js";
 import { computeDiff } from "./utils.js";
 
-function findOpencodeConfig(getHome: () => string): string | null {
+export function findOpencodeConfig(getHome: () => string): string | null {
   const dir = join(getHome(), ".config", "opencode");
   for (const name of ["opencode.json", "opencode.jsonc"]) {
     const p = join(dir, name);

@@ -17,7 +17,7 @@ import { computeDiff } from "./utils.js";
 
 /** Resolve the active ZCode config file. Primary: ~/.zcode/cli/config.json.
  *  Fallback: ~/.agents/mcp.json (only when primary is absent). */
-function findZcodeConfig(
+export function findZcodeConfig(
   getHome: () => string,
 ): { path: string; key: "mcp.servers" | "mcpServers" } | null {
   const primary = join(getHome(), ".zcode", "cli", "config.json");

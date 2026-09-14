@@ -22,6 +22,7 @@ import {
   cmdInstallCodex,
   cmdInstallOpencode,
   cmdInstallZcode,
+  detectClients,
   INSTALL_ROOT,
   type InstallDeps,
   linkSkills,
@@ -198,8 +199,17 @@ export function testInstallClaudeForeignStatuslineRefusesOverwrite(): void {
       cmdInstallClaude(false, { run, exit: testExit, homedir: () => home }),
     ),
   );
-  const after = readFileSync(join(claudeDir, "settings.json"), "utf-8");
-  assert.equal(after, before, "foreign statusLine must not be overwritten");
+  // Assert the statusLine field, not the whole file: the Stop-hook installer
+  // legitimately adds hooks.Stop to the same settings.json in this same run.
+  const after = JSON.parse(
+    readFileSync(join(claudeDir, "settings.json"), "utf-8"),
+  ) as Record<string, unknown>;
+  assert.deepEqual(
+    after.statusLine,
+    { type: "command", command: "/tmp/mine.sh" },
+    "foreign statusLine must not be overwritten",
+  );
+  assert.equal(after.other, 1, "unrelated keys must survive");
   assert.ok(err.includes("isn't fapony's"), `got: ${err}`);
   console.log("  ✓ install claude foreign statusLine → refuse overwrite");
 }
@@ -299,28 +309,32 @@ export function testInstallClaudeAddFailureHintsHelp(): void {
   console.log("  ✓ install claude add failure hints --help");
 }
 
-export function testCmdInstallDispatchesClaude(): void {
+export async function testCmdInstallDispatchesClaude(): Promise<void> {
   // cmdInstall routes --platform claude through the same seam (3rd case:
   // dispatch itself, alongside absent/present/different above).
   const ADD = claudeAddArgs().join(" ");
   const { run, calls } = mapRun({ [GET]: ABSENT, [ADD]: ADDED });
   const deps: InstallDeps = { run, exit: testExit };
-  silentErrors(() => cmdInstall(["install", "claude"].slice(1), deps));
+  await silentErrors(() => cmdInstall(["install", "claude"].slice(1), deps));
   assert.deepStrictEqual(calls, [GET, ADD]);
   console.log("  ✓ install dispatch routes --platform claude");
 }
 
-export function testCmdInstallRejectsUnknownPlatform(): void {
+export async function testCmdInstallRejectsUnknownPlatform(): Promise<void> {
   let code: number | null = null;
-  const err = silentErrors(() =>
-    captureErrors(() => {
-      try {
-        cmdInstall(["windows"], { exit: testExit });
-      } catch (e) {
-        code = (e as TestExit).code;
-      }
-    }),
-  );
+  const lines: string[] = [];
+  const orig = console.error;
+  console.error = (...a: unknown[]) => {
+    lines.push(a.map(String).join(" "));
+  };
+  try {
+    await cmdInstall(["windows"], { exit: testExit });
+  } catch (e) {
+    code = (e as TestExit).code;
+  } finally {
+    console.error = orig;
+  }
+  const err = lines.join("\n");
   assert.equal(code, 1);
   assert.ok(err.includes("opencode|claude|zcode"), `got: ${err}`);
   console.log("  ✓ install rejects unknown platform");
@@ -827,4 +841,344 @@ export function testCmdInstallDispatchesCodex(): void {
     assert.ok(after.includes("[mcp_servers.fapony]"), `got: ${after}`);
     console.log("  ✓ install dispatch routes --platform codex");
   });
+}
+
+export function testInstallClaudeStopHookAppendsOnceAndKeepsForeign(): void {
+  const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
+  const claudeDir = join(home, ".claude");
+  mkdirSync(claudeDir, { recursive: true });
+  // A Stop hook someone else registered must survive — Claude Code runs every
+  // entry in the array, so the correct move is append, never replace.
+  writeFileSync(
+    join(claudeDir, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        Stop: [{ hooks: [{ type: "command", command: "/tmp/theirs" }] }],
+      },
+    }),
+  );
+  const ADD = claudeAddArgs().join(" ");
+  const read = () =>
+    JSON.parse(readFileSync(join(claudeDir, "settings.json"), "utf-8")) as {
+      hooks: { Stop: unknown[] };
+    };
+
+  for (let i = 0; i < 2; i++) {
+    const { run } = mapRun({ [GET]: ABSENT, [ADD]: ADDED });
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallClaude(false, { run, exit: testExit, homedir: () => home }),
+      ),
+    );
+  }
+
+  const stop = read().hooks.Stop;
+  assert.equal(stop.length, 2, "installing twice must not duplicate the hook");
+  assert.ok(
+    JSON.stringify(stop[0]).includes("/tmp/theirs"),
+    "foreign Stop hook must survive",
+  );
+  assert.ok(
+    JSON.stringify(stop[1]).includes("hook-stop"),
+    "fapony's Stop hook must be registered",
+  );
+  console.log("  ✓ install claude stop hook → appends once, keeps foreign");
+}
+
+// --- detect + prompt tests ---
+
+export function testDetectClientsAllFound(): void {
+  const home = mkdtempSync(join(tmpdir(), "fapony-detect-all-"));
+  try {
+    // claude: checkCmd returns true
+    // opencode: config exists
+    const ocDir = join(home, ".config", "opencode");
+    mkdirSync(ocDir, { recursive: true });
+    writeFileSync(join(ocDir, "opencode.json"), "{}");
+    // zcode: config exists
+    const zcDir = join(home, ".zcode", "cli");
+    mkdirSync(zcDir, { recursive: true });
+    writeFileSync(join(zcDir, "config.json"), "{}");
+    // codex: config exists
+    const cdDir = join(home, ".codex");
+    mkdirSync(cdDir, { recursive: true });
+    writeFileSync(join(cdDir, "config.toml"), "");
+
+    const deps: InstallDeps = {
+      homedir: () => home,
+      checkCmd: () => true,
+    };
+    const result = detectClients(deps);
+    assert.equal(result.length, 4);
+    assert.ok(
+      result.every((d) => d.installed),
+      "all should be installed",
+    );
+    console.log("  ✓ detect clients → all found");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+export function testDetectClientsNoneFound(): void {
+  const home = mkdtempSync(join(tmpdir(), "fapony-detect-none-"));
+  try {
+    const deps: InstallDeps = {
+      homedir: () => home,
+      checkCmd: () => false,
+    };
+    const result = detectClients(deps);
+    assert.equal(result.length, 4);
+    assert.ok(
+      result.every((d) => !d.installed),
+      "none should be installed",
+    );
+    assert.ok(result.every((d) => d.platform.length > 0));
+    console.log("  ✓ detect clients → none found");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+export function testDetectClientsMixed(): void {
+  const home = mkdtempSync(join(tmpdir(), "fapony-detect-mixed-"));
+  try {
+    // Only opencode config exists
+    const ocDir = join(home, ".config", "opencode");
+    mkdirSync(ocDir, { recursive: true });
+    writeFileSync(join(ocDir, "opencode.json"), "{}");
+
+    const deps: InstallDeps = {
+      homedir: () => home,
+      checkCmd: () => false, // claude not on PATH
+    };
+    const result = detectClients(deps);
+    const opencode = result.find((d) => d.platform === "opencode");
+    const claude = result.find((d) => d.platform === "claude");
+    assert.ok(opencode?.installed, "opencode should be found");
+    assert.ok(!claude?.installed, "claude should not be found");
+    console.log("  ✓ detect clients → mixed");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+export async function testCmdInstallNoPlatformPromptsDetected(): Promise<void> {
+  const home = mkdtempSync(join(tmpdir(), "fapony-install-prompt-"));
+  try {
+    // Set up opencode config so it's detected
+    const ocDir = join(home, ".config", "opencode");
+    mkdirSync(ocDir, { recursive: true });
+    writeFileSync(join(ocDir, "opencode.json"), "{}");
+
+    const asked: string[] = [];
+    const deps: InstallDeps = {
+      homedir: () => home,
+      checkCmd: () => false, // claude not found
+      ask: async (q: string) => {
+        asked.push(q);
+        return "n"; // decline all
+      },
+    };
+
+    // Mock stdin.isTTY — but we can't easily mock that.
+    // Instead, just test that without --all and with ask returning "n",
+    // no install function is called (opencode config unchanged).
+    const origIsTTY = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: true,
+      configurable: true,
+    });
+    try {
+      await cmdInstall([], deps);
+    } finally {
+      Object.defineProperty(process.stdin, "isTTY", {
+        value: origIsTTY,
+        configurable: true,
+      });
+    }
+
+    // ask was called for opencode (only detected client)
+    assert.ok(
+      asked.length >= 1,
+      `should have asked at least once, got ${asked.length}`,
+    );
+    assert.ok(
+      asked.some((q) => q.includes("opencode")),
+      "should ask about opencode",
+    );
+    // Config should still be empty (not modified) since we answered "n"
+    const cfg = JSON.parse(readFileSync(join(ocDir, "opencode.json"), "utf-8"));
+    assert.deepStrictEqual(
+      cfg,
+      {},
+      "opencode config should not be modified when declined",
+    );
+    console.log(
+      "  ✓ install no platform → prompts detected, declines no install",
+    );
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+export async function testCmdInstallNonTtyNoAllSkipsInstall(): Promise<void> {
+  const home = mkdtempSync(join(tmpdir(), "fapony-install-nontty-"));
+  try {
+    const ocDir = join(home, ".config", "opencode");
+    mkdirSync(ocDir, { recursive: true });
+    writeFileSync(join(ocDir, "opencode.json"), "{}");
+
+    const lines: string[] = [];
+    const origError = console.error;
+    console.error = (...a: unknown[]) => {
+      lines.push(a.map(String).join(" "));
+    };
+    const deps: InstallDeps = {
+      homedir: () => home,
+      checkCmd: () => false,
+    };
+    const origIsTTY = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: false,
+      configurable: true,
+    });
+    try {
+      await cmdInstall([], deps);
+    } finally {
+      Object.defineProperty(process.stdin, "isTTY", {
+        value: origIsTTY,
+        configurable: true,
+      });
+      console.error = origError;
+    }
+
+    const output = lines.join("\n");
+    assert.ok(
+      output.includes("not a terminal"),
+      `should mention non-terminal: ${output}`,
+    );
+    // Config must remain untouched — no install happened.
+    const cfg = JSON.parse(readFileSync(join(ocDir, "opencode.json"), "utf-8"));
+    assert.deepStrictEqual(
+      cfg,
+      {},
+      "non-TTY without --all must not modify config",
+    );
+    console.log(
+      "  ✓ install non-TTY without --all → skips install, hints --all",
+    );
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+export async function testCmdInstallNoPlatformAllFlag(): Promise<void> {
+  const home = mkdtempSync(join(tmpdir(), "fapony-install-all-"));
+  try {
+    // Set up opencode config
+    const ocDir = join(home, ".config", "opencode");
+    mkdirSync(ocDir, { recursive: true });
+    writeFileSync(join(ocDir, "opencode.json"), "{}");
+
+    const deps: InstallDeps = {
+      homedir: () => home,
+      checkCmd: () => false, // claude not found
+    };
+
+    const origIsTTY = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: true,
+      configurable: true,
+    });
+    try {
+      await cmdInstall(["--all"], deps);
+    } finally {
+      Object.defineProperty(process.stdin, "isTTY", {
+        value: origIsTTY,
+        configurable: true,
+      });
+    }
+
+    // opencode config should now have mcp.fapony
+    const cfg = JSON.parse(readFileSync(join(ocDir, "opencode.json"), "utf-8"));
+    assert.ok(cfg.mcp, "opencode config should have mcp section");
+    assert.ok(
+      (cfg.mcp as Record<string, unknown>).fapony,
+      "should have fapony entry",
+    );
+    console.log("  ✓ install --all → installs all detected without prompting");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+export function testCmdInstallNoClientsFoundPrintsHelp(): void {
+  const home = mkdtempSync(join(tmpdir(), "fapony-install-noclients-"));
+  try {
+    const lines: string[] = [];
+    const orig = console.error;
+    console.error = (...a: unknown[]) => {
+      lines.push(a.map(String).join(" "));
+    };
+    const deps: InstallDeps = {
+      homedir: () => home,
+      checkCmd: () => false,
+    };
+    try {
+      cmdInstall([], deps);
+    } finally {
+      console.error = orig;
+    }
+
+    const output = lines.join("\n");
+    assert.ok(
+      output.includes("no MCP client found"),
+      `should say no client found: ${output}`,
+    );
+    assert.ok(
+      output.includes("--platform"),
+      `should hint --platform: ${output}`,
+    );
+    console.log("  ✓ install no clients → prints help message");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+export async function testCmdInstallNoPlatformDryRunNoWrite(): Promise<void> {
+  const home = mkdtempSync(join(tmpdir(), "fapony-install-dry-"));
+  try {
+    // Set up opencode config
+    const ocDir = join(home, ".config", "opencode");
+    mkdirSync(ocDir, { recursive: true });
+    writeFileSync(join(ocDir, "opencode.json"), "{}");
+
+    const deps: InstallDeps = {
+      homedir: () => home,
+      checkCmd: () => false,
+      ask: async () => "y",
+    };
+
+    const origIsTTY = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: true,
+      configurable: true,
+    });
+    try {
+      await cmdInstall(["--all", "--dry-run"], deps);
+    } finally {
+      Object.defineProperty(process.stdin, "isTTY", {
+        value: origIsTTY,
+        configurable: true,
+      });
+    }
+
+    // Config should NOT be modified (dry run)
+    const cfg = JSON.parse(readFileSync(join(ocDir, "opencode.json"), "utf-8"));
+    assert.deepStrictEqual(cfg, {}, "dry-run should not write opencode config");
+    console.log("  ✓ install --all --dry-run → no file writes");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 }
