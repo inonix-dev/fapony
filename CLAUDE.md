@@ -276,10 +276,17 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 
 ## Memory: `.fapony/.memory/log.<คุณ>.jsonl` (append-only)
 
-log คือ **สมองส่วนกลางของโปรเจกต์** — มันอยู่ใน git ฉะนั้นใครก็ตามที่ clone repo นี้ได้
-`decision` / `bug` / `note` ทั้งหมดติดมาด้วยทันที นั่นคือเหตุผลที่มันอยู่ในนี้ ไม่ใช่ใน
+log ออกแบบให้เป็น **สมองส่วนกลางของโปรเจกต์** — วางไว้ในรีโป ไม่ใช่ใน
 `~/.config/fapony/state.db` (ของเครื่องใครเครื่องมัน clone ไม่ติด) · ชื่อไฟล์มาจาก
-`git config user.name` — คนละใบต่อคน จึงไม่มีอะไรให้ merge ชน
+`git config user.name` — คนละใบต่อคน จึงไม่มีอะไรให้ merge ชน ฉะนั้นถ้า repo ไหน commit มัน
+`decision`/`bug`/`note` จะติดไปกับ clone ทันที
+
+**แต่ "อยู่ในรีโป" ไม่เท่ากับ "อยู่ใน git" — ขึ้นกับ `.gitignore` ของแต่ละ repo และ
+repo นี้จงใจไม่ commit:** `.gitignore` ที่นี่ ignore `.fapony/` ทั้งก้อน (public repo — mem/plan
+เป็นบันทึกภายใน ไม่เอาขึ้น GitHub) ฉะนั้น**ในรีโปนี้ log อ่านได้จากเครื่องตัวเองเท่านั้น
+ไม่ใช่ของที่แชร์ผ่าน clone** · ผลพลอยได้ที่ต้องรู้: `.fapony/evidence.json` ก็ไม่ถูก commit ด้วย
+ทั้งที่กฎ evidence บอกว่าต้อง commit — ข้อยกเว้นนี้ใช้ได้เพราะที่นี่มีคนแก้คนเดียว
+repo ที่มีหลายคนต้องเพิ่ม negation เอง (ดูตารางแถว `git mv` ด้านบน + README quick start)
 
 **บันทึกระหว่างทำงาน ไม่ต้องรอให้สั่ง** — ไม่มีกลไกไหนเขียนให้ มีแต่ agent ที่รันเอง:
 

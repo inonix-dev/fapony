@@ -14,8 +14,16 @@ runs on the history already sitting on your disk.
 </p>
 
 ```bash
+fapony usage-scan       # read the session logs already on your disk
+fapony price-scan       # fetch the price table (needed once, for cost)
 fapony usage-web        # every session you already have, all clients, one page
 ```
+
+**Cost is the part your client probably isn't logging.** Of the four, only OpenCode writes a real
+dollar figure into its session log — Claude Code, ZCode and Codex record `0`. fapony prices those
+sessions at published list rates and labels the number `imputed`, so a figure you can compare
+across clients exists at all. A model it can't find a rate for stays `unpriced`: nothing is
+quietly counted as free.
 
 <details>
 <summary>full usage-web dashboard preview</summary>
@@ -82,6 +90,10 @@ fapony install --platform codex           # adds fapony to Codex (edits ~/.codex
 # { "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }
 
 # 3. Measure — zero per-project setup
+fapony usage-scan                         # scan the session logs already on disk → cache
+fapony price-scan                         # fetch the OpenRouter price table → ~/.config/fapony/prices.json
+fapony usage-web                          # dashboard; re-run the scans to refresh
+#    both scans are manual by design — nothing fetches or re-reads session logs behind your back
 #    ask your agent: "Run fapony_stats and fapony_usage — what has it cost me, per model?"
 
 # 4. Verify (optional, per project) — scaffold the evidence allowlist
@@ -329,6 +341,7 @@ fapony mcp                               # MCP server (stdio JSON-RPC — 8 tool
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
+fapony price-scan                        # fetch model price table → prices.json (cache; query never fetches)
 fapony usage-web [port]                   # live usage comparison dashboard from cache
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
 
@@ -371,7 +384,6 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 - Bun-only, zero runtime dependency (`bun:sqlite` for run state, WAL mode)
 
 **Not supported (yet):**
-- DeepSeek prefilter (not wired; no config slot — the loop-era `review.prefilter` key was removed)
 - Distributed runs across multiple machines
 - Memory migration from `.fapony/.memory/log.jsonl`
 

@@ -25,6 +25,5 @@ fapony is an MCP server plus CLI that runs locally. It does not expose network s
 
 ## Best Practices
 
-- Never run fapony with `--allow-dirty` in CI without understanding the implications
-- Review executor/gate prompts before injecting into AI agents
-- Keep `fapony.config.json` in version control but never commit secrets
+- Keep `fapony.config.json` out of version control (it is per-machine and gitignored) and never commit secrets
+- Review `.fapony/evidence.json` before trusting a report from a repo you did not write — it is the only list of commands fapony will execute
