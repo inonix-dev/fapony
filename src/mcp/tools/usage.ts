@@ -1,6 +1,11 @@
 // src/mcp/tools/usage.ts — fapony_usage tool
 
 import {
+  type ImputeSummary,
+  imputeResult,
+  loadPrices,
+} from "../../price/index.js";
+import {
   mergeBytesByTool,
   type PassiveUsageResult,
   readClaudeCodeUsage,
@@ -9,6 +14,50 @@ import {
   readZcodeUsage,
 } from "../../session/index.js";
 import { jsonResult, type ToolResult } from "../types.js";
+
+/** สรุป list-price ต่อ client — additive ไม่แตะบรรทัดเดิม */
+function imputationOf(
+  result: PassiveUsageResult,
+): (ImputeSummary & { prices_fetched_at: string }) | null {
+  if (result.session_count === 0) return null;
+  const prices = loadPrices();
+  if (!prices) return null;
+  return {
+    ...imputeResult(result, prices),
+    prices_fetched_at: prices.fetched_at,
+  };
+}
+
+function imputedTextLines(label: string, result: PassiveUsageResult): string[] {
+  if (result.session_count === 0) return [];
+  const imp = imputationOf(result);
+  if (!imp)
+    return [`  ${label}list-price equivalent: — (run \`fapony price-scan\`)`];
+  const parts = [
+    `~$${imp.total_imputed.toFixed(4)} est. over ${imp.priced_sessions} priced sessions`,
+  ];
+  if (imp.free_sessions > 0) parts.push(`${imp.free_sessions} free`);
+  if (imp.unpriced_sessions > 0)
+    parts.push(
+      `unpriced: ${imp.unpriced_sessions} sessions / ${imp.unpriced_tokens.toLocaleString()} tokens`,
+    );
+  return [`  ${label}list-price equivalent: ${parts.join(" · ")}`];
+}
+
+/** ราคา list ราย model ต่อท้ายชื่อรุ่น — เฉพาะแถวที่ client ไม่บันทึก cost */
+function imputedSuffix(
+  provider: string,
+  model: string,
+  imp: (ImputeSummary & { prices_fetched_at: string }) | null,
+): string {
+  if (!imp) return "";
+  const m = imp.by_model.find(
+    (b) => b.provider === provider && b.model === model,
+  );
+  if (m && m.status === "priced")
+    return ` (~$${m.imputed_cost.toFixed(4)} list-price)`;
+  return "";
+}
 
 export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
   const worktree =
@@ -36,9 +85,19 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
   if (args.json === true) {
     return jsonResult({
       ...data,
-      zcode: zcodeData.session_count > 0 ? zcodeData : null,
-      claude_code: claudeCodeData.session_count > 0 ? claudeCodeData : null,
-      codex: codexData.session_count > 0 ? codexData : null,
+      imputation: imputationOf(data),
+      zcode:
+        zcodeData.session_count > 0
+          ? { ...zcodeData, imputation: imputationOf(zcodeData) }
+          : null,
+      claude_code:
+        claudeCodeData.session_count > 0
+          ? { ...claudeCodeData, imputation: imputationOf(claudeCodeData) }
+          : null,
+      codex:
+        codexData.session_count > 0
+          ? { ...codexData, imputation: imputationOf(codexData) }
+          : null,
     });
   }
 
@@ -56,6 +115,7 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
   lines.push(`Cache Read: ${data.total_tokens_cache_read.toLocaleString()}`);
   lines.push(`Cache Write: ${data.total_tokens_cache_write.toLocaleString()}`);
   lines.push(`Total Cost: $${data.total_cost.toFixed(4)}`);
+  lines.push(...imputedTextLines("", data));
 
   if (data.by_model.length > 0) {
     lines.push("");
@@ -131,6 +191,7 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
 
   // ZCode usage section
   if (zcodeData.session_count > 0) {
+    const zImp = imputationOf(zcodeData);
     lines.push("");
     lines.push("zcode usage:");
     lines.push(
@@ -144,14 +205,16 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
       for (const m of zcodeData.by_model) {
         const prefix = m.provider ? `${m.provider}/` : "";
         lines.push(
-          `    ${prefix}${m.model}: ${m.tokens_input} in / ${m.tokens_output} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
+          `    ${prefix}${m.model}: ${m.tokens_input} in / ${m.tokens_output} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})${imputedSuffix(m.provider, m.model, zImp)}`,
         );
       }
     }
+    lines.push(...imputedTextLines("", zcodeData));
   }
 
   // Claude Code usage section
   if (claudeCodeData.session_count > 0) {
+    const ccImp = imputationOf(claudeCodeData);
     lines.push("");
     lines.push("claude code usage:");
     lines.push(
@@ -165,14 +228,16 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
       for (const m of claudeCodeData.by_model) {
         const prefix = m.provider ? `${m.provider}/` : "";
         lines.push(
-          `    ${prefix}${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
+          `    ${prefix}${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})${imputedSuffix(m.provider, m.model, ccImp)}`,
         );
       }
     }
+    lines.push(...imputedTextLines("", claudeCodeData));
   }
 
   // Codex usage section
   if (codexData.session_count > 0) {
+    const cxImp = imputationOf(codexData);
     lines.push("");
     lines.push("codex usage:");
     lines.push(
@@ -186,10 +251,11 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
       for (const m of codexData.by_model) {
         const prefix = m.provider ? `${m.provider}/` : "";
         lines.push(
-          `    ${prefix}${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
+          `    ${prefix}${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})${imputedSuffix(m.provider, m.model, cxImp)}`,
         );
       }
     }
+    lines.push(...imputedTextLines("", codexData));
   }
 
   return { content: [{ type: "text", text: lines.join("\n") }] };

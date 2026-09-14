@@ -2,6 +2,7 @@
 //
 // Pure server-rendered HTML — no client-side JS, no polling.
 
+import { imputeResult, loadPrices, type PriceTable } from "../price/index.js";
 import type { ModelBreakdown, PassiveUsageResult } from "../session/types.js";
 import { esc, fmtCost, fmtTokens, shortModel } from "./format.js";
 
@@ -201,6 +202,7 @@ function clientTable(
   name: string,
   color: string,
   data: PassiveUsageResult | null,
+  note = "",
 ): string {
   return `
 <h2 style="color:${color}">${name} <span class="sample">(${data?.session_count ?? 0} sessions)</span>${errorBadge(data)}</h2>
@@ -217,7 +219,7 @@ ${modelRows(data)}
   <tfoot>
 ${totalsRow(data)}
   </tfoot>
-</table>`;
+</table>${note ? `\n<div class="meta">${note}</div>` : ""}`;
 }
 
 function freshnessBar(scannedAt: string): string {
@@ -303,16 +305,68 @@ function shareSection(
 </div>`;
 }
 
+/**
+ * เติมราคาตั้งให้แถวที่ client ไม่บันทึก cost (0) — ของที่มีราคาจริงอยู่แล้ว
+ * ไม่แตะ · คืน view ไว้ render + note ไว้ใต้ตาราง (ป้าย list-price ทุกจุด)
+ */
+function withImputed(
+  data: PassiveUsageResult | null,
+  prices: PriceTable | null,
+): { view: PassiveUsageResult | null; note: string } {
+  if (!data || data.session_count === 0) return { view: data, note: "" };
+  if (!prices)
+    return {
+      view: data,
+      note: "list-price equivalent unavailable \u2014 run <code>fapony price-scan</code>",
+    };
+  const s = imputeResult(data, prices);
+  const realByKey = new Map(
+    data.by_model.map((m) => [`${m.provider}\0${m.model}`, m]),
+  );
+  const byModel = s.by_model.map((m) => {
+    const real = realByKey.get(`${m.provider}\0${m.model}`);
+    return {
+      provider: m.provider,
+      model: m.model,
+      session_count: m.session_count,
+      tokens_input: m.tokens_input,
+      tokens_output: m.tokens_output,
+      tokens_reasoning: real?.tokens_reasoning ?? 0,
+      tokens_cache_read: m.tokens_cache_read,
+      tokens_cache_write: m.tokens_cache_write,
+      // รวมกับ cost จริงรายรุ่น (opencode บันทึกเอง) — ข้างไหนมีค่ากว่ากันเอาข้างนั้น
+      cost: real && real.cost > 0 ? real.cost : m.imputed_cost,
+    };
+  });
+  const realTotal = data.total_cost > 0 ? data.total_cost : s.total_imputed;
+  const parts = [
+    `~$${s.total_imputed.toFixed(4)} est. over ${s.priced_sessions} priced sessions`,
+  ];
+  if (s.free_sessions > 0) parts.push(`${s.free_sessions} free`);
+  if (s.unpriced_sessions > 0)
+    parts.push(
+      `unpriced: ${s.unpriced_sessions} sessions (${fmtTokens(s.unpriced_tokens)} tokens)`,
+    );
+  return {
+    view: { ...data, total_cost: realTotal, by_model: byModel },
+    note: `list-price equivalent: ${parts.join(" \u00b7 ")} \u00b7 prices ${esc(prices.fetched_at.slice(0, 10))} \u2014 run <code>fapony price-scan</code> to refresh`,
+  };
+}
+
 export function renderUsageHtml(
   projectData: Map<string, ClientData>,
   scannedAt: string,
   ownerName?: string,
+  prices?: PriceTable | null,
 ): string {
   // Find the global entry (worktree=null) and per-project entries.
   const globalData = projectData.get("__global__");
   const projectKeys = [...projectData.keys()]
     .filter((k) => k !== "__global__")
     .sort();
+
+  // ราคา list จาก cache อย่างเดียว — serve ไม่ fetch เอง (offline ได้)
+  const table = prices === undefined ? loadPrices() : prices;
 
   const owner = ownerName?.trim() ? esc(ownerName.trim()) : "";
 
@@ -321,10 +375,14 @@ export function renderUsageHtml(
     data: ClientData,
     isGlobal: boolean,
   ): string {
-    const pOc = calcMetrics(data.opencode);
-    const pZc = calcMetrics(data.zcode);
-    const pCc = calcMetrics(data.claude_code);
-    const pCx = calcMetrics(data.codex);
+    const oc = withImputed(data.opencode, table);
+    const zc = withImputed(data.zcode, table);
+    const cc = withImputed(data.claude_code, table);
+    const cx = withImputed(data.codex, table);
+    const pOc = calcMetrics(oc.view);
+    const pZc = calcMetrics(zc.view);
+    const pCc = calcMetrics(cc.view);
+    const pCx = calcMetrics(cx.view);
     const totalSessions =
       pOc.sessions + pZc.sessions + pCc.sessions + pCx.sessions;
     // A project with no sessions is noise — unless the reason it has none is
@@ -350,10 +408,10 @@ ${summaryCard("Codex", "var(--accent)", pCx)}
 
 ${shareSection(pOc, pZc, pCc, pCx)}
 
-${clientTable(`t-oc-${label}`, "OpenCode", "var(--green)", data.opencode)}
-${clientTable(`t-zc-${label}`, "ZCode", "var(--accent)", data.zcode)}
-${clientTable(`t-cc-${label}`, "Claude Code", "var(--yellow)", data.claude_code)}
-${clientTable(`t-cx-${label}`, "Codex", "var(--accent)", data.codex)}`;
+${clientTable(`t-oc-${label}`, "OpenCode", "var(--green)", oc.view, oc.note)}
+${clientTable(`t-zc-${label}`, "ZCode", "var(--accent)", zc.view, zc.note)}
+${clientTable(`t-cc-${label}`, "Claude Code", "var(--yellow)", cc.view, cc.note)}
+${clientTable(`t-cx-${label}`, "Codex", "var(--accent)", cx.view, cx.note)}`;
   }
 
   // Project navigation (when there are multiple projects).
@@ -448,11 +506,12 @@ ${navHtml}
 
 ${sections.join("\n")}
 
-<div class="footer">
+ <div class="footer">
   Tokens and cost come from each client's own session log — ZCode, Claude Code and Codex record no cost, so theirs reads $0.
+  Costs marked list-price equivalent are OpenRouter list rates over tokens already logged (not money paid) — unpriced models are listed, never folded into $0.
   <br>
   Run <code>fapony usage-scan</code> to refresh data.
-</div>
+ </div>
 
 </body>
 </html>`;

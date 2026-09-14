@@ -1,6 +1,12 @@
 // src/stats/format.ts — formatStatsText() for CLI + MCP text mode
 
-import type { ModelBreakdown } from "../session/index.js";
+import {
+  type ImputedModel,
+  imputeResult,
+  loadPrices,
+  type PriceTable,
+} from "../price/index.js";
+import type { ModelBreakdown, PassiveUsageResult } from "../session/index.js";
 import type { StatsData } from "./data.js";
 
 /**
@@ -27,14 +33,53 @@ function fmtIn(input: number, cacheRead: number, cacheWrite: number): string {
     : `${total.toLocaleString()} in`;
 }
 
-function modelLine(m: ModelBreakdown, withCost: boolean): string {
+function modelLine(
+  m: ModelBreakdown,
+  withCost: boolean,
+  imp?: ImputedModel,
+): string {
   const name = `${m.provider ? `${m.provider}/` : ""}${m.model || "(no model id)"}`;
-  const cost = withCost ? ` ($${m.cost.toFixed(4)})` : "";
+  let cost = "";
+  if (withCost) cost = ` ($${m.cost.toFixed(4)})`;
+  else if (imp && imp.status === "priced")
+    cost = ` (~$${imp.imputed_cost.toFixed(4)} list-price)`;
   return (
     `    ${name}: ${m.session_count} sessions, ` +
     `${fmtIn(m.tokens_input, m.tokens_cache_read, m.tokens_cache_write)} / ` +
     `${m.tokens_output.toLocaleString()} out${cost}`
   );
+}
+
+/**
+ * บรรทัด list-price equivalent ต่อท้ายแต่ละ usage section — หน่วยเดียวที่
+ * เทียบข้าม client ได้ (client ที่ไม่บันทึก cost มีราคาติดตรงนี้)
+ * ราคา list ไม่ใช่เงินที่จ่ายจริง · unpriced แยกออกมาให้เห็น ไม่รวมใน 0
+ */
+function imputedLines(
+  result: PassiveUsageResult,
+  prices: PriceTable | null,
+): { map: Map<string, ImputedModel>; lines: string[] } {
+  const map = new Map<string, ImputedModel>();
+  if (result.session_count === 0) return { map, lines: [] };
+  if (!prices) {
+    return {
+      map,
+      lines: [
+        `  list-price equivalent: — (run \`fapony price-scan\` to price ${result.session_count} sessions)`,
+      ],
+    };
+  }
+  const s = imputeResult(result, prices);
+  for (const m of s.by_model) map.set(`${m.provider}\0${m.model}`, m);
+  const parts = [
+    `~$${s.total_imputed.toFixed(4)} est. over ${s.priced_sessions} priced sessions`,
+  ];
+  if (s.free_sessions > 0) parts.push(`${s.free_sessions} free`);
+  if (s.unpriced_sessions > 0)
+    parts.push(
+      `unpriced: ${s.unpriced_sessions} sessions / ${s.unpriced_tokens.toLocaleString()} tokens`,
+    );
+  return { map, lines: [`  list-price equivalent: ${parts.join(" · ")}`] };
 }
 
 function fmtRate(r: number): string {
@@ -58,6 +103,9 @@ export function formatStatsText(data: StatsData): string {
   if (data.runs.total === 0) return "no runs yet";
 
   const lines: string[] = [];
+  // ราคา list จาก cache อย่างเดียว — query ไม่ fetch เอง (offline ได้, ไม่มี
+  // ไฟล์ = แสดง — + hint ไม่ throw)
+  const prices = loadPrices();
 
   if (data.scope) {
     lines.push(`scope: ${data.scope}`);
@@ -239,6 +287,7 @@ export function formatStatsText(data: StatsData): string {
       lines.push("  by model:");
       for (const m of data.usage.by_model) lines.push(modelLine(m, true));
     }
+    lines.push(...imputedLines(data.usage, prices).lines);
   }
 
   // ZCode usage (separate DB)
@@ -249,8 +298,15 @@ export function formatStatsText(data: StatsData): string {
       `  total: ${fmtIn(zu.total_tokens_input, zu.total_tokens_cache_read, zu.total_tokens_cache_write)} / ${zu.total_tokens_output.toLocaleString()} out / ${zu.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${zu.session_count} sessions`,
     );
     if (zu.by_model.length > 0) {
+      const imp = imputedLines(zu, prices);
       lines.push("  by model:");
-      for (const m of zu.by_model) lines.push(modelLine(m, false));
+      for (const m of zu.by_model)
+        lines.push(
+          modelLine(m, false, imp.map.get(`${m.provider}\0${m.model}`)),
+        );
+      lines.push(...imp.lines);
+    } else {
+      lines.push(...imputedLines(zu, prices).lines);
     }
   }
 
@@ -262,8 +318,15 @@ export function formatStatsText(data: StatsData): string {
       `  total: ${fmtIn(cc.total_tokens_input, cc.total_tokens_cache_read, cc.total_tokens_cache_write)} / ${cc.total_tokens_output.toLocaleString()} out / ${cc.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${cc.session_count} sessions`,
     );
     if (cc.by_model.length > 0) {
+      const imp = imputedLines(cc, prices);
       lines.push("  by model:");
-      for (const m of cc.by_model) lines.push(modelLine(m, false));
+      for (const m of cc.by_model)
+        lines.push(
+          modelLine(m, false, imp.map.get(`${m.provider}\0${m.model}`)),
+        );
+      lines.push(...imp.lines);
+    } else {
+      lines.push(...imputedLines(cc, prices).lines);
     }
   }
 
@@ -275,8 +338,15 @@ export function formatStatsText(data: StatsData): string {
       `  total: ${fmtIn(cx.total_tokens_input, cx.total_tokens_cache_read, cx.total_tokens_cache_write)} / ${cx.total_tokens_output.toLocaleString()} out / ${cx.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${cx.session_count} sessions`,
     );
     if (cx.by_model.length > 0) {
+      const imp = imputedLines(cx, prices);
       lines.push("  by model:");
-      for (const m of cx.by_model) lines.push(modelLine(m, false));
+      for (const m of cx.by_model)
+        lines.push(
+          modelLine(m, false, imp.map.get(`${m.provider}\0${m.model}`)),
+        );
+      lines.push(...imp.lines);
+    } else {
+      lines.push(...imputedLines(cx, prices).lines);
     }
   }
 
