@@ -1,0 +1,370 @@
+// test/digest.test.ts — tests for src/digest/
+//
+// Pin env vars to isolate from real machine data (SPEC §7):
+// - FAPONY_STATE_DIR → temp dir (no real db)
+// - FAPONY_OPENCODE_DB / FAPONY_ZCODE_DB → nonexistent
+// - FAPONY_CLAUDE_PROJECTS_DIR / FAPONY_CODEX_SESSIONS_DIR → nonexistent
+
+import assert from "node:assert";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { addEvent, newRun, openDb } from "../src/db/index.js";
+import { collectDigest } from "../src/digest/collect.js";
+import { renderDigestHtml } from "../src/digest/html.js";
+import { renderDigestText } from "../src/digest/text.js";
+
+// --- env isolation ---
+
+function withIsolatedEnv(fn: () => void | Promise<void>): void | Promise<void> {
+  const stateDir = mkdtempSync(join(tmpdir(), "fapony-digest-"));
+  const prev: Record<string, string | undefined> = {};
+  const keys = [
+    "FAPONY_STATE_DIR",
+    "FAPONY_OPENCODE_DB",
+    "FAPONY_ZCODE_DB",
+    "FAPONY_CLAUDE_PROJECTS_DIR",
+    "FAPONY_CODEX_SESSIONS_DIR",
+    "FAPONY_CONFIG",
+  ];
+  for (const k of keys) {
+    prev[k] = process.env[k];
+  }
+  process.env.FAPONY_STATE_DIR = stateDir;
+  process.env.FAPONY_OPENCODE_DB = "/nonexistent/opencode.db";
+  process.env.FAPONY_ZCODE_DB = "/nonexistent/zcode.db";
+  process.env.FAPONY_CLAUDE_PROJECTS_DIR = "/nonexistent/claude";
+  process.env.FAPONY_CODEX_SESSIONS_DIR = "/nonexistent/codex";
+  process.env.FAPONY_CONFIG = "/nonexistent/fapony.config.json";
+  try {
+    return fn();
+  } finally {
+    for (const k of keys) {
+      if (prev[k] === undefined) delete process.env[k];
+      else process.env[k] = prev[k];
+    }
+    rmSync(stateDir, { recursive: true, force: true });
+  }
+}
+
+// --- helpers ---
+
+function makeWorktree(): string {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-wt-"));
+  mkdirSync(join(dir, ".fapony", ".memory"), { recursive: true });
+  mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
+  mkdirSync(join(dir, ".fapony", "done"), { recursive: true });
+  // fake git repo
+  mkdirSync(join(dir, ".git"), { recursive: true });
+  writeFileSync(join(dir, ".git", "config"), "");
+  return dir;
+}
+
+function writeMemLog(dir: string, rows: Record<string, unknown>[]): void {
+  const logDir = join(dir, ".fapony", ".memory");
+  const lines = `${rows.map((r) => JSON.stringify(r)).join("\n")}\n`;
+  writeFileSync(join(logDir, "log.testuser.jsonl"), lines);
+}
+
+function writePlanFile(dir: string, name: string, content: string): void {
+  writeFileSync(join(dir, ".fapony", "plan", name), content);
+}
+
+// --- tests ---
+
+export async function testDigestEmptyRepo(): Promise<void> {
+  await withIsolatedEnv(async () => {
+    const dir = mkdtempSync(join(tmpdir(), "fapony-empty-"));
+    try {
+      const data = await collectDigest({ worktree: dir });
+      assert.ok(data.sources.length >= 5, "should have at least 5 sources");
+      for (const s of data.sources) {
+        assert.equal(s.ok, false, `${s.name} should be ok:false`);
+      }
+      assert.equal(data.decisions.length, 0);
+      assert.equal(data.bugs.open.length, 0);
+      assert.equal(data.bugs.closed.length, 0);
+      assert.equal(data.notes.length, 0);
+      assert.equal(data.plans.pending.length, 0);
+      assert.equal(data.plans.shipped.length, 0);
+      assert.equal(data.skipped_malformed, 0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ empty repo — all sources ok:false");
+}
+
+export async function testDigestSinceFilter(): Promise<void> {
+  await withIsolatedEnv(async () => {
+    const dir = makeWorktree();
+    try {
+      const now = Date.now();
+      const rows = [
+        {
+          ts: new Date(now - 12 * 3600000).toISOString(), // 12 hours ago
+          agent: "a",
+          kind: "decision",
+          text: "recent",
+          id: "r1",
+        },
+        {
+          ts: new Date(now - 60 * 86400000).toISOString(), // 60 days ago
+          agent: "b",
+          kind: "decision",
+          text: "old",
+          id: "r2",
+        },
+      ];
+      writeMemLog(dir, rows);
+
+      const d1 = await collectDigest({ worktree: dir, since: "1d", _now: now });
+      const d60 = await collectDigest({
+        worktree: dir,
+        since: "60d",
+        _now: now,
+      });
+
+      assert.equal(d1.decisions.length, 1, "1d should have 1 decision");
+      assert.equal(d60.decisions.length, 2, "60d should have 2 decisions");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log(
+    "  ✓ since filter — different ranges return different row counts",
+  );
+}
+
+export async function testDigestEscInjection(): Promise<void> {
+  await withIsolatedEnv(async () => {
+    const dir = makeWorktree();
+    try {
+      writeMemLog(dir, [
+        {
+          ts: new Date().toISOString(),
+          agent: "attacker",
+          kind: "decision",
+          text: "<script>alert('xss')</script>",
+          id: "x1",
+        },
+      ]);
+
+      const data = await collectDigest({ worktree: dir });
+      const html = renderDigestHtml(data);
+
+      assert.ok(
+        !html.includes("<script>"),
+        "HTML should not contain raw <script> tag",
+      );
+      assert.ok(
+        html.includes("&lt;script&gt;"),
+        "HTML should escape <script> to entities",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log(
+    "  ✓ esc injection — <script> in mem note does not leak into HTML",
+  );
+}
+
+export async function testDigestMalformedLine(): Promise<void> {
+  await withIsolatedEnv(async () => {
+    const dir = makeWorktree();
+    try {
+      const logDir = join(dir, ".fapony", ".memory");
+      const goodRow = JSON.stringify({
+        ts: new Date().toISOString(),
+        agent: "ok",
+        kind: "note",
+        text: "good row",
+        id: "g1",
+      });
+      writeFileSync(
+        join(logDir, "log.testuser.jsonl"),
+        `bad json {{{\n${goodRow}\n`,
+      );
+
+      const data = await collectDigest({ worktree: dir });
+      assert.equal(data.skipped_malformed, 1, "should skip 1 malformed line");
+      assert.equal(data.notes.length, 1, "should still read the good row");
+      assert.equal(data.notes[0].text, "good row");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ malformed line — skipped count, other rows still read");
+}
+
+export async function testDigestJsonSubsetOfText(): Promise<void> {
+  await withIsolatedEnv(async () => {
+    const dir = makeWorktree();
+    try {
+      const now = Date.now();
+      writeMemLog(dir, [
+        {
+          ts: new Date(now - 3600000).toISOString(),
+          agent: "t",
+          kind: "decision",
+          text: "chose X over Y",
+          id: "d1",
+        },
+        {
+          ts: new Date(now - 3500000).toISOString(),
+          agent: "t",
+          kind: "note",
+          text: "next session must know Z",
+          id: "n1",
+        },
+        {
+          ts: new Date(now - 3400000).toISOString(),
+          agent: "t",
+          kind: "bug",
+          text: "thing is broken",
+          id: "b1",
+        },
+      ]);
+      writeFileSync(join(dir, ".fapony", "done", "PLAN-old.md"), "# old\n");
+      // one run, fail round 0 then pass-good round 1: 1 unit, 0% round-1
+      const db = openDb();
+      const runId = newRun(db, dir, null, null, "abc");
+      addEvent(db, runId, "gate", {
+        verdict: "fail",
+        note: "[spec_gap] wrong shape",
+        round: 0,
+      });
+      addEvent(db, runId, "gate", {
+        verdict: "pass-good",
+        note: "[none] fixed",
+        round: 1,
+      });
+      db.close();
+
+      const data = await collectDigest({ worktree: dir, _now: now });
+      const text = renderDigestText(data);
+      const html = renderDigestHtml(data);
+
+      // header + scope
+      assert.ok(text.includes("fapony digest"), "header");
+      assert.ok(text.includes(data.worktree), "worktree path");
+      assert.ok(text.includes(data.scope_note), "scope_note");
+      // headline is run-based, not gate-based
+      assert.equal(data.verdicts.units_graded, 1, "1 run = 1 unit");
+      assert.equal(data.verdicts.round1_pct, 0, "first gate failed");
+      assert.ok(
+        text.includes("1 unit graded · 0% passed round 1"),
+        "headline counts runs",
+      );
+      // every mem row kind has a section
+      assert.ok(text.includes("chose X over Y"), "decision text");
+      assert.ok(text.includes("NOTES (1)"), "NOTES section");
+      assert.ok(text.includes("next session must know Z"), "note text");
+      assert.ok(text.includes("thing is broken"), "bug text");
+      assert.ok(text.includes("1 shipped"), "shipped count");
+      // every verdict tally has a place
+      assert.ok(text.includes("BY GRADE"), "BY GRADE section");
+      assert.ok(text.includes("pass-good"), "grade row");
+      assert.ok(text.includes("spec_gap"), "reason_code row");
+      // sources table names every source
+      for (const s of data.sources)
+        assert.ok(text.includes(s.name), `source ${s.name}`);
+      // html parity for the same fields
+      assert.ok(html.includes("Notes (1)"), "html NOTES section");
+      assert.ok(html.includes("next session must know Z"), "html note text");
+      assert.ok(html.includes("By Grade"), "html BY GRADE section");
+      assert.ok(
+        html.includes("1 unit graded ·") || html.includes("1</strong> unit"),
+        "html headline counts runs",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ json ⊆ text — every payload field appears in text+html");
+}
+
+export async function testDigestInvalidSince(): Promise<void> {
+  await withIsolatedEnv(async () => {
+    let threw = false;
+    try {
+      await collectDigest({ since: "invalid-format" });
+    } catch {
+      threw = true;
+    }
+    assert.ok(threw, "should throw on invalid --since format");
+  });
+  console.log("  ✓ invalid --since — throws error");
+}
+
+export async function testDigestPlanProgress(): Promise<void> {
+  await withIsolatedEnv(async () => {
+    const dir = makeWorktree();
+    try {
+      writePlanFile(
+        dir,
+        "PLAN-test.md",
+        `---
+kind: unit
+status: active
+---
+
+## TL;DR
+- [x] step 1 done
+- [ ] step 2 pending
+- [ ] step 3 pending
+`,
+      );
+
+      const data = await collectDigest({ worktree: dir });
+      const plan = data.plans.pending.find((p) => p.file === "PLAN-test.md");
+      assert.ok(plan, "plan should exist");
+      assert.equal(plan!.done, 1);
+      assert.equal(plan!.total, 3);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ plan with progress — checkbox counting works");
+}
+
+export async function testDigestBugOpenClose(): Promise<void> {
+  await withIsolatedEnv(async () => {
+    const dir = makeWorktree();
+    try {
+      const now = Date.now();
+      writeMemLog(dir, [
+        {
+          ts: new Date(now - 3000).toISOString(),
+          agent: "a",
+          kind: "bug",
+          text: "bug A",
+          id: "b1",
+        },
+        {
+          ts: new Date(now - 2000).toISOString(),
+          agent: "a",
+          kind: "bug",
+          text: "bug B",
+          id: "b2",
+        },
+        {
+          ts: new Date(now - 1000).toISOString(),
+          agent: "a",
+          kind: "close",
+          ref: "b1",
+          text: "fixed",
+        },
+      ]);
+
+      const data = await collectDigest({ worktree: dir });
+      assert.equal(data.bugs.open.length, 1, "one bug should be open");
+      assert.equal(data.bugs.open[0].id, "b2");
+      assert.equal(data.bugs.closed.length, 1, "one bug should be closed");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ bug open/close classification");
+}

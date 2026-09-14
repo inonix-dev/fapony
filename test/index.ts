@@ -38,6 +38,16 @@ import {
   testSchemaVersionStamped,
 } from "./db.test.js";
 import {
+  testDigestBugOpenClose,
+  testDigestEmptyRepo,
+  testDigestEscInjection,
+  testDigestInvalidSince,
+  testDigestJsonSubsetOfText,
+  testDigestMalformedLine,
+  testDigestPlanProgress,
+  testDigestSinceFilter,
+} from "./digest.test.js";
+import {
   testFindSessionModelClaudeCodeHit,
   testFindSessionModelClaudeCodeMajority,
   testFindSessionModelClaudeCodeMiss,
@@ -526,6 +536,15 @@ export async function cmdTest(): Promise<void> {
   testMemTemplateScaffoldedIgnoresRootConfig();
   testMemTemplateUnknownAppFails();
   testClaimMemoryFailGracefully();
+  // Digest tests
+  await testDigestEmptyRepo();
+  await testDigestSinceFilter();
+  await testDigestEscInjection();
+  await testDigestMalformedLine();
+  await testDigestJsonSubsetOfText();
+  await testDigestInvalidSince();
+  await testDigestPlanProgress();
+  await testDigestBugOpenClose();
   // ponytail: real ~15s execSync timeout regression test — skip in the fast
   // dev loop, keep it for CI/pre-commit (bun fapony.ts test, no SKIP_SLOW).
   if (!process.env.SKIP_SLOW) testClaimMemoryTimeout();

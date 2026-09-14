@@ -4,6 +4,7 @@
 // CLI dispatch: all logic lives in src/
 
 import { cmdAnalyze } from "./src/analyze.js";
+import { cmdDigest } from "./src/digest/cli.js";
 import { cmdHookStop } from "./src/hook.js";
 import { cmdInit } from "./src/init.js";
 import { cmdInitMem } from "./src/init-mem.js";
@@ -22,6 +23,8 @@ const [cmd, ...a] = process.argv.slice(2);
 
 if (cmd === "analyze") {
   cmdAnalyze(a);
+} else if (cmd === "digest") {
+  await cmdDigest(a);
 } else if (cmd === "stats") {
   cmdStats(a);
 } else if (cmd === "telemetry") {
@@ -55,7 +58,7 @@ if (cmd === "analyze") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|mcp|hook-stop|test> [args]",
+    "usage: fapony <setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|digest|mcp|hook-stop|test> [args]",
   );
   process.exit(1);
 }

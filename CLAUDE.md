@@ -28,6 +28,7 @@ src/session/    passive usage reader ราย client + activeSession (model att
 src/stats/      getStatsData() + format — KPI ข้าม run
 src/report/     fapony report / report-web
 src/usage/      fapony usage-web — อ่าน cache ไม่แตะ session log
+src/digest/     fapony digest — รวม 4 แหล่ง (mem log, plans, usage cache, verdicts) เป็นรายงานหน้าเดียว
 src/context/    project-health block keyed by files[]
 src/install/    หนึ่งไฟล์ต่อ client + skills.ts
 src/mcp/        MCP server — transport (SERVER_INSTRUCTIONS), evidence allowlist, tools/ 8 ตัว
@@ -313,6 +314,7 @@ Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)
 ```bash
 fapony mcp                          # MCP server — stdio JSON-RPC, 8 tools
 fapony hook-stop                    # Claude Code Stop hook (stdin JSON) — blocks a turn that has ungraded commits
+fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page project summary from existing sources (mem log, plans, usage cache, verdicts)
 fapony report <run-id>              # verification report for a run
 fapony report-web [file]            # static HTML report page
 fapony usage-scan                    # scan session logs → usage-cache.jsonl (incremental, progress bar)
