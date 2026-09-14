@@ -343,6 +343,7 @@ fapony usage-scan                        # scan session logs → cache (incremen
 fapony price-scan                        # fetch model price table → prices.json (cache; query never fetches)
 fapony usage-web [port]                   # live usage comparison dashboard from cache
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
+fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page summary: decisions, open bugs, in-flight plans, cost, pass/fail — from what's already on disk
 
 # Setup & maintenance
 fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/evidence)
