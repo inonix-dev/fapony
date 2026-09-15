@@ -160,9 +160,9 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
     }
     // Context bytes by tool — proportion of context window consumed per tool.
     // Bytes are a proxy for tokens; shown as % of total, never as "tokens".
-    // Merged across all clients: only the Claude Code reader populates the
-    // field today, so reading the top-level (opencode) detail alone would
-    // always come back empty.
+    // Merged across all clients: OpenCode/ZCode (state.output), Claude Code
+    // and Codex (tool_result) each populate bytes_by_tool, so reading the
+    // top-level (opencode) detail alone would miss the other clients.
     const bytes = mergeBytesByTool(
       data.detail,
       zcodeData.detail,
