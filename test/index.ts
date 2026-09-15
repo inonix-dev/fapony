@@ -159,6 +159,7 @@ import {
   testMapExtractMultilineTypeBlock,
   testMapExtractVarDeclaratorLists,
   testMapFileAndBroken,
+  testMapFileShowsSignature,
   testMapMissingPath,
 } from "./map.test.js";
 // MCP handcheck tests (split into test/mcp/)
@@ -525,6 +526,7 @@ export async function cmdTest(): Promise<void> {
   testMapDirListing();
   testMapDirCap();
   testMapFileAndBroken();
+  testMapFileShowsSignature();
   testMapMissingPath();
   testDecideStopBlocksUngradedCommits();
   testDecideStopAllowsEveryUnknown();
