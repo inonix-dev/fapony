@@ -31,6 +31,43 @@ export function withTempRepo(fn: (dir: string) => void): void {
 }
 
 /**
+ * Run fn with a fresh temp dir standing in for a user's home directory, then
+ * remove it. Used by tests that exercise code reading/writing `~/.<client>/…`
+ * (installers, detect) without touching the real home.
+ */
+export function withTempHome<T>(fn: (home: string) => T): T {
+  const home = mkdtempSync(join(tmpdir(), "fapony-home-"));
+  try {
+    return fn(home);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+/** Write obj as pretty JSON with a trailing newline — config/fixture files. */
+export function writeJson(path: string, obj: unknown): void {
+  writeFileSync(path, `${JSON.stringify(obj, null, 2)}\n`);
+}
+
+/**
+ * Run fn with console.error captured; returns the joined lines. Nothing is
+ * printed. Restores the original console.error even if fn throws.
+ */
+export function captureErrors(fn: () => void): string {
+  const lines: string[] = [];
+  const orig = console.error;
+  console.error = (...a: unknown[]) => {
+    lines.push(a.map(String).join(" "));
+  };
+  try {
+    fn();
+  } finally {
+    console.error = orig;
+  }
+  return lines.join("\n");
+}
+
+/**
  * Run fn with an isolated temp db. The db is opened before fn and closed
  * after; FAPONY_STATE_DIR is set to a fresh temp dir and restored on return.
  * Temp dir is always cleaned up.
