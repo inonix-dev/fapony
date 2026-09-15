@@ -57,14 +57,62 @@ const MAX_OBJECTIVE_FILES = 30;
 
 let transpiler: Bun.Transpiler | null = null;
 
-function parseError(source: string): string | null {
+interface ScanResult {
+  error: string | null;
+  exports: string[];
+}
+
+function scanSource(source: string): ScanResult {
   try {
     if (!transpiler) transpiler = new Bun.Transpiler({ loader: "tsx" });
-    transpiler.scan(source);
-    return null;
+    const scanned = transpiler.scan(source) as { exports: string[] };
+    return { error: null, exports: scanned.exports };
   } catch (e) {
-    return e instanceof Error ? e.message.split("\n")[0] : "Parse error";
+    return {
+      error: e instanceof Error ? e.message.split("\n")[0] : "Parse error",
+      exports: [],
+    };
   }
+}
+
+// Identifiers in one line of code, skipping strings, template spans, and
+// comments. Same-line only — enough to find extra bindings on a declaration
+// line without treating sample text as code.
+function codeIdentifiers(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  const flush = () => {
+    if (/^[A-Za-z_$][\w$]*$/.test(cur)) out.push(cur);
+    cur = "";
+  };
+  let i = 0;
+  while (i < line.length) {
+    const c = line[i];
+    const next = line[i + 1] ?? "";
+    if (c === "/" && next === "/") break;
+    if (c === "/" && next === "*") {
+      const end = line.indexOf("*/", i + 2);
+      i = end < 0 ? line.length : end + 2;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === "`") {
+      const quote = c;
+      i++;
+      while (i < line.length && line[i] !== quote) {
+        i += line[i] === "\\" ? 2 : 1;
+      }
+      i++;
+      continue;
+    }
+    if (/[A-Za-z_$0-9]/.test(c)) {
+      cur += c;
+    } else {
+      flush();
+    }
+    i++;
+  }
+  flush();
+  return out;
 }
 
 // --- Export extraction (name + line + kind) ---
@@ -78,23 +126,27 @@ const RE = {
   ns: /^export\s+namespace\s+([A-Za-z_$][\w$]*)/,
   starAs: /^export\s*\*\s*as\s+([A-Za-z_$][\w$]*)/,
   star: /^export\s*\*\s+from\b/,
-  con: /^export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)/,
   brace: /^export\s+(?:type\s+)?\{/,
 };
 
 // Names in one `export { ... }` fragment. Handles `a as b` (keep b),
-// per-name `type X`, and the whole block being `export type { ... }`.
-function braceNames(frag: string): { name: string; kind: ExportKind }[] {
+// per-name `type X`, and a whole block that started as `export type { ... }`
+// (blockType is set by the caller from the opening line and carried across
+// fragments, so every name in a multi-line type block stays `type`).
+function braceNames(
+  frag: string,
+  blockType = false,
+): { name: string; kind: ExportKind }[] {
   let text = frag.replace(/[{};]/g, " ");
   text = text.replace(/\bfrom\b[\s\S]*$/, " ");
   text = text.replace(/^export\s+/, "");
-  const blockType = /^type\b/.test(text.trim());
+  const blockIsType = blockType || /^type\b/.test(text.trim());
   text = text.replace(/^type\s+/, "");
   const out: { name: string; kind: ExportKind }[] = [];
   for (let part of text.split(",")) {
     part = part.trim();
     if (!part) continue;
-    let kind: ExportKind = blockType ? "type" : "re-export";
+    let kind: ExportKind = blockIsType ? "type" : "re-export";
     if (/^type\s+/.test(part)) {
       part = part.replace(/^type\s+/, "");
       kind = "type";
@@ -108,9 +160,46 @@ function braceNames(frag: string): { name: string; kind: ExportKind }[] {
   return out;
 }
 
+const VAR_DECL_RE = /^export\s+(?:const|let|var)\b/;
+
 export function extractExports(source: string): ExportScan {
-  const error = parseError(source);
-  if (error) return { symbols: [], error };
+  const scanned = scanSource(source);
+  if (scanned.error) return { symbols: [], error: scanned.error };
+
+  // Ambient declarations (`export declare ...`) are invisible to scan(), so
+  // validate value names against the union of the real source and a
+  // declare-stripped variant scanned on the same lines.
+  const stripped = source.replace(
+    /^([ \t]*)export\s+declare\s+/gm,
+    "$1export ",
+  );
+  const strippedScan = scanSource(stripped);
+  const valid = new Set([
+    ...scanned.exports,
+    ...(strippedScan.error ? [] : strippedScan.exports),
+  ]);
+  const seen = new Set<string>();
+  // scan() is blind to namespaces (and to ambient `declare`), so those kinds
+  // stay regex-authoritative; everything else must appear in the parsed export
+  // set, which is what filters sample text out of comments and strings.
+  const SCAN_BLIND: ExportKind[] = ["type", "interface", "namespace"];
+  const keep = (name: string, kind: ExportKind, declared: boolean): boolean => {
+    if (name === "*") return true;
+    if (SCAN_BLIND.includes(kind)) return true;
+    if (seen.has(name)) return false;
+    if (!declared && !valid.has(name)) return false;
+    seen.add(name);
+    return true;
+  };
+  const push = (
+    out: ExportSymbol[],
+    name: string,
+    line: number,
+    kind: ExportKind,
+    declared: boolean,
+  ): void => {
+    if (keep(name, kind, declared)) out.push({ name, line, kind });
+  };
 
   const lines = source.split("\n");
   const out: ExportSymbol[] = [];
@@ -118,11 +207,13 @@ export function extractExports(source: string): ExportScan {
   for (let i = 0; i < lines.length; i++) {
     let t = lines[i].trim();
     if (!t.startsWith("export")) continue;
+    const declared = /^export\s+declare\s+/.test(t);
     t = t.replace(/^export\s+declare\s+/, "export ");
     const line = i + 1;
     let m: RegExpMatchArray | null;
 
     if (RE.brace.test(t)) {
+      const blockType = /^export\s+type\b/.test(t);
       const frags = [{ text: t, line }];
       let joined = t;
       let j = i;
@@ -132,51 +223,58 @@ export function extractExports(source: string): ExportScan {
         joined += ` ${lines[j].trim()}`;
       }
       for (const f of frags) {
-        for (const s of braceNames(f.text)) {
-          out.push({ name: s.name, line: f.line, kind: s.kind });
+        for (const s of braceNames(f.text, blockType)) {
+          push(out, s.name, f.line, s.kind, declared);
         }
       }
       i = j;
       continue;
     }
     if (/^export\s+default\b/.test(t)) {
-      out.push({ name: "default", line, kind: "default" });
+      push(out, "default", line, "default", declared);
       continue;
     }
     if ((m = t.match(RE.fn))) {
-      out.push({ name: m[1], line, kind: "fn" });
+      push(out, m[1], line, "fn", declared);
       continue;
     }
     if ((m = t.match(RE.cls))) {
-      out.push({ name: m[1], line, kind: "class" });
+      push(out, m[1], line, "class", declared);
       continue;
     }
     if ((m = t.match(RE.iface))) {
-      out.push({ name: m[1], line, kind: "interface" });
+      push(out, m[1], line, "interface", declared);
       continue;
     }
     if ((m = t.match(RE.en))) {
-      out.push({ name: m[1], line, kind: "enum" });
+      push(out, m[1], line, "enum", declared);
       continue;
     }
     if ((m = t.match(RE.ns))) {
-      out.push({ name: m[1], line, kind: "namespace" });
+      push(out, m[1], line, "namespace", declared);
       continue;
     }
     if ((m = t.match(RE.starAs))) {
-      out.push({ name: m[1], line, kind: "namespace" });
+      push(out, m[1], line, "namespace", declared);
       continue;
     }
     if (RE.star.test(t)) {
-      out.push({ name: "*", line, kind: "re-export" });
+      push(out, "*", line, "re-export", declared);
       continue;
     }
     if ((m = t.match(RE.typ))) {
-      out.push({ name: m[1], line, kind: "type" });
+      push(out, m[1], line, "type", declared);
       continue;
     }
-    if ((m = t.match(RE.con))) {
-      out.push({ name: m[1], line, kind: "const" });
+    const varMatch = t.match(VAR_DECL_RE);
+    if (varMatch) {
+      // A `const`/`let`/`var` line can bind several names
+      // (`a = 1, b = 2`, `{ a, b } = …`, `[x] = …`). The scan set says which
+      // identifiers on this line are real exports; initializers and sample
+      // text never are.
+      for (const name of codeIdentifiers(t.slice(varMatch[0].length))) {
+        if (valid.has(name)) push(out, name, line, "const", declared);
+      }
     }
   }
   return { symbols: out, error: null };
@@ -363,7 +461,9 @@ export function formatMapDir(absDir: string, rel: string): string {
 
   const width = Math.max(...rows.map((r) => r.name.length));
   const lines = [title, ""];
-  const room = MAX_LINES - 2;
+  // The overflow marker is a line of its own, so it counts against the cap:
+  // 2 header lines + 57 rows + marker = 60, never 61.
+  const room = MAX_LINES - 3;
   for (const r of rows.slice(0, room)) {
     lines.push(`  ${r.name.padEnd(width)}  ${r.desc}`);
   }

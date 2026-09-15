@@ -89,6 +89,64 @@ export function testMapExtractExportsParseError(): void {
   console.log("  ✓ map reports parse error instead of guessing");
 }
 
+export function testMapExtractIgnoresSampleText(): void {
+  const src = [
+    "/*",
+    "export const fake = 1;",
+    "*/",
+    "export const real = 2;",
+    "const sample = `",
+    "export const ghost = 9;",
+    "`;",
+    "export const live = 1;",
+  ].join("\n");
+  const { symbols, error } = extractExports(src);
+  assert.equal(error, null);
+  const names = symbols.map((s) => s.name).sort();
+  assert.deepEqual(names, ["live", "real"]);
+  assert.deepEqual(
+    symbols.find((s) => s.name === "real"),
+    { name: "real", line: 4, kind: "const" },
+  );
+  console.log("  ✓ map ignores exports inside comments and template text");
+}
+
+export function testMapExtractMultilineTypeBlock(): void {
+  const src = [
+    "export type {",
+    "  Alpha,",
+    "  Beta as Gamma,",
+    '} from "./m";',
+  ].join("\n");
+  const { symbols, error } = extractExports(src);
+  assert.equal(error, null);
+  assert.deepEqual(symbols, [
+    { name: "Alpha", line: 2, kind: "type" },
+    { name: "Gamma", line: 3, kind: "type" },
+  ]);
+  console.log("  ✓ map keeps every name in a multi-line type block as type");
+}
+
+export function testMapExtractVarDeclaratorLists(): void {
+  const src = [
+    "export const one = 1, two = 2;",
+    "export const { a, b } = point();",
+    "export let m;",
+  ].join("\n");
+  const { symbols, error } = extractExports(src);
+  assert.equal(error, null);
+  const by = (n: string) => symbols.find((s) => s.name === n);
+  assert.deepEqual(by("one"), { name: "one", line: 1, kind: "const" });
+  assert.deepEqual(by("two"), { name: "two", line: 1, kind: "const" });
+  assert.deepEqual(by("a"), { name: "a", line: 2, kind: "const" });
+  assert.deepEqual(by("b"), { name: "b", line: 2, kind: "const" });
+  assert.deepEqual(by("m"), { name: "m", line: 3, kind: "const" });
+  assert.ok(!symbols.some((s) => s.name === "point"), "initializer kept out");
+  console.log(
+    "  ✓ map binds every name in a declarator list, not just the first",
+  );
+}
+
 export function testMapDirListing(): void {
   withFixture(
     {
@@ -131,6 +189,22 @@ export function testMapFileAndBroken(): void {
       console.log("  ✓ map file detail + broken file reported, not silent");
     },
   );
+}
+
+export function testMapDirCap(): void {
+  const files: Record<string, string> = {};
+  for (let i = 0; i < 61; i++) {
+    files[`f${String(i).padStart(2, "0")}.ts`] = `export const x${i} = ${i};\n`;
+  }
+  withFixture(files, (dir) => {
+    const out = formatMapDir(dir, ".");
+    assert.ok(
+      out.split("\n").length <= 60,
+      `listing capped at 60 lines, got ${out.split("\n").length}`,
+    );
+    assert.match(out, /… \+\d+ more/);
+    console.log("  ✓ map dir listing never exceeds the 60-line cap");
+  });
 }
 
 export function testMapMissingPath(): void {

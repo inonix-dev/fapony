@@ -151,9 +151,13 @@ import {
   testInstallZcodePrimaryPath,
 } from "./install/zcode.test.js";
 import {
+  testMapDirCap,
   testMapDirListing,
   testMapExtractExports,
   testMapExtractExportsParseError,
+  testMapExtractIgnoresSampleText,
+  testMapExtractMultilineTypeBlock,
+  testMapExtractVarDeclaratorLists,
   testMapFileAndBroken,
   testMapMissingPath,
 } from "./map.test.js";
@@ -511,7 +515,11 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeIsTestFile();
   testMapExtractExports();
   testMapExtractExportsParseError();
+  testMapExtractIgnoresSampleText();
+  testMapExtractMultilineTypeBlock();
+  testMapExtractVarDeclaratorLists();
   testMapDirListing();
+  testMapDirCap();
   testMapFileAndBroken();
   testMapMissingPath();
   testDecideStopBlocksUngradedCommits();
