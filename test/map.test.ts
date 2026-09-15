@@ -179,7 +179,7 @@ export function testMapFileAndBroken(): void {
     (dir) => {
       const ok = formatMapFile(join(dir, "ok.ts"), "ok.ts");
       assert.match(ok, /— 1 export/);
-      assert.match(ok, /1\s+const\s+x/);
+      assert.match(ok, /1\s+const\s+export const x = 1;/);
 
       const empty = formatMapFile(join(dir, "empty.ts"), "empty.ts");
       assert.match(empty, /\(no exports\)/);
@@ -187,6 +187,30 @@ export function testMapFileAndBroken(): void {
       const dirOut = formatMapDir(dir, ".");
       assert.match(dirOut, /broken\.ts\s+⚠ Parse error/);
       console.log("  ✓ map file detail + broken file reported, not silent");
+    },
+  );
+}
+
+export function testMapFileShowsSignature(): void {
+  withFixture(
+    {
+      "sig.ts": [
+        "export function greet(name: string): string {",
+        "  return `Hello, ${name}!`;",
+        "}",
+        "export class Point {",
+        "  constructor(public x: number, public y: number) {}",
+        "}",
+      ].join("\n"),
+    },
+    (dir) => {
+      const out = formatMapFile(join(dir, "sig.ts"), "sig.ts");
+      assert.match(
+        out,
+        /fn\s+export function greet\(name: string\): string \{/,
+      );
+      assert.match(out, /class\s+export class Point \{/);
+      console.log("  ✓ map file shows declaration signature alongside export");
     },
   );
 }

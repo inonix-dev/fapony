@@ -331,7 +331,7 @@ fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md
 fapony test                         # self-check
 fapony analyze [path]               # structural diagnosis (hub/orphan/cycle/changed-untested) — live graph via Bun.Transpiler.scan(), never persisted (no table: 114 files / 466 imports = 16.6ms, cache would be pure debt)
-fapony map [path]                   # on-demand source index: dirs + per-file exports (name:line), read-only, nothing persisted
+fapony map [path]                   # on-demand source index: dirs list exports (name:line), files show declaration signatures, read-only, nothing persisted
 ```
 
 <!-- code-review-graph MCP tools -->

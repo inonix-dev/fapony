@@ -484,13 +484,25 @@ export function formatMapFile(absFile: string, rel: string): string {
   const { symbols } = scan;
   const head = `fapony map ${rel} — ${symbols.length} export${symbols.length === 1 ? "" : "s"}`;
   if (symbols.length === 0) return `${head}\n\n  (no exports)`;
+
+  // Read source lines once for declaration signatures
+  let srcLines: string[] = [];
+  try {
+    srcLines = readFileSync(absFile, "utf-8").split("\n");
+  } catch {
+    // unreadable already handled above; fall back to name-only
+  }
+
   const lines = [head, ""];
   const room = MAX_LINES - 3;
   const shown = symbols.slice(0, room);
   const w = Math.max(...shown.map((s) => String(s.line).length));
+  const SIG_MAX = 90;
   for (const s of shown) {
+    const raw = srcLines[s.line - 1]?.trim() ?? "";
+    const sig = raw.length > SIG_MAX ? `${raw.slice(0, SIG_MAX - 1)}…` : raw;
     lines.push(
-      `  ${String(s.line).padStart(w)}  ${s.kind.padEnd(9)}  ${s.name}`,
+      `  ${String(s.line).padStart(w)}  ${s.kind.padEnd(9)}  ${sig || s.name}`,
     );
   }
   if (symbols.length > shown.length) {

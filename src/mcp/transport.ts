@@ -37,6 +37,8 @@ When a unit of work is finished, call verdict_submit to grade it — pass-excell
 
 worktree must be the absolute path (git rev-parse --show-toplevel): every query scopes by it, so a bare name or none files the verdict where nothing reads it, and nothing errors to say so. Write the note standalone — what the work was and how it held up — it is read months later with no access to this conversation. Never leave a run non-terminal; an open run absorbs later unrelated verdicts for that worktree.
 
+Code exploration: run "fapony map <path>" via bash — file mode shows declaration signatures, dir mode lists exports per file. Faster than Read for scanning; use Read for the specific body after map gives you the line number.
+
 Skip it and every tool still answers correctly, on a thinner history.`;
 
 // --- Statusline cache ---
