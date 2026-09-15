@@ -63,12 +63,12 @@ export function isTestFile(p: string): boolean {
   return TEST_PATH_RE.test(p);
 }
 
-const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx"]);
+export const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
 // Always skipped, hardcoded — no config (per plan: no .faponyignore in v1).
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", ".git"]);
 
-function isSkippedDir(name: string): boolean {
+export function isSkippedDir(name: string): boolean {
   return SKIP_DIRS.has(name) || name.startsWith("wt-");
 }
 
@@ -79,7 +79,10 @@ function isEntryPoint(rel: string): boolean {
 
 // --- File discovery (manual walk, not Bun.Glob) ---
 
-function collectSourceFiles(absDir: string): string[] {
+export function collectSourceFiles(
+  absDir: string,
+  opts?: { skipHidden?: boolean },
+): string[] {
   const out: string[] = [];
   const stack: string[] = [absDir];
   while (stack.length > 0) {
@@ -95,6 +98,7 @@ function collectSourceFiles(absDir: string): string[] {
       if (e.isSymbolicLink()) continue;
       if (e.isDirectory()) {
         if (isSkippedDir(e.name)) continue;
+        if (opts?.skipHidden && e.name.startsWith(".")) continue;
         stack.push(join(dir, e.name));
       } else if (e.isFile()) {
         const dot = e.name.lastIndexOf(".");

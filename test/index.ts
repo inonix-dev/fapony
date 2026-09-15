@@ -150,6 +150,13 @@ import {
   testInstallZcodeNoConfigFails,
   testInstallZcodePrimaryPath,
 } from "./install/zcode.test.js";
+import {
+  testMapDirListing,
+  testMapExtractExports,
+  testMapExtractExportsParseError,
+  testMapFileAndBroken,
+  testMapMissingPath,
+} from "./map.test.js";
 // MCP handcheck tests (split into test/mcp/)
 import {
   testExtractMultiFieldEmptyLineEndsField,
@@ -502,6 +509,11 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeEmptyDir();
   testAnalyzeBlastRadius();
   testAnalyzeIsTestFile();
+  testMapExtractExports();
+  testMapExtractExportsParseError();
+  testMapDirListing();
+  testMapFileAndBroken();
+  testMapMissingPath();
   testDecideStopBlocksUngradedCommits();
   testDecideStopAllowsEveryUnknown();
   testUtcStampMatchesSqliteFormat();
