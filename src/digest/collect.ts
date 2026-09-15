@@ -13,6 +13,7 @@ import {
   planDir,
   type Run,
 } from "../db/index.js";
+import { type MemRow, readMemLog } from "../memory.js";
 import { isPassFamily, VERDICT_GRADES } from "../parse.js";
 import { imputeResult, loadPrices } from "../price/index.js";
 import { EMPTY_RESULT, type PassiveUsageResult } from "../session/types.js";
@@ -20,20 +21,12 @@ import { type CacheEntry, readCache } from "../usage/cache.js";
 
 // --- types ---
 
+export type { MemRow };
+
 export interface SourceStatus {
   name: string;
   ok: boolean;
   detail: string;
-}
-
-export interface MemRow {
-  ts: string;
-  agent: string;
-  kind: string;
-  text: string;
-  spec?: string;
-  id?: string;
-  ref?: string; // close rows: id of the bug being closed
 }
 
 export interface PlanRow {
@@ -131,82 +124,6 @@ function resolveWorktree(override?: string): string {
   } catch {
     return process.cwd();
   }
-}
-
-// --- memory log ---
-
-interface RawMemRow {
-  ts?: string;
-  agent?: string;
-  kind?: string;
-  text?: string;
-  spec?: string;
-  id?: string;
-  ref?: string;
-}
-
-function readMemLog(
-  worktree: string,
-  sinceIso: string,
-): { rows: MemRow[]; skipped: number; filesFound: number } {
-  // หาโฟลเดอร์ memory — ลอง .fapony/.memory ก่อน แล้ว fallback .memory/
-  const newDir = join(worktree, ".fapony", ".memory");
-  const legacyDir = join(worktree, ".memory");
-  const dir = existsSync(newDir)
-    ? newDir
-    : existsSync(legacyDir) && existsSync(join(legacyDir, "log.jsonl"))
-      ? legacyDir
-      : null;
-
-  if (!dir) return { rows: [], skipped: 0, filesFound: 0 };
-
-  // อ่าน log*.jsonl ทุกใบ (排除 rotated files log.YYYY-MM-DD.jsonl)
-  const isLogFile = (f: string): boolean =>
-    f === "log.jsonl" ||
-    (/^log\.[A-Za-z0-9._-]+\.jsonl$/.test(f) &&
-      !/^log\.\d{4}-\d{2}-\d{2}\.jsonl$/.test(f));
-
-  const files = readdirSync(dir)
-    .filter(isLogFile)
-    .sort()
-    .map((f) => join(dir, f));
-
-  if (files.length === 0) return { rows: [], skipped: 0, filesFound: 0 };
-
-  let skipped = 0;
-  const all: MemRow[] = [];
-
-  for (const file of files) {
-    const raw = readFileSync(file, "utf-8");
-    const lines = raw.split("\n").filter(Boolean);
-    for (const line of lines) {
-      let parsed: RawMemRow;
-      try {
-        parsed = JSON.parse(line) as RawMemRow;
-      } catch {
-        skipped++;
-        continue;
-      }
-      if (!parsed.ts || !parsed.kind) {
-        skipped++;
-        continue;
-      }
-      // filter by since (exclusive — strictly before the cutoff)
-      if (parsed.ts < sinceIso) continue;
-      all.push({
-        ts: parsed.ts,
-        agent: parsed.agent ?? "unknown",
-        kind: parsed.kind,
-        text: parsed.text ?? "",
-        spec: parsed.spec,
-        id: parsed.id,
-        ref: parsed.ref,
-      });
-    }
-  }
-
-  all.sort((a, b) => b.ts.localeCompare(a.ts)); // newest first
-  return { rows: all, skipped, filesFound: files.length };
 }
 
 // --- plans ---

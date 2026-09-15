@@ -1,7 +1,10 @@
 // test/context.test.ts — project-health context block (PLAN-project-health-context step 4)
 
 import assert from "node:assert";
-import { buildProjectHealthContext } from "../src/context/index.js";
+import {
+  buildProjectHealthContext,
+  computeModelFit,
+} from "../src/context/index.js";
 import {
   addEvent,
   incrementRound,
@@ -215,4 +218,124 @@ export function testContextBlockFilesFilterBeyondTop3(): void {
     "non-matching notes stay filtered out",
   );
   console.log("  ✓ context block files filter applies before the top-3 slice");
+}
+
+export function testComputeModelFit(): void {
+  const byRegime: StatsData["byRegime"] = [
+    {
+      worktree: "wt1",
+      regime: "fix",
+      model: "opus",
+      gates: 9,
+      fails: 2,
+      failRate: 2 / 9,
+      avgQuality: 3.8,
+      tokensInput: null,
+      tokensOutput: null,
+      passes: 7,
+      tokensPerPass: 48000,
+    },
+    {
+      worktree: "wt1",
+      regime: "fix",
+      model: "sonnet",
+      gates: 12,
+      fails: 0,
+      failRate: 0,
+      avgQuality: 4.1,
+      tokensInput: null,
+      tokensOutput: null,
+      passes: 12,
+      tokensPerPass: 21000,
+    },
+    {
+      // gates < 5 → dropped (sample-size guard)
+      worktree: "wt1",
+      regime: "code",
+      model: "tiny",
+      gates: 3,
+      fails: 0,
+      failRate: 0,
+      avgQuality: 5,
+      tokensInput: null,
+      tokensOutput: null,
+      passes: 3,
+      tokensPerPass: 1000,
+    },
+    {
+      // other worktree → excluded when scoped
+      worktree: "wt2",
+      regime: "fix",
+      model: "haiku",
+      gates: 8,
+      fails: 1,
+      failRate: 1 / 8,
+      avgQuality: 3,
+      tokensInput: null,
+      tokensOutput: null,
+      passes: 7,
+      tokensPerPass: 5000,
+    },
+  ];
+
+  const scoped = computeModelFit(byRegime, "wt1");
+  assert.deepEqual(
+    scoped.map((f) => `${f.regime}:${f.model}`),
+    ["fix:sonnet"],
+    "lowest failRate wins; tiny dropped (<5 gates); wt2 excluded",
+  );
+
+  const all = computeModelFit(byRegime);
+  assert.ok(
+    all.some((f) => f.regime === "fix" && f.model === "sonnet"),
+    "unscoped pick still excludes sub-threshold buckets",
+  );
+  assert.ok(!all.some((f) => f.model === "tiny"), "gates<5 never recommends");
+  console.log(
+    "  ✓ computeModelFit ranks by failRate with min-N + worktree guards",
+  );
+}
+
+export function testContextBlockMemDecisions(): void {
+  const data = statsFixture();
+  const block = buildProjectHealthContext(data, {
+    memDecisions: [
+      { text: "ตัดสินใช้ SQLite ไม่ใช่ JSONL", spec: "PLAN-x.md" },
+      { text: "cache ไม่คุ้ม ตัดออก" },
+    ],
+  });
+  assert.ok(
+    block.includes(
+      '- Decisions on record (mem): "ตัดสินใช้ SQLite ไม่ใช่ JSONL" · "cache ไม่คุ้ม ตัดออก"',
+    ),
+    "mem decisions lead the block",
+  );
+  console.log("  ✓ context block surfaces mem decisions");
+}
+
+export function testContextBlockModelFitLine(): void {
+  const data = statsFixture();
+  data.byRegime = [
+    {
+      worktree: "wt1",
+      regime: "fix",
+      model: "sonnet",
+      gates: 12,
+      fails: 0,
+      failRate: 0,
+      avgQuality: 4.1,
+      tokensInput: null,
+      tokensOutput: null,
+      passes: 12,
+      tokensPerPass: 21000,
+    },
+  ];
+  const block = buildProjectHealthContext(data, { worktree: "wt1" });
+  assert.ok(
+    block.includes(
+      "- Model fit: regime=fix → sonnet (failRate 0%, quality 4.1, N=12, 21k tok/pass)",
+    ),
+    "model right-sizing renders from real buckets",
+  );
+  console.log("  ✓ context block surfaces model right-sizing");
 }
