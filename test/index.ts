@@ -119,11 +119,13 @@ import {
   testInstallCodexAppendsEntry,
   testInstallCodexDryRunNoWrite,
   testInstallCodexNoConfigFails,
+  testInstallOpencodeAlreadyConfiguredLinksSkills,
   testInstallOpencodeAlreadyConfiguredNoOp,
   testInstallOpencodeDryRunNoWrite,
   testInstallOpencodeNewFile,
   testInstallOpencodeParseErrorFails,
   testInstallRootIsRepoRoot,
+  testInstallZcodeAlreadyConfiguredLinksSkills,
   testInstallZcodeAlreadyConfiguredNoOp,
   testInstallZcodeDryRunNoWrite,
   testInstallZcodeFallbackPath,
@@ -634,6 +636,7 @@ export async function cmdTest(): Promise<void> {
   testCmdInstallRejectsUnknownPlatform();
   testInstallOpencodeNewFile();
   testInstallOpencodeAlreadyConfiguredNoOp();
+  testInstallOpencodeAlreadyConfiguredLinksSkills();
   testInstallOpencodeDryRunNoWrite();
   testInstallOpencodeParseErrorFails();
   testCmdInstallDispatchesOpencode();
@@ -646,6 +649,7 @@ export async function cmdTest(): Promise<void> {
   testInstallZcodePrimaryPath();
   testInstallZcodeFallbackPath();
   testInstallZcodeAlreadyConfiguredNoOp();
+  testInstallZcodeAlreadyConfiguredLinksSkills();
   testInstallZcodeDryRunNoWrite();
   testInstallZcodeLinksSkillsIntoAgentsDir();
   testCmdInstallDispatchesZcode();

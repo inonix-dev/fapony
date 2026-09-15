@@ -17,6 +17,7 @@ import {
   claudeAddArgs,
   claudeGetArgs,
   claudeGetPointsToFapony,
+  claudeSkillsDir,
   cmdInstall,
   cmdInstallClaude,
   cmdInstallCodex,
@@ -463,6 +464,30 @@ export function testInstallZcodeAlreadyConfiguredNoOp(): void {
   });
 }
 
+export function testInstallZcodeAlreadyConfiguredLinksSkills(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".zcode", "cli");
+    mkdirSync(configDir, { recursive: true });
+    writeJson(join(configDir, "config.json"), {
+      mcp: { servers: { fapony: zcodeEntry() } },
+    });
+
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallZcode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const dir = agentsSkillsDir(() => home);
+    for (const name of skillNames()) {
+      assert.ok(
+        lstatSync(join(dir, name)).isSymbolicLink(),
+        `${name} should be symlinked into ~/.agents/skills even when mcp is already configured`,
+      );
+    }
+    console.log("  ✓ install zcode already configured → still links skills");
+  });
+}
+
 export function testInstallZcodeDryRunNoWrite(): void {
   withTempHome((home) => {
     const configDir = join(home, ".zcode", "cli");
@@ -674,6 +699,30 @@ export function testInstallOpencodeAlreadyConfiguredNoOp(): void {
     assert.equal(before, after);
     assert.ok(err.includes("already configured"), `got: ${err}`);
     console.log("  ✓ install opencode already configured → no-op");
+  });
+}
+
+export function testInstallOpencodeAlreadyConfiguredLinksSkills(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".config", "opencode");
+    mkdirSync(configDir, { recursive: true });
+    writeJson(join(configDir, "opencode.json"), {
+      mcp: { fapony: opencodeEntry() },
+    });
+
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const dir = claudeSkillsDir(() => home);
+    for (const name of skillNames()) {
+      assert.ok(
+        lstatSync(join(dir, name)).isSymbolicLink(),
+        `${name} should be symlinked into ~/.claude/skills even when mcp is already configured`,
+      );
+    }
+    console.log("  ✓ install opencode already configured → still links skills");
   });
 }
 
