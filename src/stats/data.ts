@@ -532,6 +532,10 @@ export interface StatsData {
     tokensInput: number | null;
     /** Total output tokens across sessions attributed to this model (null when none recorded). */
     tokensOutput: number | null;
+    /** Pass-family gates in this bucket — denominator for tokensPerPass. */
+    passes: number;
+    /** (tokensInput + tokensOutput) / passes — null when passes=0 or no tokens. */
+    tokensPerPass: number | null;
   }>;
   /** How many gates got their model by inference vs. a declared session_id. */
   modelAttribution: { inferred: number; declared: number; none: number };
@@ -566,6 +570,10 @@ export interface StatsData {
     avgQuality: number;
     tokensInput: number | null;
     tokensOutput: number | null;
+    /** Pass-family gates in this bucket — denominator for tokensPerPass. */
+    passes: number;
+    /** (tokensInput + tokensOutput) / passes — null when passes=0 or no tokens. */
+    tokensPerPass: number | null;
   }>;
   /** regime × model split (old gates with no regime sit in the "—" row). */
   byRegime: Array<{
@@ -578,6 +586,10 @@ export interface StatsData {
     avgQuality: number;
     tokensInput: number | null;
     tokensOutput: number | null;
+    /** Pass-family gates in this bucket — denominator for tokensPerPass. */
+    passes: number;
+    /** (tokensInput + tokensOutput) / passes — null when passes=0 or no tokens. */
+    tokensPerPass: number | null;
   }>;
   usage: PassiveUsageResult;
   /** ZCode passive usage (when ~/.zcode/cli/db/db.sqlite exists). */
@@ -610,6 +622,27 @@ function addSessionTokens(
   bucket.seen.add(g.sessionId);
   if (g.tokensInput !== null) bucket.tokensInput += g.tokensInput;
   if (g.tokensOutput !== null) bucket.tokensOutput += g.tokensOutput;
+}
+
+/**
+ * tokens/pass — retry tax ที่มองเห็นได้ (SPEC-cost-per-pass).
+ *
+ * ตัวหารคือ pass-family gate ไม่ใช่ run: bucket เป็น gate อยู่แล้ว และงานที่
+ * "จบ" คือ gate ที่ผ่าน · token เป็นยอดต่อ session (dedupe แล้ว) ไม่ใช่ต่อ gate —
+ * session เดียวออกหลาย gate ได้ ถ้า sum ต่อ gate จะคูณเกินไม่เท่ากันทุกโมเดล
+ *
+ * `passes=0` หรือ token รวม 0 → null (ไม่ใช่ Infinity/NaN/0): "วัดไม่ได้" ต้อง
+ * แยกจาก "ฟรี" และห้ามหารศูนย์ · cost/pass ยังไม่มีใน v1 — ไม่มี cache split
+ * (tokensInput คือ fresh+cache_read+cache_write รวมกัน) จึงคิดราคาไม่ได้โดยไม่เดา
+ */
+function tokensPerPass(
+  passes: number,
+  tokensInput: number,
+  tokensOutput: number,
+): number | null {
+  if (passes <= 0) return null;
+  const total = tokensInput + tokensOutput;
+  return total > 0 ? total / passes : null;
 }
 
 /**
@@ -716,6 +749,7 @@ export function getStatsData(worktree?: string): StatsData {
         agent: string;
         gateCount: number;
         fails: number;
+        passes: number;
         qualities: number[];
         seen: Set<string>;
         tokensInput: number;
@@ -737,6 +771,7 @@ export function getStatsData(worktree?: string): StatsData {
         agent,
         gateCount: 0,
         fails: 0,
+        passes: 0,
         qualities: [],
         seen: new Set(),
         tokensInput: 0,
@@ -744,6 +779,7 @@ export function getStatsData(worktree?: string): StatsData {
       });
       bucket.gateCount++;
       if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
+      if (g.verdict && isPassFamily(g.verdict)) bucket.passes++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
       addSessionTokens(bucket, g);
@@ -761,6 +797,8 @@ export function getStatsData(worktree?: string): StatsData {
         avgQuality: b.qualities.length ? avg(b.qualities) : 0,
         tokensInput: b.tokensInput || null,
         tokensOutput: b.tokensOutput || null,
+        passes: b.passes,
+        tokensPerPass: tokensPerPass(b.passes, b.tokensInput, b.tokensOutput),
       }))
       .sort((a, b) => b.gateCount - a.gateCount);
 
@@ -808,6 +846,7 @@ export function getStatsData(worktree?: string): StatsData {
         model: string;
         gates: number;
         fails: number;
+        passes: number;
         qualities: number[];
         seen: Set<string>;
         tokensInput: number;
@@ -825,6 +864,7 @@ export function getStatsData(worktree?: string): StatsData {
         model,
         gates: 0,
         fails: 0,
+        passes: 0,
         qualities: [],
         seen: new Set<string>(),
         tokensInput: 0,
@@ -832,6 +872,7 @@ export function getStatsData(worktree?: string): StatsData {
       });
       bucket.gates++;
       if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
+      if (g.verdict && isPassFamily(g.verdict)) bucket.passes++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
       addSessionTokens(bucket, g);
@@ -847,6 +888,8 @@ export function getStatsData(worktree?: string): StatsData {
         avgQuality: b.qualities.length ? avg(b.qualities) : 0,
         tokensInput: b.tokensInput || null,
         tokensOutput: b.tokensOutput || null,
+        passes: b.passes,
+        tokensPerPass: tokensPerPass(b.passes, b.tokensInput, b.tokensOutput),
       }))
       .sort((a, b) => b.gates - a.gates);
 
@@ -876,6 +919,7 @@ export function getStatsData(worktree?: string): StatsData {
         model: string;
         gates: number;
         fails: number;
+        passes: number;
         qualities: number[];
         seen: Set<string>;
         tokensInput: number;
@@ -893,6 +937,7 @@ export function getStatsData(worktree?: string): StatsData {
         model,
         gates: 0,
         fails: 0,
+        passes: 0,
         qualities: [],
         seen: new Set<string>(),
         tokensInput: 0,
@@ -900,6 +945,7 @@ export function getStatsData(worktree?: string): StatsData {
       });
       bucket.gates++;
       if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
+      if (g.verdict && isPassFamily(g.verdict)) bucket.passes++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
       addSessionTokens(bucket, g);
@@ -915,6 +961,8 @@ export function getStatsData(worktree?: string): StatsData {
         avgQuality: b.qualities.length ? avg(b.qualities) : 0,
         tokensInput: b.tokensInput || null,
         tokensOutput: b.tokensOutput || null,
+        passes: b.passes,
+        tokensPerPass: tokensPerPass(b.passes, b.tokensInput, b.tokensOutput),
       }))
       .sort((a, b) => b.gates - a.gates);
 

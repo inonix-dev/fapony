@@ -137,23 +137,23 @@ export function formatStatsText(data: StatsData): string {
     lines.push("\nby model:");
     if (showWt) {
       lines.push(
-        "  project | client | provider | model | agent | gates | fails | failRate | avgQuality | tokens/session",
+        "  project | client | provider | model | agent | gates | fails | failRate | avgQuality | tokens/session | tokens/pass",
       );
       lines.push(
-        "  ---------|--------|----------|-------|-------|-------|-------|----------|------------|----------------",
+        "  ---------|--------|----------|-------|-------|-------|-------|----------|------------|----------------|------------",
       );
     } else {
       lines.push(
-        "  client | provider | model | agent | gates | fails | failRate | avgQuality | tokens/session",
+        "  client | provider | model | agent | gates | fails | failRate | avgQuality | tokens/session | tokens/pass",
       );
       lines.push(
-        "  -------|----------|-------|-------|-------|-------|----------|------------|----------------",
+        "  -------|----------|-------|-------|-------|-------|----------|------------|----------------|------------",
       );
     }
     for (const m of data.byModel) {
       const wt = showWt ? `${shortWt(m.worktree).padEnd(9)} | ` : "";
       lines.push(
-        `  ${wt}${m.client.padEnd(6)} | ${m.provider.padEnd(8)} | ${m.model.padEnd(5)} | ${m.agent.padEnd(5)} | ${String(m.gateCount).padStart(5)} | ${String(m.fails).padStart(5)} | ${fmtRate(m.failRate).padStart(8)} | ${m.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(m.tokensInput).padStart(7)} in / ${fmtTokens(m.tokensOutput).padStart(7)} out`,
+        `  ${wt}${m.client.padEnd(6)} | ${m.provider.padEnd(8)} | ${m.model.padEnd(5)} | ${m.agent.padEnd(5)} | ${String(m.gateCount).padStart(5)} | ${String(m.fails).padStart(5)} | ${fmtRate(m.failRate).padStart(8)} | ${m.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(m.tokensInput).padStart(7)} in / ${fmtTokens(m.tokensOutput).padStart(7)} out | ${fmtTokens(m.tokensPerPass).padStart(11)}`,
       );
     }
     const a = data.modelAttribution;
@@ -169,24 +169,24 @@ export function formatStatsText(data: StatsData): string {
     lines.push("\nplanned vs dove-in:");
     if (showWt) {
       lines.push(
-        "  project | mode     | model | gates | fails | failRate | avgQuality | tokens/session",
+        "  project | mode     | model | gates | fails | failRate | avgQuality | tokens/session | tokens/pass",
       );
       lines.push(
-        "  ---------|----------|-------|-------|-------|----------|------------|----------------",
+        "  ---------|----------|-------|-------|-------|----------|------------|----------------|------------",
       );
     } else {
       lines.push(
-        "  mode     | model | gates | fails | failRate | avgQuality | tokens/session",
+        "  mode     | model | gates | fails | failRate | avgQuality | tokens/session | tokens/pass",
       );
       lines.push(
-        "  ----------|-------|-------|-------|----------|------------|----------------",
+        "  ----------|-------|-------|-------|----------|------------|----------------|------------",
       );
     }
     for (const r of data.byPlanMode) {
       const mode = r.hasPlan ? "planned" : "no-plan";
       const wt = showWt ? `${shortWt(r.worktree).padEnd(9)} | ` : "";
       lines.push(
-        `  ${wt}${mode.padEnd(9)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${r.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(r.tokensInput).padStart(7)} in / ${fmtTokens(r.tokensOutput).padStart(7)} out`,
+        `  ${wt}${mode.padEnd(9)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${r.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(r.tokensInput).padStart(7)} in / ${fmtTokens(r.tokensOutput).padStart(7)} out | ${fmtTokens(r.tokensPerPass).padStart(11)}`,
       );
     }
   }
@@ -196,23 +196,23 @@ export function formatStatsText(data: StatsData): string {
     lines.push("\nby regime:");
     if (showWt) {
       lines.push(
-        "  project | regime | model | gates | fails | failRate | avgQuality | tokens/session",
+        "  project | regime | model | gates | fails | failRate | avgQuality | tokens/session | tokens/pass",
       );
       lines.push(
-        "  ---------|--------|-------|-------|-------|----------|------------|----------------",
+        "  ---------|--------|-------|-------|-------|----------|------------|----------------|------------",
       );
     } else {
       lines.push(
-        "  regime | model | gates | fails | failRate | avgQuality | tokens/session",
+        "  regime | model | gates | fails | failRate | avgQuality | tokens/session | tokens/pass",
       );
       lines.push(
-        "  --------|-------|-------|-------|----------|------------|----------------",
+        "  --------|-------|-------|-------|-------|----------|------------|----------------|------------",
       );
     }
     for (const r of data.byRegime) {
       const wt = showWt ? `${shortWt(r.worktree).padEnd(9)} | ` : "";
       lines.push(
-        `  ${wt}${r.regime.padEnd(7)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${r.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(r.tokensInput).padStart(7)} in / ${fmtTokens(r.tokensOutput).padStart(7)} out`,
+        `  ${wt}${r.regime.padEnd(7)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${r.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(r.tokensInput).padStart(7)} in / ${fmtTokens(r.tokensOutput).padStart(7)} out | ${fmtTokens(r.tokensPerPass).padStart(11)}`,
       );
     }
   }
