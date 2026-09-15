@@ -92,6 +92,8 @@ export function cmdInstallZcode(dryRun: boolean, deps: InstallDeps = {}): void {
   if (isZcodeConfigured(servers)) {
     console.error(`✓ mcp.${MCP_KEY} already configured — no change needed`);
     console.error(`  (${found.path})`);
+    const skillsDir = agentsSkillsDir(getHome);
+    reportSkills(linkSkills(skillsDir, dryRun), skillsDir, dryRun);
     return;
   }
 

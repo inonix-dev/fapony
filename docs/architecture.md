@@ -95,5 +95,7 @@ fapony/
   test/
     *.test.ts              # one file per src module
     mcp/                   # MCP tool tests
+    install/               # install provider tests (one file per src/install module)
+    telemetry/             # telemetry tests
 ```
 

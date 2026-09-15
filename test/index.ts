@@ -89,22 +89,11 @@ import {
   testInitNoArgs,
   testInitSnippetPathMatchesScaffold,
 } from "./init.test.js";
+// Install tests (split into test/install/)
 import {
   testClaudeAddUsesAbsolutePath,
   testClaudeGetPointsToFapony,
   testCmdInstallDispatchesClaude,
-  testCmdInstallDispatchesCodex,
-  testCmdInstallDispatchesOpencode,
-  testCmdInstallDispatchesZcode,
-  testCmdInstallNoClientsFoundPrintsHelp,
-  testCmdInstallNonTtyNoAllSkipsInstall,
-  testCmdInstallNoPlatformAllFlag,
-  testCmdInstallNoPlatformDryRunNoWrite,
-  testCmdInstallNoPlatformPromptsDetected,
-  testCmdInstallRejectsUnknownPlatform,
-  testDetectClientsAllFound,
-  testDetectClientsMixed,
-  testDetectClientsNoneFound,
   testInstallClaudeAbsentAdds,
   testInstallClaudeAddFailureHintsHelp,
   testInstallClaudeAlreadyConfiguredNoOp,
@@ -115,26 +104,63 @@ import {
   testInstallClaudeMissingBinary,
   testInstallClaudeStatuslineWiresSettings,
   testInstallClaudeStopHookAppendsOnceAndKeepsForeign,
+} from "./install/claude.test.js";
+import {
+  testCmdInstallDispatchesCodex,
   testInstallCodexAlreadyConfiguredNoOp,
   testInstallCodexAppendsEntry,
   testInstallCodexDryRunNoWrite,
   testInstallCodexNoConfigFails,
+} from "./install/codex.test.js";
+import {
+  testDetectClientsAllFound,
+  testDetectClientsMixed,
+  testDetectClientsNoneFound,
+} from "./install/detect.test.js";
+import {
+  testCmdInstallNoClientsFoundPrintsHelp,
+  testCmdInstallNonTtyNoAllSkipsInstall,
+  testCmdInstallNoPlatformAllFlag,
+  testCmdInstallNoPlatformDryRunNoWrite,
+  testCmdInstallNoPlatformPromptsDetected,
+  testCmdInstallRejectsUnknownPlatform,
+} from "./install/dispatch.test.js";
+import { testInstallRootIsRepoRoot } from "./install/helpers.test.js";
+import {
+  testCmdInstallDispatchesOpencode,
+  testInstallOpencodeAlreadyConfiguredLinksSkills,
   testInstallOpencodeAlreadyConfiguredNoOp,
   testInstallOpencodeDryRunNoWrite,
   testInstallOpencodeNewFile,
   testInstallOpencodeParseErrorFails,
-  testInstallRootIsRepoRoot,
+} from "./install/opencode.test.js";
+import {
+  testLinkSkillsCreatesSymlinks,
+  testLinkSkillsDryRunNoWrite,
+  testLinkSkillsIdempotent,
+  testLinkSkillsRefusesOverwrite,
+} from "./install/skills.test.js";
+import {
+  testCmdInstallDispatchesZcode,
+  testInstallZcodeAlreadyConfiguredLinksSkills,
   testInstallZcodeAlreadyConfiguredNoOp,
   testInstallZcodeDryRunNoWrite,
   testInstallZcodeFallbackPath,
   testInstallZcodeLinksSkillsIntoAgentsDir,
   testInstallZcodeNoConfigFails,
   testInstallZcodePrimaryPath,
-  testLinkSkillsCreatesSymlinks,
-  testLinkSkillsDryRunNoWrite,
-  testLinkSkillsIdempotent,
-  testLinkSkillsRefusesOverwrite,
-} from "./install.test.js";
+} from "./install/zcode.test.js";
+import {
+  testMapDirCap,
+  testMapDirListing,
+  testMapExtractExports,
+  testMapExtractExportsParseError,
+  testMapExtractIgnoresSampleText,
+  testMapExtractMultilineTypeBlock,
+  testMapExtractVarDeclaratorLists,
+  testMapFileAndBroken,
+  testMapMissingPath,
+} from "./map.test.js";
 // MCP handcheck tests (split into test/mcp/)
 import {
   testExtractMultiFieldEmptyLineEndsField,
@@ -469,6 +495,16 @@ import {
 import { testIsAffirmative } from "./util.test.js";
 
 export async function cmdTest(): Promise<void> {
+  // Isolation: point every passive-usage reader at a path that does not exist,
+  // so no test scans the developer's live session logs. Without this, anything
+  // that calls getStatsData() pays ~2s per call and can read logs a running
+  // agent is writing mid-test (nondeterministic — see testStatsTextMatchesCli).
+  // A test that needs real usage data sets its own fixture path and restores to
+  // this pinned value. Same isolation as test/digest.test.ts.
+  process.env.FAPONY_OPENCODE_DB = "/nonexistent/fapony-test/opencode.db";
+  process.env.FAPONY_ZCODE_DB = "/nonexistent/fapony-test/zcode.db";
+  process.env.FAPONY_CLAUDE_PROJECTS_DIR = "/nonexistent/fapony-test/claude";
+  process.env.FAPONY_CODEX_SESSIONS_DIR = "/nonexistent/fapony-test/codex";
   console.log("running tests...\n");
   testAssertSafe();
   testAnalyzeHubOrphanCycle();
@@ -477,6 +513,15 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeEmptyDir();
   testAnalyzeBlastRadius();
   testAnalyzeIsTestFile();
+  testMapExtractExports();
+  testMapExtractExportsParseError();
+  testMapExtractIgnoresSampleText();
+  testMapExtractMultilineTypeBlock();
+  testMapExtractVarDeclaratorLists();
+  testMapDirListing();
+  testMapDirCap();
+  testMapFileAndBroken();
+  testMapMissingPath();
   testDecideStopBlocksUngradedCommits();
   testDecideStopAllowsEveryUnknown();
   testUtcStampMatchesSqliteFormat();
@@ -624,6 +669,7 @@ export async function cmdTest(): Promise<void> {
   testCmdInstallRejectsUnknownPlatform();
   testInstallOpencodeNewFile();
   testInstallOpencodeAlreadyConfiguredNoOp();
+  testInstallOpencodeAlreadyConfiguredLinksSkills();
   testInstallOpencodeDryRunNoWrite();
   testInstallOpencodeParseErrorFails();
   testCmdInstallDispatchesOpencode();
@@ -636,6 +682,7 @@ export async function cmdTest(): Promise<void> {
   testInstallZcodePrimaryPath();
   testInstallZcodeFallbackPath();
   testInstallZcodeAlreadyConfiguredNoOp();
+  testInstallZcodeAlreadyConfiguredLinksSkills();
   testInstallZcodeDryRunNoWrite();
   testInstallZcodeLinksSkillsIntoAgentsDir();
   testCmdInstallDispatchesZcode();

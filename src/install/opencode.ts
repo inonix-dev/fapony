@@ -103,6 +103,8 @@ export function cmdInstallOpencode(
   if (isConfigured(mcp)) {
     console.error(`✓ mcp.${MCP_KEY} already configured — no change needed`);
     if (configPath) console.error(`  (${configPath})`);
+    const skillsDir = claudeSkillsDir(getHome);
+    reportSkills(linkSkills(skillsDir, dryRun), skillsDir, dryRun);
     return;
   }
 

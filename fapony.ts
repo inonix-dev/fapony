@@ -9,6 +9,7 @@ import { cmdHookStop } from "./src/hook.js";
 import { cmdInit } from "./src/init.js";
 import { cmdInitMem } from "./src/init-mem.js";
 import { cmdInstall } from "./src/install.js";
+import { cmdMap } from "./src/map.js";
 import { cmdMcp } from "./src/mcp/index.js";
 import { cmdPriceScan } from "./src/price/index.js";
 import { cmdReport, cmdReportWeb } from "./src/report/index.js";
@@ -23,6 +24,8 @@ const [cmd, ...a] = process.argv.slice(2);
 
 if (cmd === "analyze") {
   cmdAnalyze(a);
+} else if (cmd === "map") {
+  cmdMap(a);
 } else if (cmd === "digest") {
   await cmdDigest(a);
 } else if (cmd === "stats") {
@@ -58,7 +61,7 @@ if (cmd === "analyze") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|digest|mcp|hook-stop|test> [args]",
+    "usage: fapony <setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|map|digest|mcp|hook-stop|test> [args]",
   );
   process.exit(1);
 }
