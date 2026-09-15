@@ -404,6 +404,9 @@ import {
   testStatsSpawnModelWinsOverSessionId,
   testStatsTokensCountSessionOnce,
   testStatsTokensInByModel,
+  testStatsTokensPerPassChargesReworkOnce,
+  testStatsTokensPerPassNullWhenNoPass,
+  testStatsTokensPerPassNullWithoutTokens,
   testStatsUsageByModelIdentity,
   testStatsUsageCountsCacheAsInput,
   testStatsVerdictNotesNotCappedAtDisplayLimit,
@@ -829,6 +832,9 @@ export async function cmdTest(): Promise<void> {
   testStatsByRegimeSplit();
   testStatsTokensInByModel();
   testStatsTokensCountSessionOnce();
+  testStatsTokensPerPassChargesReworkOnce();
+  testStatsTokensPerPassNullWhenNoPass();
+  testStatsTokensPerPassNullWithoutTokens();
   testSessionDefaultHasNoDetail();
   testSessionDetailBreakdown();
   testSessionDetailBytesByTool();

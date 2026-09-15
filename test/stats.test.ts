@@ -801,6 +801,173 @@ export function testStatsTokensInByModel(): void {
   console.log("  ✓ getStatsData: tokens carried through to byModel");
 }
 
+// --- tokens/pass (PLAN-cost-per-pass) ---
+
+/** OpenCode fixture: one session with tokens, reusable by the cost/pass tests. */
+function withOpenCodeSession(
+  sessionId: string,
+  tokens: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+  },
+  fn: () => void,
+): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-stats-perpass-"));
+  const dbPath = join(dir, "opencode.db");
+  const ocdb = new Database(dbPath);
+  ocdb.run(
+    `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
+  );
+  ocdb.run(
+    `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0, tokens_cache_write INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
+  );
+  ocdb.run(
+    `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
+  );
+  ocdb
+    .prepare(`INSERT INTO project (id, worktree) VALUES (?, ?)`)
+    .run("p1", "/tmp/wt1");
+  ocdb
+    .prepare(
+      `INSERT INTO session (id, project_id, model, time_created, tokens_input, tokens_output, tokens_cache_read, tokens_cache_write) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      sessionId,
+      "p1",
+      '{"providerID":"anthropic","id":"claude-sonnet-5"}',
+      1000,
+      tokens.input,
+      tokens.output,
+      tokens.cacheRead,
+      tokens.cacheWrite,
+    );
+  ocdb.close();
+  const prev = process.env.FAPONY_OPENCODE_DB;
+  try {
+    process.env.FAPONY_OPENCODE_DB = dbPath;
+    fn();
+  } finally {
+    if (prev === undefined) delete process.env.FAPONY_OPENCODE_DB;
+    else process.env.FAPONY_OPENCODE_DB = prev;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function testStatsTokensPerPassChargesReworkOnce(): void {
+  withTmpDb((db) => {
+    // fail→pass in one run, one session: the retry is charged once and divided
+    // by the single pass gate — the whole point of the metric.
+    const runId = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, runId, "gate", {
+      verdict: "fail",
+      note: "",
+      round: 0,
+      session_id: "sess-perpass",
+      reason_code: "spec_gap",
+      source: "mcp",
+    });
+    addEvent(db, runId, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 1,
+      session_id: "sess-perpass",
+      reason_code: "missing_test",
+      source: "mcp",
+    });
+    setStatus(db, runId, "passed");
+
+    withOpenCodeSession(
+      "sess-perpass",
+      { input: 50000, output: 12000, cacheRead: 7000, cacheWrite: 3000 },
+      () => {
+        const data = getStatsData();
+        const m = data.byModel[0];
+        assert.equal(m.gateCount, 2);
+        assert.equal(m.fails, 1);
+        assert.equal(m.passes, 1);
+        // cache counts as input; charged once despite two gates
+        assert.equal(m.tokensInput, 60000);
+        assert.equal(m.tokensOutput, 12000);
+        assert.equal(m.tokensPerPass, 72000);
+        // every bucket carries the pair
+        assert.equal(data.byRegime[0].passes, 1);
+        assert.equal(data.byRegime[0].tokensPerPass, 72000);
+        assert.equal(data.byPlanMode[0].tokensPerPass, 72000);
+        assert.ok(
+          formatStatsText(data).includes("tokens/pass"),
+          "text shows the new column",
+        );
+      },
+    );
+  });
+  console.log("  ✓ stats tokens/pass: session charged once, divided by passes");
+}
+
+export function testStatsTokensPerPassNullWhenNoPass(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "wt1", null, null, "abc");
+    // uncertain is not pass-family — a bucket of only non-passes has no divisor.
+    addEvent(db, runId, "gate", {
+      verdict: "uncertain",
+      note: "",
+      round: 0,
+      session_id: "sess-nopass",
+      reason_code: "other",
+      source: "mcp",
+    });
+    addEvent(db, runId, "gate", {
+      verdict: "fail",
+      note: "",
+      round: 1,
+      session_id: "sess-nopass",
+      reason_code: "spec_gap",
+      source: "mcp",
+    });
+
+    withOpenCodeSession(
+      "sess-nopass",
+      { input: 40000, output: 5000, cacheRead: 0, cacheWrite: 0 },
+      () => {
+        const data = getStatsData();
+        const m = data.byModel[0];
+        assert.equal(m.passes, 0);
+        assert.equal(m.fails, 2, "uncertain counts as a non-pass");
+        assert.equal(m.tokensPerPass, null, "no passes → null, never Infinity");
+        const row = formatStatsText(data)
+          .split("\n")
+          .find((l) => l.includes("claude-sonnet-5"));
+        assert.ok(
+          row?.trimEnd().endsWith("—"),
+          "tokens/pass cell renders as —, not the agent column",
+        );
+      },
+    );
+  });
+  console.log("  ✓ stats tokens/pass: passes=0 → null (no divide-by-zero)");
+}
+
+export function testStatsTokensPerPassNullWithoutTokens(): void {
+  withTmpDb((db) => {
+    // Spawn-attributed model: pass is known but no session tokens exist.
+    const runId = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, runId, "spawn", { role: "executor", model: "model-m" });
+    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
+    setStatus(db, runId, "passed");
+
+    const data = getStatsData();
+    const m = data.byModel.find((x) => x.model === "model-m")!;
+    assert.equal(m.passes, 1);
+    assert.equal(
+      m.tokensPerPass,
+      null,
+      "no token record → unmeasurable, not 0",
+    );
+  });
+  console.log("  ✓ stats tokens/pass: no tokens → null (unmeasurable ≠ free)");
+}
+
 export function testStatsTokensCountSessionOnce(): void {
   withTmpDb((db) => {
     // Two gates, one session — the shape that is normal, not rare: 15 of the
