@@ -33,7 +33,7 @@ src/context/    project-health block keyed by files[]
 src/install/    หนึ่งไฟล์ต่อ client + skills.ts
 src/mcp/        MCP server — transport (SERVER_INSTRUCTIONS), evidence allowlist, tools/ 8 ตัว
 src/*.ts        gates · parse · memory · safety · math · init · init-mem · telemetry · setup · update · util · analyze
-test/           หนึ่งไฟล์ต่อ src module + test/mcp/
+test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · test/install/ · test/telemetry/
 ```
 
 ---

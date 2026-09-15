@@ -89,22 +89,11 @@ import {
   testInitNoArgs,
   testInitSnippetPathMatchesScaffold,
 } from "./init.test.js";
+// Install tests (split into test/install/)
 import {
   testClaudeAddUsesAbsolutePath,
   testClaudeGetPointsToFapony,
   testCmdInstallDispatchesClaude,
-  testCmdInstallDispatchesCodex,
-  testCmdInstallDispatchesOpencode,
-  testCmdInstallDispatchesZcode,
-  testCmdInstallNoClientsFoundPrintsHelp,
-  testCmdInstallNonTtyNoAllSkipsInstall,
-  testCmdInstallNoPlatformAllFlag,
-  testCmdInstallNoPlatformDryRunNoWrite,
-  testCmdInstallNoPlatformPromptsDetected,
-  testCmdInstallRejectsUnknownPlatform,
-  testDetectClientsAllFound,
-  testDetectClientsMixed,
-  testDetectClientsNoneFound,
   testInstallClaudeAbsentAdds,
   testInstallClaudeAddFailureHintsHelp,
   testInstallClaudeAlreadyConfiguredNoOp,
@@ -115,16 +104,44 @@ import {
   testInstallClaudeMissingBinary,
   testInstallClaudeStatuslineWiresSettings,
   testInstallClaudeStopHookAppendsOnceAndKeepsForeign,
+} from "./install/claude.test.js";
+import {
+  testCmdInstallDispatchesCodex,
   testInstallCodexAlreadyConfiguredNoOp,
   testInstallCodexAppendsEntry,
   testInstallCodexDryRunNoWrite,
   testInstallCodexNoConfigFails,
+} from "./install/codex.test.js";
+import {
+  testDetectClientsAllFound,
+  testDetectClientsMixed,
+  testDetectClientsNoneFound,
+} from "./install/detect.test.js";
+import {
+  testCmdInstallNoClientsFoundPrintsHelp,
+  testCmdInstallNonTtyNoAllSkipsInstall,
+  testCmdInstallNoPlatformAllFlag,
+  testCmdInstallNoPlatformDryRunNoWrite,
+  testCmdInstallNoPlatformPromptsDetected,
+  testCmdInstallRejectsUnknownPlatform,
+} from "./install/dispatch.test.js";
+import { testInstallRootIsRepoRoot } from "./install/helpers.test.js";
+import {
+  testCmdInstallDispatchesOpencode,
   testInstallOpencodeAlreadyConfiguredLinksSkills,
   testInstallOpencodeAlreadyConfiguredNoOp,
   testInstallOpencodeDryRunNoWrite,
   testInstallOpencodeNewFile,
   testInstallOpencodeParseErrorFails,
-  testInstallRootIsRepoRoot,
+} from "./install/opencode.test.js";
+import {
+  testLinkSkillsCreatesSymlinks,
+  testLinkSkillsDryRunNoWrite,
+  testLinkSkillsIdempotent,
+  testLinkSkillsRefusesOverwrite,
+} from "./install/skills.test.js";
+import {
+  testCmdInstallDispatchesZcode,
   testInstallZcodeAlreadyConfiguredLinksSkills,
   testInstallZcodeAlreadyConfiguredNoOp,
   testInstallZcodeDryRunNoWrite,
@@ -132,11 +149,7 @@ import {
   testInstallZcodeLinksSkillsIntoAgentsDir,
   testInstallZcodeNoConfigFails,
   testInstallZcodePrimaryPath,
-  testLinkSkillsCreatesSymlinks,
-  testLinkSkillsDryRunNoWrite,
-  testLinkSkillsIdempotent,
-  testLinkSkillsRefusesOverwrite,
-} from "./install.test.js";
+} from "./install/zcode.test.js";
 // MCP handcheck tests (split into test/mcp/)
 import {
   testExtractMultiFieldEmptyLineEndsField,
