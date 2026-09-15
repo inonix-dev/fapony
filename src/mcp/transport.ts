@@ -23,7 +23,7 @@ import { errorResult, type ToolResult } from "./types.js";
 //
 // MCP's initialize response carries an `instructions` string that clients
 // inject into the model's context. This is the vendor-neutral place for the
-// two habits fapony depends on — a user should never have to paste rules
+// habit fapony depends on — a user should never have to paste rules
 // into their own CLAUDE.md (or AGENTS.md, or a hook) to make the tools work,
 // and a rule pasted there would only cover one client anyway.
 //
@@ -36,8 +36,6 @@ const SERVER_INSTRUCTIONS = `fapony is a ledger of how work in this project turn
 When a unit of work is finished, call verdict_submit to grade it — pass-excellent..pass when it holds, fail when the first attempt was wrong, uncertain when you could not verify it (never guess pass). This is a grade on the work, not a confession: grade routinely, including work that went right the first time, because a model's record is only as good as the number of graded units behind it.
 
 worktree must be the absolute path (git rev-parse --show-toplevel): every query scopes by it, so a bare name or none files the verdict where nothing reads it, and nothing errors to say so. Write the note standalone — what the work was and how it held up — it is read months later with no access to this conversation. Never leave a run non-terminal; an open run absorbs later unrelated verdicts for that worktree.
-
-Code exploration: run "fapony map <path>" via bash — file mode shows declaration signatures, dir mode lists exports per file. Faster than Read for scanning; use Read for the specific body after map gives you the line number.
 
 Skip it and every tool still answers correctly, on a thinner history.`;
 
