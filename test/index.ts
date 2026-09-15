@@ -469,6 +469,16 @@ import {
 import { testIsAffirmative } from "./util.test.js";
 
 export async function cmdTest(): Promise<void> {
+  // Isolation: point every passive-usage reader at a path that does not exist,
+  // so no test scans the developer's live session logs. Without this, anything
+  // that calls getStatsData() pays ~2s per call and can read logs a running
+  // agent is writing mid-test (nondeterministic — see testStatsTextMatchesCli).
+  // A test that needs real usage data sets its own fixture path and restores to
+  // this pinned value. Same isolation as test/digest.test.ts.
+  process.env.FAPONY_OPENCODE_DB = "/nonexistent/fapony-test/opencode.db";
+  process.env.FAPONY_ZCODE_DB = "/nonexistent/fapony-test/zcode.db";
+  process.env.FAPONY_CLAUDE_PROJECTS_DIR = "/nonexistent/fapony-test/claude";
+  process.env.FAPONY_CODEX_SESSIONS_DIR = "/nonexistent/fapony-test/codex";
   console.log("running tests...\n");
   testAssertSafe();
   testAnalyzeHubOrphanCycle();
