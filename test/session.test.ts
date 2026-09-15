@@ -170,6 +170,21 @@ export function testSessionDetailBreakdown(): void {
   );
 }
 
+export function testSessionDetailBytesByTool(): void {
+  withFixtureDb((dbPath) =>
+    withEnvDb(dbPath, () => {
+      const r = readPassiveUsage(undefined, undefined, undefined, true);
+      assert.ok(r.detail, "detail present");
+      // Only s1's first read carried state.output ("file contents here" = 18
+      // bytes); tools/steps without output contribute nothing.
+      assert.deepEqual(r.detail!.bytes_by_tool, { read: 18 });
+      console.log(
+        "  ✓ readPassiveUsage detail → bytes_by_tool from state.output",
+      );
+    }),
+  );
+}
+
 export function testSessionDetailSkipsUnknownType(): void {
   withFixtureDb((dbPath) =>
     withEnvDb(dbPath, () => {

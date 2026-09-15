@@ -75,6 +75,12 @@ export interface DetailPerSessionToolRow {
   c: number;
 }
 
+export interface DetailBytesRow {
+  tool: string | null;
+  /** Summed `state.output` length (context bytes consumed by tool results). */
+  b: number;
+}
+
 /**
  * Aggregate tool + step query results into a UsageDetail.
  *
@@ -91,6 +97,7 @@ export function aggregateDetail(
   perSessionSteps: DetailStepRow[],
   perSessionTools: DetailPerSessionToolRow[],
   fallbackModelLookup?: Array<{ sid: string; model: string | null }>,
+  bytesRows?: DetailBytesRow[],
 ): UsageDetail {
   const tool_breakdown: Record<string, number> = {};
   for (const r of toolRows) {
@@ -126,7 +133,14 @@ export function aggregateDetail(
     }
   }
 
-  return {
+  const bytesByTool: Record<string, number> = {};
+  for (const r of bytesRows ?? []) {
+    if (typeof r.b !== "number" || r.b <= 0) continue;
+    const name = typeof r.tool === "string" && r.tool ? r.tool : "(unknown)";
+    bytesByTool[name] = (bytesByTool[name] ?? 0) + r.b;
+  }
+
+  const detail: UsageDetail = {
     tool_breakdown,
     steps: stepsRow?.steps ?? 0,
     by_session: [...bySessionMap.values()]
@@ -134,13 +148,15 @@ export function aggregateDetail(
       .sort((a, b) => b.steps - a.steps),
     note: STEP_TOKENS_NOTE,
   };
+  if (Object.keys(bytesByTool).length > 0) detail.bytes_by_tool = bytesByTool;
+  return detail;
 }
 
 /**
  * Sum `bytes_by_tool` across any number of UsageDetail objects (or nulls).
- * Only the Claude Code reader populates the field today — SQLite providers
- * and Codex contribute nothing — so callers must pass every client's detail
- * (opencode + zcode + claude_code + codex), never just the top-level one.
+ * Claude Code, Codex and the SQLite providers (OpenCode/ZCode) all populate
+ * the field now, so callers still pass every client's detail (opencode +
+ * zcode + claude_code + codex) and never just the top-level one.
  * Returns {} when no client reported bytes.
  */
 export function mergeBytesByTool(
@@ -253,6 +269,24 @@ export function readDetailFromDb(
     )
     .all(...filter.params) as DetailPerSessionToolRow[];
 
+  // Context bytes per tool — summed `state.output` length. Same signal the
+  // Claude Code/Codex readers derive from tool_result blocks, so `fapony_usage`
+  // stops reporting zero bytes for the SQLite clients.
+  const bytesRows = db
+    .prepare(
+      `
+      SELECT json_extract(p.data, '$.tool') AS tool,
+             SUM(length(COALESCE(json_extract(p.data, '$.state.output'), ''))) AS b
+      FROM part p
+      JOIN session s ON s.id = p.session_id
+      ${join}
+      WHERE json_extract(p.data, '$.type') = 'tool'
+      ${filter.clause}
+      GROUP BY tool
+    `,
+    )
+    .all(...filter.params) as DetailBytesRow[];
+
   // Backfill model for sessions with tools but no step-finish rows.
   let fallbackModelLookup:
     | Array<{ sid: string; model: string | null }>
@@ -277,6 +311,7 @@ export function readDetailFromDb(
     perSessionSteps,
     perSessionTools,
     fallbackModelLookup,
+    bytesRows,
   );
 }
 

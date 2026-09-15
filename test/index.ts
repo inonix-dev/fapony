@@ -363,6 +363,7 @@ import {
   testReadZcodeUsagePrimaryPath,
   testSessionDefaultHasNoDetail,
   testSessionDetailBreakdown,
+  testSessionDetailBytesByTool,
   testSessionDetailMatchesRawSql,
   testSessionDetailSkipsUnknownType,
   testSessionDetailStepTokensNotSummed,
@@ -830,6 +831,7 @@ export async function cmdTest(): Promise<void> {
   testStatsTokensCountSessionOnce();
   testSessionDefaultHasNoDetail();
   testSessionDetailBreakdown();
+  testSessionDetailBytesByTool();
   testSessionWorktreeScopeUsesSessionDirectory();
   testSessionDetailSkipsUnknownType();
   testSessionDetailStepTokensNotSummed();
