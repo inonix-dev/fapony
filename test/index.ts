@@ -329,6 +329,12 @@ import {
   testQualityScore,
 } from "./parse.test.js";
 import {
+  testPlanSeedConfigFallback,
+  testPlanSeedNoOverwrite,
+  testPlanSeedSpecSignatures,
+  testPlanSeedWritesPlan,
+} from "./plan-seed.test.js";
+import {
   testCalcCostCacheWriteFallsBackToInput,
   testCalcCostUsesCacheReadRate,
   testFetchPriceTableStub,
@@ -533,6 +539,10 @@ export async function cmdTest(): Promise<void> {
   testMapFileAndBroken();
   testMapFileShowsSignature();
   testMapMissingPath();
+  testPlanSeedWritesPlan();
+  testPlanSeedNoOverwrite();
+  testPlanSeedSpecSignatures();
+  testPlanSeedConfigFallback();
   testDecideStopBlocksUngradedCommits();
   testDecideStopAllowsEveryUnknown();
   testUtcStampMatchesSqliteFormat();
