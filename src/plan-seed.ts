@@ -80,17 +80,20 @@ function scopeRows(absDir: string): ScopeRow[] {
     }
     if (st.isDirectory()) {
       // A dir row stays a pointer (name + size) — drill happens in SPEC chunks.
+      // Dirs with no source files (docs/, images/, ...) are dropped, not shown
+      // as noise — same omission buildChunks already does for empty modules.
       let count = 0;
       try {
         count = collectSourceFiles(child, { skipHidden: true }).length;
       } catch {
         count = 0;
       }
+      if (count === 0) continue;
       rows.push({
         name: `${name}/`,
         exportCount: count,
         exports: [],
-        error: count === 0 ? "empty" : null,
+        error: null,
       });
     } else if (SCAN_EXTS.has(name.slice(name.lastIndexOf(".")))) {
       let source: string;
