@@ -20,10 +20,13 @@ import {
   testTemplateArgsReplaceAll,
 } from "./config.test.js";
 import {
+  testComputeModelFit,
   testContextBlockFilesFilterBeyondTop3,
   testContextBlockLineCap,
   testContextBlockLowHistory,
   testContextBlockLowHistoryStillShowsNotes,
+  testContextBlockMemDecisions,
+  testContextBlockModelFitLine,
   testContextBlockNoPatterns,
   testContextBlockRecentNotes,
   testContextBlockSnapshot,
@@ -301,6 +304,8 @@ import {
   testMemoryDefaultWiringNoFile,
   testMemoryDefaultWiringWithFile,
   testMemoryExplicitConfigWins,
+  testMemoryReadRecentDecisions,
+  testMemoryReadRecentDecisionsMonorepo,
 } from "./memory.test.js";
 import {
   testMemTemplateCentralCopyMovedIntoFapony,
@@ -323,6 +328,12 @@ import {
   testParseGateEventData,
   testQualityScore,
 } from "./parse.test.js";
+import {
+  testPlanSeedConfigFallback,
+  testPlanSeedNoOverwrite,
+  testPlanSeedSpecSignatures,
+  testPlanSeedWritesPlan,
+} from "./plan-seed.test.js";
 import {
   testCalcCostCacheWriteFallsBackToInput,
   testCalcCostUsesCacheReadRate,
@@ -528,6 +539,10 @@ export async function cmdTest(): Promise<void> {
   testMapFileAndBroken();
   testMapFileShowsSignature();
   testMapMissingPath();
+  testPlanSeedWritesPlan();
+  testPlanSeedNoOverwrite();
+  testPlanSeedSpecSignatures();
+  testPlanSeedConfigFallback();
   testDecideStopBlocksUngradedCommits();
   testDecideStopAllowsEveryUnknown();
   testUtcStampMatchesSqliteFormat();
@@ -587,6 +602,8 @@ export async function cmdTest(): Promise<void> {
   testMemTemplateScaffoldedIgnoresRootConfig();
   testMemTemplateUnknownAppFails();
   testClaimMemoryFailGracefully();
+  testMemoryReadRecentDecisions();
+  testMemoryReadRecentDecisionsMonorepo();
   // Digest tests
   await testDigestEmptyRepo();
   await testDigestSinceFilter();
@@ -640,6 +657,9 @@ export async function cmdTest(): Promise<void> {
   testContextBlockLowHistoryStillShowsNotes();
   testContextToolEndToEnd();
   testContextToolEmptyDb();
+  testComputeModelFit();
+  testContextBlockMemDecisions();
+  testContextBlockModelFitLine();
   testParseDirtyLines();
   testFormatDirtyBlock();
   testShouldProceedAfterDirty();

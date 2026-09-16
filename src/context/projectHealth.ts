@@ -16,6 +16,91 @@ export interface HealthContextOptions {
   minRuns?: number;
   /** Filter recentVerdictNotes to only those mentioning these files. */
   files?: string[];
+  /**
+   * Project decisions from the mem log, surfaced first. Reading the log is I/O,
+   * so it happens in the tool handler — this builder stays pure over its inputs.
+   */
+  memDecisions?: MemDecision[];
+}
+
+/** One mem-log decision distilled for the block. */
+export interface MemDecision {
+  text: string;
+  spec?: string;
+}
+
+/** Best-scoring model for one regime, from real graded work. */
+export interface ModelFit {
+  regime: string;
+  model: string;
+  gates: number;
+  failRate: number;
+  avgQuality: number;
+  tokensPerPass: number | null;
+}
+
+// Model right-sizing: below this many graded touches a bucket is noise, not a
+// recommendation (same sample-size guard the trend lines use).
+const MIN_MODEL_FIT_N = 5;
+// Most regimes are 4 (code|fix|review|plan); cap protects the 15-line budget.
+const MAX_MODEL_FIT = 4;
+// Mem decisions shown ahead of the less-specific lines below.
+const MEM_DECISION_MAX = 3;
+const MEM_DECISION_CHARS = 140;
+
+function fmtShortTokens(n: number): string {
+  return n >= 1000 ? `${Math.round(n / 1000)}k` : `${Math.round(n)}`;
+}
+
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
+}
+
+/**
+ * Pick the best model per regime from real graded work. "Best" = fewest fails
+ * first (the thing that costs a rework), then cheapest tokens/pass, then
+ * highest quality. Buckets under `minN` are skipped — one lucky verdict is not
+ * a recommendation; regimes with no eligible bucket drop out entirely.
+ */
+export function computeModelFit(
+  byRegime: StatsData["byRegime"],
+  worktree?: string,
+  minN = MIN_MODEL_FIT_N,
+): ModelFit[] {
+  const eligible = byRegime.filter(
+    (r) =>
+      r.regime !== "—" &&
+      r.model !== "—" &&
+      r.gates >= minN &&
+      (worktree ? r.worktree === worktree : true),
+  );
+
+  const byName = new Map<string, ModelFit[]>();
+  for (const r of eligible) {
+    const list = byName.get(r.regime) ?? [];
+    list.push({
+      regime: r.regime,
+      model: r.model,
+      gates: r.gates,
+      failRate: r.failRate,
+      avgQuality: r.avgQuality,
+      tokensPerPass: r.tokensPerPass,
+    });
+    byName.set(r.regime, list);
+  }
+
+  const out: ModelFit[] = [];
+  for (const list of byName.values()) {
+    list.sort((a, b) => {
+      if (a.failRate !== b.failRate) return a.failRate - b.failRate;
+      const at = a.tokensPerPass ?? Number.POSITIVE_INFINITY;
+      const bt = b.tokensPerPass ?? Number.POSITIVE_INFINITY;
+      if (at !== bt) return at - bt;
+      return b.avgQuality - a.avgQuality;
+    });
+    out.push(list[0]);
+  }
+  return out.slice(0, MAX_MODEL_FIT);
 }
 
 /**
@@ -37,6 +122,31 @@ export function buildProjectHealthContext(
     : data.runs.total;
   const scope = worktree ?? "all worktrees";
   const header = `## Known patterns for this project (from fapony history, N=${total} runs, ${scope})`;
+
+  // Lead with the two things no code-exploration tool can produce: what this
+  // project already decided (mem) and which model actually holds up for each
+  // task shape (the ledger). Everything below is the older, weaker watch-fors.
+  const lead: string[] = [];
+  const memDecisions = (opts?.memDecisions ?? []).slice(0, MEM_DECISION_MAX);
+  if (memDecisions.length > 0) {
+    const list = memDecisions
+      .map((d) => `"${truncate(d.text, MEM_DECISION_CHARS)}"`)
+      .join(" · ");
+    lead.push(`- Decisions on record (mem): ${list}`);
+  }
+  for (const f of computeModelFit(data.byRegime, worktree)) {
+    const bits = [
+      `failRate ${Math.round(f.failRate * 100)}%`,
+      `quality ${f.avgQuality.toFixed(1)}`,
+      `N=${f.gates}`,
+    ];
+    if (f.tokensPerPass !== null) {
+      bits.push(`${fmtShortTokens(f.tokensPerPass)} tok/pass`);
+    }
+    lead.push(
+      `- Model fit: regime=${f.regime} → ${f.model} (${bits.join(", ")})`,
+    );
+  }
 
   // Recent free-text notes carry signal from N=1 (a specific "worked around
   // X" beats a count) — unlike the trend lines below, not gated by minRuns.
@@ -84,6 +194,7 @@ export function buildProjectHealthContext(
   if (total < minRuns) {
     const lines = [
       header,
+      ...lead,
       `- Not enough history yet (${total} runs, need ${minRuns}+) for recurring patterns; draft freely.`,
     ];
     if (riskLine) lines.push(riskLine);
@@ -92,7 +203,7 @@ export function buildProjectHealthContext(
         `- Recent verdict notes: ${notes.map((n) => `[${n.reason}] ${n.note}`).join(" · ")}`,
       );
     }
-    return lines.join("\n");
+    return lines.slice(0, 15).join("\n");
   }
 
   const reasons = (
@@ -109,7 +220,7 @@ export function buildProjectHealthContext(
       : data.bestPassing
   ).slice(0, 3);
 
-  const lines = [header];
+  const lines = [header, ...lead];
   if (riskLine) lines.push(riskLine);
   if (reasons.length > 0) {
     const list = reasons.map((r) => `${r.reason} (${r.count}×)`).join(", ");

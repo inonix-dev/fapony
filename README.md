@@ -344,7 +344,7 @@ fapony price-scan                        # fetch model price table → prices.js
 fapony usage-web [port]                   # live usage comparison dashboard from cache
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page summary: decisions, open bugs, in-flight plans, cost, pass/fail — from what's already on disk
-fapony map [path]                         # on-demand source index: dirs list exports (name:line), files show declaration signatures, read-only, nothing persisted
+fapony plan-seed <name> [--spec]          # write PLAN (+SPEC) with §2/§5 pre-filled from map/analyze — agent fills judgment sections
 
 # Setup & maintenance
 fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/evidence)

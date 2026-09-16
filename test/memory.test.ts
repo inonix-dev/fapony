@@ -6,6 +6,7 @@ import type { Config } from "../src/db/index.js";
 import {
   claimMemory,
   DEFAULT_MEMORY,
+  readRecentMemDecisions,
   resolveMemoryConfig,
 } from "../src/memory.js";
 import { baseConfig } from "./helpers.js";
@@ -110,4 +111,96 @@ export function testClaimMemoryTimeout(): void {
   }
 
   console.log("  ✓ claimMemory timeout prevents hang");
+}
+
+export function testMemoryReadRecentDecisions(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-mem-log-"));
+  try {
+    const memDir = join(dir, ".fapony", ".memory");
+    mkdirSync(memDir, { recursive: true });
+    const rows = [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        id: "a",
+        kind: "decision",
+        text: "old decision",
+      },
+      { ts: "2026-01-02T00:00:00.000Z", id: "b", kind: "bug", text: "a bug" },
+      {
+        ts: "2026-01-03T00:00:00.000Z",
+        id: "c",
+        kind: "decision",
+        text: "newer decision",
+      },
+      {
+        ts: "2026-01-04T00:00:00.000Z",
+        id: "d",
+        kind: "decision",
+        text: "newest decision",
+      },
+    ];
+    writeFileSync(
+      join(memDir, "log.jsonl"),
+      `${rows.map((r) => JSON.stringify(r)).join("\n")}\n`,
+    );
+
+    const got = readRecentMemDecisions(dir, 2);
+    assert.equal(got.length, 2, "respects limit");
+    assert.equal(got[0].text, "newest decision", "newest first");
+    assert.equal(got[1].text, "newer decision");
+    assert.ok(
+      !got.some((r) => r.kind === "bug"),
+      "non-decision rows filtered out",
+    );
+
+    // keyword is a preference: a matching older row jumps the recency order
+    const hit = readRecentMemDecisions(dir, 1, ["old decision"]);
+    assert.equal(hit[0].text, "old decision");
+
+    // no match → falls back to recent rather than going silent
+    const fallback = readRecentMemDecisions(dir, 1, ["no-such-keyword"]);
+    assert.equal(fallback[0].text, "newest decision");
+
+    // missing log → empty, never throws
+    assert.deepEqual(readRecentMemDecisions("/nonexistent/worktree", 3), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ readRecentMemDecisions filters, ranks, and degrades");
+}
+
+export function testMemoryReadRecentDecisionsMonorepo(): void {
+  const root = mkdtempSync(join(tmpdir(), "fapony-mono-"));
+  const prevApp = process.env.MEM_APP;
+  try {
+    const memDir = join(root, "apps", "vela", ".fapony", ".memory");
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(
+      join(memDir, "log.jsonl"),
+      `${JSON.stringify({
+        ts: "2026-01-01T00:00:00.000Z",
+        id: "a",
+        kind: "decision",
+        text: "app-scoped decision",
+      })}\n`,
+    );
+    // The run history is keyed to the monorepo root, but the log lives in the
+    // app dir — the reader must find it from the root, like mem.ts does.
+    process.env.MEM_APP = "vela";
+
+    const got = readRecentMemDecisions(root, 3);
+    assert.equal(got.length, 1);
+    assert.equal(
+      got[0].text,
+      "app-scoped decision",
+      "mem dir resolved under <root>/apps/<app>/.fapony/.memory",
+    );
+  } finally {
+    if (prevApp === undefined) delete process.env.MEM_APP;
+    else process.env.MEM_APP = prevApp;
+    rmSync(root, { recursive: true, force: true });
+  }
+  console.log(
+    "  ✓ readRecentMemDecisions finds the app-scoped log in a monorepo",
+  );
 }
