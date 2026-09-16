@@ -5,7 +5,11 @@
 // before drafting. Framed as "watch for", never "must follow" (overfitting
 // guard — PLAN §5). Pure function over StatsData: no DB, no I/O.
 
-import type { StatsData } from "../stats/data.js";
+import type {
+  ReasonCodeCount,
+  RecentVerdictNote,
+  StatsData,
+} from "../stats/data.js";
 
 export interface HealthContextOptions {
   /** Scope to one worktree path. Global across worktrees when omitted. */
@@ -70,6 +74,10 @@ const MAX_MODEL_FIT = 4;
 // Mem decisions shown ahead of the less-specific lines below.
 const MEM_DECISION_MAX = 3;
 const MEM_DECISION_CHARS = 140;
+// Free-text verdict notes can be a whole paragraph — one 4k-char note once
+// made the whole block 5,001 chars (measured 2026-09-17). Cap ~200, same trim
+// shape as the mem-decision line above.
+const RECENT_NOTE_CHARS = 200;
 
 function fmtShortTokens(n: number): string {
   return n >= 1000 ? `${Math.round(n / 1000)}k` : `${Math.round(n)}`;
@@ -77,6 +85,33 @@ function fmtShortTokens(n: number): string {
 
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
+}
+
+// `[none]` says "no reason code given" — noise, not signal (it was the reason
+// three 1.4k-char notes read as a wall). A real reason tag stays: it is the
+// KPI axis the trend line counts by.
+function fmtRecentNote(n: RecentVerdictNote): string {
+  const body = truncate(n.note, RECENT_NOTE_CHARS);
+  return n.reason === "none" ? body : `[${n.reason}] ${body}`;
+}
+
+// Per-worktree rows repeat the same reason_code across worktrees — without a
+// worktree scope, merge counts by reason BEFORE slicing, or the line reads
+// "spec_gap (5×), scope_mismatch (2×), spec_gap (2×)" (measured) instead of
+// one entry per reason with the true total.
+function topReasonRows(
+  rows: ReasonCodeCount[],
+  cap: number,
+  mergeAcrossWorktrees: boolean,
+): ReasonCodeCount[] {
+  if (!mergeAcrossWorktrees) return rows.slice(0, cap);
+  const merged = new Map<string, number>();
+  for (const r of rows)
+    merged.set(r.reason, (merged.get(r.reason) ?? 0) + r.count);
+  return [...merged.entries()]
+    .map(([reason, count]) => ({ worktree: "(all)", reason, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, cap);
 }
 
 function hubLine(hubs: HubEntry[]): string | null {
@@ -243,17 +278,19 @@ export function buildProjectHealthContext(
     if (hub) lines.push(hub);
     if (notes.length > 0) {
       lines.push(
-        `- Recent verdict notes: ${notes.map((n) => `[${n.reason}] ${n.note}`).join(" · ")}`,
+        `- Recent verdict notes: ${notes.map(fmtRecentNote).join(" · ")}`,
       );
     }
     return lines.slice(0, 15).join("\n");
   }
 
-  const reasons = (
+  const reasons = topReasonRows(
     worktree
       ? data.byReasonCode.filter((r) => r.worktree === worktree)
-      : data.byReasonCode
-  ).slice(0, Math.max(topReasons, 0));
+      : data.byReasonCode,
+    Math.max(topReasons, 0),
+    !worktree,
+  );
   const escalated = worktree
     ? data.escalatedRuns.filter((e) => e.worktree === worktree)
     : data.escalatedRuns;
@@ -290,7 +327,7 @@ export function buildProjectHealthContext(
   }
   if (notes.length > 0) {
     lines.push(
-      `- Recent verdict notes: ${notes.map((n) => `[${n.reason}] ${n.note}`).join(" · ")}`,
+      `- Recent verdict notes: ${notes.map(fmtRecentNote).join(" · ")}`,
     );
   }
   if (lines.length === 1) {

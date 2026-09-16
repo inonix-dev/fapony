@@ -77,17 +77,22 @@ draft, which is worth far more than a question about constraints.
 
 ## Phase 1.6 — Seed the facts (`fapony plan-seed`, if the CLI is available)
 
-If the `fapony` CLI is on PATH, run it **once** before drafting:
+If the `fapony` CLI is on PATH, run it **once** before drafting — with `--scope` when the dev's
+idea already points at a directory (repeatable; without it the seed scans the whole cwd and
+warns past ~300 files):
 
 ```bash
-fapony plan-seed <feature> --spec
+fapony plan-seed <feature> --spec --scope <path>
 ```
 
 It writes `<planDir>/PLAN-<feature>.md` + `<specDir>/SPEC-<feature>.md` with the factual
-sections already filled from the code itself — §2 Scope from the source map, §5 Risks from the
-import graph, and a `## Context (fapony)` block (recent mem decisions + which model holds up per
-task shape). Plan-dir/spec-dir resolution and name collisions are handled by the CLI: it refuses
-to overwrite (matches hard rule 9 — pick `-v2`).
+sections already filled from the code itself — §2 Scope reports **what repeats** across the
+scope's export names (repetition clusters ≥ 3 members, not a source map — the directory
+listing is the one thing Glob gives you for free), §5 Risks from the import graph scoped to
+the requested paths, and a `## Context (fapony)` block (recent mem decisions + which model
+holds up per task shape). Every section is hard-capped (PLAN ≤ ~60 / SPEC ≤ 200 lines) and
+capped lines always say what was cut. Plan-dir/spec-dir resolution and name collisions are
+handled by the CLI: it refuses to overwrite (matches hard rule 9 — pick `-v2`).
 
 What that buys you: you skip re-deriving structure by opening files (the expensive, wrong-file
 prone part) and spend the draft budget on judgment — Goal, Done criteria, ordering. So:

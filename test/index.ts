@@ -32,8 +32,10 @@ import {
   testContextBlockLowHistory,
   testContextBlockLowHistoryStillShowsNotes,
   testContextBlockMemDecisions,
+  testContextBlockMergesReasonsAcrossWorktrees,
   testContextBlockModelFitLine,
   testContextBlockNoPatterns,
+  testContextBlockNoteCapAndNoneTag,
   testContextBlockRecentNotes,
   testContextBlockSnapshot,
   testContextBlockWorktreeScope,
@@ -348,8 +350,13 @@ import {
   testQualityScore,
 } from "./parse.test.js";
 import {
+  testPlanSeedCapsHold,
   testPlanSeedConfigFallback,
   testPlanSeedNoOverwrite,
+  testPlanSeedOverlapScopeDedup,
+  testPlanSeedRepetitionCluster,
+  testPlanSeedScopeFilters,
+  testPlanSeedSingleFileScope,
   testPlanSeedSpecSignatures,
   testPlanSeedWritesPlan,
 } from "./plan-seed.test.js";
@@ -373,6 +380,9 @@ import {
   testReportHtmlCanonicalQuality,
   testReportHtmlEscapesContent,
   testReportHtmlFiltersAndMethodology,
+  testReportWebForceOverrides,
+  testReportWebRefusesWhenCommittable,
+  testReportWebWarnsOnlyWhenCommittable,
 } from "./report-html.test.js";
 import {
   testReviewSeedDeterministicAndNoWrite,
@@ -572,6 +582,11 @@ export async function cmdTest(): Promise<void> {
   testPlanSeedWritesPlan();
   testPlanSeedNoOverwrite();
   testPlanSeedSpecSignatures();
+  testPlanSeedRepetitionCluster();
+  testPlanSeedScopeFilters();
+  testPlanSeedCapsHold();
+  testPlanSeedSingleFileScope();
+  testPlanSeedOverlapScopeDedup();
   testPlanSeedConfigFallback();
   testReviewSeedScopeFlags();
   testReviewSeedStructure();
@@ -700,6 +715,8 @@ export async function cmdTest(): Promise<void> {
   testComputeModelFit();
   testContextBlockMemDecisions();
   testContextBlockModelFitLine();
+  testContextBlockMergesReasonsAcrossWorktrees();
+  testContextBlockNoteCapAndNoneTag();
   testContextBlockHubLine();
   testContextBlockHubLowHistory();
   testContextBlockHubSilentBelowThreshold();
@@ -951,6 +968,9 @@ export async function cmdTest(): Promise<void> {
   testReportHtmlByModelHasAttributionColumns();
   testReportHtmlByModelProjectColumn();
   testReportHtmlEscapesContent();
+  testReportWebWarnsOnlyWhenCommittable();
+  testReportWebRefusesWhenCommittable();
+  testReportWebForceOverrides();
   // Usage-web tests
   testFmtTokensZero();
   testFmtTokensThousands();

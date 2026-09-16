@@ -9,8 +9,10 @@
 // `unverified` claims (provenance: agent_report), matching the contract that
 // `verified:false` means "fapony did not run this".
 //
-// §0 rule: fapony never writes to the worktree — this module only reads
-// config and runs allowlisted commands (cwd = worktree).
+// Rule 5b: this module writes nothing — it only reads config and runs
+// allowlisted commands (cwd = worktree). Evidence has to stay the owner's own
+// record; a claim fapony fabricated would be worth nothing. (Previously cited
+// the blanket "fapony never writes to the worktree" rule, dropped 2026-09-17.)
 
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";

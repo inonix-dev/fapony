@@ -37,6 +37,12 @@ Run `fapony review-seed` with the scope flag matching what you're reviewing (def
 enter, never coverage — walk it, run it, kill your findings as normal. No fapony CLI or the call
 errors → skip silently and review anyway — a hint, not a gate.
 
+**`--plan` on an already-shipped plan comes back "nothing in this scope" — that's the wrong scope,
+not no scope.** A shipped plan has nothing left in the working tree to diff. If its header cites
+commit shas (`> Status: shipped ... Commits: <sha1> ... <shaN>`), re-run against those — one
+`--range <first-sha>^...<last-sha>` covering them, or `--commit <sha>` per commit — and walk that
+instead. Only treat the plan as prose-only, no code to walk, when its header cites no commits.
+
 ## Pass 1 — Scope is a finding
 
 Say what the change is for in one sentence, in your own words. If you can't, the artifact is

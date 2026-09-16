@@ -7,7 +7,11 @@
 // walk the diff, run the tests, kill findings as normal.
 //
 // Read-only stdout: no file writes, no cache, no state.db read — the seed is
-// a lens, not a delivery (rule 5). Facts only: nothing here says broken/fixed
+// a lens, not a delivery (rule 5b — a command that reads code writes only to a
+// path the user pointed at, and this one accepts no such path). This used to
+// cite rule 5 "never write into a target worktree", dropped 2026-09-17 because
+// four commands broke it; being read-only was always a property of this
+// command, never of that rule. Facts only: nothing here says broken/fixed
 // — judgment lives in the reviewer and the ledger (verdict_submit), never in
 // this output. Deterministic: same input, same bytes, no LLM.
 //
@@ -175,7 +179,8 @@ interface ResolvedScope {
 // brace form `prefix/{old => new}/suffix` (only the moved segment) — expand
 // both back to full paths so downstream sections see the real new path plus
 // a renamedFrom annotation, never git's internal syntax.
-function parseNumstat(output: string): FileEntry[] {
+// Exported for plan-seed's changed-files feed — reuse, not a second parser.
+export function parseNumstat(output: string): FileEntry[] {
   const out: FileEntry[] = [];
   for (const line of output.split("\n").filter(Boolean)) {
     const [ins, del, ...rest] = line.split("\t");
@@ -205,8 +210,8 @@ function parseNumstat(output: string): FileEntry[] {
 
 // untracked paths, one per file — -uall stops git collapsing an untracked
 // directory to "dir/" (a seed wants file names, and the collapsed dir breaks
-// plan cross-check path equality).
-function untrackedFiles(porcelain: string): FileEntry[] {
+// plan cross-check path equality). Exported for plan-seed (same feed).
+export function untrackedFiles(porcelain: string): FileEntry[] {
   const out: FileEntry[] = [];
   for (const line of porcelain.split("\n").filter(Boolean)) {
     if (!line.startsWith("?? ")) continue;

@@ -1,7 +1,8 @@
 // src/report/cli.ts — CLI commands for fapony report / report-web
 
+import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
-import { resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 import { loadConfig } from "../db/index.js";
 import { toolVerificationReport } from "../mcp/tools/report.js";
 import { parseToolResult } from "../mcp/types.js";
@@ -26,30 +27,54 @@ export function cmdReport(args: string[]): void {
   console.log(result.content[0].text);
 }
 
+/**
+ * True when `abs` sits in a git repo and is NOT gitignored — writing the report
+ * there means the generated HTML turns up in `git status` and rides along in
+ * someone's next commit.
+ *
+ * Replaces the rule-5 refusal (dropped 2026-09-17). That check blocked any path
+ * inside a *configured* worktree, which got it wrong three ways: it refused
+ * paths the user had typed themselves, it missed every repo not listed in the
+ * config, and it fired even when the path was already gitignored. The hazard was
+ * never "inside a worktree" — it is "would be committed".
+ */
+export function wouldBeCommitted(abs: string): boolean {
+  // check-ignore exits 0 = ignored, 1 = not ignored, 128 = not a repo.
+  // A missing git, or a dir that does not exist, leaves status null — stay quiet.
+  const probe = spawnSync("git", ["check-ignore", "-q", abs], {
+    cwd: dirname(abs),
+    stdio: "ignore",
+  });
+  return probe.status === 1;
+}
+
 export function cmdReportWeb(args: string[]): void {
   const config = loadConfig();
   // Accept optional --worktree <path> to scope the report to one project.
   const wtIdx = args.indexOf("--worktree");
   const worktree =
     wtIdx !== -1 && args[wtIdx + 1] ? args[wtIdx + 1] : undefined;
+  // --force overrides the rule-5c refusal when the path would be committed.
+  const force = args.includes("--force");
   // First positional arg is still the output file (legacy).
   const outFile =
     wtIdx !== -1
       ? args.filter((_a, i) => i !== wtIdx && i !== wtIdx + 1)[0]
       : args[0];
 
-  if (outFile) {
-    // Rule #5: fapony never writes into a target worktree — refuse output
-    // paths inside a configured worktree. Stdout stays always available.
-    const abs = resolve(outFile);
-    for (const wt of Object.values(config.worktrees ?? {})) {
-      if (abs === wt || abs.startsWith(wt + sep)) {
-        console.error(
-          `fapony report-web: refusing to write inside worktree "${wt}" — choose a path outside worktrees or omit the file to print to stdout`,
-        );
-        process.exit(1);
-      }
+  // Rule 5c: refuse when the output would end up in git status. The user
+  // typed the path — that makes it a commit hazard, not a prohibition case.
+  // --force overrides this (for scripts that accept the risk).
+  if (outFile && wouldBeCommitted(resolve(outFile))) {
+    if (!force) {
+      console.error(
+        `fapony report-web: ${outFile} is in a git repo and not gitignored — the generated HTML would show up in git status. Add it to .gitignore, write outside the repo, or pass --force to override.`,
+      );
+      process.exit(1);
     }
+    console.error(
+      `fapony report-web: ${outFile} is in a git repo and not gitignored — --force written anyway.`,
+    );
   }
 
   const uw = config.usageWeb ?? {};

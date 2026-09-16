@@ -1,5 +1,15 @@
 import assert from "node:assert";
 import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
   addEvent,
   type Config,
   loadConfig,
@@ -7,8 +17,10 @@ import {
   openDb,
   setStatus,
 } from "../src/db/index.js";
+import { cmdReportWeb, wouldBeCommitted } from "../src/report/cli.js";
 import { renderReportHtml } from "../src/report/index.js";
 import { getStatsData } from "../src/stats/index.js";
+import { withTempRepo } from "./helpers.js";
 
 function _baseConfig(): Config {
   return loadConfig("/nonexistent-path/fapony.config.json");
@@ -122,4 +134,74 @@ export function testReportHtmlEscapesContent(): void {
   });
 
   console.log("  ✓ report-html escapes interpolated strings");
+}
+
+export function testReportWebWarnsOnlyWhenCommittable(): void {
+  withTempRepo((repo) => {
+    writeFileSync(join(repo, ".gitignore"), "out/\n");
+    // The probe runs git from dirname(path), so that dir has to exist — same
+    // as the real call, where writeFileSync would need it anyway.
+    mkdirSync(join(repo, "out"));
+
+    assert.ok(
+      wouldBeCommitted(join(repo, "report.html")),
+      "untracked, unignored path in a repo would be committed",
+    );
+    assert.ok(
+      !wouldBeCommitted(join(repo, "out", "report.html")),
+      "gitignored path is safe — no warning",
+    );
+  });
+
+  const outside = mkdtempSync(join(tmpdir(), "fapony-norepo-"));
+  try {
+    assert.ok(
+      !wouldBeCommitted(join(outside, "report.html")),
+      "path outside any repo is safe — no warning",
+    );
+  } finally {
+    rmSync(outside, { recursive: true, force: true });
+  }
+
+  console.log("  ✓ report-web warns only when the output would be committed");
+}
+
+export function testReportWebRefusesWhenCommittable(): void {
+  withTempRepo((repo) => {
+    mkdirSync(join(repo, "out"));
+    const target = join(repo, "report.html");
+    let code: number | null = null;
+    const origExit = process.exit;
+    try {
+      process.exit = ((c?: number) => {
+        code = c ?? 0;
+        throw new Error("__exit__");
+      }) as never;
+      cmdReportWeb([target]);
+    } catch {
+      // exit stub unwinds
+    } finally {
+      process.exit = origExit;
+    }
+    assert.equal(code, 1, "exits 1 when output would be committed");
+    assert.ok(!existsSync(target), "file not written");
+  });
+
+  console.log(
+    "  ✓ report-web refuses to write when wouldBeCommitted and no --force",
+  );
+}
+
+export function testReportWebForceOverrides(): void {
+  withTempRepo((repo) => {
+    mkdirSync(join(repo, "out"));
+    const target = join(repo, "report.html");
+    cmdReportWeb([target, "--force"]);
+    assert.ok(
+      readFileSync(target, "utf-8").length > 0,
+      "file written with --force",
+    );
+  });
+
+  console.log("  ✓ report-web --force writes even when wouldBeCommitted");
 }

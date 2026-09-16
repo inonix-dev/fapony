@@ -194,6 +194,63 @@ export function testContextToolEmptyDb(): void {
   console.log("  ✓ project_health_context on empty db → low-history line");
 }
 
+export function testContextBlockMergesReasonsAcrossWorktrees(): void {
+  const data = statsFixture();
+  // Rows are per-worktree — the same reason appears once per worktree. The
+  // unscoped block must merge counts by reason BEFORE slicing (measured
+  // 2026-09-17: "spec_gap (5×), scope_mismatch (2×), spec_gap (2×)").
+  data.byReasonCode = [
+    { worktree: "wt-a", reason: "spec_gap", count: 5 },
+    { worktree: "wt-b", reason: "spec_gap", count: 2 },
+    { worktree: "wt-a", reason: "scope_mismatch", count: 2 },
+  ];
+  const block = buildProjectHealthContext(data);
+  assert.ok(
+    block.includes("spec_gap (7×), scope_mismatch (2×)"),
+    "same reason across worktrees collapses into one entry with the total",
+  );
+  assert.equal(
+    block.match(/spec_gap \(\d+×\)/g)?.length,
+    1,
+    "no duplicate reasons in one line",
+  );
+  console.log("  ✓ context block merges byReasonCode across worktrees");
+}
+
+export function testContextBlockNoteCapAndNoneTag(): void {
+  const data = statsFixture();
+  data.recentVerdictNotes = [
+    {
+      worktree: "wt1",
+      reason: "none",
+      note: "x".repeat(500),
+      ts: "",
+    },
+    {
+      worktree: "wt1",
+      reason: "spec_gap",
+      note: "y".repeat(500),
+      ts: "",
+    },
+  ];
+  const block = buildProjectHealthContext(data);
+  const line = block
+    .split("\n")
+    .find((l) => l.includes("Recent verdict notes"));
+  assert.ok(line, "notes line present");
+  assert.ok(!line.includes("[none]"), "a none reason tag is noise — dropped");
+  assert.ok(
+    line.includes("[spec_gap] "),
+    "a real reason tag stays (the KPI axis)",
+  );
+  // 200-char cap per note (… included), two notes + separator + label
+  assert.ok(
+    line.length < 600,
+    `notes are capped, not a wall (got ${line.length} chars)`,
+  );
+  console.log("  ✓ context block caps note length and drops [none] tags");
+}
+
 export function testContextBlockFilesFilterBeyondTop3(): void {
   const data = statsFixture();
   data.recentVerdictNotes = [
