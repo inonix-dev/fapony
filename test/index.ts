@@ -6,6 +6,8 @@ import {
 } from "./activeSession.test.js";
 import {
   testAnalyzeBlastRadius,
+  testAnalyzeBlastRadiusTransitive,
+  testAnalyzeBlastRadiusTransitiveCycle,
   testAnalyzeChangedUntested,
   testAnalyzeEmptyDir,
   testAnalyzeHubOrphanCycle,
@@ -541,6 +543,8 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeSkipsUnresolvableAndBroken();
   testAnalyzeEmptyDir();
   testAnalyzeBlastRadius();
+  testAnalyzeBlastRadiusTransitive();
+  testAnalyzeBlastRadiusTransitiveCycle();
   testAnalyzeIsTestFile();
   testMapExtractExports();
   testMapExtractExportsParseError();

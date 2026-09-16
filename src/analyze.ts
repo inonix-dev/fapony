@@ -48,6 +48,29 @@ export interface Finding {
 export interface BlastEntry {
   dependents: number;
   tested: boolean;
+  /** Dependents of dependents, transitively (cycle-safe, excludes the file itself). */
+  transitive: number;
+}
+
+// BFS over the reverse-edge map — one grep-and-recurse chain collapsed into
+// one walk. `seen` makes cycles a no-op instead of an infinite loop.
+function transitiveDependentsCount(graph: ImportGraph, file: string): number {
+  const seen = new Set<string>();
+  let frontier = graph.dependents.get(file) ?? new Set<string>();
+  while (frontier.size > 0) {
+    const next = new Set<string>();
+    for (const f of frontier) {
+      if (seen.has(f)) continue;
+      seen.add(f);
+      for (const dep of graph.dependents.get(f) ?? []) {
+        if (!seen.has(dep)) next.add(dep);
+      }
+    }
+    frontier = next;
+  }
+  // A cycle can walk back to `file` itself — it's not its own dependent.
+  seen.delete(file);
+  return seen.size;
 }
 
 // --- Shared criteria ---
@@ -317,7 +340,11 @@ export function blastRadius(
   const out: Record<string, BlastEntry> = {};
   for (const f of files) {
     const deps = graph.dependents.get(f) ?? new Set<string>();
-    out[f] = { dependents: deps.size, tested: [...deps].some(isTestFile) };
+    out[f] = {
+      dependents: deps.size,
+      tested: [...deps].some(isTestFile),
+      transitive: transitiveDependentsCount(graph, f),
+    };
   }
   return out;
 }
