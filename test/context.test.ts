@@ -1,6 +1,8 @@
 // test/context.test.ts — project-health context block (PLAN-project-health-context step 4)
 
 import assert from "node:assert";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   buildProjectHealthContext,
   computeModelFit,
@@ -14,7 +16,7 @@ import {
 import { toolProjectHealthContext } from "../src/mcp/tools/context.js";
 import { EMPTY_RESULT } from "../src/session/index.js";
 import { getStatsData, type StatsData } from "../src/stats.js";
-import { withTmpDb } from "./helpers.js";
+import { withTempRepo, withTmpDb } from "./helpers.js";
 
 function statsFixture(): StatsData {
   return {
@@ -338,4 +340,112 @@ export function testContextBlockModelFitLine(): void {
     "model right-sizing renders from real buckets",
   );
   console.log("  ✓ context block surfaces model right-sizing");
+}
+
+export function testContextBlockHubLine(): void {
+  const data = statsFixture();
+  const block = buildProjectHealthContext(data, {
+    hubs: [{ file: "src/stats/data.ts", dependents: 9, tested: false }],
+  });
+  assert.ok(
+    block.includes(
+      "- Hubs you are touching (high blast radius): src/stats/data.ts (imported by 9 files; untested)",
+    ),
+    "hub line renders with dependents count + untested flag",
+  );
+
+  const tested = buildProjectHealthContext(data, {
+    hubs: [{ file: "src/stats/data.ts", dependents: 9, tested: true }],
+  });
+  assert.ok(
+    tested.includes("imported by 9 files)"),
+    "tested hub omits the untested flag",
+  );
+  console.log("  ✓ context block surfaces structural hubs");
+}
+
+export function testContextBlockHubLowHistory(): void {
+  const data = statsFixture();
+  data.runs.total = 2;
+  data.byWorktree = [
+    { worktree: "wt1", runs: 2, passed: 2, stalled: 0, pending: null },
+  ];
+  const block = buildProjectHealthContext(data, {
+    hubs: [{ file: "hub.ts", dependents: 6, tested: false }],
+  });
+  assert.ok(block.includes("Not enough history yet"));
+  assert.ok(
+    block.includes("Hubs you are touching"),
+    "hub is structural, not history — fires even at N=0",
+  );
+  console.log("  ✓ context block shows hub line even below minRuns");
+}
+
+export function testContextBlockHubSilentBelowThreshold(): void {
+  const data = statsFixture();
+  const block = buildProjectHealthContext(data, { hubs: [] });
+  assert.ok(
+    !block.includes("Hubs you are touching"),
+    "no hub entries → no hub line (reflex guard, PLAN-hub-signal rule 8)",
+  );
+  console.log("  ✓ context block stays silent without hubs");
+}
+
+export function testContextBlockHubCapHolds(): void {
+  const data = statsFixture();
+  data.byReasonCode = Array.from({ length: 30 }, (_, i) => ({
+    worktree: "wt1",
+    reason: `reason_${i}`,
+    count: 30 - i,
+  }));
+  const block = buildProjectHealthContext(data, {
+    hubs: [
+      { file: "a.ts", dependents: 30, tested: false },
+      { file: "b.ts", dependents: 20, tested: true },
+      { file: "c.ts", dependents: 10, tested: false },
+      { file: "d.ts", dependents: 6, tested: false },
+    ],
+  });
+  assert.ok(block.split("\n").length <= 15, "15-line cap still enforced");
+  assert.ok(
+    block.includes("Hubs you are touching (high blast radius): "),
+    "hub line present",
+  );
+  assert.ok(block.includes("a.ts"), "top hub by dependents kept");
+  assert.ok(
+    !block.includes("d.ts"),
+    "beyond top-3 entries truncated (PLAN §5 escape hatch)",
+  );
+  console.log("  ✓ context block hub line respects the 15-line cap");
+}
+
+export function testContextToolHubEndToEnd(): void {
+  withTempRepo((dir) => {
+    // hub.ts imported by exactly HUB_DEPENDENTS_MIN files (4 imps + leaf);
+    // leaf.ts itself by 0.
+    writeFileSync(join(dir, "hub.ts"), "export const hub = 1;\n");
+    writeFileSync(join(dir, "leaf.ts"), "import { hub } from './hub.js';\n");
+    for (let i = 0; i < 4; i++) {
+      writeFileSync(
+        join(dir, `imp${i}.ts`),
+        "import { hub } from './hub.js';\n",
+      );
+    }
+    const withHub = toolProjectHealthContext({
+      worktree: dir,
+      files: ["hub.ts", "leaf.ts"],
+    });
+    assert.ok(withHub.content[0].text.includes("hub.ts (imported by 5 files"));
+    assert.ok(
+      !withHub.content[0].text.includes("leaf.ts (imported by"),
+      "1-dependent file stays silent — below threshold",
+    );
+
+    // files[] without worktree → no graph → no hub line, no throw.
+    const noWorktree = toolProjectHealthContext({ files: ["hub.ts"] });
+    assert.ok(!noWorktree.content[0].text.includes("Hubs you are touching"));
+  });
+  console.log(
+    "  ✓ project_health_context hub detection end-to-end on a real repo",
+  );
 }

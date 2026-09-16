@@ -7,7 +7,12 @@
 // It also surfaces project decisions from the mem log — that read is the only
 // I/O here; `buildProjectHealthContext` stays pure and just renders.
 
-import { buildProjectHealthContext } from "../../context/index.js";
+import { blastRadiusForWorktree } from "../../analyze.js";
+import {
+  buildProjectHealthContext,
+  HUB_DEPENDENTS_MIN,
+  type HubEntry,
+} from "../../context/index.js";
 import { readRecentMemDecisions } from "../../memory.js";
 import { getStatsData } from "../../stats.js";
 import type { ToolResult } from "../types.js";
@@ -34,10 +39,26 @@ export function toolProjectHealthContext(
       }))
     : [];
 
+  // Hub detection needs both worktree (graph root) and files[] (what to map).
+  // Same live-graph cost handoff_check already pays; null/unreadable graph →
+  // no hub line, never a throw (PLAN-hub-signal §3).
+  const hubs: HubEntry[] =
+    worktree && files
+      ? Object.entries(blastRadiusForWorktree(worktree, files) ?? {})
+          .filter(([, b]) => b.dependents >= HUB_DEPENDENTS_MIN)
+          .sort((a, b) => b[1].dependents - a[1].dependents)
+          .map(([file, b]) => ({
+            file,
+            dependents: b.dependents,
+            tested: b.tested,
+          }))
+      : [];
+
   const block = buildProjectHealthContext(getStatsData(), {
     worktree,
     files,
     memDecisions,
+    hubs,
   });
   return { content: [{ type: "text", text: block }] };
 }

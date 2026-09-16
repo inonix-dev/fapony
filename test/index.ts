@@ -22,6 +22,10 @@ import {
 import {
   testComputeModelFit,
   testContextBlockFilesFilterBeyondTop3,
+  testContextBlockHubCapHolds,
+  testContextBlockHubLine,
+  testContextBlockHubLowHistory,
+  testContextBlockHubSilentBelowThreshold,
   testContextBlockLineCap,
   testContextBlockLowHistory,
   testContextBlockLowHistoryStillShowsNotes,
@@ -33,6 +37,7 @@ import {
   testContextBlockWorktreeScope,
   testContextToolEmptyDb,
   testContextToolEndToEnd,
+  testContextToolHubEndToEnd,
 } from "./context.test.js";
 import {
   testDbLifecycle,
@@ -660,6 +665,11 @@ export async function cmdTest(): Promise<void> {
   testComputeModelFit();
   testContextBlockMemDecisions();
   testContextBlockModelFitLine();
+  testContextBlockHubLine();
+  testContextBlockHubLowHistory();
+  testContextBlockHubSilentBelowThreshold();
+  testContextBlockHubCapHolds();
+  testContextToolHubEndToEnd();
   testParseDirtyLines();
   testFormatDirtyBlock();
   testShouldProceedAfterDirty();
