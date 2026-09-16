@@ -1,6 +1,8 @@
-// src/install.ts — `fapony install --platform opencode|claude|zcode|codex` command.
+// src/install.ts — `fapony install --platform opencode|claude|cursor|zcode|codex` command.
 // opencode: adds mcp.fapony config to ~/.config/opencode/opencode.json or opencode.jsonc.
 // claude: shells out to `claude mcp add` (never parses/writes ~/.claude.json directly).
+// cursor: writes mcpServers.fapony to ~/.cursor/mcp.json directly and merges the
+//         fapony stop hook into the stop array in ~/.cursor/hooks.json.
 // zcode: reads/writes ~/.zcode/cli/config.json (fallback ~/.agents/mcp.json) directly,
 //        and symlinks skills into ~/.agents/skills.
 // codex: reads/writes ~/.codex/config.toml directly.
@@ -12,6 +14,7 @@
 import { createInterface } from "node:readline";
 import { cmdInstallClaude } from "./install/claude.js";
 import { cmdInstallCodex } from "./install/codex.js";
+import { cmdInstallCursor } from "./install/cursor.js";
 import { detectClients } from "./install/detect.js";
 import { cmdInstallOpencode } from "./install/opencode.js";
 import { defaultExit, type InstallDeps } from "./install/types.js";
@@ -29,6 +32,7 @@ export {
   cmdInstallCodex,
   findCodexConfig,
 } from "./install/codex.js";
+export { cmdInstallCursor, findCursorDir } from "./install/cursor.js";
 export { detectClients } from "./install/detect.js";
 export {
   cmdInstallOpencode,
@@ -63,6 +67,10 @@ export async function cmdInstall(
     cmdInstallClaude(dryRun, deps);
     return;
   }
+  if (platform === "cursor") {
+    cmdInstallCursor(dryRun, deps);
+    return;
+  }
   if (platform === "zcode") {
     cmdInstallZcode(dryRun, deps);
     return;
@@ -77,9 +85,11 @@ export async function cmdInstall(
   }
   if (platform !== undefined) {
     console.error(
-      `usage: fapony install --platform opencode|claude|zcode|codex [--dry-run]`,
+      `usage: fapony install --platform opencode|claude|cursor|zcode|codex [--dry-run]`,
     );
-    console.error(`  supported platforms: opencode, claude, zcode, codex`);
+    console.error(
+      `  supported platforms: opencode, claude, cursor, zcode, codex`,
+    );
     (deps.exit ?? defaultExit)(1);
     return;
   }
@@ -102,7 +112,7 @@ export async function cmdInstall(
   if (found.length === 0) {
     console.error();
     console.error(
-      `  no MCP client found (looked for claude on PATH; config files for opencode, zcode, codex).`,
+      `  no MCP client found (looked for claude on PATH; config files for cursor, opencode, zcode, codex).`,
     );
     console.error(
       `  open the app once, then re-run — or force with: fapony install --platform <name>`,
@@ -159,6 +169,9 @@ function installPlatform(
   switch (platform) {
     case "claude":
       cmdInstallClaude(dryRun, deps);
+      break;
+    case "cursor":
+      cmdInstallCursor(dryRun, deps);
       break;
     case "opencode":
       cmdInstallOpencode(dryRun, deps);

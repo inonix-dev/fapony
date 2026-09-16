@@ -9,6 +9,8 @@ import { withTempHome } from "./helpers.js";
 export function testDetectClientsAllFound(): void {
   withTempHome((home) => {
     // claude: checkCmd returns true
+    // cursor: ~/.cursor exists
+    mkdirSync(join(home, ".cursor"), { recursive: true });
     // opencode: config exists
     const ocDir = join(home, ".config", "opencode");
     mkdirSync(ocDir, { recursive: true });
@@ -27,7 +29,7 @@ export function testDetectClientsAllFound(): void {
       checkCmd: () => true,
     };
     const result = detectClients(deps);
-    assert.equal(result.length, 4);
+    assert.equal(result.length, 5);
     assert.ok(
       result.every((d) => d.installed),
       "all should be installed",
@@ -43,7 +45,7 @@ export function testDetectClientsNoneFound(): void {
       checkCmd: () => false,
     };
     const result = detectClients(deps);
-    assert.equal(result.length, 4);
+    assert.equal(result.length, 5);
     assert.ok(
       result.every((d) => !d.installed),
       "none should be installed",

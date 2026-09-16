@@ -89,8 +89,11 @@ import {
   testGateOnceUncertain,
 } from "./gate.test.js";
 import {
+  testCursorPayloadEdges,
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
+  testStopOutputShapesPerClient,
+  testStopPayloadsMapToSameDecision,
   testUtcStampMatchesSqliteFormat,
 } from "./hook.test.js";
 import {
@@ -122,6 +125,15 @@ import {
   testInstallCodexDryRunNoWrite,
   testInstallCodexNoConfigFails,
 } from "./install/codex.test.js";
+import {
+  testCmdInstallDispatchesCursor,
+  testInstallCursorAlreadyConfiguredNoOp,
+  testInstallCursorDryRunNoWrite,
+  testInstallCursorForeignMcpRefuses,
+  testInstallCursorFreshWritesMcpAndHooks,
+  testInstallCursorMergesStopHookKeepsOthers,
+  testInstallCursorNoDirFails,
+} from "./install/cursor.test.js";
 import {
   testDetectClientsAllFound,
   testDetectClientsMixed,
@@ -568,6 +580,9 @@ export async function cmdTest(): Promise<void> {
   testReviewSeedStateDbUntouched();
   testDecideStopBlocksUngradedCommits();
   testDecideStopAllowsEveryUnknown();
+  testStopPayloadsMapToSameDecision();
+  testCursorPayloadEdges();
+  testStopOutputShapesPerClient();
   testUtcStampMatchesSqliteFormat();
   testDbLifecycle();
   testSchemaVersionStamped();
@@ -732,6 +747,13 @@ export async function cmdTest(): Promise<void> {
   testInstallCodexAlreadyConfiguredNoOp();
   testInstallCodexDryRunNoWrite();
   testCmdInstallDispatchesCodex();
+  testInstallCursorNoDirFails();
+  testInstallCursorFreshWritesMcpAndHooks();
+  testInstallCursorMergesStopHookKeepsOthers();
+  testInstallCursorForeignMcpRefuses();
+  testInstallCursorAlreadyConfiguredNoOp();
+  testInstallCursorDryRunNoWrite();
+  testCmdInstallDispatchesCursor();
   testInstallZcodeNoConfigFails();
   testInstallZcodePrimaryPath();
   testInstallZcodeFallbackPath();
