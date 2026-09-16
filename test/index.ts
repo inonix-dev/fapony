@@ -32,8 +32,10 @@ import {
   testContextBlockLowHistory,
   testContextBlockLowHistoryStillShowsNotes,
   testContextBlockMemDecisions,
+  testContextBlockMergesReasonsAcrossWorktrees,
   testContextBlockModelFitLine,
   testContextBlockNoPatterns,
+  testContextBlockNoteCapAndNoneTag,
   testContextBlockRecentNotes,
   testContextBlockSnapshot,
   testContextBlockWorktreeScope,
@@ -701,6 +703,8 @@ export async function cmdTest(): Promise<void> {
   testComputeModelFit();
   testContextBlockMemDecisions();
   testContextBlockModelFitLine();
+  testContextBlockMergesReasonsAcrossWorktrees();
+  testContextBlockNoteCapAndNoneTag();
   testContextBlockHubLine();
   testContextBlockHubLowHistory();
   testContextBlockHubSilentBelowThreshold();
