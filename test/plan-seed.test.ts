@@ -273,6 +273,70 @@ export function testPlanSeedCapsHold(): void {
   console.log("  ✓ plan-seed caps hold: PLAN ≤ 60 / SPEC ≤ 200 with markers");
 }
 
+export function testPlanSeedSingleFileScope(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-file-"));
+  try {
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(
+      join(dir, "src", "util.ts"),
+      [
+        "export function fmt(x: string): string { return x; }",
+        "export function parse(s: string): unknown { return s; }",
+        "",
+      ].join("\n"),
+    );
+    withCwd(dir, () => {
+      cmdPlanSeed(["file", "--spec", "--scope", "src/util.ts"]);
+      const spec = readFileSync(
+        join(dir, ".fapony", "spec", "SPEC-file.md"),
+        "utf-8",
+      );
+      const plan = readFileSync(
+        join(dir, ".fapony", "plan", "PLAN-file.md"),
+        "utf-8",
+      );
+      // §2 reports the single-file scope as exports found
+      assert.match(plan, /scanned: src\/util\.ts — 1 file\(s\), 2 export\(s\)/);
+      // SPEC chunk index links the file
+      assert.match(spec, /\[util\.ts\]\(#util-ts\)/);
+      // Signatures are present
+      assert.match(spec, /export function fmt/);
+      assert.match(spec, /export function parse/);
+      // Scope echo present in SPEC
+      assert.match(spec, /\*\*Scope:\*\* src\/util\.ts/);
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log(
+    "  ✓ plan-seed --scope <file> produces SPEC chunk with signatures",
+  );
+}
+
+export function testPlanSeedOverlapScopeDedup(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-overlap-"));
+  try {
+    mkdirSync(join(dir, "src", "utils"), { recursive: true });
+    writeFileSync(join(dir, "src", "index.ts"), "export const a = 1;\n");
+    writeFileSync(join(dir, "src", "utils", "b.ts"), "export const b = 2;\n");
+    withCwd(dir, () => {
+      cmdPlanSeed(["overlap", "--scope", "src", "--scope", "src/utils"]);
+      const plan = readFileSync(
+        join(dir, ".fapony", "plan", "PLAN-overlap.md"),
+        "utf-8",
+      );
+      // §2 should count each file once, not twice
+      assert.match(plan, /2 file\(s\), 2 export\(s\)/);
+      assert.doesNotMatch(plan, /4 file\(s\)/, "no double-count");
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log(
+    "  ✓ plan-seed prunes nested --scope roots to avoid double-count",
+  );
+}
+
 export function testPlanSeedConfigFallback(): void {
   withFixture((dir) => {
     // A config file that sets custom dirs must be honoured; a broken one must

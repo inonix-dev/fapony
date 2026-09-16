@@ -94,12 +94,16 @@ function scopeSourceFiles(root: string): string[] {
   );
 }
 
-function renderScope(roots: string[], cwd: string): string {
+function renderScope(
+  roots: string[],
+  filesByRoot: Map<string, string[]>,
+  cwd: string,
+): string {
   const byToken = new Map<string, Set<string>>();
   let files = 0;
   let exports = 0;
   for (const root of roots) {
-    for (const abs of scopeSourceFiles(root)) {
+    for (const abs of filesByRoot.get(root) ?? []) {
       let source: string;
       try {
         source = readFileSync(abs, "utf-8");
@@ -171,6 +175,7 @@ function gitChangedFiles(repoRoot: string): string[] {
         cwd: repoRoot,
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],
+        timeout: 15_000,
       });
     } catch {
       return "";
@@ -411,9 +416,31 @@ function moduleChunk(absDir: string, rel: string): Chunk | null {
   return { slug: slug(rel), title: rel, body: lines.join("\n").trimEnd() };
 }
 
-// One scope root = root files first, then one chunk per top-level dir.
+// One scope root = root files first, then one chunk per top-level dir. When the
+// root is a single file, produce one chunk for it (readdirSync on a file throws,
+// so handle it before the dir walk).
 function rootChunks(absDir: string): Chunk[] {
   const chunks: Chunk[] = [];
+  let st: import("node:fs").Stats;
+  try {
+    st = statSync(absDir);
+  } catch {
+    return chunks;
+  }
+  if (!st.isDirectory()) {
+    // Single-file scope: one chunk, the file's own signatures.
+    const name = basename(absDir);
+    if (!isSourceFile(st, name)) return chunks;
+    const lines = fileLines(absDir);
+    if (lines.length === 0) return chunks;
+    return [
+      capChunk({
+        slug: slug(name),
+        title: name,
+        body: lines.join("\n"),
+      }),
+    ];
+  }
   let entries: string[] = [];
   try {
     entries = readdirSync(absDir, { withFileTypes: true })
@@ -484,6 +511,31 @@ function specTemplate(
   scopeEcho: string | null,
 ): string {
   const index = chunks.map((c) => `- [${c.title}](#${c.slug})`).join("\n");
+  // The index is one string with a newline per chunk; budgeting it as one line
+  // undershot the cap by that many lines (the 18k-SPEC failure mode). Cap the
+  // index separately so the body's capLines has a bounded head to work with.
+  const fixedHead = [
+    `# SPEC-${name} — (agent เติมชื่อเรื่อง)`,
+    "",
+    `> **Used by:** PLAN-${name} — signatures below come from \`fapony map <file>\` (live scan — re-seed after structural changes).`,
+    ...(scopeEcho ? [`> **Scope:** ${scopeEcho}`] : []),
+    "",
+    "## Chunk index",
+    "",
+  ];
+  const indexLines = index
+    ? index.split("\n")
+    : ["_(no chunks — no source files found)_"];
+  const budgetIndex = Math.max(MAX_SPEC_LINES - fixedHead.length - 1, 0);
+  const cappedIndex = capLines(
+    indexLines,
+    budgetIndex,
+    "chunks (narrow with --scope <path>)",
+  );
+  const head = [...fixedHead, ...cappedIndex, ""];
+  const tail = [
+    "## (agent เติม — wireframes / edge cases / API shapes ที่ plan อ้างถึง)",
+  ];
   const bodyLines = chunks.flatMap((c) => [
     `## <a id="${c.slug}"></a>${c.title}`,
     "",
@@ -493,29 +545,13 @@ function specTemplate(
   // Whole-file cap runs last and the agent section survives it, same way
   // review-seed reserves its disclaimer: reserve the tail, cut the middle,
   // say how much was dropped.
-  const head = [
-    `# SPEC-${name} — (agent เติมชื่อเรื่อง)`,
-    "",
-    `> **Used by:** PLAN-${name} — signatures below come from \`fapony map <file>\` (live scan — re-seed after structural changes).`,
-    ...(scopeEcho ? [`> **Scope:** ${scopeEcho}`] : []),
-    "",
-    "## Chunk index",
-    "",
-    // split — the index is one string with a newline per chunk; budgeting it
-    // as one line undershot the cap by that many lines.
-    ...(index ? index.split("\n") : ["_(no chunks — no source files found)_"]),
-    "",
-  ];
-  const tail = [
-    "## (agent เติม — wireframes / edge cases / API shapes ที่ plan อ้างถึง)",
-  ];
-  const budget = Math.max(MAX_SPEC_LINES - head.length - tail.length, 1);
-  if (bodyLines.length > budget) {
-    const rest = bodyLines.length - (budget - 1);
-    bodyLines.length = budget - 1;
-    bodyLines.push(`… +${rest} more lines (narrow with --scope <path>)`);
-  }
-  return [...head, ...bodyLines, ...tail].join("\n") + "\n";
+  const budget = Math.max(MAX_SPEC_LINES - head.length - tail.length, 0);
+  const cappedBody = capLines(
+    bodyLines,
+    budget,
+    "lines (narrow with --scope <path>)",
+  );
+  return [...head, ...cappedBody, ...tail].join("\n") + "\n";
 }
 
 // --- CLI entry ---
@@ -567,18 +603,34 @@ export function cmdPlanSeed(args: string[]): void {
   }
 
   // Scope: explicit paths win; default is the cwd. Resolved absolutes,
-  // deduped — the same path twice is one scope.
+  // deduped — the same path twice is one scope. Nested roots are pruned:
+  // --scope src --scope src/utils would double-count files in src/utils.
   const requested = [...new Set(scopeArgs.map((s) => resolve(cwd, s)))];
+  // Sort by path length (shortest first) so a parent always comes before its
+  // children; then drop any root whose ancestor is already in the list.
+  requested.sort((a, b) => a.length - b.length);
+  const roots: string[] = [];
   for (const r of requested) {
+    if (roots.some((accepted) => r.startsWith(`${accepted}${sep}`))) continue;
+    roots.push(r);
+  }
+  for (const r of roots) {
     if (!existsSync(r)) {
       console.error(`plan-seed: scope not found: ${r}`);
       process.exit(1);
     }
   }
-  const roots = requested.length > 0 ? requested : [resolve(cwd, ".")];
+  if (roots.length === 0) roots.push(resolve(cwd, "."));
   // Past a few hundred files the caps start eating output — say why it looks
-  // short instead of letting the seed silently truncate. 300 is a guess.
-  const totalFiles = roots.reduce((n, r) => n + scopeSourceFiles(r).length, 0);
+  // short instead of letting the seed silently truncate. 300 is a guess. Walk
+  // the scope once here; renderScope reuses the result without a second walk.
+  const filesByRoot = new Map<string, string[]>();
+  let totalFiles = 0;
+  for (const r of roots) {
+    const files = scopeSourceFiles(r);
+    filesByRoot.set(r, files);
+    totalFiles += files.length;
+  }
   if (totalFiles > SCOPE_WARN_FILES) {
     console.error(
       `plan-seed: ${totalFiles} source files in scope (> ${SCOPE_WARN_FILES}) — output is capped; narrow with --scope <path>`,
@@ -594,7 +646,7 @@ export function cmdPlanSeed(args: string[]): void {
     process.exit(1);
   }
 
-  const scope = renderScope(roots, cwd);
+  const scope = renderScope(roots, filesByRoot, cwd);
   const risks = renderRisks(worktree, roots);
   const contextFapony = renderContextFapony(worktree);
 

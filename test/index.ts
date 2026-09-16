@@ -353,8 +353,10 @@ import {
   testPlanSeedCapsHold,
   testPlanSeedConfigFallback,
   testPlanSeedNoOverwrite,
+  testPlanSeedOverlapScopeDedup,
   testPlanSeedRepetitionCluster,
   testPlanSeedScopeFilters,
+  testPlanSeedSingleFileScope,
   testPlanSeedSpecSignatures,
   testPlanSeedWritesPlan,
 } from "./plan-seed.test.js";
@@ -378,6 +380,8 @@ import {
   testReportHtmlCanonicalQuality,
   testReportHtmlEscapesContent,
   testReportHtmlFiltersAndMethodology,
+  testReportWebForceOverrides,
+  testReportWebRefusesWhenCommittable,
   testReportWebWarnsOnlyWhenCommittable,
 } from "./report-html.test.js";
 import {
@@ -581,6 +585,8 @@ export async function cmdTest(): Promise<void> {
   testPlanSeedRepetitionCluster();
   testPlanSeedScopeFilters();
   testPlanSeedCapsHold();
+  testPlanSeedSingleFileScope();
+  testPlanSeedOverlapScopeDedup();
   testPlanSeedConfigFallback();
   testReviewSeedScopeFlags();
   testReviewSeedStructure();
@@ -963,6 +969,8 @@ export async function cmdTest(): Promise<void> {
   testReportHtmlByModelProjectColumn();
   testReportHtmlEscapesContent();
   testReportWebWarnsOnlyWhenCommittable();
+  testReportWebRefusesWhenCommittable();
+  testReportWebForceOverrides();
   // Usage-web tests
   testFmtTokensZero();
   testFmtTokensThousands();
