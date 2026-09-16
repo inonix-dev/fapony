@@ -33,6 +33,8 @@ const MAX_IMPORTER_LINES = 4;
 const MAX_SIGNATURE_LINES = 4;
 const MAX_IMPORTERS_SHOWN = 4;
 const MAX_SIGNATURES_SHOWN = 5;
+const MAX_DYNAMIC_LINES = 2;
+const MAX_CROSS_CHECK_LINES = 2;
 const OUTPUT_CAP = 30;
 const DISCLAIMER =
   "static graph only — seed is where to enter, not what is verified";
@@ -502,7 +504,10 @@ export function renderSeed(args: string[], cwd: string): string {
       lines.push(
         "dynamic-dispatch hint (import(/require( — resolve at runtime):",
       );
-      lines.push(...wrapped);
+      lines.push(...wrapped.slice(0, MAX_DYNAMIC_LINES));
+      if (wrapped.length > MAX_DYNAMIC_LINES) {
+        lines.push(`  … +${wrapped.length - MAX_DYNAMIC_LINES} more lines`);
+      }
     }
   }
 
@@ -515,12 +520,24 @@ export function renderSeed(args: string[], cwd: string): string {
       .sort();
     if (notInPlan.length > 0 || notChanged.length > 0) {
       if (notInPlan.length > 0) {
+        const wrapped = wrap(notInPlan, ", ", "  ");
         lines.push("plan cross-check: changed-not-in-plan:");
-        lines.push(...wrap(notInPlan, ", ", "  "));
+        lines.push(...wrapped.slice(0, MAX_CROSS_CHECK_LINES));
+        if (wrapped.length > MAX_CROSS_CHECK_LINES) {
+          lines.push(
+            `  … +${wrapped.length - MAX_CROSS_CHECK_LINES} more lines`,
+          );
+        }
       }
       if (notChanged.length > 0) {
+        const wrapped = wrap(notChanged, ", ", "  ");
         lines.push("plan cross-check: in-plan-not-changed:");
-        lines.push(...wrap(notChanged, ", ", "  "));
+        lines.push(...wrapped.slice(0, MAX_CROSS_CHECK_LINES));
+        if (wrapped.length > MAX_CROSS_CHECK_LINES) {
+          lines.push(
+            `  … +${wrapped.length - MAX_CROSS_CHECK_LINES} more lines`,
+          );
+        }
       }
     }
   } else if (scope.kind === "plan") {
@@ -529,12 +546,14 @@ export function renderSeed(args: string[], cwd: string): string {
     lines.push("plan cross-check: skipped — no --plan flag");
   }
 
-  lines.push(DISCLAIMER);
-  if (lines.length > OUTPUT_CAP) {
-    const rest = lines.length - (OUTPUT_CAP - 1);
-    lines.length = OUTPUT_CAP - 1;
+  // Disclaimer is mandatory on every output — reserve its line so cap
+  // truncation (below) can never carry it off with the rest of the tail.
+  if (lines.length > OUTPUT_CAP - 1) {
+    const rest = lines.length - (OUTPUT_CAP - 2);
+    lines.length = OUTPUT_CAP - 2;
     lines.push(`… (+${rest} lines truncated)`);
   }
+  lines.push(DISCLAIMER);
   return lines.join("\n");
 }
 
