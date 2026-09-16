@@ -75,10 +75,38 @@ draft, which is worth far more than a question about constraints.
 - If fapony isn't wired up, or it says "not enough history yet", skip silently — never block
   drafting on this.
 
+## Phase 1.6 — Seed the facts (`fapony plan-seed`, if the CLI is available)
+
+If the `fapony` CLI is on PATH, run it **once** before drafting:
+
+```bash
+fapony plan-seed <feature> --spec
+```
+
+It writes `<planDir>/PLAN-<feature>.md` + `<specDir>/SPEC-<feature>.md` with the factual
+sections already filled from the code itself — §2 Scope from the source map, §5 Risks from the
+import graph, and a `## Context (fapony)` block (recent mem decisions + which model holds up per
+task shape). Plan-dir/spec-dir resolution and name collisions are handled by the CLI: it refuses
+to overwrite (matches hard rule 9 — pick `-v2`).
+
+What that buys you: you skip re-deriving structure by opening files (the expensive, wrong-file
+prone part) and spend the draft budget on judgment — Goal, Done criteria, ordering. So:
+
+- **Read the seeded PLAN first**, then draft into it — correct the seeded §2/§5 only where the
+  dev's idea contradicts them (say so when you do: "the map shows X but you want Y").
+- **Fill the judgment sections** — §1/3/4/6/8 and the TL;DR. They start as `_agent เติม_` slots.
+- The seeded lines are tagged `(fapony map)` / `(fapony analyze)` — keep the tags so the dev can
+  tell measured facts from your guesses.
+- **Signatures live in the SPEC chunks only.** Never paste them into plan §7 — link to the spec.
+- If the CLI is missing, skip silently and draft from scratch (Phase 2 as written) — never block
+  on a missing tool.
+
 ## Phase 2 — Draft straight to the file
 
 Write the full draft **now**, all eight sections, from the Phase 0 harvest + the Phase 1 answer +
-the Phase 1.5 patterns. Fill every section — guessing where you have to.
+the Phase 1.5 patterns — **or, when Phase 1.6 seeded a file, correct and complete that file
+instead of writing from scratch** (its §2/§5 already hold the measured facts). Fill every
+section — guessing where you have to.
 
 ```
 1. Goal (why)                          5. Risks & Escape hatches (if it fails)
@@ -103,7 +131,8 @@ keys are missing, fall back to `.fapony/plan` / `.fapony/spec` (shipped plans si
 app (e.g. `apps/<app>/plan`) are normal — writing to the default there scatters plans into a
 directory nobody reads.
 
-`ls <planDir>/` and check `PLAN-<feature>.md` doesn't already exist. If it does, don't overwrite
+`ls <planDir>/` and check `PLAN-<feature>.md` doesn't already exist (Phase 1.6's CLI already
+refuses to overwrite; when drafting by hand this check is yours). If it does, don't overwrite
 it — pick a more specific name (e.g. `PLAN-<feature>-v2.md`) or ask which one is stale.
 
 **Open the file with frontmatter, then a TL;DR** — the two things that let every later question
@@ -195,6 +224,8 @@ Only if the dev asks, or the plan keeps trying to describe *how*:
 > react than specify."
 
 Then draft `<specDir>/SPEC-<feature>.md` (same config lookup as Phase 2) by:
+- If Phase 1.6 already created it (`--spec`), edit that one — its Chunk index + signatures are
+  the live scan; add the dev-facing detail (edge cases, examples, fail examples) on top
 - Referencing sections from the plan directly — don't rewrite
 - More concrete examples than abstract
 - Include "fail examples" to make boundaries clear
