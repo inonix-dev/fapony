@@ -378,6 +378,7 @@ import {
   testReviewSeedDeterministicAndNoWrite,
   testReviewSeedNotARepo,
   testReviewSeedPlanCrossCheck,
+  testReviewSeedRenames,
   testReviewSeedScopeFlags,
   testReviewSeedStateDbUntouched,
   testReviewSeedStructure,
@@ -574,6 +575,7 @@ export async function cmdTest(): Promise<void> {
   testPlanSeedConfigFallback();
   testReviewSeedScopeFlags();
   testReviewSeedStructure();
+  testReviewSeedRenames();
   testReviewSeedDeterministicAndNoWrite();
   testReviewSeedPlanCrossCheck();
   testReviewSeedNotARepo();

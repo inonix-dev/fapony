@@ -165,6 +165,48 @@ export function testReviewSeedStructure(): void {
   console.log("  ✓ review-seed structure lines are facts-only and capped");
 }
 
+export function testReviewSeedRenames(): void {
+  // plain file rename — one annotated row, never a delete+add pair
+  withFixture((dir) => {
+    writeFileSync(join(dir, "src", "old.ts"), "export const old = 1;\n");
+    execSync("git add src/old.ts", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "add old" src/old.ts', {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    execSync("git mv src/old.ts src/new.ts", { cwd: dir, stdio: "ignore" });
+    const staged = renderSeed(["--staged"], dir);
+    assert.match(staged, /src\/new\.ts \(renamed from src\/old\.ts\)/);
+    assert.doesNotMatch(staged, /src\/old\.ts \+\d/);
+  });
+  // directory rename — git's brace form {a => b}/x.ts parsed back to full
+  // paths; git's internal syntax never leaks into the output
+  const dir = mkdtempSync(join(tmpdir(), "fapony-review-seed-dirren-"));
+  try {
+    execSync("git init", { cwd: dir, stdio: "ignore" });
+    execSync("git config user.email 'test@test.com'", {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    execSync("git config user.name 'Test'", { cwd: dir, stdio: "ignore" });
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src", "x.ts"), "export const x = 1;\n");
+    writeFileSync(join(dir, "src", "y.ts"), "export const y = 2;\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "src"', { cwd: dir, stdio: "ignore" });
+    execSync("git mv src pkg", { cwd: dir, stdio: "ignore" });
+    const staged = renderSeed(["--staged"], dir);
+    assert.match(staged, /pkg\/x\.ts \(renamed from src\/x\.ts\)/);
+    assert.match(staged, /pkg\/y\.ts \(renamed from src\/y\.ts\)/);
+    assert.doesNotMatch(staged, /\{/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log(
+    "  ✓ review-seed parses renames (-M) — one row, annotated, brace form expanded",
+  );
+}
+
 export function testReviewSeedDeterministicAndNoWrite(): void {
   withFixture((dir) => {
     const before = treePaths(dir);
