@@ -36,9 +36,11 @@ export {
   type WhereClause,
 } from "./helpers.js";
 export { readPassiveUsage } from "./opencode.js";
+export { CLIENTS, type ClientAdapter } from "./registry.js";
 export {
   EMPTY_RESULT,
   type ModelBreakdown,
+  type PassiveUsageReader,
   type PassiveUsageResult,
   type SessionDetail,
   STEP_TOKENS_NOTE,

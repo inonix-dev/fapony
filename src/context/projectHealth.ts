@@ -34,11 +34,14 @@ export interface HubEntry {
   file: string;
   dependents: number;
   tested: boolean;
+  /** Transitive (multi-hop) dependent count — omitted when equal to dependents. */
+  transitive?: number;
 }
 
 // Files imported by at least this many direct dependents are structural hubs —
 // a break there drags every dependent with it (PLAN-hub-signal §4: 5 is the
-// noise floor guess; transitive blast is PLAN-callers-impact, not this).
+// noise floor guess). Threshold gates on direct dependents only; transitive
+// count is additive context on the same line, not a second gate.
 export const HUB_DEPENDENTS_MIN = 5;
 // One line, few entries — the mechanical 15-line cap already bounds the block.
 const HUB_MAX = 3;
@@ -80,10 +83,13 @@ function hubLine(hubs: HubEntry[]): string | null {
   if (hubs.length === 0) return null;
   const list = hubs
     .slice(0, HUB_MAX)
-    .map(
-      (h) =>
-        `${h.file} (imported by ${h.dependents} files${h.tested ? "" : "; untested"})`,
-    )
+    .map((h) => {
+      const transitiveBit =
+        h.transitive !== undefined && h.transitive > h.dependents
+          ? `, ${h.transitive} transitively`
+          : "";
+      return `${h.file} (imported by ${h.dependents} files${transitiveBit}${h.tested ? "" : "; untested"})`;
+    })
     .join(" · ");
   return `- Hubs you are touching (high blast radius): ${list}`;
 }

@@ -6,6 +6,8 @@ import {
 } from "./activeSession.test.js";
 import {
   testAnalyzeBlastRadius,
+  testAnalyzeBlastRadiusTransitive,
+  testAnalyzeBlastRadiusTransitiveCycle,
   testAnalyzeChangedUntested,
   testAnalyzeEmptyDir,
   testAnalyzeHubOrphanCycle,
@@ -87,8 +89,11 @@ import {
   testGateOnceUncertain,
 } from "./gate.test.js";
 import {
+  testCursorPayloadEdges,
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
+  testStopOutputShapesPerClient,
+  testStopPayloadsMapToSameDecision,
   testUtcStampMatchesSqliteFormat,
 } from "./hook.test.js";
 import {
@@ -120,6 +125,15 @@ import {
   testInstallCodexDryRunNoWrite,
   testInstallCodexNoConfigFails,
 } from "./install/codex.test.js";
+import {
+  testCmdInstallDispatchesCursor,
+  testInstallCursorAlreadyConfiguredNoOp,
+  testInstallCursorDryRunNoWrite,
+  testInstallCursorForeignMcpRefuses,
+  testInstallCursorFreshWritesMcpAndHooks,
+  testInstallCursorMergesStopHookKeepsOthers,
+  testInstallCursorNoDirFails,
+} from "./install/cursor.test.js";
 import {
   testDetectClientsAllFound,
   testDetectClientsMixed,
@@ -364,6 +378,7 @@ import {
   testReviewSeedDeterministicAndNoWrite,
   testReviewSeedNotARepo,
   testReviewSeedPlanCrossCheck,
+  testReviewSeedRenames,
   testReviewSeedScopeFlags,
   testReviewSeedStateDbUntouched,
   testReviewSeedStructure,
@@ -541,6 +556,8 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeSkipsUnresolvableAndBroken();
   testAnalyzeEmptyDir();
   testAnalyzeBlastRadius();
+  testAnalyzeBlastRadiusTransitive();
+  testAnalyzeBlastRadiusTransitiveCycle();
   testAnalyzeIsTestFile();
   testMapExtractExports();
   testMapExtractExportsParseError();
@@ -558,12 +575,16 @@ export async function cmdTest(): Promise<void> {
   testPlanSeedConfigFallback();
   testReviewSeedScopeFlags();
   testReviewSeedStructure();
+  testReviewSeedRenames();
   testReviewSeedDeterministicAndNoWrite();
   testReviewSeedPlanCrossCheck();
   testReviewSeedNotARepo();
   testReviewSeedStateDbUntouched();
   testDecideStopBlocksUngradedCommits();
   testDecideStopAllowsEveryUnknown();
+  testStopPayloadsMapToSameDecision();
+  testCursorPayloadEdges();
+  testStopOutputShapesPerClient();
   testUtcStampMatchesSqliteFormat();
   testDbLifecycle();
   testSchemaVersionStamped();
@@ -728,6 +749,13 @@ export async function cmdTest(): Promise<void> {
   testInstallCodexAlreadyConfiguredNoOp();
   testInstallCodexDryRunNoWrite();
   testCmdInstallDispatchesCodex();
+  testInstallCursorNoDirFails();
+  testInstallCursorFreshWritesMcpAndHooks();
+  testInstallCursorMergesStopHookKeepsOthers();
+  testInstallCursorForeignMcpRefuses();
+  testInstallCursorAlreadyConfiguredNoOp();
+  testInstallCursorDryRunNoWrite();
+  testCmdInstallDispatchesCursor();
   testInstallZcodeNoConfigFails();
   testInstallZcodePrimaryPath();
   testInstallZcodeFallbackPath();

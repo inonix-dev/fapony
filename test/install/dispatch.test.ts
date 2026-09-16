@@ -30,7 +30,8 @@ export async function testCmdInstallRejectsUnknownPlatform(): Promise<void> {
   }
   const err = lines.join("\n");
   assert.equal(code, 1);
-  assert.ok(err.includes("opencode|claude|zcode"), `got: ${err}`);
+  assert.ok(err.includes("opencode|claude"), `got: ${err}`);
+  assert.ok(err.includes("|cursor|"), `got: ${err}`);
   console.log("  ✓ install rejects unknown platform");
 }
 

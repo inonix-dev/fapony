@@ -33,7 +33,11 @@ const MAX_IMPORTER_LINES = 4;
 const MAX_SIGNATURE_LINES = 4;
 const MAX_IMPORTERS_SHOWN = 4;
 const MAX_SIGNATURES_SHOWN = 5;
+const MAX_DYNAMIC_LINES = 2;
+const MAX_CROSS_CHECK_LINES = 2;
 const OUTPUT_CAP = 30;
+// Signature text cap per symbol (same trim as map.ts's file view).
+const SIG_MAX = 90;
 const DISCLAIMER =
   "static graph only — seed is where to enter, not what is verified";
 const USAGE =
@@ -156,6 +160,8 @@ interface FileEntry {
   ins: number | null;
   del: number | null;
   untracked: boolean;
+  /** Set when -M paired this path with a deleted source (a rename). */
+  renamedFrom?: string;
 }
 
 interface ResolvedScope {
@@ -165,17 +171,33 @@ interface ResolvedScope {
   crossCheck?: { planFiles: string[]; changed: string[] };
 }
 
+// numstat with -M reports renames as `old => new` (whole path) or git's
+// brace form `prefix/{old => new}/suffix` (only the moved segment) — expand
+// both back to full paths so downstream sections see the real new path plus
+// a renamedFrom annotation, never git's internal syntax.
 function parseNumstat(output: string): FileEntry[] {
   const out: FileEntry[] = [];
   for (const line of output.split("\n").filter(Boolean)) {
     const [ins, del, ...rest] = line.split("\t");
-    const path = rest.join("\t");
+    let path = rest.join("\t");
     if (!path) continue;
+    if (path.startsWith('"') && path.endsWith('"')) path = path.slice(1, -1);
+    let renamedFrom: string | undefined;
+    const brace = /\{([^{}]*) => ([^{}]*)\}/.exec(path);
+    if (brace) {
+      renamedFrom = path.replace(brace[0], brace[1]);
+      path = path.replace(brace[0], brace[2]);
+    } else if (path.includes(" => ")) {
+      const arrow = path.indexOf(" => ");
+      renamedFrom = path.slice(0, arrow);
+      path = path.slice(arrow + 4);
+    }
     out.push({
       path,
       ins: ins === "-" ? null : Number.parseInt(ins, 10),
       del: del === "-" ? null : Number.parseInt(del, 10),
       untracked: false,
+      ...(renamedFrom !== undefined ? { renamedFrom } : {}),
     });
   }
   return out;
@@ -221,9 +243,7 @@ function resolveScope(scope: Scope, cwd: string): ResolvedScope {
     if (planFiles === null) {
       // No files[] to scope from — fall back to the default diff, say so.
       const entries = [
-        ...parseNumstat(
-          execGit("git diff HEAD --numstat --no-renames", cwd).output,
-        ),
+        ...parseNumstat(execGit("git diff HEAD --numstat -M", cwd).output),
         ...untrackedFiles(execGit("git status --porcelain -uall", cwd).output),
       ];
       return {
@@ -233,9 +253,7 @@ function resolveScope(scope: Scope, cwd: string): ResolvedScope {
     }
     // Cross-check target is the default diff — one declared git call.
     const changed = [
-      ...parseNumstat(
-        execGit("git diff HEAD --numstat --no-renames", cwd).output,
-      ),
+      ...parseNumstat(execGit("git diff HEAD --numstat -M", cwd).output),
       ...untrackedFiles(execGit("git status --porcelain -uall", cwd).output),
     ].map((e) => e.path);
     const shortA = shortSha(cwd, "HEAD");
@@ -251,8 +269,8 @@ function resolveScope(scope: Scope, cwd: string): ResolvedScope {
     };
   }
   if (scope.kind === "default") {
-    const diff = execGit("git diff HEAD --numstat --no-renames", cwd);
-    gitOk(diff, "git diff HEAD --numstat --no-renames");
+    const diff = execGit("git diff HEAD --numstat -M", cwd);
+    gitOk(diff, "git diff HEAD --numstat -M");
     const st = execGit("git status --porcelain -uall", cwd);
     gitOk(st, "git status --porcelain -uall");
     const entries = [
@@ -262,8 +280,8 @@ function resolveScope(scope: Scope, cwd: string): ResolvedScope {
     return { label: "diff HEAD + untracked", entries };
   }
   if (scope.kind === "staged") {
-    const diff = execGit("git diff --cached --numstat --no-renames", cwd);
-    gitOk(diff, "git diff --cached --numstat --no-renames");
+    const diff = execGit("git diff --cached --numstat -M", cwd);
+    gitOk(diff, "git diff --cached --numstat -M");
     return {
       label: "--staged (diff --cached)",
       entries: parseNumstat(diff.output),
@@ -287,8 +305,8 @@ function resolveScope(scope: Scope, cwd: string): ResolvedScope {
       };
     }
     const parentShort = shortSha(cwd, `${sha}^`) ?? parent.output.slice(0, 7);
-    const diff = execGit(`git diff ${sha}^ ${sha} --numstat --no-renames`, cwd);
-    gitOk(diff, `git diff ${sha}^ ${sha} --numstat --no-renames`);
+    const diff = execGit(`git diff ${sha}^ ${sha} --numstat -M`, cwd);
+    gitOk(diff, `git diff ${sha}^ ${sha} --numstat -M`);
     return {
       label: `--commit ${short} (${parentShort}..${short})`,
       entries: parseNumstat(diff.output),
@@ -299,8 +317,8 @@ function resolveScope(scope: Scope, cwd: string): ResolvedScope {
   const mb = execGit(`git merge-base ${expr.replace("...", " ")}`, cwd);
   const tipShort = shortSha(cwd, expr.split("...")[1]) ?? expr.split("...")[1];
   const baseShort = mb.ok ? (shortSha(cwd, mb.output) ?? "?") : null;
-  const diff = execGit(`git diff ${expr} --numstat --no-renames`, cwd);
-  gitOk(diff, `git diff ${expr} --numstat --no-renames`);
+  const diff = execGit(`git diff ${expr} --numstat -M`, cwd);
+  gitOk(diff, `git diff ${expr} --numstat -M`);
   return {
     label: baseShort ? `${expr} = ${baseShort}…${tipShort}` : `--range ${expr}`,
     entries: parseNumstat(diff.output),
@@ -345,10 +363,11 @@ function wrap(parts: string[], joiner: string, indent: string): string[] {
 }
 
 function fmtCounts(e: FileEntry): string {
+  const rename = e.renamedFrom ? ` (renamed from ${e.renamedFrom})` : "";
   if (e.untracked) return " (untracked)";
-  if (e.ins === null || e.del === null) return " (as given)";
-  if (e.ins === 0 && e.del === 0) return "";
-  return ` +${e.ins}-${e.del}`;
+  if (e.ins === null || e.del === null) return rename || " (as given)";
+  if (e.ins === 0 && e.del === 0) return rename;
+  return ` +${e.ins}-${e.del}${rename}`;
 }
 
 function hasDynamicDispatch(absFile: string): boolean {
@@ -470,17 +489,27 @@ export function renderSeed(args: string[], cwd: string): string {
         sigLines.push(`  ${e.path} — ⚠ ${scan.error}`);
         continue;
       }
+      if (scan.symbols.length === 0) {
+        sigLines.push(`  ${e.path} — (no exports)`);
+        continue;
+      }
+      // Real declaration text per symbol — the reviewer checks "did a param
+      // change" without opening the file. Same trim as map.ts's file view.
+      const srcLines = source.split("\n");
       const shown = scan.symbols
         .slice(0, MAX_SIGNATURES_SHOWN)
-        .map((s) => `${s.name}:${s.line}`)
-        .join(", ");
+        .map((s) => {
+          const raw = (srcLines[s.line - 1] ?? "").trim();
+          const sig =
+            raw.length > SIG_MAX ? `${raw.slice(0, SIG_MAX - 1)}…` : raw;
+          return sig ? `${s.name}:${s.line} ${sig}` : `${s.name}:${s.line}`;
+        })
+        .join(" · ");
       const rest =
         scan.symbols.length > MAX_SIGNATURES_SHOWN
           ? ` (+${scan.symbols.length - MAX_SIGNATURES_SHOWN})`
           : "";
-      sigLines.push(
-        `  ${e.path} — ${scan.symbols.length === 0 ? "(no exports)" : `${shown}${rest}`}`,
-      );
+      sigLines.push(`  ${e.path} — ${shown}${rest}`);
     }
     if (sigLines.length > 0) {
       lines.push("signatures (current):");
@@ -502,7 +531,10 @@ export function renderSeed(args: string[], cwd: string): string {
       lines.push(
         "dynamic-dispatch hint (import(/require( — resolve at runtime):",
       );
-      lines.push(...wrapped);
+      lines.push(...wrapped.slice(0, MAX_DYNAMIC_LINES));
+      if (wrapped.length > MAX_DYNAMIC_LINES) {
+        lines.push(`  … +${wrapped.length - MAX_DYNAMIC_LINES} more lines`);
+      }
     }
   }
 
@@ -515,12 +547,24 @@ export function renderSeed(args: string[], cwd: string): string {
       .sort();
     if (notInPlan.length > 0 || notChanged.length > 0) {
       if (notInPlan.length > 0) {
+        const wrapped = wrap(notInPlan, ", ", "  ");
         lines.push("plan cross-check: changed-not-in-plan:");
-        lines.push(...wrap(notInPlan, ", ", "  "));
+        lines.push(...wrapped.slice(0, MAX_CROSS_CHECK_LINES));
+        if (wrapped.length > MAX_CROSS_CHECK_LINES) {
+          lines.push(
+            `  … +${wrapped.length - MAX_CROSS_CHECK_LINES} more lines`,
+          );
+        }
       }
       if (notChanged.length > 0) {
+        const wrapped = wrap(notChanged, ", ", "  ");
         lines.push("plan cross-check: in-plan-not-changed:");
-        lines.push(...wrap(notChanged, ", ", "  "));
+        lines.push(...wrapped.slice(0, MAX_CROSS_CHECK_LINES));
+        if (wrapped.length > MAX_CROSS_CHECK_LINES) {
+          lines.push(
+            `  … +${wrapped.length - MAX_CROSS_CHECK_LINES} more lines`,
+          );
+        }
       }
     }
   } else if (scope.kind === "plan") {
@@ -529,12 +573,14 @@ export function renderSeed(args: string[], cwd: string): string {
     lines.push("plan cross-check: skipped — no --plan flag");
   }
 
-  lines.push(DISCLAIMER);
-  if (lines.length > OUTPUT_CAP) {
-    const rest = lines.length - (OUTPUT_CAP - 1);
-    lines.length = OUTPUT_CAP - 1;
+  // Disclaimer is mandatory on every output — reserve its line so cap
+  // truncation (below) can never carry it off with the rest of the tail.
+  if (lines.length > OUTPUT_CAP - 1) {
+    const rest = lines.length - (OUTPUT_CAP - 2);
+    lines.length = OUTPUT_CAP - 2;
     lines.push(`… (+${rest} lines truncated)`);
   }
+  lines.push(DISCLAIMER);
   return lines.join("\n");
 }
 

@@ -361,6 +361,32 @@ export function testContextBlockHubLine(): void {
     tested.includes("imported by 9 files)"),
     "tested hub omits the untested flag",
   );
+
+  const transitive = buildProjectHealthContext(data, {
+    hubs: [
+      {
+        file: "src/stats/data.ts",
+        dependents: 9,
+        tested: true,
+        transitive: 20,
+      },
+    ],
+  });
+  assert.ok(
+    transitive.includes("imported by 9 files, 20 transitively)"),
+    "hub line adds transitive count when it exceeds direct dependents",
+  );
+
+  const noExtra = buildProjectHealthContext(data, {
+    hubs: [
+      { file: "src/stats/data.ts", dependents: 9, tested: true, transitive: 9 },
+    ],
+  });
+  assert.ok(
+    noExtra.includes("imported by 9 files)") &&
+      !noExtra.includes("transitively"),
+    "transitive count omitted when equal to direct (no new info)",
+  );
   console.log("  ✓ context block surfaces structural hubs");
 }
 

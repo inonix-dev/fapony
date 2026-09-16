@@ -6,13 +6,13 @@
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|usage-scan|usage-web|analyze|setup|stats|telemetry|test|update
+  fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|map|plan-seed|review-seed|digest|mcp|hook-stop|test
   fapony.config.json  # runtime config (worktrees, review.maxRounds, memory, paths, safety) — optional, gitignored
   skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
                                 # each SKILL.md is self-contained — the symlink ships only
                                 # skill/<name>/, so a link out of that dir is dead on install
     plan-with-pony/             # draft plan + spec จาก conversation (pipe to any agent's stdin)
-    review-pony/                # review as verification + known patterns before, verdict after
+    review-pony/                # review as verification + scope facts before (review-seed), verdict after
     move-to-done/               # archive PLAN เข้า .fapony/done/ หลัง ship
     git-commit-conventional/    # commit แยก concern + conventional message
     git-ship/                   # push branch, open PR, merge, reset branch onto base
@@ -41,11 +41,17 @@ fapony/
       claude-code.ts   # readClaudeCodeUsage() — Claude Code JSONL files
       codex.ts         # readCodexUsage() — Codex JSONL files
     context/           # project-health context block, keyed by files[] (any caller)
-      projectHealth.ts # buildProjectHealthContext() — pure over StatsData, ~15 lines max
+      projectHealth.ts # buildProjectHealthContext() — pure over StatsData, ~15 lines max; computeModelFit() (regime×model right-sizing, min-N=5) shared by plan-seed
       index.ts         # barrel re-export
+    analyze.ts         # fapony analyze — buildGraph()/blastRadius()/diagnose() (hub/orphan/cycle/changed-untested), live import graph via Bun.Transpiler.scan(), never persisted
+    map.ts              # fapony map — extractExports() on-demand source index; no direct caller anymore (superseded by plan-seed/review-seed composing it as a library — see PLAN-code-map)
+    plan-seed.ts        # fapony plan-seed <name> [--spec] — writes PLAN(+SPEC) with §2/§5 pre-filled from map/analyze + mem/ledger; caller: plan-with-pony Phase 1.6
+    review-seed.ts      # fapony review-seed [--staged|--commit|--range|--files|--plan] — read-only scope facts for a review (changed/importers/untested/signatures/cross-check); caller: review-pony "Before"
+    hook.ts             # fapony hook-stop — Claude Code Stop hook: blocks a turn with ungraded commits
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
     init.ts            # fapony init — scaffold .fapony/{plan,done,spec,.memory,evidence.json}
     init-mem.ts        # init-mem — scaffold/refresh (`--update`) the memory copy; `init` reuses its copyDir
+    digest/               # fapony digest — merges mem log + plans + usage cache + verdicts into one page
     stats/                # fapony stats — KPI across runs
       data.ts             # getStatsData() + StatsData type + computeEfficiency() + reason_code/plan/escalation/best-passing queries
       format.ts           # formatStatsText() — CLI + MCP text mode

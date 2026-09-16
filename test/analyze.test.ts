@@ -146,6 +146,43 @@ export function testAnalyzeBlastRadius(): void {
   console.log("  ✓ analyze blastRadius counts dependents and test coverage");
 }
 
+export function testAnalyzeBlastRadiusTransitive(): void {
+  withFixture(
+    {
+      // core <- mid <- leaf : leaf is a transitive (not direct) dependent of core.
+      "core.ts": "export const x = 1;\n",
+      "mid.ts": 'import "./core.js";\n',
+      "leaf.ts": 'import "./mid.js";\n',
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      const blast = blastRadius(graph, ["core.ts", "leaf.ts"]);
+      assert.equal(blast["core.ts"].dependents, 1);
+      assert.equal(blast["core.ts"].transitive, 2, "mid + leaf, both hops");
+      assert.equal(blast["leaf.ts"].transitive, 0, "nothing imports leaf");
+    },
+  );
+  console.log(
+    "  ✓ analyze blastRadius walks transitive dependents, cycle-safe",
+  );
+}
+
+export function testAnalyzeBlastRadiusTransitiveCycle(): void {
+  withFixture(
+    {
+      "a.ts": 'import "./b.js";\n',
+      "b.ts": 'import "./a.js";\n',
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      const blast = blastRadius(graph, ["a.ts"]);
+      // a <- b <- a: BFS must terminate and not double-count the cycle.
+      assert.equal(blast["a.ts"].transitive, 1);
+    },
+  );
+  console.log("  ✓ analyze blastRadius transitive walk terminates on cycles");
+}
+
 export function testAnalyzeIsTestFile(): void {
   assert.equal(isTestFile("src/foo.test.ts"), true);
   assert.equal(isTestFile("test/bar.ts"), true);

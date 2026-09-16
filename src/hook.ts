@@ -1,4 +1,4 @@
-// src/hook.ts — Claude Code Stop hook: refuse to end a turn that produced
+// src/hook.ts — Claude Code / Cursor Stop hook: refuse to end a turn that produced
 // commits but no verdict.
 //
 // ทำไมต้องเป็น hook ไม่ใช่ข้อความ: SERVER_INSTRUCTIONS เป็นการ *ขอ* ให้ agent จำ
@@ -7,14 +7,36 @@
 //
 // สัญญาณคือ commit ไม่ใช่ dirty tree — dirty = กำลังทำอยู่, commit = หน่วยงานจบแล้ว
 // ตรงกับนิยาม "1 run = 1 หน่วยงานที่วัดได้" (กฎ 7)
+//
+// สอง payload หนึ่งการตัดสิน — field-mapping เท่านั้น:
+//   claude  {cwd, transcript_path, stop_hook_active} → {"decision":"block"}
+//   cursor  {workspace_roots, conversation_id, loop_count, status} → {"followup_message"}
+//   (cursor: loop_count ≥ 1 = hook เคยยิงแล้ว, status ≠ completed = ปล่อยผ่าน)
 
 import { statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { openDb } from "./db/index.js";
 
-export interface StopHookInput {
+export interface RawStopPayload {
+  // Claude Code
   cwd?: string;
-  transcript_path?: string;
+  transcript_path?: string | null;
   stop_hook_active?: boolean;
+  // Cursor — common schema (https://cursor.com/docs/agent/hooks)
+  workspace_roots?: string[];
+  conversation_id?: string;
+  loop_count?: number;
+  status?: string;
+}
+
+export type StopClient = "claude" | "cursor";
+
+export interface NormalizedStopInput {
+  client: StopClient;
+  cwd: string;
+  transcriptPath: string | null;
+  stopHookActive: boolean;
 }
 
 /** UTC 'YYYY-MM-DD HH:MM:SS' — the format events.ts is written in. */
@@ -60,20 +82,96 @@ function git(args: string[], cwd: string): string | null {
   }
 }
 
+/**
+ * Cursor transcript location derived from the conversation id —
+ * ~/.cursor/projects/<slug>/agent-transcripts/<id>/<id>.jsonl where slug is
+ * the workspace path minus its leading "/", "/" → "-" (Claude Code's slug
+ * convention). Fallback only: a real transcript_path in the payload wins.
+ */
+export function cursorTranscriptPath(
+  home: string,
+  cwd: string,
+  conversationId: string,
+): string {
+  const slug = cwd.replace(/^\//, "").replace(/\//g, "-");
+  return join(
+    home,
+    ".cursor",
+    "projects",
+    slug,
+    "agent-transcripts",
+    conversationId,
+    `${conversationId}.jsonl`,
+  );
+}
+
+export function isCursorPayload(raw: RawStopPayload): boolean {
+  return (
+    Array.isArray(raw.workspace_roots) ||
+    typeof raw.conversation_id === "string"
+  );
+}
+
+/** Field-mapping only — both clients feed the same decideStop below. */
+export function normalizeStopInput(
+  raw: RawStopPayload,
+  home: string,
+): NormalizedStopInput {
+  if (isCursorPayload(raw)) {
+    const cwd = raw.workspace_roots?.[0] ?? raw.cwd ?? process.cwd();
+    let transcriptPath =
+      typeof raw.transcript_path === "string" && raw.transcript_path
+        ? raw.transcript_path
+        : null;
+    if (!transcriptPath && raw.conversation_id) {
+      transcriptPath = cursorTranscriptPath(home, cwd, raw.conversation_id);
+    }
+    return {
+      client: "cursor",
+      cwd,
+      transcriptPath,
+      // loop_count counts follow-ups this hook already triggered — ≥ 1 means
+      // we already blocked once (Cursor's stop_hook_active).
+      stopHookActive: (raw.loop_count ?? 0) > 0,
+    };
+  }
+  return {
+    client: "claude",
+    cwd: raw.cwd ?? process.cwd(),
+    transcriptPath: raw.transcript_path ?? null,
+    stopHookActive: raw.stop_hook_active === true,
+  };
+}
+
+/** Claude blocks with decision:block; Cursor's stop hook "blocks" by
+ *  auto-submitting the reason as the next user message. */
+export function stopOutput(client: StopClient, reason: string): string {
+  return client === "cursor"
+    ? JSON.stringify({ followup_message: reason })
+    : JSON.stringify({ decision: "block", reason });
+}
+
 /** Reads the Stop-hook JSON on stdin, prints a block decision or nothing. */
 export async function cmdHookStop(): Promise<void> {
   let reason: string | null = null;
+  let client: StopClient = "claude";
   try {
-    const input = JSON.parse(await Bun.stdin.text()) as StopHookInput;
-    const cwd = input.cwd ?? process.cwd();
-    const worktree = git(["rev-parse", "--show-toplevel"], cwd);
+    const raw = JSON.parse(await Bun.stdin.text()) as RawStopPayload;
+    const norm = normalizeStopInput(raw, homedir());
+    client = norm.client;
+    // Cursor aborted/errored turns pass: the user said stop, or the loop
+    // died — commits from those turns are still caught at the next completed
+    // stop (the window is the conversation transcript's birthtime).
+    if (client === "cursor" && raw.status !== "completed") return;
+
+    const worktree = git(["rev-parse", "--show-toplevel"], norm.cwd);
 
     // Session start = when the transcript file was created. No transcript,
     // no window to measure — allow.
     let since: string | null = null;
-    if (input.transcript_path) {
+    if (norm.transcriptPath) {
       try {
-        since = utcStamp(statSync(input.transcript_path).birthtime);
+        since = utcStamp(statSync(norm.transcriptPath).birthtime);
       } catch {
         since = null;
       }
@@ -82,7 +180,10 @@ export async function cmdHookStop(): Promise<void> {
     let commits = 0;
     let verdicts = 0;
     if (worktree && since) {
-      const log = git(["log", "--since", `${since} +0000`, "--oneline"], cwd);
+      const log = git(
+        ["log", "--since", `${since} +0000`, "--oneline"],
+        norm.cwd,
+      );
       commits = log ? log.split("\n").filter(Boolean).length : 0;
       if (commits > 0) {
         const db = openDb();
@@ -97,7 +198,7 @@ export async function cmdHookStop(): Promise<void> {
     }
 
     reason = decideStop({
-      stopHookActive: input.stop_hook_active === true,
+      stopHookActive: norm.stopHookActive,
       worktree: since ? worktree : null,
       commits,
       verdicts,
@@ -106,5 +207,5 @@ export async function cmdHookStop(): Promise<void> {
     reason = null; // any failure = allow the turn to end
   }
 
-  if (reason) console.log(JSON.stringify({ decision: "block", reason }));
+  if (reason) console.log(stopOutput(client, reason));
 }

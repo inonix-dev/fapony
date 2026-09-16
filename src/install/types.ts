@@ -29,6 +29,14 @@ args = ["run", "${INSTALL_ROOT}/fapony.ts", "mcp"]
 type = "stdio"
 `;
 
+/** Cursor's stdio MCP shape (mcpServers.fapony in ~/.cursor/mcp.json):
+ *  command is a string, args is an array — same as ZCode, not OpenCode's
+ *  `command: [...]`. */
+export const CURSOR_MCP_ENTRY = {
+  command: "bun",
+  args: ["run", join(INSTALL_ROOT, "fapony.ts"), "mcp"],
+};
+
 export interface ClaudeRunResult {
   exitCode: number;
   stdout: string;
