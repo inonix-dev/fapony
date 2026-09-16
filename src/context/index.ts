@@ -4,6 +4,8 @@ export {
   buildProjectHealthContext,
   computeModelFit,
   type HealthContextOptions,
+  HUB_DEPENDENTS_MIN,
+  type HubEntry,
   type MemDecision,
   type ModelFit,
 } from "./projectHealth.js";

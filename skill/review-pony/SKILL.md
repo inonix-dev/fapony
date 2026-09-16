@@ -1,6 +1,6 @@
 ---
 name: review-pony
-description: Review a plan, PR, diff, or design doc as a verification rather than an opinion — scope first, walk the real path, break it on paper, cite everything. Takes optional effort (low|medium|high|max, widens the walk only, never skips a pass) and --fix (apply CONFIRMED blocker/major findings after the report). Wired to fapony; pulls known failure patterns from run history before reviewing and records the verdict after. Trigger on /review-pony and proactively whenever the user asks to review, audit, scrutinize, sanity-check, or get a second opinion on a plan, PR, diff, design doc, or proposed code change.
+description: Review a plan, PR, diff, or design doc as a verification rather than an opinion — scope first, walk the real path, break it on paper, cite everything. Takes optional effort (low|medium|high|max, widens the walk only, never skips a pass) and --fix (apply CONFIRMED blocker/major findings after the report). Records the verdict to fapony after the report. Trigger on /review-pony and proactively whenever the user asks to review, audit, scrutinize, sanity-check, or get a second opinion on a plan, PR, diff, design doc, or proposed code change.
 ---
 
 # Review Pony
@@ -14,9 +14,9 @@ Four passes. Run them in order. Each one is allowed to end the review early.
 only. Passes 1, 3, and 4 run in full at every level; effort never skips verification, it only
 changes how far you walk before writing findings down. There is no `ultra` here — that's
 multi-agent cloud review; point the user at `/code-review ultra` instead.
-`--fix` — after the report, apply the fix for every `blocker`/`major` `CONFIRMED` finding to the
-working tree (never nits, never `PLAUSIBLE`), then say what was applied and what wasn't in one
-line each. `--comment` is not supported here — that's PR-posting, already `/code-review --comment`.
+`--fix` — after the report, apply every `blocker`/`major` `CONFIRMED` fix (never nits, never
+`PLAUSIBLE`) — details in the `--fix` section below. `--comment` is not supported — PR-posting
+is another tool's job.
 
 ## The four passes
 
@@ -30,23 +30,12 @@ proof that you looked. Start at pass 1.
 
 ---
 
-## Before: what already goes wrong here (fapony)
+## Before: scope facts (fapony, optional)
 
-Call `project_health_context` with `worktree` set to the **absolute path** of this repo —
-`git rev-parse --show-toplevel`, never a hardcoded literal, this skill ships to other projects.
-When the review scope is clear (specific files or a focused PR), also pass `files` with the
-list of files being changed — this filters findings to only those relevant to your scope.
-It returns recurring `reason_code`s, escalated plans, round-1-pass shapes, and recent verdict
-notes.
-
-The absolute path is not a preference. `runs.worktree` is free text, so a bare repo name writes
-to a bucket no later query reads — `project_health_context` reports "not enough history" on a
-project that has plenty, and `verification_report` on that run fails outright with *worktree key
-"<name>" not found in config*. Every fapony tool scopes by absolute path. Match them.
-
-Skim it, don't quote it back. It tells you where to press harder: if `missing_test` has come up
-4×, coverage is not a nit in this repo. If the tool errors or fapony isn't wired in this session,
-skip silently and review anyway — a hint, not a gate.
+Run `fapony review-seed` with the scope flag matching what you're reviewing (default = uncommitted,
+`--commit <sha>`, `--range <a...b>`, `--files f1,f2`, `--plan <PLAN.md>`). The output is where to
+enter, never coverage — walk it, run it, kill your findings as normal. No fapony CLI or the call
+errors → skip silently and review anyway — a hint, not a gate.
 
 ## Pass 1 — Scope is a finding
 
@@ -166,9 +155,8 @@ was applied).
 ## After: record the verdict (fapony)
 
 Call `verdict_submit` once, after the report is shown. Don't block the report on it, and don't
-let it change the report's content. Pass `regime="review"` — it is required, and a review is what
-this was; the grade is on the work you reviewed, and it is what puts this run in the
-`regime × model` table.
+let it change the report's content. Pass `regime="review"` — required, and a review is what this
+was; it is what puts this run in the `regime × model` table.
 
 | Report verdict | `verdict` |
 |---|---|
@@ -185,24 +173,20 @@ this was; the grade is on the work you reviewed, and it is what puts this run in
 - the plan or spec didn't cover a case the walk exposed → `spec_gap`
 - anything else, or 0 findings → `other`
 
-Always attach a one-line `note`. Grades and codes only count; the note is the only field a later
-review can act on. Say what specifically broke or was walked, not that a review happened.
+Always attach a one-line `note` — the only field a later review can act on. Say what broke or
+was walked, not that a review happened.
 
-Args: `verdict`, `reason_code`, `note`, `worktree` (same key as the pre-step), `plan` (the
-PLAN file path under review, omitted for a bare PR/diff), and `files` — the repo-relative paths
-you actually walked. **Always send `files`.** It is the only input to per-file risk history; a
-verdict without it tells the next session that something failed but not where.
-No `run_id` — fapony reuses the
-latest still-open run for the same worktree+plan (so round 2+ counts toward the round cap),
-creating a row only when none is open.
-
-`session_id` (optional) — the client session id so fapony can attribute the model from the session
-log when no spawn events exist. OpenCode/ZCode: the session id string. Claude Code/Codex: the
-`.jsonl` file path. Only send it if the client exposes it; if not, omit — never block the submit
-on it.
-
-If `verdict_submit` errors, say so in one line and move on. Never re-run a review because storage
-failed.
+Args: `verdict`, `reason_code`, `note`, `regime`, `worktree` — **absolute path** via
+`git rev-parse --show-toplevel`, never a bare name (`runs.worktree` is free text; a bare name
+writes where no query reads it and every fapony tool misses the run), `plan` (the PLAN file
+path under review, omitted for a bare PR/diff), and `files` — the repo-relative paths you
+actually walked. **Always send `files`.** It is the only input to per-file risk history; a
+verdict without it tells the next session that something failed but not where. No `run_id` —
+fapony reuses the latest still-open run for the same worktree+plan (so round 2+ counts toward
+the round cap), creating a row only when none is open. `session_id` (optional) — the client
+session id, only if the client exposes it; attribute the model, never block the submit on it.
+If `verdict_submit` errors, say so in one line and move on — never re-run a review because
+storage failed.
 
 ---
 
@@ -210,9 +194,8 @@ failed.
 
 - **The report is a decision aid, not a transcript.** Budget above is binding: verdict, ≤3
   findings, ≤4 lines each, one deferred line. Over budget means you are reporting process.
-- **Order is not optional.** No line-by-line notes before pass 1 has asked whether the change
-  should exist. No finding before pass 2 has walked its path. No finding before pass 3 has tried
-  to disprove it. Nothing stated as fact that pass 4 cannot cite.
+- **Order is not optional.** No line-by-line notes before pass 1, no finding before passes 2-3
+  earned it, nothing stated as fact that pass 4 cannot cite.
 - **No rubber-stamps.** "LGTM" is not an output. Finding nothing is a valid result — say in one
   line what you walked, so the user can judge the coverage instead of trusting it.
 - **Forget who wrote it.** The author's reasoning is context, never evidence.
@@ -222,8 +205,6 @@ failed.
 ## Example
 
 ```
-pre.  project_health_context(worktree="/Users/you/Project/fapony/wt-fapony")
-        → "missing_test (4×), spec_gap (2×)"
 1-4.  scope holds; walked the new gate branch; ran the evidence command — it exits 0
       without running the suite (CONFIRMED: `bun test` with no test dir exits 0)
 post. verdict_submit(verdict="pass-adequate", reason_code="other", regime="review",

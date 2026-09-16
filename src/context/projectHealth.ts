@@ -21,7 +21,27 @@ export interface HealthContextOptions {
    * so it happens in the tool handler — this builder stays pure over its inputs.
    */
   memDecisions?: MemDecision[];
+  /**
+   * Structural hubs among the files being touched, computed at the handler
+   * from the live import graph (I/O) — this builder stays pure and just
+   * renders. Files below the dependents threshold never reach here.
+   */
+  hubs?: HubEntry[];
 }
+
+/** One structural hub from the live import graph (dependents ≥ threshold). */
+export interface HubEntry {
+  file: string;
+  dependents: number;
+  tested: boolean;
+}
+
+// Files imported by at least this many direct dependents are structural hubs —
+// a break there drags every dependent with it (PLAN-hub-signal §4: 5 is the
+// noise floor guess; transitive blast is PLAN-callers-impact, not this).
+export const HUB_DEPENDENTS_MIN = 5;
+// One line, few entries — the mechanical 15-line cap already bounds the block.
+const HUB_MAX = 3;
 
 /** One mem-log decision distilled for the block. */
 export interface MemDecision {
@@ -54,6 +74,18 @@ function fmtShortTokens(n: number): string {
 
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
+}
+
+function hubLine(hubs: HubEntry[]): string | null {
+  if (hubs.length === 0) return null;
+  const list = hubs
+    .slice(0, HUB_MAX)
+    .map(
+      (h) =>
+        `${h.file} (imported by ${h.dependents} files${h.tested ? "" : "; untested"})`,
+    )
+    .join(" · ");
+  return `- Hubs you are touching (high blast radius): ${list}`;
 }
 
 /**
@@ -191,6 +223,10 @@ export function buildProjectHealthContext(
     }
   }
 
+  // Structural hubs (computed at the handler — pure here) warn before an
+  // edit: same watch-for framing as riskLine, but deterministic, not history.
+  const hub = hubLine(opts?.hubs ?? []);
+
   if (total < minRuns) {
     const lines = [
       header,
@@ -198,6 +234,7 @@ export function buildProjectHealthContext(
       `- Not enough history yet (${total} runs, need ${minRuns}+) for recurring patterns; draft freely.`,
     ];
     if (riskLine) lines.push(riskLine);
+    if (hub) lines.push(hub);
     if (notes.length > 0) {
       lines.push(
         `- Recent verdict notes: ${notes.map((n) => `[${n.reason}] ${n.note}`).join(" · ")}`,
@@ -222,6 +259,7 @@ export function buildProjectHealthContext(
 
   const lines = [header, ...lead];
   if (riskLine) lines.push(riskLine);
+  if (hub) lines.push(hub);
   if (reasons.length > 0) {
     const list = reasons.map((r) => `${r.reason} (${r.count}×)`).join(", ");
     lines.push(

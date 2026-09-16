@@ -22,6 +22,10 @@ import {
 import {
   testComputeModelFit,
   testContextBlockFilesFilterBeyondTop3,
+  testContextBlockHubCapHolds,
+  testContextBlockHubLine,
+  testContextBlockHubLowHistory,
+  testContextBlockHubSilentBelowThreshold,
   testContextBlockLineCap,
   testContextBlockLowHistory,
   testContextBlockLowHistoryStillShowsNotes,
@@ -33,6 +37,7 @@ import {
   testContextBlockWorktreeScope,
   testContextToolEmptyDb,
   testContextToolEndToEnd,
+  testContextToolHubEndToEnd,
 } from "./context.test.js";
 import {
   testDbLifecycle,
@@ -355,6 +360,14 @@ import {
   testReportHtmlEscapesContent,
   testReportHtmlFiltersAndMethodology,
 } from "./report-html.test.js";
+import {
+  testReviewSeedDeterministicAndNoWrite,
+  testReviewSeedNotARepo,
+  testReviewSeedPlanCrossCheck,
+  testReviewSeedScopeFlags,
+  testReviewSeedStateDbUntouched,
+  testReviewSeedStructure,
+} from "./review-seed.test.js";
 import { testAssertSafe } from "./safety.test.js";
 import {
   testBeginSnapshotOnlyUnderWal,
@@ -543,6 +556,12 @@ export async function cmdTest(): Promise<void> {
   testPlanSeedNoOverwrite();
   testPlanSeedSpecSignatures();
   testPlanSeedConfigFallback();
+  testReviewSeedScopeFlags();
+  testReviewSeedStructure();
+  testReviewSeedDeterministicAndNoWrite();
+  testReviewSeedPlanCrossCheck();
+  testReviewSeedNotARepo();
+  testReviewSeedStateDbUntouched();
   testDecideStopBlocksUngradedCommits();
   testDecideStopAllowsEveryUnknown();
   testUtcStampMatchesSqliteFormat();
@@ -660,6 +679,11 @@ export async function cmdTest(): Promise<void> {
   testComputeModelFit();
   testContextBlockMemDecisions();
   testContextBlockModelFitLine();
+  testContextBlockHubLine();
+  testContextBlockHubLowHistory();
+  testContextBlockHubSilentBelowThreshold();
+  testContextBlockHubCapHolds();
+  testContextToolHubEndToEnd();
   testParseDirtyLines();
   testFormatDirtyBlock();
   testShouldProceedAfterDirty();
