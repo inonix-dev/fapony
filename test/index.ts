@@ -350,8 +350,11 @@ import {
   testQualityScore,
 } from "./parse.test.js";
 import {
+  testPlanSeedCapsHold,
   testPlanSeedConfigFallback,
   testPlanSeedNoOverwrite,
+  testPlanSeedRepetitionCluster,
+  testPlanSeedScopeFilters,
   testPlanSeedSpecSignatures,
   testPlanSeedWritesPlan,
 } from "./plan-seed.test.js";
@@ -575,6 +578,9 @@ export async function cmdTest(): Promise<void> {
   testPlanSeedWritesPlan();
   testPlanSeedNoOverwrite();
   testPlanSeedSpecSignatures();
+  testPlanSeedRepetitionCluster();
+  testPlanSeedScopeFilters();
+  testPlanSeedCapsHold();
   testPlanSeedConfigFallback();
   testReviewSeedScopeFlags();
   testReviewSeedStructure();

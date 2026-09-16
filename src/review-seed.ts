@@ -179,7 +179,8 @@ interface ResolvedScope {
 // brace form `prefix/{old => new}/suffix` (only the moved segment) — expand
 // both back to full paths so downstream sections see the real new path plus
 // a renamedFrom annotation, never git's internal syntax.
-function parseNumstat(output: string): FileEntry[] {
+// Exported for plan-seed's changed-files feed — reuse, not a second parser.
+export function parseNumstat(output: string): FileEntry[] {
   const out: FileEntry[] = [];
   for (const line of output.split("\n").filter(Boolean)) {
     const [ins, del, ...rest] = line.split("\t");
@@ -209,8 +210,8 @@ function parseNumstat(output: string): FileEntry[] {
 
 // untracked paths, one per file — -uall stops git collapsing an untracked
 // directory to "dir/" (a seed wants file names, and the collapsed dir breaks
-// plan cross-check path equality).
-function untrackedFiles(porcelain: string): FileEntry[] {
+// plan cross-check path equality). Exported for plan-seed (same feed).
+export function untrackedFiles(porcelain: string): FileEntry[] {
   const out: FileEntry[] = [];
   for (const line of porcelain.split("\n").filter(Boolean)) {
     if (!line.startsWith("?? ")) continue;
