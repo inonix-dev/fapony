@@ -51,6 +51,7 @@ export function toolProjectHealthContext(
             file,
             dependents: b.dependents,
             tested: b.tested,
+            transitive: b.transitive,
           }))
       : [];
 
