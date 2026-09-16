@@ -14,6 +14,7 @@ import { cmdMcp } from "./src/mcp/index.js";
 import { cmdPlanSeed } from "./src/plan-seed.js";
 import { cmdPriceScan } from "./src/price/index.js";
 import { cmdReport, cmdReportWeb } from "./src/report/index.js";
+import { cmdReviewSeed } from "./src/review-seed.js";
 import { cmdSetup } from "./src/setup.js";
 import { cmdStats } from "./src/stats.js";
 import { cmdTelemetry } from "./src/telemetry.js";
@@ -29,6 +30,8 @@ if (cmd === "analyze") {
   cmdMap(a);
 } else if (cmd === "plan-seed") {
   cmdPlanSeed(a);
+} else if (cmd === "review-seed") {
+  cmdReviewSeed(a);
 } else if (cmd === "digest") {
   await cmdDigest(a);
 } else if (cmd === "stats") {
@@ -64,7 +67,7 @@ if (cmd === "analyze") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|map|plan-seed|digest|mcp|hook-stop|test> [args]",
+    "usage: fapony <setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|map|plan-seed|review-seed|digest|mcp|hook-stop|test> [args]",
   );
   process.exit(1);
 }
