@@ -54,17 +54,26 @@ export function cmdReportWeb(args: string[]): void {
   const wtIdx = args.indexOf("--worktree");
   const worktree =
     wtIdx !== -1 && args[wtIdx + 1] ? args[wtIdx + 1] : undefined;
+  // --force overrides the rule-5c refusal when the path would be committed.
+  const force = args.includes("--force");
   // First positional arg is still the output file (legacy).
   const outFile =
     wtIdx !== -1
       ? args.filter((_a, i) => i !== wtIdx && i !== wtIdx + 1)[0]
       : args[0];
 
-  // Rule 5c: warn, then write. The path came from the user — consent, not
-  // prohibition. Stdout stays available by omitting the file argument.
+  // Rule 5c: refuse when the output would end up in git status. The user
+  // typed the path — that makes it a commit hazard, not a prohibition case.
+  // --force overrides this (for scripts that accept the risk).
   if (outFile && wouldBeCommitted(resolve(outFile))) {
+    if (!force) {
+      console.error(
+        `fapony report-web: ${outFile} is in a git repo and not gitignored — the generated HTML would show up in git status. Add it to .gitignore, write outside the repo, or pass --force to override.`,
+      );
+      process.exit(1);
+    }
     console.error(
-      `fapony report-web: ${outFile} is in a git repo and not gitignored — the generated HTML will show up in git status. Add it to .gitignore, or write outside the repo. Writing it anyway.`,
+      `fapony report-web: ${outFile} is in a git repo and not gitignored — --force written anyway.`,
     );
   }
 

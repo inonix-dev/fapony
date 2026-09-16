@@ -1,5 +1,12 @@
 import assert from "node:assert";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -10,7 +17,7 @@ import {
   openDb,
   setStatus,
 } from "../src/db/index.js";
-import { wouldBeCommitted } from "../src/report/cli.js";
+import { cmdReportWeb, wouldBeCommitted } from "../src/report/cli.js";
 import { renderReportHtml } from "../src/report/index.js";
 import { getStatsData } from "../src/stats/index.js";
 import { withTempRepo } from "./helpers.js";
@@ -157,4 +164,44 @@ export function testReportWebWarnsOnlyWhenCommittable(): void {
   }
 
   console.log("  ✓ report-web warns only when the output would be committed");
+}
+
+export function testReportWebRefusesWhenCommittable(): void {
+  withTempRepo((repo) => {
+    mkdirSync(join(repo, "out"));
+    const target = join(repo, "report.html");
+    let code: number | null = null;
+    const origExit = process.exit;
+    try {
+      process.exit = ((c?: number) => {
+        code = c ?? 0;
+        throw new Error("__exit__");
+      }) as never;
+      cmdReportWeb([target]);
+    } catch {
+      // exit stub unwinds
+    } finally {
+      process.exit = origExit;
+    }
+    assert.equal(code, 1, "exits 1 when output would be committed");
+    assert.ok(!existsSync(target), "file not written");
+  });
+
+  console.log(
+    "  ✓ report-web refuses to write when wouldBeCommitted and no --force",
+  );
+}
+
+export function testReportWebForceOverrides(): void {
+  withTempRepo((repo) => {
+    mkdirSync(join(repo, "out"));
+    const target = join(repo, "report.html");
+    cmdReportWeb([target, "--force"]);
+    assert.ok(
+      readFileSync(target, "utf-8").length > 0,
+      "file written with --force",
+    );
+  });
+
+  console.log("  ✓ report-web --force writes even when wouldBeCommitted");
 }
