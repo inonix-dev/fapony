@@ -112,6 +112,15 @@ export const EMPTY_RESULT: PassiveUsageResult = {
   by_model: [],
 };
 
+/** Common shape every client reader implements — see registry.ts. */
+export type PassiveUsageReader = (
+  worktree?: string,
+  since?: number,
+  until?: number,
+  detail?: boolean,
+  full?: boolean,
+) => PassiveUsageResult;
+
 export const STEP_TOKENS_NOTE =
   "step tokens overlap (per-step context window) — SUM(step tokens) != session tokens; steps is a count only";
 

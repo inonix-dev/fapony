@@ -6,12 +6,7 @@
 // Progress bar on TTY, plain lines on pipe/CI.
 
 import { loadConfig, openDb } from "../db/index.js";
-import {
-  readClaudeCodeUsage,
-  readCodexUsage,
-  readPassiveUsage,
-  readZcodeUsage,
-} from "../session/index.js";
+import { CLIENTS } from "../session/index.js";
 import type { PassiveUsageResult } from "../session/types.js";
 import {
   type CacheEntry,
@@ -107,7 +102,7 @@ export function cmdUsageScan(rawArgs: string[]): void {
     { label: "all projects" },
   ];
 
-  const totalSteps = scanTargets.length * 4; // 4 clients per target
+  const totalSteps = scanTargets.length * CLIENTS.length;
   let step = 0;
 
   const entries: CacheEntry[] = [];
@@ -115,31 +110,11 @@ export function cmdUsageScan(rawArgs: string[]): void {
   for (const target of scanTargets) {
     const wt = target.worktree;
 
-    for (const [clientKey, label, scanFn] of [
-      [
-        "opencode",
-        "opencode",
-        () =>
-          readPassiveUsage(wt, windowSince, undefined, {
-            detail: false,
-            full,
-          }),
-      ],
-      [
-        "zcode",
-        "zcode",
-        () => readZcodeUsage(wt, windowSince, undefined, false, full),
-      ],
-      [
-        "claude_code",
-        "claude-code",
-        () => readClaudeCodeUsage(wt, windowSince),
-      ],
-      ["codex", "codex", () => readCodexUsage(wt, windowSince)],
-    ] as const) {
+    for (const client of CLIENTS) {
       step++;
       const pct = Math.round((step / totalSteps) * 100);
       const bar = `[${"█".repeat(Math.round(pct / 5))}${"░".repeat(20 - Math.round(pct / 5))}]`;
+      const label = client.scanLabel ?? client.key;
       const scopeLabel = wt ? `${target.label}/${label}` : label;
       progress(
         `${scopeLabel}  ${bar}  ${step}/${totalSteps}  (${pct}%)`,
@@ -147,7 +122,7 @@ export function cmdUsageScan(rawArgs: string[]): void {
       );
 
       try {
-        const result = scanFn();
+        const result = client.read(wt, windowSince, undefined, false, full);
         // A failed read returns zeros WITH a code — the same shape as "no
         // sessions", so it gets dropped below and would otherwise leave the
         // cache silently short one client. Say it out loud instead.
@@ -155,7 +130,7 @@ export function cmdUsageScan(rawArgs: string[]): void {
         // A broken client is cached too, precisely because it has no sessions
         // to speak for it — otherwise it just vanishes from usage-web.
         if (result.session_count > 0 || result.error) {
-          entries.push(toCacheEntry(clientKey, result, wt));
+          entries.push(toCacheEntry(client.key, result, wt));
         }
       } catch (err) {
         warn(scopeLabel, String(err), isTTY);

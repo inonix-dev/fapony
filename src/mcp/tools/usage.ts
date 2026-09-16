@@ -7,12 +7,9 @@ import {
   type PriceTable,
 } from "../../price/index.js";
 import {
+  CLIENTS,
   mergeBytesByTool,
   type PassiveUsageResult,
-  readClaudeCodeUsage,
-  readCodexUsage,
-  readPassiveUsage,
-  readZcodeUsage,
 } from "../../session/index.js";
 import { jsonResult, type ToolResult } from "../types.js";
 
@@ -70,45 +67,32 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
   const until = typeof args.until === "number" ? args.until : undefined;
   const detail = args.detail === true;
 
-  const data: PassiveUsageResult = readPassiveUsage(
-    worktree,
-    since,
-    until,
-    detail,
-  );
+  const primary = CLIENTS.find((c) => c.primary)!;
+  const others = CLIENTS.filter((c) => !c.primary);
 
-  // ZCode data is always fetched when the DB exists
-  const zcodeData = readZcodeUsage(worktree, since, until, detail);
+  const data: PassiveUsageResult = primary.read(worktree, since, until, detail);
 
-  // Claude Code data is always fetched when the projects dir exists
-  const claudeCodeData = readClaudeCodeUsage(worktree, since, until, detail);
-
-  // Codex data is always fetched when the sessions dir exists
-  const codexData = readCodexUsage(worktree, since, until, detail);
+  // Every non-primary client is always fetched when its own log exists.
+  const otherResults = others.map((client) => ({
+    client,
+    result: client.read(worktree, since, until, detail),
+  }));
 
   // ราคา list จาก cache อย่างเดียว — อ่านครั้งเดียวต่อ call ไม่ใช่ต่อ section
   const prices = loadPrices();
 
   if (args.json === true) {
-    return jsonResult({
+    const json: Record<string, unknown> = {
       ...data,
       imputation: imputationOf(data, prices),
-      zcode:
-        zcodeData.session_count > 0
-          ? { ...zcodeData, imputation: imputationOf(zcodeData, prices) }
-          : null,
-      claude_code:
-        claudeCodeData.session_count > 0
-          ? {
-              ...claudeCodeData,
-              imputation: imputationOf(claudeCodeData, prices),
-            }
-          : null,
-      codex:
-        codexData.session_count > 0
-          ? { ...codexData, imputation: imputationOf(codexData, prices) }
-          : null,
-    });
+    };
+    for (const { client, result } of otherResults) {
+      json[client.key] =
+        result.session_count > 0
+          ? { ...result, imputation: imputationOf(result, prices) }
+          : null;
+    }
+    return jsonResult(json);
   }
 
   const lines: string[] = [];
@@ -165,9 +149,7 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
     // top-level (opencode) detail alone would miss the other clients.
     const bytes = mergeBytesByTool(
       data.detail,
-      zcodeData.detail,
-      claudeCodeData.detail,
-      codexData.detail,
+      ...otherResults.map((r) => r.result.detail),
     );
     if (bytes) {
       const entries = Object.entries(bytes).sort((a, b) => b[1] - a[1]);
@@ -199,73 +181,30 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
     }
   }
 
-  // ZCode usage section
-  if (zcodeData.session_count > 0) {
-    const zImp = imputationOf(zcodeData, prices);
+  // One text section per non-primary client — same shape for every client,
+  // new ones need no new formatting code, only a registry.ts entry.
+  for (const { client, result } of otherResults) {
+    if (result.session_count === 0) continue;
+    const imp = imputationOf(result, prices);
+    const label = client.reportLabel ?? client.key;
     lines.push("");
-    lines.push("zcode usage:");
+    lines.push(`${label} usage:`);
     lines.push(
-      `  total: ${zcodeData.total_tokens_input} in / ${zcodeData.total_tokens_output} out / ${zcodeData.total_tokens_reasoning} reasoning tokens over ${zcodeData.session_count} sessions`,
+      `  total: ${result.total_tokens_input.toLocaleString()} in / ${result.total_tokens_output.toLocaleString()} out / ${result.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${result.session_count} sessions`,
     );
     lines.push(
-      `  cache: ${zcodeData.total_tokens_cache_read.toLocaleString()} read / ${zcodeData.total_tokens_cache_write.toLocaleString()} write`,
+      `  cache: ${result.total_tokens_cache_read.toLocaleString()} read / ${result.total_tokens_cache_write.toLocaleString()} write`,
     );
-    if (zcodeData.by_model.length > 0) {
+    if (result.by_model.length > 0) {
       lines.push("  by model:");
-      for (const m of zcodeData.by_model) {
+      for (const m of result.by_model) {
         const prefix = m.provider ? `${m.provider}/` : "";
         lines.push(
-          `    ${prefix}${m.model}: ${m.tokens_input} in / ${m.tokens_output} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})${imputedSuffix(m.provider, m.model, zImp)}`,
+          `    ${prefix}${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})${imputedSuffix(m.provider, m.model, imp)}`,
         );
       }
     }
-    lines.push(...imputedTextLines("", zcodeData, prices));
-  }
-
-  // Claude Code usage section
-  if (claudeCodeData.session_count > 0) {
-    const ccImp = imputationOf(claudeCodeData, prices);
-    lines.push("");
-    lines.push("claude code usage:");
-    lines.push(
-      `  total: ${claudeCodeData.total_tokens_input.toLocaleString()} in / ${claudeCodeData.total_tokens_output.toLocaleString()} out / ${claudeCodeData.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${claudeCodeData.session_count} sessions`,
-    );
-    lines.push(
-      `  cache: ${claudeCodeData.total_tokens_cache_read.toLocaleString()} read / ${claudeCodeData.total_tokens_cache_write.toLocaleString()} write`,
-    );
-    if (claudeCodeData.by_model.length > 0) {
-      lines.push("  by model:");
-      for (const m of claudeCodeData.by_model) {
-        const prefix = m.provider ? `${m.provider}/` : "";
-        lines.push(
-          `    ${prefix}${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})${imputedSuffix(m.provider, m.model, ccImp)}`,
-        );
-      }
-    }
-    lines.push(...imputedTextLines("", claudeCodeData, prices));
-  }
-
-  // Codex usage section
-  if (codexData.session_count > 0) {
-    const cxImp = imputationOf(codexData, prices);
-    lines.push("");
-    lines.push("codex usage:");
-    lines.push(
-      `  total: ${codexData.total_tokens_input.toLocaleString()} in / ${codexData.total_tokens_output.toLocaleString()} out / ${codexData.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${codexData.session_count} sessions`,
-    );
-    lines.push(
-      `  cache: ${codexData.total_tokens_cache_read.toLocaleString()} read / ${codexData.total_tokens_cache_write.toLocaleString()} write`,
-    );
-    if (codexData.by_model.length > 0) {
-      lines.push("  by model:");
-      for (const m of codexData.by_model) {
-        const prefix = m.provider ? `${m.provider}/` : "";
-        lines.push(
-          `    ${prefix}${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})${imputedSuffix(m.provider, m.model, cxImp)}`,
-        );
-      }
-    }
-    lines.push(...imputedTextLines("", codexData, prices));
+    lines.push(...imputedTextLines("", result, prices));
   }
 
   return { content: [{ type: "text", text: lines.join("\n") }] };
