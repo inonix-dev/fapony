@@ -1,4 +1,7 @@
 import assert from "node:assert";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   addEvent,
   type Config,
@@ -7,8 +10,10 @@ import {
   openDb,
   setStatus,
 } from "../src/db/index.js";
+import { wouldBeCommitted } from "../src/report/cli.js";
 import { renderReportHtml } from "../src/report/index.js";
 import { getStatsData } from "../src/stats/index.js";
+import { withTempRepo } from "./helpers.js";
 
 function _baseConfig(): Config {
   return loadConfig("/nonexistent-path/fapony.config.json");
@@ -122,4 +127,34 @@ export function testReportHtmlEscapesContent(): void {
   });
 
   console.log("  ✓ report-html escapes interpolated strings");
+}
+
+export function testReportWebWarnsOnlyWhenCommittable(): void {
+  withTempRepo((repo) => {
+    writeFileSync(join(repo, ".gitignore"), "out/\n");
+    // The probe runs git from dirname(path), so that dir has to exist — same
+    // as the real call, where writeFileSync would need it anyway.
+    mkdirSync(join(repo, "out"));
+
+    assert.ok(
+      wouldBeCommitted(join(repo, "report.html")),
+      "untracked, unignored path in a repo would be committed",
+    );
+    assert.ok(
+      !wouldBeCommitted(join(repo, "out", "report.html")),
+      "gitignored path is safe — no warning",
+    );
+  });
+
+  const outside = mkdtempSync(join(tmpdir(), "fapony-norepo-"));
+  try {
+    assert.ok(
+      !wouldBeCommitted(join(outside, "report.html")),
+      "path outside any repo is safe — no warning",
+    );
+  } finally {
+    rmSync(outside, { recursive: true, force: true });
+  }
+
+  console.log("  ✓ report-web warns only when the output would be committed");
 }

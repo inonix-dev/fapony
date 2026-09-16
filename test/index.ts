@@ -373,6 +373,7 @@ import {
   testReportHtmlCanonicalQuality,
   testReportHtmlEscapesContent,
   testReportHtmlFiltersAndMethodology,
+  testReportWebWarnsOnlyWhenCommittable,
 } from "./report-html.test.js";
 import {
   testReviewSeedDeterministicAndNoWrite,
@@ -951,6 +952,7 @@ export async function cmdTest(): Promise<void> {
   testReportHtmlByModelHasAttributionColumns();
   testReportHtmlByModelProjectColumn();
   testReportHtmlEscapesContent();
+  testReportWebWarnsOnlyWhenCommittable();
   // Usage-web tests
   testFmtTokensZero();
   testFmtTokensThousands();

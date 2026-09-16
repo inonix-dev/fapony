@@ -7,7 +7,11 @@
 // walk the diff, run the tests, kill findings as normal.
 //
 // Read-only stdout: no file writes, no cache, no state.db read — the seed is
-// a lens, not a delivery (rule 5). Facts only: nothing here says broken/fixed
+// a lens, not a delivery (rule 5b — a command that reads code writes only to a
+// path the user pointed at, and this one accepts no such path). This used to
+// cite rule 5 "never write into a target worktree", dropped 2026-09-17 because
+// four commands broke it; being read-only was always a property of this
+// command, never of that rule. Facts only: nothing here says broken/fixed
 // — judgment lives in the reviewer and the ledger (verdict_submit), never in
 // this output. Deterministic: same input, same bytes, no LLM.
 //

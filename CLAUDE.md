@@ -158,7 +158,22 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
    **merge เข้า `main` ยังเป็นของเจ้าของตัดสิน** agent เปิด PR ได้ กด merge เองไม่ได้
 3. **Commit แยก concern** — one commit per feature/area
 4. **assertSafe() ต้องเรียกกับทุก shell command** ที่ spawn จาก config (memory/evidence/install) รวมถึงที่มาจาก template
-5. **fapony ห้ามเขียนไฟล์ใน worktree เป้าหมาย** — db อยู่ ~/.config/fapony/ เท่านั้น
+5. **fapony เขียนไฟล์ในเวิร์กทรีเป้าหมายได้ ถ้าเจ้าของสั่ง** — กฎเดิม "ห้ามเขียนเด็ดขาด" ถอดแล้ว
+   2026-09-17 เพราะโค้ดตัวเองละเมิดอยู่ 4 ที่ (`init.ts` `init-mem.ts` `setup.ts` `plan-seed.ts`)
+   บังคับใช้จริงแค่ 2 ที่ (`report/cli.ts` `mcp/evidence.ts`) และอีกที่อ้างเป็นตัวตน
+   (`review-seed.ts:10`) — **กฎที่ครึ่งหนึ่งของโค้ดไม่ทำตามคือรสนิยม ไม่ใช่กฎ** ·
+   แทนด้วยสามข้อที่เช็คได้:
+   - **5a runtime state ห้ามอยู่ในเวิร์กทรี** — ledger db อยู่ `~/.config/fapony/` เท่านั้น
+     นี่คือข้อที่ทำให้ cross-worktree/cross-client ทำงานได้ และเป็นข้อที่ README ขายจริง
+     ("db อยู่เครื่องคุณ ไม่มี server ไม่มี account") · เช็ค: path ของ db ห้ามมาจาก arg/config
+     ที่ชี้เวิร์กทรี
+   - **5b คำสั่งที่อ่านโค้ด ห้ามมี write side effect** — `analyze` `map` `review-seed` `stats`
+     `digest` `report` เขียนได้เฉพาะ path ที่ผู้ใช้ชี้เอง (`--out` / ชื่อไฟล์ใน argv)
+     ไม่ใช่ path ที่คำสั่งคิดขึ้นเอง · เช็ค: `writeFileSync` ใน producer ต้องรับ path จาก argv
+     เท่านั้น — คำสั่งใหม่ที่อ่านโค้ดตกอยู่ใต้ข้อนี้อัตโนมัติ ไม่ต้องมาเติมรายชื่อ
+   - **5c เขียนทับของที่มีอยู่ = ถามก่อน หรือปฏิเสธ** — `init.ts:187` (ถามก่อน append) กับ
+     `plan-seed` (refuse to overwrite) คือแบบอย่าง · **consent ไม่ใช่ prohibition** — กฎเดิม
+     ทำให้ `report-web` ปฏิเสธ path ที่ผู้ใช้พิมพ์มาเอง ซึ่งไม่ได้กันอะไรนอกจากกันผู้ใช้
 6. **memory: null** = ปิดชั้น memory ทั้งหมด ไม่ error
 7. **ให้เกรดทุกหน่วยงานที่จบ = ยิง `verdict_submit` เอง ไม่ต้องรอให้สั่ง** — มันคือ *เกรดของงาน*
    ไม่ใช่คำสารภาพ · **`regime` บังคับ** (`code | fix | review | plan`) ไม่ส่ง = call ถูก reject
