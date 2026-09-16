@@ -8,6 +8,7 @@
 //
 // Composes existing producers — no new parsing, no new table, no MCP tool.
 
+import { execSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -402,6 +403,19 @@ export function cmdPlanSeed(args: string[]): void {
   const withSpec = args.includes("--spec");
   const cwd = process.cwd();
   const config = loadConfig(join(cwd, "fapony.config.json"));
+  // Resolve the git worktree root so mem/ledger queries hit the same key
+  // state.db uses (git rev-parse --show-toplevel). Running from a subdir
+  // would otherwise mismatch: stats return empty, Context (fapony) always
+  // prints "(not enough graded history yet)".
+  let worktree: string;
+  try {
+    worktree = execSync("git rev-parse --show-toplevel", {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch {
+    worktree = cwd;
+  }
 
   const planDirAbs = join(cwd, planDir(config));
   const planPath = join(planDirAbs, `PLAN-${name}.md`);
@@ -415,7 +429,7 @@ export function cmdPlanSeed(args: string[]): void {
   const absDir = resolve(cwd, ".");
   const scope = renderScope(absDir);
   const risks = renderRisks(absDir);
-  const contextFapony = renderContextFapony(cwd);
+  const contextFapony = renderContextFapony(worktree);
 
   let specLink: string | null = null;
   if (withSpec) {
