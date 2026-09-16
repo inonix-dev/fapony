@@ -272,7 +272,7 @@ Code expects, so a client can symlink the directory rather than copy the file:
 | Skill | Purpose | Trigger |
 |-------|---------|---------|
 | `skill/plan-with-pony/` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-pony` |
-| `skill/review-pony/` | Review as verification, wired to fapony: known patterns before, verdict after | `/review-pony` |
+| `skill/review-pony/` | Review as verification, wired to fapony: scope facts before (`review-seed`), verdict after | `/review-pony` |
 | `skill/move-to-done/` | Archive a shipped PLAN into .fapony/done/ | `/move-to-done` |
 | `skill/git-commit-conventional/` | Commit split by concern + conventional message | `/git-commit` |
 | `skill/git-ship/` | Push branch, open PR with drafted title/body, merge, reset branch onto base | `/ship`, `/pr` |
@@ -345,6 +345,7 @@ fapony usage-web [port]                   # live usage comparison dashboard from
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page summary: decisions, open bugs, in-flight plans, cost, pass/fail — from what's already on disk
 fapony plan-seed <name> [--spec]          # write PLAN (+SPEC) with §2/§5 pre-filled from map/analyze — agent fills judgment sections
+fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan <PLAN.md>]  # read-only scope facts for a review (changed files, importers, untested, signatures, plan cross-check)
 
 # Setup & maintenance
 fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/evidence)

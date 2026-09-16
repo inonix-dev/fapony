@@ -32,7 +32,8 @@ src/digest/     fapony digest — รวม 4 แหล่ง (mem log, plans, u
 src/context/    project-health block keyed by files[]
 src/install/    หนึ่งไฟล์ต่อ client + skills.ts
 src/mcp/        MCP server — transport (SERVER_INSTRUCTIONS), evidence allowlist, tools/ 8 ตัว
-src/*.ts        gates · parse · memory · safety · math · init · init-mem · telemetry · setup · update · util · analyze
+src/*.ts        gates · parse · memory · safety · math · init · init-mem · telemetry · setup · update · util
+                · analyze · map · plan-seed · review-seed · hook
 test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · test/install/ · test/telemetry/
 ```
 
@@ -331,7 +332,9 @@ fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md
 fapony test                         # self-check
 fapony analyze [path]               # structural diagnosis (hub/orphan/cycle/changed-untested) — live graph via Bun.Transpiler.scan(), never persisted (no table: 114 files / 466 imports = 16.6ms, cache would be pure debt)
-fapony map [path]                   # on-demand source index: dirs list exports (name:line), files show declaration signatures, read-only, nothing persisted
+fapony map [path]                   # on-demand source index: dirs list exports (name:line), files show declaration signatures, read-only, nothing persisted — no caller invokes this directly anymore (see PLAN-code-map, superseded); map.ts survives as a library used by plan-seed/review-seed
+fapony plan-seed <name> [--spec]    # write PLAN(+SPEC) with §2 Scope/§5 Risks pre-filled from map/analyze + mem/ledger — caller: plan-with-pony Phase 1.6
+fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan <PLAN.md>]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"
 ```
 
 <!-- code-review-graph MCP tools -->
