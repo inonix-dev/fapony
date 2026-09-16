@@ -36,6 +36,8 @@ const MAX_SIGNATURES_SHOWN = 5;
 const MAX_DYNAMIC_LINES = 2;
 const MAX_CROSS_CHECK_LINES = 2;
 const OUTPUT_CAP = 30;
+// Signature text cap per symbol (same trim as map.ts's file view).
+const SIG_MAX = 90;
 const DISCLAIMER =
   "static graph only — seed is where to enter, not what is verified";
 const USAGE =
@@ -472,17 +474,27 @@ export function renderSeed(args: string[], cwd: string): string {
         sigLines.push(`  ${e.path} — ⚠ ${scan.error}`);
         continue;
       }
+      if (scan.symbols.length === 0) {
+        sigLines.push(`  ${e.path} — (no exports)`);
+        continue;
+      }
+      // Real declaration text per symbol — the reviewer checks "did a param
+      // change" without opening the file. Same trim as map.ts's file view.
+      const srcLines = source.split("\n");
       const shown = scan.symbols
         .slice(0, MAX_SIGNATURES_SHOWN)
-        .map((s) => `${s.name}:${s.line}`)
-        .join(", ");
+        .map((s) => {
+          const raw = (srcLines[s.line - 1] ?? "").trim();
+          const sig =
+            raw.length > SIG_MAX ? `${raw.slice(0, SIG_MAX - 1)}…` : raw;
+          return sig ? `${s.name}:${s.line} ${sig}` : `${s.name}:${s.line}`;
+        })
+        .join(" · ");
       const rest =
         scan.symbols.length > MAX_SIGNATURES_SHOWN
           ? ` (+${scan.symbols.length - MAX_SIGNATURES_SHOWN})`
           : "";
-      sigLines.push(
-        `  ${e.path} — ${scan.symbols.length === 0 ? "(no exports)" : `${shown}${rest}`}`,
-      );
+      sigLines.push(`  ${e.path} — ${shown}${rest}`);
     }
     if (sigLines.length > 0) {
       lines.push("signatures (current):");

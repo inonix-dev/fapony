@@ -148,9 +148,9 @@ export function testReviewSeedStructure(): void {
     assert.match(out, /untested \(1\):/);
     assert.match(out, /src\/b\.ts/);
     assert.doesNotMatch(out, /untested \(1\):\n {2}src\/a\.ts/);
-    // signatures: current scan with name:line
+    // signatures: current scan with name:line + real declaration text
     assert.match(out, /signatures \(current\):/);
-    assert.match(out, /src\/b\.ts — b:\d+/);
+    assert.match(out, /src\/b\.ts — b:1 export function b\(\): number/);
     // disclaimer is mandatory on every output
     assert.match(
       out,
