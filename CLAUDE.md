@@ -162,7 +162,11 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
    ซึ่งต้องมี branch บน remote ก่อน — กฎที่ต้องปลดล็อกทุกครั้งไม่ได้กันอะไร แค่สอนให้ข้าม ·
    สิ่งที่ทำลายได้จริงคือ force-push กับการเขียนทับ default branch ไม่ใช่ push เอง ·
    **merge เข้า `main` ยังเป็นของเจ้าของตัดสิน** agent เปิด PR ได้ กด merge เองไม่ได้
-3. **Commit แยก concern** — one commit per feature/area
+3. **Commit แยก concern** — one commit per feature/area · **งานที่จบแล้ว commit เลย ห้ามถามก่อน**
+   (ถอดออก 2026-09-17) — การหยุดถาม "commit ไหม" ทุกครั้งไม่ได้กันอะไร งานที่ยังไม่จบก็ไม่ควร
+   commit อยู่แล้ว ส่วนงานที่จบแล้วเจ้าของอ่านจาก diff/PR ไม่ใช่จากคำถามกลางทาง ·
+   **จบ = typecheck ผ่าน + `bun fapony.ts test` ผ่าน** ถ้ายังไม่ผ่านคือยังไม่จบ อย่า commit ทับ ·
+   push/PR ยังตามกฎ 2 (branch ที่ทำงานอยู่เท่านั้น) และ merge ยังเป็นของเจ้าของ
 4. **assertSafe() ต้องเรียกกับทุก shell command** ที่ spawn จาก config (memory/evidence/install) รวมถึงที่มาจาก template
 5. **fapony เขียนไฟล์ในเวิร์กทรีเป้าหมายได้ ถ้าเจ้าของสั่ง** — กฎเดิม "ห้ามเขียนเด็ดขาด" ถอดแล้ว
    2026-09-17 เพราะโค้ดตัวเองละเมิดอยู่ 4 ที่ (`init.ts` `init-mem.ts` `setup.ts` `plan-seed.ts`)
