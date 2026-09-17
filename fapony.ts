@@ -10,7 +10,7 @@ import { cmdInit } from "./src/init.js";
 import { cmdInitMem } from "./src/init-mem.js";
 import { cmdInstall } from "./src/install.js";
 import { cmdMap } from "./src/map.js";
-import { cmdMcp } from "./src/mcp/index.js";
+import { cmdMcp } from "./src/mcp/transport.js";
 import { cmdPlanSeed } from "./src/plan-seed.js";
 import { cmdPriceScan } from "./src/price/index.js";
 import { cmdReport, cmdReportWeb } from "./src/report/index.js";

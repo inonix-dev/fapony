@@ -3,12 +3,9 @@
 import { VERDICT_GRADES } from "../../parse.js";
 import { REASON_CODES, REGIME_CODES } from "../types.js";
 
-export { extractMultiField, toolHandoffCheck } from "./check.js";
-export { toolHandoffCollect } from "./collect.js";
 export { toolProjectHealthContext } from "./context.js";
 export { toolMemFind } from "./mem.js";
 export { toolPlanList } from "./plans.js";
-export { toolVerificationReport } from "./report.js";
 export { toolFaponyStats } from "./stats.js";
 export { toolPassiveUsage } from "./usage.js";
 export { toolVerdictSubmit } from "./verdict.js";
@@ -77,8 +74,10 @@ export const TOOLS = [
         session_id: {
           type: "string",
           description:
-            "Optional client session id (OpenCode/ZCode session id, or Claude Code/Codex .jsonl path). " +
-            "Used to resolve model attribution when no spawn events exist in the gate window.",
+            "The client session id — Claude Code/Codex: the transcript .jsonl path; " +
+            "OpenCode/ZCode: the session id. It is what attributes this verdict to a model; " +
+            "without it fapony infers the model from whichever session is running, which is a " +
+            "guess. Send it whenever the client exposes it. Cannot find it → omit, never invent one.",
         },
         files: {
           type: "array",
