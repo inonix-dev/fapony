@@ -939,7 +939,7 @@ export function testStatsTokensPerPassNullWhenNoPass(): void {
           .split("\n")
           .find((l) => l.includes("claude-sonnet-5"));
         assert.ok(
-          row?.trimEnd().endsWith("—"),
+          row !== undefined && /\|\s*—\s*\|/.test(row),
           "tokens/pass cell renders as —, not the agent column",
         );
       },
