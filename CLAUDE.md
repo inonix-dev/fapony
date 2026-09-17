@@ -401,7 +401,7 @@ fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC. 6 tools:
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) + required `regime` (`code\|fix\|review\|plan\|inquiry\|test`) — the task-shape axis. Clean work takes `reason_code: none`, never `other` |
 | `fapony_stats` | Query KPIs: by-model (gates/fails/quality/tokens), by-grade, **planned vs dove-in** (`runs.plan` null/not-null), **regime × model**; `group_by: reason_code\|plan\|file` for top-N slices |
 | `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
-| `project_health_context` | Known-patterns block keyed by `files[]` — recurring fail reasons, escalations, round-1-pass shapes. Pre-edit reflex for any task; `plan-with-pony` is one caller, not the only one |
+| `project_health_context` | Known-patterns block keyed by `files[]` — recurring fail reasons, escalations, round-1-pass shapes. Optional — worth a call on a file that has history, empty on most (กฎ 8); `plan-with-pony` is one caller, not the only one |
 | `mem_find` | Search the project's mem log read-only: `files[]`/`text`/`kind`/`since`/`limit` — every kind, no default filter; `memDir:null` = no mem (not "nothing matched") |
 
 See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.
