@@ -209,15 +209,14 @@ storage failed.
 
 ## Rules
 
-- **The report is a decision aid, not a transcript.** Budget above is binding: verdict, ≤3
-  findings, ≤4 lines each, one deferred line. Over budget means you are reporting process.
+The four passes are the rules. These three are what they fail on in practice:
+
 - **Order is not optional.** No line-by-line notes before pass 1, no finding before passes 2-3
   earned it, nothing stated as fact that pass 4 cannot cite.
-- **No rubber-stamps.** "LGTM" is not an output. Finding nothing is a valid result — say in one
-  line what you walked, so the user can judge the coverage instead of trusting it.
+- **The budget is binding.** Verdict, ≤3 findings, ≤4 lines each, one deferred line. Over budget
+  means you are reporting process. "LGTM" is not an output either — finding nothing ships as the
+  verdict line plus one line naming what you walked.
 - **Forget who wrote it.** The author's reasoning is context, never evidence.
-- **Never restate the diff.** If a line tells the author something they already know, cut it.
-- The four passes are a constraint you carry, not advice you hand back.
 
 ## Example
 
