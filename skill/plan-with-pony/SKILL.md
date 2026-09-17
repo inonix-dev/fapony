@@ -25,6 +25,27 @@ A plan is a starting position, not a contract. Say this out loud the moment a de
 > "This doesn't have to be right — it has to be good enough to start. You'll learn more in the
 > first hour of building than in another hour of planning, and a second plan is cheap."
 
+## Phase −1 — Is this a plan at all? (bail cheaply)
+
+A plan file is an artifact for work that **outlives the session**: a new feature, several days,
+something the next session has to pick up. Wiring, refactors, merging components, UI/UX passes
+near ship are none of that — they finish in one session and the PLAN.md gets archived unread. For
+those, this skill is overhead, and the dev is right to skip it.
+
+So before Phase 0, decide out loud in one line. If there is nothing to archive, **say so and hand
+over the two-command opener instead of drafting**:
+
+```bash
+fapony analyze <dir>                  # hub / orphan / cycle / changed-untested in that area
+fapony review-seed --files a.ts,b.ts  # exports with line numbers + importers + untested
+```
+
+That is the same facts this skill would have seeded into §2/§5, without the file — roughly 1k
+tokens, deterministic, and it is the front half of the pair the dev already closes with
+`review-pony`. Hand it over and stop; do not draft a plan nobody asked to keep.
+
+Go on to Phase 0 only when the work is a feature with a life beyond today.
+
 ## Phase 0 — What the dev already said
 
 Most devs arrive here *after* talking the idea through. Re-asking what they just explained is the

@@ -366,6 +366,19 @@ fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): §2 =
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan <PLAN.md>]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"
 ```
 
+**`review-seed --files` คือ lookup ตอน *execute* ไม่ใช่แค่ "Before" ของ review-pony** — โหมดนี้
+โชว์ export ทุกตัวพร้อมเลขบรรทัด + importer ทุกตัว (uncapped ตั้งแต่ 2026-09-17 เพราะ cap ที่
+ทำไว้ให้ diff 40 ไฟล์อ่านรู้เรื่อง มันบัง `data.ts` เหลือ 5 จาก 13 export) · วัดแล้ว: 5 ไฟล์
+2,146 บรรทัด = 3.7KB (~940 tokens) เทียบกับอ่านทั้ง 5 ไฟล์ ~35k tokens · **ก่อนแก้ไฟล์ที่ยัง
+ไม่รู้จัก ยิงอันนี้แทนการ Read ทั้งไฟล์** แล้วค่อย Read เฉพาะช่วงบรรทัดที่มันชี้ · นี่คือที่อยู่
+ใหม่ของสิ่งที่ `fapony map <file>` เคยพิมพ์ (คำสั่งนั้นถูกลบเพราะไม่มี caller — ตัว engine
+`extractExports()` ไม่เคยหายไปไหน) · scope แบบ diff (`--commit`/`--range`/`--staged`) ยัง cap
+เท่าเดิม นั่นคืองบของ review ไม่ใช่ของ lookup
+
+**งาน wire/refactor ไม่ต้องมี PLAN.md** — `plan-with-pony` Phase −1 bail ออกเองแล้วเมื่องานจบใน
+session เดียวและไม่มีอะไรให้ archive · คู่ที่ใช้จริงคือ `analyze <dir>` + `review-seed --files`
+ตอนเปิด แล้วปิดด้วย `review-pony` — deterministic ทั้งสองหัว ไม่มี LLM คั่นกลาง
+
 **Dead code ไม่ใช่งานของ fapony — ใช้ `bunx knip@6`** ([knip.json](knip.json) ignore `templates/**`
 ไว้แล้ว เพราะ `init-mem` ก๊อปโฟลเดอร์นั้นไปรีโปอื่น มันจึงไม่มีวันมี importer ที่นี่) · ไม่ใส่
 `devDependencies` ไม่ผูก CI — gate ที่ต้องปลดล็อกทุกครั้งแค่สอนให้ข้าม (กฎ 2) หยิบมารันทุกสองสาม
