@@ -200,10 +200,8 @@ path under review, omitted for a bare PR/diff), and `files` — the repo-relativ
 actually walked. **Always send `files`.** It is the only input to per-file risk history; a
 verdict without it tells the next session that something failed but not where. No `run_id` —
 fapony reuses the latest still-open run for the same worktree+plan (so round 2+ counts toward
-the round cap), creating a row only when none is open. `session_id` — send it whenever the
-client exposes one (Claude Code/Codex: the transcript .jsonl path; OpenCode/ZCode: the session
-id). It is what attributes the verdict to a model — without it fapony guesses from the live
-session. Cannot find it → omit, never invent one; never block the submit on it.
+the round cap), creating a row only when none is open. `session_id` (optional) — the client
+session id, only if the client exposes it; attribute the model, never block the submit on it.
 If `verdict_submit` errors, say so in one line and move on — never re-run a review because
 storage failed.
 
