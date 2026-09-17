@@ -9,6 +9,7 @@ import { getServerSha } from "./primitives.js";
 import {
   TOOLS,
   toolFaponyStats,
+  toolMemFind,
   toolPassiveUsage,
   toolPlanList,
   toolProjectHealthContext,
@@ -164,6 +165,9 @@ function dispatchToolCall(params: {
       break;
     case "plan_list":
       result = toolPlanList(args);
+      break;
+    case "mem_find":
+      result = toolMemFind(args);
       break;
     default:
       return errorResult(`unknown tool: ${params.name}`);

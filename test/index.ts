@@ -62,6 +62,11 @@ import {
   testDigestSinceFilter,
 } from "./digest.test.js";
 import {
+  testAddingFakeEnumValueFailsDocsCheck,
+  testReasonCodesListedInDocs,
+  testRegimeCodesListedInDocs,
+} from "./docs.test.js";
+import {
   testFindSessionModelClaudeCodeHit,
   testFindSessionModelClaudeCodeMajority,
   testFindSessionModelClaudeCodeMiss,
@@ -96,6 +101,8 @@ import {
   testCursorPayloadEdges,
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
+  testDecideStopMemNeverBlocks,
+  testDecideStopReportsCommitsAndMem,
   testStopOutputShapesPerClient,
   testStopPayloadsMapToSameDecision,
   testUtcStampMatchesSqliteFormat,
@@ -245,6 +252,12 @@ import {
   testReasonCodesAreLocked,
   testRegimeCodesAreLocked,
 } from "./mcp/helpers.test.js";
+import {
+  testMemFindFiltersAndMatchesFiles,
+  testMemFindReturnsAllKindsNoDefaultFilter,
+  testMemFindToolValidation,
+  testMemFindTotalVsLimitAndFailShapes,
+} from "./mcp/mem.test.js";
 import {
   testPlanListGroupsByFrontmatter,
   testPlanListJoinsRunHistory,
@@ -602,6 +615,8 @@ export async function cmdTest(): Promise<void> {
   testReviewSeedNotARepo();
   testReviewSeedStateDbUntouched();
   testDecideStopBlocksUngradedCommits();
+  testDecideStopReportsCommitsAndMem();
+  testDecideStopMemNeverBlocks();
   testDecideStopAllowsEveryUnknown();
   testStopPayloadsMapToSameDecision();
   testCursorPayloadEdges();
@@ -662,6 +677,10 @@ export async function cmdTest(): Promise<void> {
   testMemTemplatePerPersonLogs();
   testMemTemplateScaffoldedIgnoresRootConfig();
   testMemTemplateUnknownAppFails();
+  testMemFindReturnsAllKindsNoDefaultFilter();
+  testMemFindFiltersAndMatchesFiles();
+  testMemFindTotalVsLimitAndFailShapes();
+  testMemFindToolValidation();
   testClaimMemoryFailGracefully();
   testMemoryReadRecentDecisions();
   testMemoryReadRecentDecisionsMonorepo();
@@ -866,6 +885,9 @@ export async function cmdTest(): Promise<void> {
   testParseToolResult();
   testReasonCodesAreLocked();
   testRegimeCodesAreLocked();
+  testReasonCodesListedInDocs();
+  testRegimeCodesListedInDocs();
+  testAddingFakeEnumValueFailsDocsCheck();
   // Verification primitives tests
   testEvidenceStatusesAreLocked();
   testComputeEvidenceSummaryEmpty();

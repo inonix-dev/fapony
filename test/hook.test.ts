@@ -46,6 +46,58 @@ export function testDecideStopBlocksUngradedCommits(): void {
   );
 }
 
+export function testDecideStopReportsCommitsAndMem(): void {
+  // PLAN-mem-mcp chunk 3 (Done criteria 4): the block message carries the
+  // commit list and the mem status — information, never a block condition.
+  const reason = decideStop({
+    ...base,
+    commits: 7,
+    commitList: [
+      "edcb02e fix(analyze): skip nested checkouts by .git",
+      "f90784b fix(mcp): fapony_usage reads four clients",
+      "75d0b04 refactor(mcp): drop the handoff trio",
+      "aaaaaaa c4",
+      "bbbbbbb c5",
+      "ccccccc c6",
+      "ddddddd c7",
+    ],
+    memLastTs: "2026-09-16T08:00:00.000Z",
+  });
+  assert(reason);
+  for (const sha of ["edcb02e", "f90784b", "75d0b04", "aaaaaaa", "bbbbbbb"]) {
+    assert.ok(reason.includes(sha), `lists ${sha}`);
+  }
+  assert.ok(reason.includes("… +2 more"), "folds commits past 5");
+  assert.ok(!reason.includes("ccccccc"), "does not list past the cap");
+  assert.ok(
+    reason.includes("mem: last row 2026-09-16"),
+    "mem status is information",
+  );
+  assert.ok(
+    reason.includes("your call"),
+    "mem is never presented as required — the agent decides",
+  );
+  // ≤ 12 lines (spec §6)
+  assert.ok(reason.split("\n").length <= 12, "message stays short");
+
+  // No mem at all must read differently from "nothing newer"
+  const noMem = decideStop({ ...base, memLastTs: null });
+  assert.ok(noMem?.includes("no rows at all"));
+}
+
+export function testDecideStopMemNeverBlocks(): void {
+  // กฎ 7 — mem status is data: the block condition stays verdict-only,
+  // so a fresh mem row changes the message, not the decision.
+  const without = decideStop(base);
+  const withFreshMem = decideStop({
+    ...base,
+    memLastTs: "2026-09-17T00:00:00Z",
+  });
+  assert.ok(without, "blocks without mem");
+  assert.ok(withFreshMem, "blocks identically with mem present");
+  assert.notEqual(without, withFreshMem);
+}
+
 export function testDecideStopAllowsEveryUnknown(): void {
   // Each of these must resolve to allow — a hook that guesses wrong traps
   // the agent, so anything it cannot prove is treated as "nothing to grade".

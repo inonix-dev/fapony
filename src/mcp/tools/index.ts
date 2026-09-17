@@ -6,6 +6,7 @@ import { REASON_CODES, REGIME_CODES } from "../types.js";
 export { extractMultiField, toolHandoffCheck } from "./check.js";
 export { toolHandoffCollect } from "./collect.js";
 export { toolProjectHealthContext } from "./context.js";
+export { toolMemFind } from "./mem.js";
 export { toolPlanList } from "./plans.js";
 export { toolVerificationReport } from "./report.js";
 export { toolFaponyStats } from "./stats.js";
@@ -193,6 +194,58 @@ export const TOOLS = [
         },
       },
       required: [],
+    },
+  },
+  {
+    name: "mem_find",
+    description:
+      "Search the project's mem log (.fapony/.memory/log*.jsonl — decisions, " +
+      "bugs, notes, and bookkeeping kinds alike; NO default kind filter). " +
+      "Read-only. Answer 'what was ever decided about this file?' in one call " +
+      "BEFORE editing: pass files[] (repo-relative) to match rows mentioning " +
+      "them. mem never stored files[], so match is substring over text/spec/ref " +
+      "— a row that never names the file cannot be found (limit of the data, " +
+      "not the query). In a monorepo only the log of the app guessed from the " +
+      "worktree name is read; memDir in the result shows which one. Returns " +
+      "{rows, total, filesFound, skipped, memDir}: total is the match count " +
+      "before limit, memDir:null means no mem at all (not 'nothing matched').",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        worktree: {
+          type: "string",
+          description:
+            "Absolute path (git rev-parse --show-toplevel) — required; " +
+            "scope of the mem log to read",
+        },
+        files: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Repo-relative paths — match rows whose text/spec/ref mentions them (substring)",
+        },
+        text: {
+          type: "string",
+          description: "Substring, case-insensitive",
+        },
+        kind: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Filter by kind (decision/note/bug/close/…). Omit = every kind — " +
+            "no default filter",
+        },
+        since: {
+          type: "string",
+          description: "ISO date — only rows at or after this time",
+        },
+        limit: {
+          type: "number",
+          description:
+            "Max rows returned (default 20) — total still counts all matches",
+        },
+      },
+      required: ["worktree"],
     },
   },
   {

@@ -103,7 +103,7 @@ export function testVerificationReportToolCount(): void {
     assert.ok(!names.includes(gone), `${gone} is back on the MCP surface`);
   }
   assert.ok(names.includes("project_health_context"));
-  assert.equal(TOOLS.length, 5);
+  assert.equal(TOOLS.length, 6);
   console.log("  ✓ handoff trio stays off the MCP surface (5 tools total)");
 }
 

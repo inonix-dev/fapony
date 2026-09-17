@@ -161,13 +161,14 @@ sequenceDiagram
 `verdict_submit` is the only step that creates knowledge — grade, `reason_code`, `regime`.
 Everything in between is the agent's own business.
 
-## The 5 tools
+## The 6 tools
 
 ```
 discover: plan_list (plans grouped by state, joined with their run history)
 measure:  fapony_stats ── fapony_usage
 verify:   verdict_submit
 recall:   project_health_context (what failed in these files before — optional, never required)
+          mem_find (what was ever decided about these files — reads the project's mem log)
 ```
 
 | Tool | Tier | Purpose |
@@ -177,6 +178,7 @@ recall:   project_health_context (what failed in these files before — optional
 | `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) with a required `regime` — the task shape the grade applies to |
 | `project_health_context` | recall | Known-patterns block for the files you are about to touch. Useful when a file does have history; measured across real repos, most do not (1-9% of shipped files come back under a `fix:` within two weeks), so it is optional — never a precondition for editing |
+| `mem_find` | recall | Search the project's mem log read-only — decisions/bugs/notes keyed by `files[]`, `text`, `kind` (no default filter), `since`. "What was ever decided about this file?" in one call before editing |
 
 The handoff/report family is CLI-only — the schemas cost every session of every client and no skill called them. `fapony report <run-id>` prints the full report for a run (facts + handoff conformance + evidence + verdict); `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
 
@@ -332,7 +334,7 @@ Example plans produced by it live in [examples/](examples/).
 
 ```bash
 # Verification & reporting
-fapony mcp                               # MCP server (stdio JSON-RPC — 5 tools)
+fapony mcp                               # MCP server (stdio JSON-RPC — 6 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
@@ -371,7 +373,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 ## Scope
 
 **Supported:**
-- MCP server — 5 tools via stdio JSON-RPC, works with any MCP client
+- MCP server — 6 tools via stdio JSON-RPC, works with any MCP client
 - Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
 - Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
 - Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file

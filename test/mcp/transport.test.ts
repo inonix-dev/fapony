@@ -14,10 +14,11 @@ export function testMcpToolsList(): void {
       "fapony_stats",
       "fapony_usage",
       "project_health_context",
+      "mem_find",
       "plan_list",
     ],
   );
-  console.log("  ✓ mcp tools/list returns 5 tools");
+  console.log("  ✓ mcp tools/list returns 6 tools");
 }
 
 export function testMcpInitialize(): void {
