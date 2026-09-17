@@ -139,42 +139,57 @@ flowchart LR
     G --> P[project_health - optional]
 ```
 
-fapony never drives the agent — it is a set of checkpoints the agent walks past. One
-work cycle looks like this:
+fapony never drives the agent. It sits on two sides of your work that never touch each
+other, and they are worth reading separately — the first is optional and shaped like however
+you already work, the second is the product.
+
+### Side one — getting the work done (optional, nothing recorded)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant A as Agent (any MCP client)
-    participant F as fapony (MCP tools + CLI)
+    participant A as You + your agent
+    participant F as fapony CLI (read-only)
     participant W as your worktree
 
-    A->>F: review-seed --files (plan_list instead, when there is a plan)
-    F->>W: static read — exports, importers, untested
+    A->>F: review-seed --files src/thing/
+    F->>W: static scan — exports, importers, untested
     W-->>F: facts, no LLM in the middle
-    F-->>A: the lines worth reading, instead of the files
-    Note over A,W: the agent does the actual work — fapony is not involved
-    A->>W: commit
-    opt work you want proven, not just claimed — CLI, after a run exists
-        A->>F: fapony report <run-id>
-        F->>W: git diff/log + commands from .fapony/evidence.json
-        W-->>F: facts + evidence (passed / failed / timeout / not_run)
-        F-->>A: one report, stamped with server_sha
-    end
-    A->>F: verdict_submit (grade + reason_code + regime + note)
-    Note over F: stored in ~/.config/fapony/state.db
-    F--)A: Stop hook — a turn that commits without grading is blocked once
-    A->>F: fapony_stats
-    F-->>A: model x regime x quality — which model to pay for this shape next
+    F-->>A: the lines worth reading, instead of the whole files
+    A->>W: build, then commit
+    Note over A,F: nothing is stored — skip this side entirely and fapony still works
 ```
 
-`verdict_submit` is the only step that creates knowledge — grade, `reason_code`, `regime`.
-Everything in between is the agent's own business, and the `opt` block really is optional:
-most cycles go lookup → work → commit → verdict and never ask for a report.
+Read-only, deterministic, and it writes nothing to the ledger. Use it, use your client's own
+search, or use neither — plans, skills and seeds are conveniences, not the contract.
 
-The dashed arrow is the only thing fapony does *to* you. Everything else you call; the Stop
-hook calls you, once, when a turn ends with a commit and no grade. It never picks the grade —
-it cannot see whether the work held up.
+### Side two — the one habit that makes fapony worth installing
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Any MCP client
+    participant F as fapony MCP
+    participant L as ~/.config/fapony/state.db
+
+    Note over A,F: end a turn with a commit and no grade → the Stop hook blocks it once
+    A->>F: verdict_submit (grade + regime + reason_code + note)
+    F->>L: one graded unit of work, stamped with the model that did it
+    opt proof, not just a claim — CLI, once the run exists
+        A->>F: fapony report <run-id>
+        F-->>A: git facts + evidence from .fapony/evidence.json, stamped with server_sha
+    end
+    A->>F: fapony_stats
+    F->>L: read across every run, client and project
+    L-->>A: model x regime x quality — which model to pay for this shape
+```
+
+`verdict_submit` is the only step that creates knowledge, and it needs nothing from side one:
+no plan file, no skill, no `.fapony/` directory. Any agent that speaks MCP can grade a unit of
+work, and grading it is what turns a pile of session logs into an answer.
+
+The Stop hook is the only thing fapony does *to* you — once per turn, when a commit ends
+ungraded. It never picks the grade; it cannot see whether the work held up.
 
 ## The 6 tools
 
