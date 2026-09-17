@@ -1,11 +1,6 @@
 // test/telemetry/helpers.ts — shared helpers for telemetry tests
 
-export {
-  assertClose,
-  baseConfig,
-  withTempConfig,
-  withTmpDb,
-} from "../helpers.js";
+export { withTempConfig, withTmpDb } from "../helpers.js";
 
 import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
