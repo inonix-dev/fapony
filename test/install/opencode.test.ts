@@ -158,3 +158,61 @@ export function testCmdInstallDispatchesOpencode(): void {
     console.log("  ✓ install dispatch routes --platform opencode");
   });
 }
+
+export function testInstallOpencodeReadHintPlugin(): void {
+  withTempHome((home) => {
+    const pluginPath = join(
+      home,
+      ".config",
+      "opencode",
+      "plugins",
+      "fapony-read-hint.ts",
+    );
+    // Fresh install path.
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.ok(existsSync(pluginPath), "plugin file should be written");
+    const src = readFileSync(pluginPath, "utf-8");
+    assert.ok(src.includes("readHintFor"), "must import the shared logic");
+    assert.ok(
+      src.includes("tool.execute.after"),
+      "must hook tool.execute.after",
+    );
+    assert.ok(err.includes("read hint"), `got: ${err}`);
+
+    // Idempotent — and the already-configured early-return path still runs it.
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(pluginPath, "utf-8");
+    assert.equal(src, after, "second install must not rewrite the plugin");
+  });
+  console.log(
+    "  ✓ install opencode read hint → plugin written once, both paths",
+  );
+}
+
+export function testInstallOpencodeReadHintForeignFileUntouched(): void {
+  withTempHome((home) => {
+    const pluginsDir = join(home, ".config", "opencode", "plugins");
+    mkdirSync(pluginsDir, { recursive: true });
+    const pluginPath = join(pluginsDir, "fapony-read-hint.ts");
+    writeFileSync(pluginPath, "// someone else's plugin\n");
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.equal(
+      readFileSync(pluginPath, "utf-8"),
+      "// someone else's plugin\n",
+      "a foreign file at our name must never be overwritten",
+    );
+  });
+  console.log("  ✓ install opencode read hint → foreign plugin untouched");
+}

@@ -1,12 +1,18 @@
 import assert from "node:assert";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   cursorTranscriptPath,
   decideStop,
   isCursorPayload,
   normalizeStopInput,
+  READ_HINT_MIN_BYTES,
+  readHintFor,
   stopOutput,
   utcStamp,
 } from "../src/hook.js";
+import { readHintPluginSource } from "../src/install/opencode.js";
 
 const base = {
   stopHookActive: false,
@@ -200,4 +206,123 @@ export function testStopOutputShapesPerClient(): void {
   assert.equal(cursor.followup_message, reason);
   assert.equal(claude.followup_message, undefined);
   assert.equal(cursor.decision, undefined);
+}
+
+// --- Read hint (PreToolUse annotate) ---
+
+import { withTempRepo } from "./helpers.js";
+
+/** > 2× threshold, so the fixture stays valid if the constant moves. */
+const PAD = Math.ceil(READ_HINT_MIN_BYTES / 20) * 20 + 40;
+
+function padFile(dir: string, name: string): string {
+  const p = join(dir, name);
+  const body = Array.from(
+    { length: PAD },
+    (_, i) => `const pad${i} = ${i}; // padding`,
+  ).join("\n");
+  writeFileSync(p, `export const entry = () => {\n${body}\n};\n`);
+  return p;
+}
+
+export function testReadHintAnnotatesLargeFullRead(): void {
+  withTempRepo((dir) => {
+    const p = padFile(dir, "big.ts");
+    const hint = readHintFor({ filePath: p, cwd: dir });
+    assert.ok(hint, "large full read must get a hint");
+    assert.match(hint ?? "", /big\.ts is \d+ lines/);
+    assert.match(hint ?? "", /review-seed --files big\.ts/);
+    assert.match(hint ?? "", /measured /);
+  });
+  console.log("  ✓ read hint annotates large full-file read");
+}
+
+export function testReadHintSkipsCheapReads(): void {
+  withTempRepo((dir) => {
+    const big = padFile(dir, "big.ts");
+    // bounded read — the caller already kept it cheap
+    assert.equal(
+      readHintFor({ filePath: big, limit: 50, cwd: dir }),
+      null,
+      "bounded read must stay silent",
+    );
+    // a large limit is still a full read in spirit
+    assert.ok(
+      readHintFor({ filePath: big, limit: 5000, cwd: dir }),
+      "large limit must still hint",
+    );
+    // small file
+    const small = join(dir, "small.ts");
+    writeFileSync(small, "export const tiny = 1;\n");
+    assert.equal(readHintFor({ filePath: small, cwd: dir }), null);
+    // non-source extension
+    const md = join(dir, "README.md");
+    writeFileSync(md, "x".repeat(READ_HINT_MIN_BYTES * 2));
+    assert.equal(readHintFor({ filePath: md, cwd: dir }), null);
+    // nonexistent path
+    assert.equal(
+      readHintFor({ filePath: join(dir, "nope.ts"), cwd: dir }),
+      null,
+    );
+    assert.equal(readHintFor({ filePath: null, cwd: dir }), null);
+  });
+  console.log(
+    "  ✓ read hint skips bounded reads, small files, non-source, missing",
+  );
+}
+
+export function testReadHintNeedsGitRepo(): void {
+  // Outside a repo the hint would point at a command that cannot run.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-rh-norepo-"));
+  try {
+    const p = padFile(dir, "big.ts");
+    assert.equal(readHintFor({ filePath: p, cwd: dir }), null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ read hint stays silent outside a git repo");
+}
+
+export function testReadHintClaudeOutputShape(): void {
+  // cmdHookReadHint is a thin wrapper; assert the pure core feeds the
+  // documented additionalContext shape via the real stdin/stdout path.
+  withTempRepo((dir) => {
+    const p = padFile(dir, "big.ts");
+    const proc = Bun.spawnSync(
+      ["bun", join(import.meta.dir, "..", "fapony.ts"), "hook-read-hint"],
+      {
+        cwd: dir,
+        stdin: Buffer.from(
+          JSON.stringify({ cwd: dir, tool_input: { file_path: p } }),
+        ),
+        stdout: "pipe",
+      },
+    );
+    const out = JSON.parse(proc.stdout.toString()) as {
+      hookSpecificOutput: Record<string, string>;
+    };
+    assert.equal(out.hookSpecificOutput.hookEventName, "PreToolUse");
+    assert.ok(typeof out.hookSpecificOutput.additionalContext === "string");
+    assert.ok(
+      !JSON.stringify(out).includes("permissionDecision"),
+      "annotate-only: no permissionDecision may ever appear",
+    );
+  });
+  console.log("  ✓ read hint claude output = additionalContext, no decision");
+}
+
+export function testReadHintPluginSource(): void {
+  // The generated OpenCode plugin must import the shared logic (no second
+  // implementation), target the read tool, and mutate output only.
+  const src = readHintPluginSource("/install/root");
+  assert.ok(
+    src.includes("/install/root/src/hook.ts"),
+    "bakes the install root",
+  );
+  assert.ok(src.includes('input.tool !== "read"'), "guards the tool name");
+  assert.ok(src.includes("output.output"), "mutates the tool output");
+  assert.ok(!src.includes("throw"), "must never throw into the tool call");
+  console.log(
+    "  ✓ read hint opencode plugin imports shared logic, annotate-only",
+  );
 }

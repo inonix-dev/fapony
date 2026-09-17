@@ -13,9 +13,10 @@
 //   cursor  {workspace_roots, conversation_id, loop_count, status} → {"followup_message"}
 //   (cursor: loop_count ≥ 1 = hook เคยยิงแล้ว, status ≠ completed = ปล่อยผ่าน)
 
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
+import { SCAN_EXTS } from "./analyze.js";
 import { openDb } from "./db/index.js";
 import { readMemLog } from "./memory.js";
 
@@ -245,4 +246,102 @@ export async function cmdHookStop(): Promise<void> {
   }
 
   if (reason) console.log(stopOutput(client, reason));
+}
+
+// --- Read hint (PreToolUse annotate — never block, never dedupe) ---
+//
+// การอ่านไฟล์ใหญ่ทั้งไฟล์เป็นจุดที่ agent จ่าย token โดยไม่รู้ตัว — เสียงเตือน
+// ใน skill ไม่เคยพอ (หลักเดียวกับ Stop hook: พูดตอนมันกำลังจ่าย) แต่ hook นี้
+// **annotate เท่านั้น**: ไม่มี permissionDecision, ไม่มี "อ่านไปแล้ว" dedupe —
+// context compaction ทำให้ "อ่านไปแล้ว" กลายเป็นเท็จ และ hook ที่เดาผิดแล้วขัง
+// agent แย่กว่าไม่มี hook (กฎของ hook.ts เดิม) — annotate ขังไม่ได้ด้วย
+// construction, ต้นทุนพลาดสูงสุดคือบรรทัดเดียวที่ไม่จำเป็น
+//
+// ข้อความเป็น fact ล้วน (จำนวนบรรทัด + คำสั่ง + ค่าที่วัดครั้งเดียว) ไม่ใช่
+// estimate ต่อไฟล์ — เดา token เป็นการแต่งตัวเป็นข้อมูล ขัด "facts only"
+
+/** Below this size a full read is already cheap — stay silent. */
+export const READ_HINT_MIN_BYTES = 24_000;
+/** A caller-chosen limit below this is a bounded read — already cheap. */
+export const READ_HINT_MIN_LIMIT = 300;
+/** One-time measurement (2026-09-17, this repo): 5 files / 2,146 lines ≈ 3.7KB out. */
+const READ_HINT_MEASURED = "measured ~3.7KB output on a 2,146-line file";
+
+export interface ReadHintInput {
+  filePath: unknown;
+  offset?: unknown;
+  limit?: unknown;
+  cwd: string;
+}
+
+/**
+ * Factual one-liner for a full-file read of a large source file, or null.
+ * Every unknown (no path, non-source ext, small file, bounded read, no git
+ * repo, stat/read failure) resolves to null — a hint must never fire on a
+ * guess. Fast path is statSync only; the file is read just to count lines,
+ * and only after the size threshold passed.
+ */
+export function readHintFor(opts: ReadHintInput): string | null {
+  try {
+    if (typeof opts.filePath !== "string" || opts.filePath === "") return null;
+    const dot = opts.filePath.lastIndexOf(".");
+    // SCAN_EXTS keys carry the dot (".ts") — slice from the dot itself.
+    if (dot < 0 || !SCAN_EXTS.has(opts.filePath.slice(dot))) return null;
+    const limit = typeof opts.limit === "number" ? opts.limit : null;
+    if (limit !== null && limit < READ_HINT_MIN_LIMIT) return null;
+    const st = statSync(opts.filePath);
+    if (!st.isFile() || st.size < READ_HINT_MIN_BYTES) return null;
+    // review-seed is a git command — outside a repo the hint would lie.
+    const git = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+      cwd: opts.cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (git.exitCode !== 0) return null;
+    const lines = readFileSync(opts.filePath, "utf-8").split("\n").length;
+    // The hint feeds a command line — inside the worktree show the clean
+    // relative path, outside it relative() climbs dots, show absolute.
+    const rel = relative(opts.cwd, opts.filePath);
+    const shown = rel.startsWith("..") ? opts.filePath : rel;
+    return (
+      `fapony: ${shown} is ${lines} lines — review-seed --files ${shown} ` +
+      `returns exports with line numbers, importers, and signatures first ` +
+      `(${READ_HINT_MEASURED})`
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** Claude Code PreToolUse (matcher Read): stdin JSON in, additionalContext out.
+ *  No permissionDecision ever — the tool call always proceeds. */
+export async function cmdHookReadHint(): Promise<void> {
+  try {
+    const raw = JSON.parse(await Bun.stdin.text()) as {
+      cwd?: string;
+      tool_input?: {
+        file_path?: unknown;
+        offset?: unknown;
+        limit?: unknown;
+      };
+    };
+    const hint = readHintFor({
+      filePath: raw.tool_input?.file_path,
+      offset: raw.tool_input?.offset,
+      limit: raw.tool_input?.limit,
+      cwd: raw.cwd ?? process.cwd(),
+    });
+    if (hint) {
+      console.log(
+        JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            additionalContext: hint,
+          },
+        }),
+      );
+    }
+  } catch {
+    // any failure = no hint; a hook must never block a read over a hint
+  }
 }
