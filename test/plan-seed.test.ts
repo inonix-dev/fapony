@@ -53,7 +53,7 @@ export function testPlanSeedWritesPlan(): void {
       // explicit "nothing repeats" line for a one-export fixture
       assert.match(
         body,
-        /- scanned: \. — 1 file\(s\), 1 export\(s\) `\(fapony map\)`/,
+        /- scanned: \. — 1 file\(s\), 1 export\(s\) `\(source scan\)`/,
       );
       assert.match(
         body,
@@ -163,7 +163,7 @@ export function testPlanSeedRepetitionCluster(): void {
       );
       assert.match(
         body,
-        /- format\* — 3 export\(s\) across fmt, render: formatDate, formatOrder, formatUser `\(fapony map\)`/,
+        /- format\* — 3 export\(s\) across fmt, render: formatDate, formatOrder, formatUser `\(source scan\)`/,
       );
       assert.ok(
         !body.includes("parse*"),

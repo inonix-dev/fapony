@@ -173,7 +173,7 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
      นี่คือข้อที่ทำให้ cross-worktree/cross-client ทำงานได้ และเป็นข้อที่ README ขายจริง
      ("db อยู่เครื่องคุณ ไม่มี server ไม่มี account") · เช็ค: path ของ db ห้ามมาจาก arg/config
      ที่ชี้เวิร์กทรี
-   - **5b คำสั่งที่อ่านโค้ด ห้ามมี write side effect** — `analyze` `map` `review-seed` `stats`
+   - **5b คำสั่งที่อ่านโค้ด ห้ามมี write side effect** — `analyze` `review-seed` `stats`
      `digest` `report` เขียนได้เฉพาะ path ที่ผู้ใช้ชี้เอง (`--out` / ชื่อไฟล์ใน argv)
      ไม่ใช่ path ที่คำสั่งคิดขึ้นเอง · เช็ค: `writeFileSync` ใน producer ต้องรับ path จาก argv
      เท่านั้น — คำสั่งใหม่ที่อ่านโค้ดตกอยู่ใต้ข้อนี้อัตโนมัติ ไม่ต้องมาเติมรายชื่อ
@@ -362,7 +362,6 @@ fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md
 fapony test                         # self-check
 fapony analyze [path]               # structural diagnosis (hub/orphan/cycle/changed-untested) — live graph via Bun.Transpiler.scan(), never persisted (no table: 114 files / 466 imports = 16.6ms, cache would be pure debt)
-fapony map [path]                   # on-demand source index: dirs list exports (name:line), files show declaration signatures, read-only, nothing persisted — no caller invokes this directly anymore (see PLAN-code-map, superseded); map.ts survives as a library used by plan-seed/review-seed
 fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): §2 = export-name prefixes repeating across 2+ dirs (single-dir = that dir's naming convention, not reported), §5 = scoped analyze findings, hard caps PLAN ≤ ~60 / SPEC ≤ 200 lines — caller: plan-with-pony Phase 1.6
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan <PLAN.md>]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"
 ```

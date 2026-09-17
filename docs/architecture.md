@@ -6,7 +6,7 @@
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|map|plan-seed|review-seed|digest|mcp|hook-stop|test
+  fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|plan-seed|review-seed|digest|mcp|hook-stop|test
   fapony.config.json  # runtime config (worktrees, review.maxRounds, memory, paths, safety) — optional, gitignored
   skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
                                 # each SKILL.md is self-contained — the symlink ships only
@@ -44,7 +44,7 @@ fapony/
       projectHealth.ts # buildProjectHealthContext() — pure over StatsData, ~15 lines max; computeModelFit() (regime×model right-sizing, min-N=5) shared by plan-seed
       index.ts         # barrel re-export
     analyze.ts         # fapony analyze — buildGraph()/blastRadius()/diagnose() (hub/orphan/cycle/changed-untested), live import graph via Bun.Transpiler.scan(), never persisted
-    map.ts              # fapony map — extractExports() on-demand source index; no direct caller anymore (superseded by plan-seed/review-seed composing it as a library — see PLAN-code-map)
+    map.ts              # extractExports() — on-demand source index, library only; the `fapony map` command was deleted once plan-seed/review-seed were its only callers (see PLAN-code-map)
     plan-seed.ts        # fapony plan-seed <name> [--spec] [--scope <path>]... — writes PLAN(+SPEC): §2 = export-name prefixes repeating across 2+ dirs (single-dir clusters are that dir's naming convention), §5 = scope-filtered analyze findings, hard caps PLAN ≤ ~60 / SPEC ≤ 200; caller: plan-with-pony Phase 1.6
     review-seed.ts      # fapony review-seed [--staged|--commit|--range|--files|--plan] — read-only scope facts for a review (changed/importers/untested/signatures/cross-check); caller: review-pony "Before"
     hook.ts             # fapony hook-stop — Claude Code Stop hook: blocks a turn with ungraded commits

@@ -1,12 +1,11 @@
-// src/map.ts — `fapony map`: an on-demand source index for TS/JS projects.
+// src/map.ts — extractExports(): an on-demand source index for TS/JS projects.
 //
-// One file, zero persistence: the tree and every export list are read from the
-// filesystem and thrown away. No index file, no table, no MCP tool, no cache —
-// standing cost to every other session is exactly zero (the opposite of a
-// cached graph). Read-only: never writes into the mapped directory.
+// Library only. The `fapony map` command this grew out of was deleted once
+// plan-seed and review-seed were its only callers — see PLAN-code-map.
 //
-// `fapony map` is `fapony map .` — there is one code path, a per-dir listing.
-// Drill by passing a child: map → map src → map src/stats → map <file>.
+// Zero persistence: every export list is read from the filesystem and thrown
+// away. No index file, no table, no MCP tool, no cache — standing cost to every
+// other session is exactly zero (the opposite of a cached graph). Read-only.
 //
 // Export names come from a line-based scan; Bun.Transpiler.scan() is the parse
 // gate (throws => "parse error", never guessed away). scan() itself is not the
@@ -18,11 +17,6 @@
 // every file, and reading already costs more than the parse the cache would
 // save, so it bought no wall-clock win at L1 (measured 2026-09-15). It is
 // deferred to L2 (crux excerpt), where per-file work is heavy enough to pay.
-
-import type { Dirent } from "node:fs";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, join, relative, resolve, sep } from "node:path";
-import { collectSourceFiles, isSkippedDir, SCAN_EXTS } from "./analyze.js";
 
 export type ExportKind =
   | "fn"
@@ -46,12 +40,6 @@ export interface ExportScan {
   symbols: ExportSymbol[];
   error: string | null;
 }
-
-const MAX_LINES = 60;
-const MAX_EXPORTS = 6;
-const OBJECTIVE_WIDTH = 72;
-const CONTAINER_DIRS = 4;
-const MAX_OBJECTIVE_FILES = 30;
 
 // --- Parse gate ---
 
@@ -280,247 +268,10 @@ export function extractExports(source: string): ExportScan {
   return { symbols: out, error: null };
 }
 
-function scanFile(absFile: string): ExportScan {
-  let source: string;
-  try {
-    source = readFileSync(absFile, "utf-8");
-  } catch {
-    return { symbols: [], error: "unreadable" };
-  }
-  return extractExports(source);
-}
-
-// --- Directory listing ---
-
-interface Children {
-  files: string[];
-  dirs: string[];
-}
-
-function immediateChildren(absDir: string): Children {
-  const files: string[] = [];
-  const dirs: string[] = [];
-  let entries: Dirent[];
-  try {
-    entries = readdirSync(absDir, { withFileTypes: true });
-  } catch {
-    return { files, dirs };
-  }
-  for (const e of entries) {
-    if (e.isSymbolicLink()) continue;
-    if (e.isDirectory()) {
-      if (isSkippedDir(e.name, absDir) || e.name.startsWith(".")) continue;
-      dirs.push(e.name);
-    } else if (e.isFile()) {
-      const dot = e.name.lastIndexOf(".");
-      if (dot >= 0 && SCAN_EXTS.has(e.name.slice(dot))) files.push(e.name);
-    }
-  }
-  files.sort();
-  dirs.sort();
-  return { files, dirs };
-}
-
-function countSourceFiles(absDir: string): number {
-  try {
-    return collectSourceFiles(absDir, { skipHidden: true }).length;
-  } catch {
-    return 0;
-  }
-}
-
 // First comment content in the first ~12 lines + the line it sits on. Used only
 // to guess a leaf dir's objective — a module header, not a doc parser.
-function firstComment(source: string): { text: string; line: number } | null {
-  const lines = source.split("\n").slice(0, 12);
-  for (let i = 0; i < lines.length; i++) {
-    const t = lines[i].trim();
-    if (t === "") continue;
-    if (t.startsWith("//")) {
-      const text = t.replace(/^\/\/\s*/, "").trim();
-      if (text && !text.startsWith("!")) return { text, line: i + 1 };
-      continue;
-    }
-    if (t.startsWith("/*")) {
-      const text = t
-        .replace(/^\/\*+\s*/, "")
-        .replace(/\*\/\s*$/, "")
-        .trim();
-      if (text) return { text, line: i + 1 };
-      continue;
-    }
-    if (t.startsWith("*")) {
-      const text = t
-        .replace(/^\*+\s*/, "")
-        .replace(/\*\/\s*$/, "")
-        .trim();
-      if (text) return { text, line: i + 1 };
-      continue;
-    }
-    // Code before any comment: no module header here.
-    return null;
-  }
-  return null;
-}
-
-function stripFilePrefix(text: string): string {
-  const m = text.match(
-    /^(?:[\w./-]*\/)?[\w.-]+\.(?:ts|tsx|js|jsx)\s*[—–-]\s*(.+)$/,
-  );
-  return (m ? m[1] : text).trim();
-}
-
-function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
 
 // Objective guess for a dir with no subdirs: the module header of the most
 // descriptive file. Prefers `// path — desc` (the repo's convention), then a
 // first-line comment, then any comment; ties break to the lexical-first file.
 // Capped: a guess reads at most MAX_OBJECTIVE_FILES files, never a whole tree.
-function guessObjective(absDir: string): string | null {
-  let best: { text: string; score: number } | null = null;
-  const files = collectSourceFiles(absDir, { skipHidden: true });
-  for (const rel of files.slice(0, MAX_OBJECTIVE_FILES)) {
-    let source: string;
-    try {
-      source = readFileSync(join(absDir, rel), "utf-8");
-    } catch {
-      continue;
-    }
-    const c = firstComment(source);
-    if (!c) continue;
-    const named = /^(?:[\w./-]*\/)?[\w.-]+\.(?:ts|tsx|js|jsx)\s*[—–-]\s*/.test(
-      c.text,
-    );
-    const score = named && c.line === 1 ? 3 : named ? 2 : c.line === 1 ? 1 : 0;
-    if (score > 0 && (!best || score > best.score)) {
-      best = { text: stripFilePrefix(c.text), score };
-    }
-  }
-  return best ? truncate(best.text, OBJECTIVE_WIDTH) : null;
-}
-
-function dirObjective(absDir: string): string | null {
-  const { dirs } = immediateChildren(absDir);
-  if (dirs.length >= CONTAINER_DIRS) {
-    const shown = dirs.slice(0, 8).join(", ");
-    const rest = dirs.length > 8 ? ` … (+${dirs.length - 8})` : "";
-    return `dirs: ${shown}${rest}`;
-  }
-  return guessObjective(absDir);
-}
-
-function formatExports(symbols: ExportSymbol[]): string {
-  if (symbols.length === 0) return "(no exports)";
-  const shown = symbols.slice(0, MAX_EXPORTS);
-  const tokens = shown.map((s) => `${s.name}:${s.line}`).join(" ");
-  const rest =
-    symbols.length > MAX_EXPORTS ? ` +${symbols.length - MAX_EXPORTS}` : "";
-  return `${symbols.length} export${symbols.length === 1 ? "" : "s"}  ${tokens}${rest}`;
-}
-
-export function formatMapDir(absDir: string, rel: string): string {
-  const isRoot = rel === ".";
-  const total = countSourceFiles(absDir);
-  const title = isRoot
-    ? `fapony map — ${basename(absDir)} (${total} source files)`
-    : `fapony map ${rel} — ${total} source files`;
-
-  const { files, dirs } = immediateChildren(absDir);
-  const rows: { name: string; desc: string }[] = [];
-
-  for (const name of dirs) {
-    const childAbs = join(absDir, name);
-    const count = countSourceFiles(childAbs);
-    if (count === 0) continue;
-    const obj = dirObjective(childAbs);
-    rows.push({
-      name: `${name}/`,
-      desc: `${count} file${count === 1 ? "" : "s"}${obj ? `  ${obj}` : ""}`,
-    });
-  }
-  for (const name of files) {
-    const scan = scanFile(join(absDir, name));
-    rows.push({
-      name,
-      desc:
-        scan.error === "unreadable"
-          ? "unreadable"
-          : scan.error
-            ? `⚠ ${scan.error}`
-            : formatExports(scan.symbols),
-    });
-  }
-
-  rows.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-
-  if (rows.length === 0) {
-    return `${title}\n\n(no source files)`;
-  }
-
-  const width = Math.max(...rows.map((r) => r.name.length));
-  const lines = [title, ""];
-  // The overflow marker is a line of its own, so it counts against the cap:
-  // 2 header lines + 57 rows + marker = 60, never 61.
-  const room = MAX_LINES - 3;
-  for (const r of rows.slice(0, room)) {
-    lines.push(`  ${r.name.padEnd(width)}  ${r.desc}`);
-  }
-  if (rows.length > room) {
-    lines.push(`  … +${rows.length - room} more`);
-  }
-  return lines.join("\n");
-}
-
-export function formatMapFile(absFile: string, rel: string): string {
-  const scan = scanFile(absFile);
-  if (scan.error && scan.error !== "unreadable") {
-    return `fapony map ${rel} — parse error\n\n  ⚠ ${scan.error} — symbols not extractable`;
-  }
-  if (scan.error === "unreadable") {
-    return `fapony map ${rel} — unreadable (cannot read file)`;
-  }
-  const { symbols } = scan;
-  const head = `fapony map ${rel} — ${symbols.length} export${symbols.length === 1 ? "" : "s"}`;
-  if (symbols.length === 0) return `${head}\n\n  (no exports)`;
-
-  // Read source lines once for declaration signatures
-  let srcLines: string[] = [];
-  try {
-    srcLines = readFileSync(absFile, "utf-8").split("\n");
-  } catch {
-    // unreadable already handled above; fall back to name-only
-  }
-
-  const lines = [head, ""];
-  const room = MAX_LINES - 3;
-  const shown = symbols.slice(0, room);
-  const w = Math.max(...shown.map((s) => String(s.line).length));
-  const SIG_MAX = 90;
-  for (const s of shown) {
-    const raw = srcLines[s.line - 1]?.trim() ?? "";
-    const sig = raw.length > SIG_MAX ? `${raw.slice(0, SIG_MAX - 1)}…` : raw;
-    lines.push(
-      `  ${String(s.line).padStart(w)}  ${s.kind.padEnd(9)}  ${sig || s.name}`,
-    );
-  }
-  if (symbols.length > shown.length) {
-    lines.push(`  … +${symbols.length - shown.length} more`);
-  }
-  return lines.join("\n");
-}
-
-export function cmdMap(args: string[]): void {
-  const target = args[0] ?? ".";
-  const abs = resolve(target);
-  let isFile: boolean;
-  try {
-    isFile = statSync(abs).isFile();
-  } catch {
-    console.error(`fapony map: "${target}" does not exist`);
-    process.exit(1);
-  }
-  const rel = relative(process.cwd(), abs).split(sep).join("/") || ".";
-  console.log(isFile ? formatMapFile(abs, rel) : formatMapDir(abs, rel));
-}
