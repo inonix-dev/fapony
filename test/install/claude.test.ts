@@ -321,3 +321,34 @@ export function testInstallClaudeStopHookAppendsOnceAndKeepsForeign(): void {
   );
   console.log("  ✓ install claude stop hook → appends once, keeps foreign");
 }
+
+export function testInstallClaudeReadHintAppendsOnce(): void {
+  const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
+  const claudeDir = join(home, ".claude");
+  mkdirSync(claudeDir, { recursive: true });
+  const ADD = claudeAddArgs().join(" ");
+  const read = () =>
+    JSON.parse(readFileSync(join(claudeDir, "settings.json"), "utf-8")) as {
+      hooks: { PreToolUse: Array<Record<string, unknown>> };
+    };
+
+  for (let i = 0; i < 2; i++) {
+    const { run } = mapRun({ [GET]: ABSENT, [ADD]: ADDED });
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallClaude(false, { run, exit: testExit, homedir: () => home }),
+      ),
+    );
+  }
+
+  const pre = read().hooks.PreToolUse;
+  assert.equal(pre.length, 1, "installing twice must not duplicate");
+  assert.equal(pre[0].matcher, "Read", "matcher must be Read only");
+  assert.ok(
+    JSON.stringify(pre[0]).includes("hook-read-hint"),
+    "read hint command must be registered",
+  );
+  console.log(
+    "  ✓ install claude read hint → PreToolUse matcher Read, appends once",
+  );
+}

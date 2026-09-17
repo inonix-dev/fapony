@@ -1,6 +1,6 @@
 ---
 name: plan-with-pony
-description: Draft a plan + spec from "what's in your head" — one question, then a draft you correct. Vendor-neutral — works with Claude Code, OpenCode, Codex, ZCode. Pulls known failure patterns from fapony run history when it's wired up. Trigger on /plan-with-pony and when the user asks to plan or brainstorm a feature.
+description: Draft a plan + spec from "what's in your head" — one question, then a draft you correct. Vendor-neutral — works with Claude Code, OpenCode, Codex, ZCode. Seeds the factual sections from the code and the fapony ledger when the CLI is wired up. Trigger on /plan-with-pony and when the user asks to plan or brainstorm a feature.
 ---
 
 # plan-with-pony — start from what's in your head
@@ -38,7 +38,12 @@ over the two-command opener instead of drafting**:
 ```bash
 fapony analyze <dir>                  # hub / orphan / cycle / changed-untested in that area
 fapony review-seed --files a.ts,b.ts,src/zone/  # exports + importers + untested — dirs expand to source files under them
+fapony review-seed --files a.ts --body doThing --callers doThing  # + the declaration slice and every call site, same call
 ```
+
+`--body`/`--callers` are the second step of that same lookup: use them instead of reading a file
+you only need one symbol out of. Exports only — a non-exported name answers "no export named X in
+scope", which is not the same as "not there".
 
 That is the same facts this skill would have seeded into §2/§5, without the file — roughly 1k
 tokens, deterministic, and it is the front half of the pair the dev already closes with
@@ -71,29 +76,7 @@ If it runs long, summarise it back in one sentence and let them correct the summ
 
 That is the entire question phase. Everything else comes out of the draft.
 
-## Phase 1.5 — Known patterns (fapony history, if available)
-
-Before drafting, check what has gone wrong here before — these become *guessed constraints* in the
-draft, which is worth far more than a question about constraints.
-
-If the `project_health_context` MCP tool is available:
-
-1. **Call it with no `worktree` argument** — patterns across *every* project sharing this fapony
-   state db. Do this one always. It is the deeper well (more runs = more regimes covered, real
-   recurring `reason_code`s) and it is the one nothing else in this skill duplicates.
-2. **Then, only if Phase 1.6's `fapony plan-seed` did NOT run**, call it again with `worktree` =
-   the **absolute path** to this repo (`git rev-parse --show-toplevel`). When the seed *did* run,
-   skip this: the seed's `## Context (fapony)` block already carries the same project-scoped
-   decisions and model fit, and calling it too pays for that block twice. Passing `files` with the
-   paths the idea touches narrows it to file-scoped findings.
-
-Every fapony tool scopes by absolute path — a bare repo name lands in a bucket later queries never
-find.
-
-Show what you got to the dev, labelled "this project" vs "all projects". If fapony isn't wired up,
-or it says "not enough history yet", skip silently — never block drafting on this.
-
-## Phase 1.6 — Seed the facts (`fapony plan-seed`, if the CLI is available)
+## Phase 1.5 — Seed the facts (`fapony plan-seed`, if the CLI is available)
 
 If the `fapony` CLI is on PATH, run it **once** before drafting — with `--scope` when the dev's
 idea already points at a directory (repeatable; without it the seed scans the whole cwd and
@@ -103,22 +86,23 @@ warns past ~300 files):
 fapony plan-seed <feature> --spec --scope <path>
 ```
 
-It writes `<planDir>/PLAN-<feature>.md` + `<specDir>/SPEC-<feature>.md` with the factual
-sections pre-filled from the code itself — §2 Scope reports export-name prefixes that repeat
-**across two or more directories** (a prefix confined to one directory is that directory's naming
-convention, so it is not reported), §5 Risks from the import graph scoped to the requested paths,
-and a `## Context (fapony)` block (recent mem decisions + which model holds up per task shape).
-Every section is hard-capped (PLAN ≤ ~60 / SPEC ≤ 200 lines) and capped lines always say what was
-cut. The CLI resolves plan-dir/spec-dir and refuses to overwrite (hard rule 9 — pick `-v2`).
+That is the whole fact-gathering phase — one command, no MCP round trip. It writes
+`<planDir>/PLAN-<feature>.md` + `<specDir>/SPEC-<feature>.md` with the factual sections
+pre-filled from the code itself: §2 Scope reports export-name prefixes that repeat **across two
+or more directories** (a prefix confined to one directory is that directory's naming convention,
+so it is not reported), §5 Risks from the import graph scoped to the requested paths, and a
+`## Context (fapony)` block — recent mem decisions plus which model holds up per task shape here.
+Sections are hard-capped (PLAN ≤ ~60 / SPEC ≤ 200 lines) and capped lines say what was cut. The
+CLI resolves plan-dir/spec-dir and refuses to overwrite (pick `-v2` — see Phase 2).
 
-What that buys you: the file, the frontmatter and §5 exist before you start, so the draft budget
-goes on judgment — Goal, Done criteria, ordering — instead of on structure. So:
+The file, the frontmatter and §5 exist before you start, so the draft budget goes on judgment —
+Goal, Done criteria, ordering — instead of on structure. So:
 
-- **Read the seeded §2/§5 — skip the rest**, it is the empty template you are about to fill.
-  Correct a seeded line only where the dev's idea contradicts it, and say so when you do
-  ("the scan shows X but you want Y").
+- **Read the seeded §2/§5 and the Context block — skip the rest**, it is the empty template you
+  are about to fill. Correct a seeded line only where the dev's idea contradicts it, and say so
+  when you do ("the scan shows X but you want Y").
 - **Fill the judgment sections** — §1/3/4/6/8 and the TL;DR. They start as `_agent เติม_` slots.
-- The seeded lines are tagged `(source scan)` / `(fapony analyze)` — keep the tags so the dev can
+- Seeded lines are tagged `(source scan)` / `(fapony analyze)` — keep the tags so the dev can
   tell measured facts from your guesses.
 - **Signatures live in the SPEC chunks only.** Never paste them into plan §7 — link to the spec.
 - If the CLI is missing, skip silently and draft from scratch (Phase 2 as written) — never block
@@ -126,10 +110,10 @@ goes on judgment — Goal, Done criteria, ordering — instead of on structure. 
 
 ## Phase 2 — Draft straight to the file
 
-Write the full draft **now**, all eight sections, from the Phase 0 harvest + the Phase 1 answer +
-the Phase 1.5 patterns — **or, when Phase 1.6 seeded a file, correct and complete that file
-instead of writing from scratch** (its §2/§5 already hold the measured facts). Fill every
-section — guessing where you have to.
+Write the full draft **now**, all eight sections, from the Phase 0 harvest + the Phase 1 answer
+— **or, when Phase 1.5 seeded a file, correct and complete that file instead of writing from
+scratch** (its §2/§5 already hold the measured facts). Fill every section — guessing where you
+have to.
 
 ```
 1. Goal (why)                          5. Risks & Escape hatches (if it fails)
@@ -138,8 +122,8 @@ section — guessing where you have to.
 4. Constraints / Hard rules            8. References
 ```
 
-**Mark every guess `(guess)`.** A marked guess is the whole technique; an unmarked one breaks
-hard rule #6.
+**Mark every guess `(guess)`.** A marked guess is the whole technique; an unmarked one is how
+a plan picks up requirements nobody asked for (hard rule 1).
 
 **Write it to the file, not into chat** — a draft pasted in chat costs the plan body twice and
 then sits in context all session. Corrections land as small edits instead of a re-draft.
@@ -151,7 +135,7 @@ normal — writing to the default there scatters plans into a directory nobody r
 
 `ls <planDir>/` and check `PLAN-<feature>.md` doesn't already exist — check `paths.doneDir`
 (default `.fapony/done`) too, shipped plans live there. If it exists, don't overwrite: pick
-`PLAN-<feature>-v2.md` or ask which one is stale. (Phase 1.6's CLI refuses on its own; drafting
+`PLAN-<feature>-v2.md` or ask which one is stale. (Phase 1.5's CLI refuses on its own; drafting
 by hand, this check is yours.)
 
 **Editing a plan someone is executing right now is a different job from drafting one.** Ask the
@@ -248,7 +232,7 @@ Only if the dev asks, or the plan keeps trying to describe *how*:
 > react than specify."
 
 Then draft `<specDir>/SPEC-<feature>.md` (same config lookup as Phase 2) by:
-- If Phase 1.6 already created it (`--spec`), edit that one — its Chunk index + signatures are
+- If Phase 1.5 already created it (`--spec`), edit that one — its Chunk index + signatures are
   the live scan; add the dev-facing detail (edge cases, examples, fail examples) on top
 - Referencing sections from the plan directly — don't rewrite
 - More concrete examples than abstract
@@ -258,22 +242,15 @@ Then draft `<specDir>/SPEC-<feature>.md` (same config lookup as Phase 2) by:
 
 ## Hard rules
 
-1. **Draft before you interrogate** — one question, then a draft. Never open with a questionnaire
-2. **Never more than 2 questions in one message** — and only about load-bearing blanks
-3. **"I don't know" is handled, never punished** — offer 2-3 options with consequences and let the
-   dev point. Never answer it with more questions
-4. **Every guess is labelled `(guess)` — and listed back in chat** (Phase 3). The list is what the
-   dev corrects; unlabelled invention breaks rule #6
-5. **Never block on a blank section** — `_TBD — decide while building_` and move on
-6. **What wasn't discussed or corrected = not in the plan** — a labelled guess the dev fixed or
+Everything above is procedure. These three are the ones that break the plan when broken —
+the rest of this file states them where they apply:
+
+1. **Every guess is labelled `(guess)` — and listed back in chat** (Phase 3). The list is what
+   the dev corrects; unlabelled invention is how a plan picks up requirements nobody asked for
+2. **What wasn't discussed or corrected = not in the plan** — a labelled guess the dev fixed or
    kept counts as discussed; silent additions never do
-7. **Every output is a file** — not chat (so git can track it)
-8. **Plan must have all eight sections** — `_TBD_` is a legitimate value, a missing heading is not
-9. **Never overwrite an existing PLAN-<feature>.md** — check first, pick a different name
-10. **A plan with an open run is live — add nothing to it that reads as work** (Phase 2). Park the
-    new thing in its own plan and leave a one-line pointer naming the files this one doesn't touch
-11. **Ordering and blockers go in frontmatter, not only in prose** — "ต้องอยู่ก่อน X" buried in
-    paragraph 2 of a 40KB file is invisible to every later question about what to do next
+3. **All eight sections exist, in a file, not in chat** — `_TBD — decide while building_` is a
+   legitimate value; a missing heading is not
 
 ## Piping into a non-MCP agent
 

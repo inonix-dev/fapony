@@ -1,8 +1,9 @@
 // src/mcp/tools/context.ts — project_health_context tool
 //
-// Single-call pre-edit reflex for any caller: returns the paste-ready "known
-// patterns" block built from real run history, keyed by files[] (no raw dump,
-// ~15 lines max). `plan-with-pony` is one caller, not the only entry point.
+// Single call, any caller: returns the paste-ready "known patterns" block built
+// from real run history, keyed by files[] (no raw dump, ~15 lines max). Not a
+// pre-edit reflex — most files have no history (see CLAUDE.md rule 8); it earns
+// its call on a file that does. `plan-with-pony` is one caller, not the only one.
 //
 // It also surfaces project decisions from the mem log — that read is the only
 // I/O here; `buildProjectHealthContext` stays pure and just renders.

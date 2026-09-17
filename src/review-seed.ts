@@ -62,7 +62,13 @@ const SIG_MAX = 90;
 const DISCLAIMER =
   "static graph only — seed is where to enter, not what is verified";
 const USAGE =
-  "usage: fapony review-seed [--staged | --commit <sha> | --range <a...b> | --files f1,f2,dir | --plan <PLAN.md>]";
+  "usage: fapony review-seed [--staged | --commit <sha> | --range <a...b> | --files f1,f2,dir | --plan <PLAN.md>] [--body sym[,sym]] [--callers sym]";
+// --body / --callers are the executor's lookup, not the reviewer's seed: when
+// either is present the output is only those sections (plus worktree line and
+// disclaimer) — the standard sections would be a wall around the one answer.
+const MAX_BODY_LINES = 80;
+const MAX_CALLER_FILES = 12;
+const MAX_CALLER_HITS = 20;
 
 export class SeedError extends Error {}
 
@@ -120,6 +126,53 @@ type Scope =
   | { kind: "files"; list: string[] }
   | { kind: "plan"; path: string };
 
+interface LookupFlags {
+  /** --body sym[,sym] — declaration slices from the named file(s). */
+  body: string[];
+  /** --callers sym — symbol→symbol grep over importer files. */
+  callers: string | null;
+}
+
+function parseLookup(args: string[]): LookupFlags {
+  const body: string[] = [];
+  let callers: string | null = null;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--body" || a === "--callers") {
+      const v = args[i + 1];
+      if (v === undefined || v.startsWith("--")) {
+        throw new SeedError(`review-seed: ${a} needs a value\n${USAGE}`);
+      }
+      i++;
+      if (a === "--body") {
+        for (const s of v
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)) {
+          if (!/^[A-Za-z_$][\w$]*$/.test(s)) {
+            throw new SeedError(`review-seed: invalid symbol: ${s}`);
+          }
+          body.push(s);
+        }
+        if (body.length === 0) {
+          throw new SeedError(`review-seed: --body needs a symbol\n${USAGE}`);
+        }
+      } else {
+        if (!/^[A-Za-z_$][\w$]*$/.test(v)) {
+          throw new SeedError(`review-seed: invalid symbol: ${v}`);
+        }
+        if (callers) {
+          throw new SeedError(
+            `review-seed: --callers takes one symbol\n${USAGE}`,
+          );
+        }
+        callers = v;
+      }
+    }
+  }
+  return { body, callers };
+}
+
 function parseScope(args: string[]): Scope {
   const flags: Scope[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -132,6 +185,10 @@ function parseScope(args: string[]): Scope {
       i++;
       return v;
     };
+    if (a === "--body" || a === "--callers") {
+      i++; // consumed by parseLookup — never a scope flag
+      continue;
+    }
     if (a === "--staged") flags.push({ kind: "staged" });
     else if (a === "--commit") {
       const v = value();
@@ -485,6 +542,194 @@ function hasDynamicDispatch(absFile: string): boolean {
   return /\b(?:import|require)\s*\(/.test(content);
 }
 
+// --- --body: declaration slice (indent-out, no parser) ---
+
+// Slice from the declaration line until the first line at the declaration's
+// own indent level that is non-blank (indent-out). Raw indentation as the
+// close signal means no brace counting and no parse — a one-liner returns
+// itself, nested blocks and object literals never return to the base indent
+// until the declaration is over. The closing line is the exception indent-out
+// cannot see: `}` sits AT the declaration indent, so the walk stops one line
+// short of it. Take that line when it is nothing but closers — which is why
+// the slice a caller pastes into an edit is syntactically whole.
+function extractBody(source: string, line: number): string[] {
+  const lines = source.split("\n");
+  const start = line - 1;
+  if (start < 0 || start >= lines.length) return [];
+  const decl = lines[start];
+  if (decl.trim() === "") return [];
+  const base = decl.match(/^\s*/)?.[0].length ?? 0;
+  const out: string[] = [decl];
+  for (
+    let i = start + 1;
+    i < lines.length && out.length < MAX_BODY_LINES;
+    i++
+  ) {
+    const l = lines[i];
+    if (l.trim() === "") {
+      out.push(l);
+      continue;
+    }
+    if ((l.match(/^\s*/)?.[0].length ?? 0) <= base) {
+      // Closers only (`}`, `};`, `});`) — never the next declaration.
+      if (/^[)\]}]+[;,]?$/.test(l.trim())) out.push(l);
+      break;
+    }
+    out.push(l);
+  }
+  // Trailing blank lines inside the slice are padding, not body.
+  while (out.length > 1 && out[out.length - 1].trim() === "") out.pop();
+  return out;
+}
+
+// --- --callers: symbol→symbol over importer files (identifier scan) ---
+
+// Narrow file→file importers to symbol→symbol by scanning importer files for
+// the identifier. Deliberately textual: a name in a comment or string counts
+// as a hit — ~80% of "who calls this" for near-zero cost. Real call-graph
+// precision is code-review-graph's job; this is the seed that says where to
+// look. Only static importers are scanned (the graph's dependents); a caller
+// that never imports the defining file is out of reach here.
+function findCallers(
+  symbol: string,
+  targets: string[],
+  graph: ImportGraph,
+  worktree: string,
+): {
+  rows: { file: string; hits: number[]; more: number }[];
+  filesCapped: boolean;
+} {
+  const all: { file: string; hits: number[]; more: number }[] = [];
+  const re = new RegExp(`\\b${symbol}\\b`);
+  for (const target of targets) {
+    for (const dep of graph.dependents.get(target) ?? new Set<string>()) {
+      if (all.some((o) => o.file === dep)) continue;
+      let source: string;
+      try {
+        source = readFileSync(join(worktree, dep), "utf-8");
+      } catch {
+        continue;
+      }
+      const found = source
+        .split("\n")
+        .map((l, i) => (re.test(l) ? i + 1 : 0))
+        .filter((n) => n > 0);
+      if (found.length === 0) continue;
+      const hits = found.slice(0, MAX_CALLER_HITS);
+      all.push({ file: dep, hits, more: found.length - hits.length });
+    }
+  }
+  // Sort before capping: capping first would show an arbitrary 12 of N.
+  all.sort((a, b) => (a.file < b.file ? -1 : 1));
+  const rows = all.slice(0, MAX_CALLER_FILES);
+  return { rows, filesCapped: all.length > rows.length };
+}
+
+// --body / --callers output: the answer the executor asked for, nothing else.
+// Resolve the scope first (cheap for --files, one git call otherwise) because
+// --callers needs the target file list to walk importers from.
+function renderLookup(
+  flags: LookupFlags,
+  scope: Scope,
+  worktree: string,
+): string {
+  const lines: string[] = [];
+  lines.push(`worktree: ${worktree} (${lookupLabel(flags)})`);
+
+  let resolved: ResolvedScope | null = null;
+  if (flags.callers) {
+    resolved = resolveScope(scope, worktree);
+  }
+
+  const hasGraph = (f: string): boolean => {
+    const dot = f.lastIndexOf(".");
+    return dot >= 0 && SCAN_EXTS.has(f.slice(dot));
+  };
+
+  if (flags.body.length > 0) {
+    // Which files to search: scope entries when the scope names them, else
+    // the flag can be used bare — then scan every source file in the tree
+    // (same walk as buildGraph), capped, with the cut announced.
+    let targets: string[];
+    if (scope.kind === "files") {
+      targets = expandFilesScope(scope.list, worktree)
+        .files.map((e) => e.path)
+        .filter(hasGraph);
+    } else {
+      targets = collectSourceFiles(worktree);
+    }
+    const shown: string[] = [];
+    for (const path of targets) {
+      let source: string;
+      try {
+        source = readFileSync(join(worktree, path), "utf-8");
+      } catch {
+        continue;
+      }
+      const scan = extractExports(source);
+      if (scan.error) continue;
+      for (const sym of scan.symbols) {
+        if (!flags.body.includes(sym.name)) continue;
+        shown.push(`${path}:${sym.line}`);
+        lines.push(`${path}:${sym.line} ${sym.name}`);
+        const body = extractBody(source, sym.line);
+        if (body.length >= MAX_BODY_LINES) {
+          lines.push(
+            `  ⚠ body truncated at ${MAX_BODY_LINES} lines — read the file for the rest`,
+          );
+        }
+        for (const b of body) lines.push(`  ${b}`);
+      }
+    }
+    if (shown.length === 0) {
+      lines.push(`body: no export named ${flags.body.join(", ")} in scope`);
+    }
+    if (scope.kind !== "files") {
+      lines.push(
+        "(no --files: scanned whole tree — pass --files <file> to narrow)",
+      );
+    }
+  }
+
+  if (flags.callers) {
+    const graph = buildGraph(worktree);
+    const targets = (resolved?.entries ?? [])
+      .map((e) => e.path)
+      .filter(hasGraph);
+    const found = findCallers(flags.callers, targets, graph, worktree);
+    if (targets.length === 0) {
+      lines.push(`callers of ${flags.callers}: no source files in scope`);
+    } else if (found.rows.length === 0) {
+      lines.push(
+        `callers of ${flags.callers}: none found in static importers (dynamic or non-importing use is out of reach)`,
+      );
+    } else {
+      lines.push(
+        `callers of ${flags.callers} (textual hits, may be comments/strings):`,
+      );
+      for (const f of found.rows) {
+        const more = f.more > 0 ? ` (+${f.more} more hits)` : "";
+        lines.push(`  ${f.file}:${f.hits.join(",")}${more}`);
+      }
+      if (found.filesCapped) {
+        lines.push(
+          `  ⚠ more importer files matched — capped at ${MAX_CALLER_FILES}`,
+        );
+      }
+    }
+  }
+
+  lines.push(DISCLAIMER);
+  return lines.join("\n");
+}
+
+function lookupLabel(flags: LookupFlags): string {
+  const parts: string[] = [];
+  if (flags.body.length > 0) parts.push(`--body ${flags.body.join(",")}`);
+  if (flags.callers) parts.push(`--callers ${flags.callers}`);
+  return parts.join(" ");
+}
+
 export function renderSeed(args: string[], cwd: string): string {
   const scope = parseScope(args);
   const root = execGit("git rev-parse --show-toplevel", cwd);
@@ -499,6 +744,15 @@ export function renderSeed(args: string[], cwd: string): string {
     );
   }
   const worktree = root.output.split("\n")[0];
+
+  // --body / --callers: lookup mode. Scope flags stay legal (a --files dir
+  // feeds --callers its targets), but the standard sections are suppressed —
+  // the caller asked for one answer, not the review seed around it.
+  const lookup = parseLookup(args);
+  if (lookup.body.length > 0 || lookup.callers) {
+    return renderLookup(lookup, scope, worktree);
+  }
+
   const resolved = resolveScope(scope, worktree);
   const entries = [...resolved.entries].sort((a, b) =>
     a.path < b.path ? -1 : 1,
@@ -522,14 +776,16 @@ export function renderSeed(args: string[], cwd: string): string {
   });
 
   // Lookup mode: caller named the files, so show them whole (see caps above).
-  const lookup = scope.kind === "files";
-  const importersShown = lookup ? LOOKUP_IMPORTERS_SHOWN : MAX_IMPORTERS_SHOWN;
-  const importerLineCap = lookup ? entries.length : MAX_IMPORTER_LINES;
-  const signaturesShown = lookup
+  const filesLookup = scope.kind === "files";
+  const importersShown = filesLookup
+    ? LOOKUP_IMPORTERS_SHOWN
+    : MAX_IMPORTERS_SHOWN;
+  const importerLineCap = filesLookup ? entries.length : MAX_IMPORTER_LINES;
+  const signaturesShown = filesLookup
     ? Number.POSITIVE_INFINITY
     : MAX_SIGNATURES_SHOWN;
-  const signatureLineCap = lookup ? entries.length : MAX_SIGNATURE_LINES;
-  const outputCap = lookup ? LOOKUP_OUTPUT_CAP : OUTPUT_CAP;
+  const signatureLineCap = filesLookup ? entries.length : MAX_SIGNATURE_LINES;
+  const outputCap = filesLookup ? LOOKUP_OUTPUT_CAP : OUTPUT_CAP;
 
   const lines: string[] = [];
   lines.push(`worktree: ${worktree} (${resolved.label})`);

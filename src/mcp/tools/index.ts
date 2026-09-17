@@ -171,11 +171,13 @@ export const TOOLS = [
   {
     name: "project_health_context",
     description:
-      "Call this BEFORE editing files: known-patterns context for the files " +
-      "you are about to touch — recurring fail reasons, escalated runs, and " +
-      "round-1-pass shapes from real run history. Pass files[] (the unit is " +
-      "touched files, not a plan; a bug fix with no plan file still qualifies). " +
-      "Short plain-text block (framed as watch-fors, not constraints).",
+      "Known-patterns block for files[]: recurring fail reasons, escalated runs, " +
+      "and round-1-pass shapes from real run history. Worth a call when you are " +
+      "about to touch a file that has history — a long-lived file, one you have " +
+      "not seen before, or one a previous attempt already failed on. The unit is " +
+      "touched files, not a plan; a bug fix with no plan file still qualifies. " +
+      "Returns nothing when there is no history (most files); short plain-text " +
+      "block, framed as watch-fors, not constraints.",
     inputSchema: {
       type: "object" as const,
       properties: {

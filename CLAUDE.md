@@ -345,6 +345,7 @@ Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)
 ```bash
 fapony mcp                          # MCP server — stdio JSON-RPC, 6 tools
 fapony hook-stop                    # Claude Code Stop hook (stdin JSON) — blocks a turn that has ungraded commits
+fapony hook-read-hint               # Read hint (claude PreToolUse / opencode plugin) — annotates a full-file read of a large source file with one factual line pointing at review-seed; annotate-only, never blocks, never dedupes (context compaction makes "อ่านไปแล้ว" เป็นเท็จ)
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page project summary from existing sources (mem log, plans, usage cache, verdicts)
 fapony report <run-id>              # verification report for a run
 fapony report-web [file]            # static HTML report page
@@ -363,7 +364,7 @@ fapony telemetry show|send          # opt-in only, default off — see TELEMETRY
 fapony test                         # self-check
 fapony analyze [path]               # structural diagnosis (hub/orphan/cycle/changed-untested) — live graph via Bun.Transpiler.scan(), never persisted (no table: 114 files / 466 imports = 16.6ms, cache would be pure debt)
 fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): §2 = export-name prefixes repeating across 2+ dirs (single-dir = that dir's naming convention, not reported), §5 = scoped analyze findings, hard caps PLAN ≤ ~60 / SPEC ≤ 200 lines — caller: plan-with-pony Phase 1.6
-fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"
+fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"; --body/--callers = the executor's symbol lookup (one call answers both)
 ```
 
 **`review-seed --files` คือ lookup ตอน *execute* ไม่ใช่แค่ "Before" ของ review-pony** — โหมดนี้
@@ -378,6 +379,18 @@ component นี้ / เปลี่ยน UX โซนนี้" คิดเ�
 แล้วบอกตรง ๆ เมื่อตัด · path ที่ไม่มีจริงถูก drop พร้อมแจ้ง not found แทนที่จะนับเป็น
 changed เงียบ ๆ (2026-09-17) · scope แบบ diff (`--commit`/`--range`/`--staged`) ยัง cap
 เท่าเดิม นั่นคืองบของ review ไม่ใช่ของ lookup
+
+**`--body` / `--callers` คือก้าวที่สองของ lookup เดียวกัน ไม่ใช่ของ reviewer** — `--files` ตอบว่า
+"ไฟล์นี้มี export อะไร บรรทัดไหน ใครใช้" แล้วถ้ายังต้องเห็นตัวโค้ดหรือจุดเรียกจริง ต่อท้าย
+แฟลกสองตัวนี้ใน call เดียวกันได้เลย ไม่ต้องยิงใหม่:
+
+```bash
+fapony review-seed --files src/x.ts --body resolveScope,findScope --callers resolveScope
+```
+
+`--body` = declaration slice ของ export ที่ระบุ (indent-out ไม่มี parser, ตัดที่ cap แล้วบอกตรง ๆ) ·
+`--callers` = symbol→symbol scan ข้าม importer ที่ static graph เห็น (dynamic use อยู่นอกมือ) ·
+**export เท่านั้น** — ฟังก์ชันที่ไม่ export ตอบว่า "no export named X in scope" ไม่ใช่ "ไม่มี"
 
 **งาน wire/refactor ไม่ต้องมี PLAN.md** — `plan-with-pony` Phase −1 bail ออกเองแล้วเมื่องานจบใน
 session เดียวและไม่มีอะไรให้ archive · คู่ที่ใช้จริงคือ `analyze <dir>` + `review-seed --files`
@@ -401,7 +414,7 @@ fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC. 6 tools:
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) + required `regime` (`code\|fix\|review\|plan\|inquiry\|test`) — the task-shape axis. Clean work takes `reason_code: none`, never `other` |
 | `fapony_stats` | Query KPIs: by-model (gates/fails/quality/tokens), by-grade, **planned vs dove-in** (`runs.plan` null/not-null), **regime × model**; `group_by: reason_code\|plan\|file` for top-N slices |
 | `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
-| `project_health_context` | Known-patterns block keyed by `files[]` — recurring fail reasons, escalations, round-1-pass shapes. Pre-edit reflex for any task; `plan-with-pony` is one caller, not the only one |
+| `project_health_context` | Known-patterns block keyed by `files[]` — recurring fail reasons, escalations, round-1-pass shapes. Optional — worth a call on a file that has history, empty on most (กฎ 8); `plan-with-pony` is one caller, not the only one |
 | `mem_find` | Search the project's mem log read-only: `files[]`/`text`/`kind`/`since`/`limit` — every kind, no default filter; `memDir:null` = no mem (not "nothing matched") |
 
 See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.

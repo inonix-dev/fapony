@@ -107,10 +107,13 @@ fapony init /path/to/your-worktree
 #    changed files all sit under that app use it; anything else uses the root one.
 ```
 
-With `.fapony/evidence.json` in place, ask your agent to verify its own work:
+With `.fapony/evidence.json` in place, any graded run can be replayed as a report. This one is
+a CLI command, not an MCP tool — the schemas cost every session of every client and no skill
+called them (see [The 6 tools](#the-6-tools) below). Grade something first;
+`verdict_submit` is what creates the run:
 
-```
-"Run fapony verification_report on this repo and summarize the result."
+```bash
+fapony report <run-id>        # run ids come from `fapony stats`
 ```
 
 You get one report: git facts (files, commits, branch), handoff conformance (claims vs. reality), evidence from the allowlisted commands (pass/fail/timeout/unverified), a 6-grade verdict, and cost — with anything the agent claimed but couldn't prove marked as such.
@@ -133,7 +136,7 @@ flowchart LR
     F --> G[git facts + session logs]
     G --> S[stats / usage]
     G --> V[verification report]
-    G --> P[project_health → plan-with-pony]
+    G --> P[project_health - optional]
 ```
 
 fapony never drives the agent — it is a set of checkpoints the agent walks past. One
@@ -143,23 +146,35 @@ work cycle looks like this:
 sequenceDiagram
     autonumber
     participant A as Agent (any MCP client)
-    participant F as fapony MCP
+    participant F as fapony (MCP tools + CLI)
     participant W as your worktree
 
-    A->>F: plan_list
-    F-->>A: pending plans + how each one went last time
-    Note over A,W: agent does the actual work — fapony is not involved
-    A->>F: verification_report
-    F->>W: git diff/log + commands from .fapony/evidence.json
-    W-->>F: facts + evidence (passed / failed / timeout / not_run)
-    F-->>A: one report, stamped with server_sha
+    A->>F: review-seed --files (plan_list instead, when there is a plan)
+    F->>W: static read — exports, importers, untested
+    W-->>F: facts, no LLM in the middle
+    F-->>A: the lines worth reading, instead of the files
+    Note over A,W: the agent does the actual work — fapony is not involved
+    A->>W: commit
+    opt work you want proven, not just claimed — CLI, after a run exists
+        A->>F: fapony report <run-id>
+        F->>W: git diff/log + commands from .fapony/evidence.json
+        W-->>F: facts + evidence (passed / failed / timeout / not_run)
+        F-->>A: one report, stamped with server_sha
+    end
     A->>F: verdict_submit (grade + reason_code + regime + note)
     Note over F: stored in ~/.config/fapony/state.db
-    F-->>A: fapony_stats — model x regime x quality, for the next call
+    F--)A: Stop hook — a turn that commits without grading is blocked once
+    A->>F: fapony_stats
+    F-->>A: model x regime x quality — which model to pay for this shape next
 ```
 
 `verdict_submit` is the only step that creates knowledge — grade, `reason_code`, `regime`.
-Everything in between is the agent's own business.
+Everything in between is the agent's own business, and the `opt` block really is optional:
+most cycles go lookup → work → commit → verdict and never ask for a report.
+
+The dashed arrow is the only thing fapony does *to* you. Everything else you call; the Stop
+hook calls you, once, when a turn ends with a commit and no grade. It never picks the grade —
+it cannot see whether the work held up.
 
 ## The 6 tools
 
@@ -279,32 +294,45 @@ Code expects, so a client can symlink the directory rather than copy the file:
 
 ```mermaid
 flowchart TD
-    I([idea]) --> P["/plan-with-pony"]
+    I([idea]) --> Q{does it outlive<br/>this session?}
+    Q -->|"feature, several days"| P["/plan-with-pony<br/>PLAN.md + SPEC.md"]
+    Q -->|"wire · refactor · fix"| Z["fapony analyze DIR<br/>fapony review-seed --files"]
     P --> W[you and your agent build]
+    Z --> W
     W --> C["/git-commit"]
     C --> R["/review-pony"]
     R -->|findings| W
     R -->|clean| S["/git-ship"]
-    S --> D["/move-to-done"]
-    D -.-> H[(fapony history)]
+    S -->|"there was a PLAN.md"| D["/move-to-done"]
+    D -.-> H[(fapony ledger)]
     R -.-> H
-    H -.->|known patterns| P
+    C -.->|"Stop hook: a commit needs a verdict"| H
+    H -.->|"which model for this shape"| Q
 
     style H fill:#2d333b,stroke:#768390,color:#adbac7
 ```
 
-The dotted edges are the whole point. `/review-pony` and `/move-to-done` write a verdict with a
-`reason_code` and a one-line note; `/plan-with-pony` reads them back before the next plan is
-written. Nothing else in the loop knows what went wrong last month.
+**The fork at the top is load-bearing.** A plan file is an artifact for work the next session has
+to pick up. Wiring, refactors and UI passes finish in one sitting and the PLAN.md gets archived
+unread — so `/plan-with-pony` declines those itself and hands over the two seed commands instead.
+`fapony review-seed --files` takes a directory as well as file names, and answers "what is in
+here, who imports it, what is untested" for about a thirtieth of the tokens reading those files
+costs. Both arms meet at the same review and the same ledger.
+
+**The dotted edges are the whole point.** Verdicts carry `regime` and `reason_code`, so the
+ledger can answer the one question no single client can: *in this project, which model is worth
+paying for this shape of work.* That is what flows back to the fork — not "this file broke once",
+which fapony measured at a 1–9% base rate and demoted.
 
 | Moment | Call | What fapony gets out of it |
 |---|---|---|
-| Before writing a plan | `/plan-with-pony` | reads `project_health_context` when these files have history |
+| Starting anything | `/plan-with-pony` | decides plan-vs-seed, then reads back how this shape has gone |
+| Before editing an unfamiliar file | `fapony review-seed --files` | nothing; it saves you reading the file |
 | Before committing | `/git-commit` | nothing; it just keeps commits reviewable |
 | Before merging | `/review-pony` | writes a verdict + `reason_code` + `regime` + note |
 | Merging | `/git-ship` (`pr` / `land` on a team) | nothing; pure git plumbing |
 | After it ships | `/move-to-done` | writes the ship verdict, closes the loop |
-| Any time | ask for `verification_report` | git facts + allowlisted evidence, one call |
+| Proving a finished run | `fapony report <run-id>` (CLI, not MCP) | git facts + allowlisted evidence, one page |
 
 **Team flow.** `/git-ship pr` stops once the PR is open and hands you the URL; the reviewer does
 their pass; `/git-ship land` merges it after approval. If the default branch requires reviews,

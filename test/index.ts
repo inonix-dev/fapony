@@ -103,6 +103,11 @@ import {
   testDecideStopBlocksUngradedCommits,
   testDecideStopMemNeverBlocks,
   testDecideStopReportsCommitsAndMem,
+  testReadHintAnnotatesLargeFullRead,
+  testReadHintClaudeOutputShape,
+  testReadHintNeedsGitRepo,
+  testReadHintPluginSource,
+  testReadHintSkipsCheapReads,
   testStopOutputShapesPerClient,
   testStopPayloadsMapToSameDecision,
   testUtcStampMatchesSqliteFormat,
@@ -126,6 +131,7 @@ import {
   testInstallClaudeForeignScriptRefusesOverwrite,
   testInstallClaudeForeignStatuslineRefusesOverwrite,
   testInstallClaudeMissingBinary,
+  testInstallClaudeReadHintAppendsOnce,
   testInstallClaudeStatuslineWiresSettings,
   testInstallClaudeStopHookAppendsOnceAndKeepsForeign,
 } from "./install/claude.test.js";
@@ -166,6 +172,8 @@ import {
   testInstallOpencodeDryRunNoWrite,
   testInstallOpencodeNewFile,
   testInstallOpencodeParseErrorFails,
+  testInstallOpencodeReadHintForeignFileUntouched,
+  testInstallOpencodeReadHintPlugin,
 } from "./install/opencode.test.js";
 import {
   testLinkSkillsCreatesSymlinks,
@@ -396,6 +404,7 @@ import {
 } from "./report-html.test.js";
 import {
   testReviewSeedBarrelAndScopeList,
+  testReviewSeedBodyAndCallers,
   testReviewSeedDeterministicAndNoWrite,
   testReviewSeedFilesDirExpansion,
   testReviewSeedFilesLookupUncapped,
@@ -603,6 +612,7 @@ export async function cmdTest(): Promise<void> {
   testReviewSeedRenames();
   testReviewSeedDeterministicAndNoWrite();
   testReviewSeedBarrelAndScopeList();
+  testReviewSeedBodyAndCallers();
   testReviewSeedFilesLookupUncapped();
   testReviewSeedFilesDirExpansion();
   testReviewSeedPlanCrossCheck();
@@ -611,6 +621,11 @@ export async function cmdTest(): Promise<void> {
   testDecideStopBlocksUngradedCommits();
   testDecideStopReportsCommitsAndMem();
   testDecideStopMemNeverBlocks();
+  testReadHintAnnotatesLargeFullRead();
+  testReadHintSkipsCheapReads();
+  testReadHintNeedsGitRepo();
+  testReadHintClaudeOutputShape();
+  testReadHintPluginSource();
   testDecideStopAllowsEveryUnknown();
   testStopPayloadsMapToSameDecision();
   testCursorPayloadEdges();
@@ -763,6 +778,7 @@ export async function cmdTest(): Promise<void> {
   testInstallClaudeDifferentCommandRefusesOverwrite();
   testInstallClaudeForeignStatuslineRefusesOverwrite();
   testInstallClaudeStopHookAppendsOnceAndKeepsForeign();
+  testInstallClaudeReadHintAppendsOnce();
   testInstallClaudeForeignScriptRefusesOverwrite();
   testInstallClaudeStatuslineWiresSettings();
   testInstallClaudeDryRunNeverAdds();
@@ -775,6 +791,8 @@ export async function cmdTest(): Promise<void> {
   testLinkSkillsDryRunNoWrite();
   testCmdInstallRejectsUnknownPlatform();
   testInstallOpencodeNewFile();
+  testInstallOpencodeReadHintPlugin();
+  testInstallOpencodeReadHintForeignFileUntouched();
   testInstallOpencodeAlreadyConfiguredNoOp();
   testInstallOpencodeAlreadyConfiguredLinksSkills();
   testInstallOpencodeDryRunNoWrite();

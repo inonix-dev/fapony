@@ -486,3 +486,97 @@ export function testReviewSeedFilesLookupUncapped(): void {
   });
   console.log("  ✓ review-seed --files shows every signature, diff scopes cap");
 }
+
+/**
+ * --body: one round trip instead of review-seed → Read. The slice runs from
+ * the declaration to indent-out; --callers narrows file→file importers to
+ * symbol→symbol textually (comments/strings count — documented, not hidden).
+ */
+export function testReviewSeedBodyAndCallers(): void {
+  withFixture((dir) => {
+    writeFileSync(
+      join(dir, "src", "multi.ts"),
+      [
+        "export function outer(x: number): number {",
+        "  if (x > 0) {",
+        "    return inner(x);",
+        "  }",
+        "  return 0;",
+        "}",
+        "",
+        "export const helper = (): void => {};",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(dir, "src", "user.ts"),
+      'import { outer } from "./multi.js";\n// outer mention\nconst s = "outer in a string";\nconsole.log(outer(1));\n',
+    );
+    execSync("git add -A", { cwd: dir, stdio: "ignore" });
+
+    const body = renderSeed(
+      ["--files", "src/multi.ts", "--body", "outer"],
+      dir,
+    );
+    assert.ok(body.includes("src/multi.ts:1 outer"), `decl line:\n${body}`);
+    assert.ok(body.includes("return inner(x);"), `body slice:\n${body}`);
+    assert.ok(
+      body.includes("return 0;"),
+      `slice must reach the last statement:\n${body}`,
+    );
+    // The closing brace sits at the declaration's own indent, so indent-out
+    // stops one line short of it unless the closer is taken deliberately.
+    const sliceLines = body.split("\n");
+    assert.strictEqual(
+      sliceLines[sliceLines.findIndex((l) => l.includes("return 0;")) + 1],
+      "  }",
+      `slice must end at the closing brace, not one line short:\n${body}`,
+    );
+    assert.ok(
+      !body.includes("helper"),
+      `must stop at indent-out, not swallow the next fn:\n${body}`,
+    );
+    assert.ok(
+      !body.includes("importers"),
+      `lookup mode suppresses standard sections:\n${body}`,
+    );
+
+    // One-liner returns itself.
+    const one = renderSeed(
+      ["--files", "src/multi.ts", "--body", "helper"],
+      dir,
+    );
+    assert.ok(one.includes("export const helper"), `one-liner:\n${one}`);
+
+    const callers = renderSeed(
+      ["--files", "src/multi.ts", "--callers", "outer"],
+      dir,
+    );
+    assert.ok(
+      callers.includes("src/user.ts:1,2,3,4"),
+      `caller hits with line numbers:\n${callers}`,
+    );
+    assert.ok(
+      callers.includes("may be comments/strings"),
+      `textual caveat must be stated:\n${callers}`,
+    );
+
+    const missing = renderSeed(
+      ["--files", "src/multi.ts", "--body", "nope"],
+      dir,
+    );
+    assert.match(missing, /no export named nope/);
+
+    const both = renderSeed(
+      ["--files", "src/multi.ts", "--body", "outer", "--callers", "outer"],
+      dir,
+    );
+    assert.ok(
+      both.includes("outer(x: number)") && both.includes("src/user.ts:1"),
+      `both lookups compose:\n${both}`,
+    );
+  });
+  console.log(
+    "  ✓ review-seed --body slices declarations, --callers scans importers",
+  );
+}
