@@ -4,6 +4,7 @@ import type { Run } from "../../db/index.js";
 import { openDb } from "../../db/index.js";
 import {
   formatStatsText,
+  formatVerdictText,
   getPlanBreakdown,
   getStatsData,
   type PlanBreakdown,
@@ -68,6 +69,14 @@ export function toolFaponyStats(args: Record<string, unknown>): ToolResult {
   }
   if (typeof groupBy !== "undefined") {
     return errorResult(`group_by must be one of: reason_code, plan, file`);
+  }
+
+  // mode: "verdict" → Pareto frontier of quality vs tokens/pass
+  if (args.mode === "verdict") {
+    const regime = typeof args.regime === "string" ? args.regime : undefined;
+    return {
+      content: [{ type: "text", text: formatVerdictText(data, regime) }],
+    };
   }
 
   // json:true → StatsData ล้วน (SPEC-verdict-stats) — ห้ามแทรก text อื่น

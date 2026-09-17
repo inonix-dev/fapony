@@ -97,16 +97,37 @@ export const TOOLS = [
     description:
       "Query accumulated run statistics: pass/stall rates, quality scores, " +
       "breakdown by model/grade/worktree. Returns StatsData shape. " +
-      "With group_by='reason_code'|'plan'|'file', returns top-N rows for that " +
-      "grouping (recurring failure signatures / per-plan totals / per-file " +
-      "gate-vs-fail counts) instead of the full shape.",
+      "With mode='verdict', returns the model to pay for each regime — the " +
+      "Pareto frontier of quality vs tokens/pass, one line per regime (or the " +
+      "full frontier/dominated/candidates breakdown for one regime). This is " +
+      "the answer the ledger exists to give; call it before assuming which " +
+      "model fits a task. With group_by='reason_code'|'plan'|'file', returns " +
+      "top-N rows for that grouping (recurring failure signatures / per-plan " +
+      "totals / per-file gate-vs-fail counts) instead of the full shape.",
     inputSchema: {
       type: "object" as const,
       properties: {
+        mode: {
+          type: "string",
+          enum: ["verdict"],
+          description:
+            "'verdict' ranks models by quality vs tokens/pass instead of listing " +
+            "raw counts — the leaderboard, not the ledger dump. Models below " +
+            "n=5 are shown separately and never picked as the answer; a model " +
+            "tried once at top quality does not get to define the frontier.",
+        },
+        regime: {
+          type: "string",
+          enum: ["code", "fix", "review", "plan", "inquiry", "test"],
+          description:
+            "With mode='verdict', narrows to one regime's full frontier " +
+            "(dominated models + candidates too). Omitted = one summary line " +
+            "per regime.",
+        },
         json: {
           type: "boolean",
           description:
-            "If true, return raw JSON StatsData. If false (default), return human-readable text.",
+            "If true, return raw JSON StatsData. If false (default), return human-readable text. Ignored when mode='verdict' (always text).",
         },
         group_by: {
           type: "string",
@@ -122,7 +143,7 @@ export const TOOLS = [
         worktree: {
           type: "string",
           description:
-            "Scope a group_by query to one worktree path (absolute).",
+            "Scope a query (verdict mode, group_by, or the default view) to one worktree path (absolute).",
         },
       },
       required: [],

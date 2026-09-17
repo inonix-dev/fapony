@@ -322,6 +322,34 @@ export function testComputeModelFit(): void {
       tokensPerPass: 1000,
     },
     {
+      // failRate-first would crown this (0 fails); the frontier does not —
+      // it is beaten outright on both quality and tokens by "cheapfail".
+      worktree: "wt1",
+      regime: "review",
+      model: "zerofail",
+      gates: 6,
+      fails: 0,
+      failRate: 0,
+      avgQuality: 3.0,
+      tokensInput: null,
+      tokensOutput: null,
+      passes: 6,
+      tokensPerPass: 90000,
+    },
+    {
+      worktree: "wt1",
+      regime: "review",
+      model: "cheapfail",
+      gates: 6,
+      fails: 1,
+      failRate: 1 / 6,
+      avgQuality: 4.5,
+      tokensInput: null,
+      tokensOutput: null,
+      passes: 5,
+      tokensPerPass: 10000,
+    },
+    {
       // other worktree → excluded when scoped
       worktree: "wt2",
       regime: "fix",
@@ -340,8 +368,8 @@ export function testComputeModelFit(): void {
   const scoped = computeModelFit(byRegime, "wt1");
   assert.deepEqual(
     scoped.map((f) => `${f.regime}:${f.model}`),
-    ["fix:sonnet"],
-    "lowest failRate wins; tiny dropped (<5 gates); wt2 excluded",
+    ["fix:sonnet", "review:cheapfail"],
+    "frontier wins over a zero-fail bucket it beats on quality and tokens; tiny dropped (<5 gates); wt2 excluded",
   );
 
   const all = computeModelFit(byRegime);
@@ -351,7 +379,7 @@ export function testComputeModelFit(): void {
   );
   assert.ok(!all.some((f) => f.model === "tiny"), "gates<5 never recommends");
   console.log(
-    "  ✓ computeModelFit ranks by failRate with min-N + worktree guards",
+    "  ✓ computeModelFit ranks on the frontier with min-N + worktree guards",
   );
 }
 

@@ -162,7 +162,11 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
    ซึ่งต้องมี branch บน remote ก่อน — กฎที่ต้องปลดล็อกทุกครั้งไม่ได้กันอะไร แค่สอนให้ข้าม ·
    สิ่งที่ทำลายได้จริงคือ force-push กับการเขียนทับ default branch ไม่ใช่ push เอง ·
    **merge เข้า `main` ยังเป็นของเจ้าของตัดสิน** agent เปิด PR ได้ กด merge เองไม่ได้
-3. **Commit แยก concern** — one commit per feature/area
+3. **Commit แยก concern** — one commit per feature/area · **งานที่จบแล้ว commit เลย ห้ามถามก่อน**
+   (ถอดออก 2026-09-17) — การหยุดถาม "commit ไหม" ทุกครั้งไม่ได้กันอะไร งานที่ยังไม่จบก็ไม่ควร
+   commit อยู่แล้ว ส่วนงานที่จบแล้วเจ้าของอ่านจาก diff/PR ไม่ใช่จากคำถามกลางทาง ·
+   **จบ = typecheck ผ่าน + `bun fapony.ts test` ผ่าน** ถ้ายังไม่ผ่านคือยังไม่จบ อย่า commit ทับ ·
+   push/PR ยังตามกฎ 2 (branch ที่ทำงานอยู่เท่านั้น) และ merge ยังเป็นของเจ้าของ
 4. **assertSafe() ต้องเรียกกับทุก shell command** ที่ spawn จาก config (memory/evidence/install) รวมถึงที่มาจาก template
 5. **fapony เขียนไฟล์ในเวิร์กทรีเป้าหมายได้ ถ้าเจ้าของสั่ง** — กฎเดิม "ห้ามเขียนเด็ดขาด" ถอดแล้ว
    2026-09-17 เพราะโค้ดตัวเองละเมิดอยู่ 4 ที่ (`init.ts` `init-mem.ts` `setup.ts` `plan-seed.ts`)
@@ -351,7 +355,7 @@ fapony report <run-id>              # verification report for a run
 fapony report-web [file]            # static HTML report page
 fapony usage-scan                    # scan session logs → usage-cache.jsonl (incremental, progress bar)
 fapony usage-web [port]              # live usage comparison dashboard from cache (no session log access)
-fapony stats                        # KPIs: pass/stall rate, by-model, by-grade
+fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]  # KPIs: pass/stall rate, by-model, by-grade — --mode verdict ranks by quality/tokens instead
 fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
 fapony init-mem [--update]          # re-copy templates/mem/ into this repo's memory dir (path from paths.memoryEntry) — data files (log.jsonl) untouched
 fapony install                            # detect installed clients, prompt to wire each
@@ -412,7 +416,7 @@ fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC. 6 tools:
 |------|---------|
 | `plan_list` | Pending plan files grouped by state (`active` / `blocked` / `untouched` / `superseded` / `trackers`) + progress tally, joined with run history — not a raw `ls`. State comes from optional 4-key frontmatter; `format:"markdown"` renders the generated master checklist |
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) + required `regime` (`code\|fix\|review\|plan\|inquiry\|test`) — the task-shape axis. Clean work takes `reason_code: none`, never `other` |
-| `fapony_stats` | Query KPIs: by-model (gates/fails/quality/tokens), by-grade, **planned vs dove-in** (`runs.plan` null/not-null), **regime × model**; `group_by: reason_code\|plan\|file` for top-N slices |
+| `fapony_stats` | Query KPIs: by-model (gates/fails/quality/tokens), by-grade, **planned vs dove-in** (`runs.plan` null/not-null), **regime × model**; `group_by: reason_code\|plan\|file` for top-N slices; **`mode: verdict`** — the answer, not the dump: Pareto frontier of quality vs tokens/pass per regime, `n≥5` gated so a lucky single run can't define the frontier |
 | `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `project_health_context` | Known-patterns block keyed by `files[]` — recurring fail reasons, escalations, round-1-pass shapes. Optional — worth a call on a file that has history, empty on most (กฎ 8); `plan-with-pony` is one caller, not the only one |
 | `mem_find` | Search the project's mem log read-only: `files[]`/`text`/`kind`/`since`/`limit` — every kind, no default filter; `memDir:null` = no mem (not "nothing matched") |

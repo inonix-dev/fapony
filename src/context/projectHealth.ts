@@ -10,6 +10,7 @@ import type {
   RecentVerdictNote,
   StatsData,
 } from "../stats/data.js";
+import { computeFrontier } from "../stats/format.js";
 
 export interface HealthContextOptions {
   /** Scope to one worktree path. Global across worktrees when omitted. */
@@ -132,10 +133,15 @@ function hubLine(hubs: HubEntry[]): string | null {
 }
 
 /**
- * Pick the best model per regime from real graded work. "Best" = fewest fails
- * first (the thing that costs a rework), then cheapest tokens/pass, then
- * highest quality. Buckets under `minN` are skipped — one lucky verdict is not
- * a recommendation; regimes with no eligible bucket drop out entirely.
+ * Pick the best model per regime from real graded work, on the same Pareto
+ * frontier `stats --mode verdict` renders: quality up, tokens/pass down.
+ *
+ * This used to sort by failRate first. That axis is dead in practice — work is
+ * self-graded and nearly every bucket sits at 0 fails — so the sort fell
+ * through to tokens and almost never read quality at all. failRate is still
+ * reported, just no longer the ranking key.
+ *
+ * Buckets under `minN` are skipped: one lucky verdict is not a recommendation.
  */
 export function computeModelFit(
   byRegime: StatsData["byRegime"],
@@ -150,30 +156,42 @@ export function computeModelFit(
       (worktree ? r.worktree === worktree : true),
   );
 
-  const byName = new Map<string, ModelFit[]>();
+  const byName = new Map<string, typeof eligible>();
   for (const r of eligible) {
     const list = byName.get(r.regime) ?? [];
-    list.push({
-      regime: r.regime,
-      model: r.model,
-      gates: r.gates,
-      failRate: r.failRate,
-      avgQuality: r.avgQuality,
-      tokensPerPass: r.tokensPerPass,
-    });
+    list.push(r);
     byName.set(r.regime, list);
   }
 
   const out: ModelFit[] = [];
   for (const list of byName.values()) {
-    list.sort((a, b) => {
-      if (a.failRate !== b.failRate) return a.failRate - b.failRate;
-      const at = a.tokensPerPass ?? Number.POSITIVE_INFINITY;
-      const bt = b.tokensPerPass ?? Number.POSITIVE_INFINITY;
-      if (at !== bt) return at - bt;
-      return b.avgQuality - a.avgQuality;
+    const { frontier } = computeFrontier(
+      list.map((r) => ({
+        model: r.model,
+        gates: r.gates,
+        fails: r.fails,
+        avgQuality: r.avgQuality,
+        tokensPerPass: r.tokensPerPass,
+      })),
+      minN,
+    );
+    // The frontier is built cheapest-first with quality rising, so its last row
+    // is the best quality nothing beats outright. An empty frontier means no
+    // bucket had token attribution — then quality alone decides.
+    const best =
+      frontier[frontier.length - 1]?.model ??
+      [...list].sort(
+        (a, b) => b.avgQuality - a.avgQuality || a.failRate - b.failRate,
+      )[0].model;
+    const row = list.find((r) => r.model === best)!;
+    out.push({
+      regime: row.regime,
+      model: row.model,
+      gates: row.gates,
+      failRate: row.failRate,
+      avgQuality: row.avgQuality,
+      tokensPerPass: row.tokensPerPass,
     });
-    out.push(list[0]);
   }
   return out.slice(0, MAX_MODEL_FIT);
 }
