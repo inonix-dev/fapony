@@ -482,6 +482,10 @@ import {
   testStatsUsageByModelIdentity,
   testStatsUsageCountsCacheAsInput,
   testStatsVerdictNotesNotCappedAtDisplayLimit,
+  testVerdictDominatedRowNamesDominator,
+  testVerdictNoRegimeShowsOneLinerPerRegime,
+  testVerdictSingleModelShowsDash,
+  testVerdictThinNeverDominates,
 } from "./stats.test.js";
 // Telemetry tests (split into test/telemetry/)
 import {
@@ -966,6 +970,10 @@ export async function cmdTest(): Promise<void> {
   testStatsTokensPerPassChargesReworkOnce();
   testStatsTokensPerPassNullWhenNoPass();
   testStatsTokensPerPassNullWithoutTokens();
+  testVerdictDominatedRowNamesDominator();
+  testVerdictSingleModelShowsDash();
+  testVerdictThinNeverDominates();
+  testVerdictNoRegimeShowsOneLinerPerRegime();
   testSessionDefaultHasNoDetail();
   testSessionDetailBreakdown();
   testSessionDetailBytesByTool();

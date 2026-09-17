@@ -352,3 +352,233 @@ export function formatStatsText(data: StatsData): string {
 
   return lines.join("\n");
 }
+
+// --- Verdict mode: Pareto frontier of quality vs tokens/pass ---
+
+/** One model's record inside a single regime. */
+export interface VerdictRow {
+  model: string;
+  gates: number;
+  fails: number;
+  avgQuality: number;
+  tokensPerPass: number | null;
+}
+
+export interface FrontierRow extends VerdictRow {
+  n: number;
+}
+
+interface DominatedRow extends VerdictRow {
+  dominator: string;
+  tokenRatio: number;
+  n: number;
+}
+
+/** Below this many gates a model is a candidate, not a yardstick. */
+const MIN_N = 5;
+
+/** Every regime the ledger accepts — so "never graded" is visible, not absent. */
+const REGIMES = ["code", "fix", "review", "plan", "inquiry", "test"];
+
+const withN = (r: VerdictRow): FrontierRow => ({ ...r, n: r.gates });
+
+/** Cheapest first; quality breaks ties. */
+const byTokens = (a: VerdictRow, b: VerdictRow) =>
+  (a.tokensPerPass ?? 0) - (b.tokensPerPass ?? 0) ||
+  b.avgQuality - a.avgQuality;
+
+const hasTokens = (r: VerdictRow) =>
+  r.tokensPerPass !== null && r.tokensPerPass > 0;
+
+/**
+ * Pareto frontier over (quality up, tokens/pass down), computed from models
+ * with n >= MIN_N only.
+ *
+ * Thin rows are listed separately and never dominate anyone. Without that
+ * split one lucky run redefines a whole regime: a model tried once at q4.0
+ * dominated nine established models here, including one with n=17.
+ */
+export function computeFrontier(
+  rows: VerdictRow[],
+  minN = MIN_N,
+): {
+  frontier: FrontierRow[];
+  dominated: DominatedRow[];
+  candidates: FrontierRow[];
+  unranked: FrontierRow[];
+} {
+  const unranked = rows.filter((r) => !hasTokens(r)).map(withN);
+  const candidates = rows
+    .filter((r) => hasTokens(r) && r.gates < minN)
+    .sort(byTokens)
+    .map(withN);
+  const ranked = rows
+    .filter((r) => hasTokens(r) && r.gates >= minN)
+    .sort(byTokens);
+
+  const frontier: FrontierRow[] = [];
+  let maxQuality = -1;
+  for (const r of ranked) {
+    if (r.avgQuality > maxQuality) {
+      frontier.push(withN(r));
+      maxQuality = r.avgQuality;
+    }
+  }
+
+  const onFrontier = new Set(frontier.map((f) => f.model));
+  const dominated: DominatedRow[] = [];
+  for (const r of ranked) {
+    if (onFrontier.has(r.model)) continue;
+    let dominator: string | null = null;
+    let tokenRatio = Infinity;
+    for (const f of frontier) {
+      if (r.avgQuality > f.avgQuality) continue;
+      if (r.tokensPerPass! <= f.tokensPerPass!) continue;
+      const ratio = r.tokensPerPass! / f.tokensPerPass!;
+      if (ratio < tokenRatio) {
+        tokenRatio = ratio;
+        dominator = f.model;
+      }
+    }
+    if (dominator) dominated.push({ ...r, dominator, tokenRatio, n: r.gates });
+  }
+
+  return { frontier, dominated, candidates, unranked };
+}
+
+/** `stealth/union-alpha   q3.2  673.8k/pass  n=5` */
+function modelRow(r: FrontierRow): string {
+  return `  ${r.model.padEnd(35)} q${r.avgQuality.toFixed(1)}  ${fmtTokens(r.tokensPerPass)}/pass  n=${r.n}`;
+}
+
+/** The model to reach for, plus what the cheaper end of the frontier costs. */
+function pick(frontier: FrontierRow[], closest: FrontierRow | null): string {
+  if (frontier.length === 0) {
+    return closest
+      ? `— no model at n≥${MIN_N} yet (closest: ${closest.model}, n=${closest.n})`
+      : `— no model has token attribution yet`;
+  }
+  const best = frontier[frontier.length - 1]!; // built cheapest-first, quality rising
+  const cheapest = frontier[0]!;
+  const line = `${best.model}  q${best.avgQuality.toFixed(1)}  ${fmtTokens(best.tokensPerPass)}/pass  n=${best.n}`;
+  return cheapest.model === best.model
+    ? line
+    : `${line}  · cheapest: ${cheapest.model} q${cheapest.avgQuality.toFixed(1)} ${fmtTokens(cheapest.tokensPerPass)}`;
+}
+
+/**
+ * Render verdict mode: which model to pay for, per regime, ranked on the
+ * Pareto frontier of quality vs tokens/pass.
+ *
+ * Without `regime` it is one line per regime. With one, it is that regime's
+ * full frontier / dominated / candidates breakdown.
+ *
+ * Pass rate is deliberately not the ranking axis — self-graded work passes
+ * almost always, so the footer reports fails rather than ranking on them.
+ */
+export function formatVerdictText(data: StatsData, regime?: string): string {
+  if (data.runs.total === 0) return "no runs yet";
+
+  const scope = data.scope ?? "all projects";
+  const groups = new Map<string, VerdictRow[]>();
+  for (const r of data.byRegime) {
+    if (r.model === "—") continue; // unattributed: cannot be ranked
+    if (regime && r.regime !== regime) continue;
+    const g = groups.get(r.regime) ?? [];
+    g.push({
+      model: r.model,
+      gates: r.gates,
+      fails: r.fails,
+      avgQuality: r.avgQuality,
+      tokensPerPass: r.tokensPerPass,
+    });
+    groups.set(r.regime, g);
+  }
+
+  const sum = (rows: VerdictRow[], key: "gates" | "fails") =>
+    rows.reduce((s, r) => s + r[key], 0);
+  const closestToN = (rows: VerdictRow[]) =>
+    rows
+      .filter(hasTokens)
+      .map(withN)
+      .sort((a, b) => b.n - a.n)[0] ?? null;
+
+  // --- one regime: the full breakdown ---
+  if (regime) {
+    const rows = groups.get(regime);
+    if (!rows || rows.length === 0) {
+      return `regime=${regime} · ${scope} · no graded work yet`;
+    }
+    const gates = sum(rows, "gates");
+    const { frontier, dominated, candidates, unranked } = computeFrontier(rows);
+    const lines = [
+      `regime=${regime} · ${scope} · ${gates} gates · ${rows.length} models`,
+    ];
+
+    if (frontier.length > 0) {
+      lines.push(
+        `\nfrontier (n≥${MIN_N}) — nothing beats these on both quality and tokens:`,
+      );
+      for (const f of [...frontier].reverse()) lines.push(modelRow(f));
+    } else {
+      lines.push(`\n${pick(frontier, closestToN(rows))}`);
+    }
+
+    if (rows.length === 1) {
+      lines.push(
+        "  — no comparison yet (only one model graded in this regime)",
+      );
+    }
+
+    if (dominated.length > 0) {
+      lines.push("\ndominated:");
+      for (const d of dominated) {
+        lines.push(
+          `${modelRow(d)}  ← ${d.dominator} dominates, ${d.tokenRatio.toFixed(1)}× tokens`,
+        );
+      }
+    }
+
+    if (candidates.length > 0) {
+      lines.push(
+        `\ncandidates (n<${MIN_N} — shown, but never used as the yardstick):`,
+      );
+      for (const c of candidates) lines.push(modelRow(c));
+    }
+
+    if (unranked.length > 0) {
+      lines.push("\nno token attribution — cannot be ranked:");
+      for (const u of unranked) {
+        lines.push(
+          `  ${u.model.padEnd(35)} q${u.avgQuality.toFixed(1)}  n=${u.n}`,
+        );
+      }
+    }
+
+    lines.push(
+      `\nfails: ${sum(rows, "fails")}/${gates} — pass/fail carries no signal here; ranking is quality × tokens`,
+    );
+    return lines.join("\n");
+  }
+
+  // --- all regimes: one line each ---
+  const allRows = [...groups.values()].flat();
+  const lines = [
+    `${scope} · ${sum(allRows, "gates")} gates · ${sum(allRows, "fails")} fails`,
+    "",
+  ];
+  for (const reg of REGIMES) {
+    const rows = groups.get(reg);
+    const label = `  ${reg.padEnd(8)} ${`(${rows ? sum(rows, "gates") : 0})`.padStart(5)}`;
+    if (!rows || rows.length === 0) {
+      lines.push(`${label}  — no graded work`);
+      continue;
+    }
+    const { frontier } = computeFrontier(rows);
+    lines.push(`${label}  ${pick(frontier, closestToN(rows))}`);
+  }
+  lines.push(
+    `\n(fapony stats --mode verdict --regime <name> for the breakdown)`,
+  );
+  return lines.join("\n");
+}

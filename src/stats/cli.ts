@@ -2,7 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 import { getStatsData } from "./data.js";
-import { formatStatsText } from "./format.js";
+import { formatStatsText, formatVerdictText } from "./format.js";
 
 /** Absolute path of the repo/worktree the CLI was run in, or null outside git. */
 function currentWorktree(): string | null {
@@ -23,5 +23,22 @@ export function cmdStats(args: string[]): void {
   const worktree = args.includes("--all")
     ? undefined
     : (currentWorktree() ?? undefined);
-  console.log(formatStatsText(getStatsData(worktree)));
+  const data = getStatsData(worktree);
+
+  const modeIdx = args.indexOf("--mode");
+  const mode =
+    modeIdx !== -1 && typeof args[modeIdx + 1] === "string"
+      ? args[modeIdx + 1]
+      : undefined;
+
+  if (mode === "verdict") {
+    const regimeIdx = args.indexOf("--regime");
+    const regime =
+      regimeIdx !== -1 && typeof args[regimeIdx + 1] === "string"
+        ? args[regimeIdx + 1]
+        : undefined;
+    console.log(formatVerdictText(data, regime));
+  } else {
+    console.log(formatStatsText(data));
+  }
 }

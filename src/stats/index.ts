@@ -10,4 +10,10 @@ export {
   resolveMaxRounds,
   type StatsData,
 } from "./data.js";
-export { formatStatsText } from "./format.js";
+export {
+  computeFrontier,
+  type FrontierRow,
+  formatStatsText,
+  formatVerdictText,
+  type VerdictRow,
+} from "./format.js";
