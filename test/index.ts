@@ -301,6 +301,7 @@ import {
   testStatsToolGroupByPlanWorktreeScoped,
   testStatsToolGroupByReasonCode,
   testStatsToolJsonMode,
+  testStatsToolModeVerdict,
   testStatsToolTextMode,
 } from "./mcp/stats.test.js";
 import {
@@ -846,6 +847,7 @@ export async function cmdTest(): Promise<void> {
   testStatsToolGroupByPlan();
   testStatsToolGroupByPlanWorktreeScoped();
   testStatsToolGroupByInvalid();
+  testStatsToolModeVerdict();
   testUsageDefaultRegression();
   testUsageDetailJson();
   testUsageDetailText();

@@ -275,3 +275,40 @@ export function testStatsToolGroupByInvalid(): void {
   });
   console.log("  ✓ fapony_stats rejects unknown group_by");
 }
+
+export function testStatsToolModeVerdict(): void {
+  withTempDb(() => {
+    // Empty db: same "no runs yet" text as the default view.
+    const empty = toolFaponyStats({ mode: "verdict" });
+    assert.equal(empty.isError, undefined);
+    assert.equal(empty.content[0].text, "no runs yet");
+
+    // Non-empty: dispatch must match calling formatVerdictText directly —
+    // this is what was missing before the schema exposed `mode`/`regime`:
+    // the formatter existed and was CLI-reachable, but no MCP client could
+    // ever pass `mode` because the tool's inputSchema didn't declare it.
+    const db = openDb();
+    const runId = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, runId, "spawn", { role: "executor", model: "m" });
+    addEvent(db, runId, "route", {});
+    addEvent(db, runId, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 0,
+      regime: "code",
+    });
+    setStatus(db, runId, "passed");
+
+    const viaTool = toolFaponyStats({ mode: "verdict", regime: "code" })
+      .content[0].text;
+    assert.ok(
+      viaTool.includes("regime=code"),
+      "should render the code regime frontier",
+    );
+    assert.ok(
+      !viaTool.includes("{"),
+      "verdict mode is text, never JSON-wrapped",
+    );
+  });
+  console.log("  ✓ fapony_stats mode=verdict dispatches to formatVerdictText");
+}
