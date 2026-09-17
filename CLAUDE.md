@@ -355,7 +355,7 @@ fapony report <run-id>              # verification report for a run
 fapony report-web [file]            # static HTML report page
 fapony usage-scan                    # scan session logs → usage-cache.jsonl (incremental, progress bar)
 fapony usage-web [port]              # live usage comparison dashboard from cache (no session log access)
-fapony stats                        # KPIs: pass/stall rate, by-model, by-grade
+fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]  # KPIs: pass/stall rate, by-model, by-grade — --mode verdict ranks by quality/tokens instead
 fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
 fapony init-mem [--update]          # re-copy templates/mem/ into this repo's memory dir (path from paths.memoryEntry) — data files (log.jsonl) untouched
 fapony install                            # detect installed clients, prompt to wire each
@@ -416,7 +416,7 @@ fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC. 6 tools:
 |------|---------|
 | `plan_list` | Pending plan files grouped by state (`active` / `blocked` / `untouched` / `superseded` / `trackers`) + progress tally, joined with run history — not a raw `ls`. State comes from optional 4-key frontmatter; `format:"markdown"` renders the generated master checklist |
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) + required `regime` (`code\|fix\|review\|plan\|inquiry\|test`) — the task-shape axis. Clean work takes `reason_code: none`, never `other` |
-| `fapony_stats` | Query KPIs: by-model (gates/fails/quality/tokens), by-grade, **planned vs dove-in** (`runs.plan` null/not-null), **regime × model**; `group_by: reason_code\|plan\|file` for top-N slices |
+| `fapony_stats` | Query KPIs: by-model (gates/fails/quality/tokens), by-grade, **planned vs dove-in** (`runs.plan` null/not-null), **regime × model**; `group_by: reason_code\|plan\|file` for top-N slices; **`mode: verdict`** — the answer, not the dump: Pareto frontier of quality vs tokens/pass per regime, `n≥5` gated so a lucky single run can't define the frontier |
 | `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `project_health_context` | Known-patterns block keyed by `files[]` — recurring fail reasons, escalations, round-1-pass shapes. Optional — worth a call on a file that has history, empty on most (กฎ 8); `plan-with-pony` is one caller, not the only one |
 | `mem_find` | Search the project's mem log read-only: `files[]`/`text`/`kind`/`since`/`limit` — every kind, no default filter; `memDir:null` = no mem (not "nothing matched") |

@@ -35,11 +35,26 @@ quietly counted as free.
 </details>
 
 That is day one. Past that, fapony measures what coding agents actually do — rounds, pass/fail,
-cost per grade — through 8 MCP tools any agent can call. If you juggle more than one agent, this is
+cost per grade — through 6 MCP tools any agent can call. If you juggle more than one agent, this is
 the point: the numbers come from the same yardstick everywhere, so "which model earns its keep on
 which kind of task" becomes a data question instead of a vibe. On top of measurement it checks
 claims against git facts: handoff conformance, allowlisted evidence, a 6-grade verdict — with
 everything the agent claimed but couldn't prove marked as such.
+
+**What that question looks like answered, from one project's own ledger (52 graded `code`-regime
+runs, `fapony stats --mode verdict --regime code`):**
+
+| model | tokens/pass | quality | n |
+|---|---|---|---|
+| `claude-opus-5` | 22.5M | 3.8 | 10 |
+| `claude-sonnet-5` | 5.6M | 3.5 | 11 |
+| `muse-spark-1.3-contributor-free` | 4.3M | 4.0 | 5 |
+
+Same quality band, an 8× token spread — the kind of answer a session log can't give (it has tokens,
+no grades) and a benchmark can't give either (it has grades, not your codebase). One caveat that's
+on you to hold: work isn't randomly assigned to models, so a gap this size is a strong prior, not a
+controlled trial — you likely route easy tasks to the cheap model already. `n≥5` is fapony's own
+floor before a model counts toward the frontier at all; below that it's a data point, not a pick.
 
 **The reason to keep it running is the third layer: knowledge accumulation.** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: which model earns its keep on which kind of work **in this project**, at what token cost, graded by whoever reviewed it. Every verdict carries a `regime` (`code` / `fix` / `review` / `plan` / `inquiry` / `test`), and runs split by whether there was a plan at all — so "does planning beat diving in, and for which model" is a table, not an argument. Session logs have the tokens but no grades; benchmarks have grades but not your codebase. fapony is the one layer that holds both, because it's the one every client reports into.
 
@@ -204,7 +219,7 @@ recall:   project_health_context (what failed in these files before — optional
 | Tool | Tier | Purpose |
 |------|------|---------|
 | `plan_list` | discover | Plan files grouped by state — active / blocked / untouched / superseded / trackers — with a progress tally and each one's run history. Not a raw `ls`; see [Plans your agent can answer questions about](#plans-your-agent-can-answer-questions-about) |
-| `fapony_stats` | measure | KPIs across runs: by-model (gates, fail rate, quality, tokens), by-grade, planned vs dove-in, regime x model, per-file risk; `group_by: reason_code\|plan\|file` for top-N slices |
+| `fapony_stats` | measure | KPIs across runs: by-model (gates, fail rate, quality, tokens), by-grade, planned vs dove-in, regime x model, per-file risk; `group_by: reason_code\|plan\|file` for top-N slices; `mode: verdict` ranks models by quality vs tokens/pass instead of listing raw counts |
 | `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) with a required `regime` — the task shape the grade applies to |
 | `project_health_context` | recall | Known-patterns block for the files you are about to touch. Useful when a file does have history; measured across real repos, most do not (1-9% of shipped files come back under a `fix:` within two weeks), so it is optional — never a precondition for editing |
@@ -383,7 +398,7 @@ fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
 fapony price-scan                        # fetch model price table → prices.json (cache; query never fetches)
 fapony usage-web [port]                   # live usage comparison dashboard from cache
-fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
+fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]  # KPIs: pass/stall rate, by-model, by-grade — --mode verdict ranks by quality/tokens instead
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page summary: decisions, open bugs, in-flight plans, cost, pass/fail — from what's already on disk
 fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN (+SPEC): §2 = export-name prefixes repeating across 2+ directories, §5 = scoped analyze findings, every section capped — agent fills judgment sections
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]  # read-only scope facts for a review (changed files, importers, untested, signatures, plan cross-check)
@@ -427,7 +442,12 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 - Bun-only; run state in SQLite via `bun:sqlite` (WAL mode)
 
 **Not supported (yet):**
-- Distributed runs across multiple machines
+- A hosted or shared ledger for a team — `runs.worktree` is the only sharing key today, and it's a
+  path, not an identity. If you want to try pointing two machines at the same ledger anyway,
+  `FAPONY_STATE_DIR` can be set to a synced folder (Syncthing, a shared drive) — but SQLite's WAL
+  mode does not tolerate concurrent writers over most network filesystems (NFS, Dropbox, iCloud
+  Drive) and can corrupt the db under real contention. Treat this as an experiment you're accepting
+  the risk on, not a supported path; nothing here is a substitute for a real shared-ledger server.
 - Memory migration from `.fapony/.memory/log.jsonl`
 
 ## License
