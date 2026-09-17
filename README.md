@@ -133,7 +133,7 @@ flowchart LR
     F --> G[git facts + session logs]
     G --> S[stats / usage]
     G --> V[verification report]
-    G --> P[project_health → plan-with-pony]
+    G --> P[project_health - optional]
 ```
 
 fapony never drives the agent — it is a set of checkpoints the agent walks past. One
@@ -279,27 +279,40 @@ Code expects, so a client can symlink the directory rather than copy the file:
 
 ```mermaid
 flowchart TD
-    I([idea]) --> P["/plan-with-pony"]
+    I([idea]) --> Q{does it outlive<br/>this session?}
+    Q -->|"feature, several days"| P["/plan-with-pony<br/>PLAN.md + SPEC.md"]
+    Q -->|"wire · refactor · fix"| Z["fapony analyze DIR<br/>fapony review-seed --files"]
     P --> W[you and your agent build]
+    Z --> W
     W --> C["/git-commit"]
     C --> R["/review-pony"]
     R -->|findings| W
     R -->|clean| S["/git-ship"]
-    S --> D["/move-to-done"]
-    D -.-> H[(fapony history)]
+    S -->|"there was a PLAN.md"| D["/move-to-done"]
+    D -.-> H[(fapony ledger)]
     R -.-> H
-    H -.->|known patterns| P
+    C -.->|"Stop hook: a commit needs a verdict"| H
+    H -.->|"which model for this shape"| Q
 
     style H fill:#2d333b,stroke:#768390,color:#adbac7
 ```
 
-The dotted edges are the whole point. `/review-pony` and `/move-to-done` write a verdict with a
-`reason_code` and a one-line note; `/plan-with-pony` reads them back before the next plan is
-written. Nothing else in the loop knows what went wrong last month.
+**The fork at the top is load-bearing.** A plan file is an artifact for work the next session has
+to pick up. Wiring, refactors and UI passes finish in one sitting and the PLAN.md gets archived
+unread — so `/plan-with-pony` declines those itself and hands over the two seed commands instead.
+`fapony review-seed --files` takes a directory as well as file names, and answers "what is in
+here, who imports it, what is untested" for about a thirtieth of the tokens reading those files
+costs. Both arms meet at the same review and the same ledger.
+
+**The dotted edges are the whole point.** Verdicts carry `regime` and `reason_code`, so the
+ledger can answer the one question no single client can: *in this project, which model is worth
+paying for this shape of work.* That is what flows back to the fork — not "this file broke once",
+which fapony measured at a 1–9% base rate and demoted.
 
 | Moment | Call | What fapony gets out of it |
 |---|---|---|
-| Before writing a plan | `/plan-with-pony` | reads `project_health_context` when these files have history |
+| Starting anything | `/plan-with-pony` | decides plan-vs-seed, then reads back how this shape has gone |
+| Before editing an unfamiliar file | `fapony review-seed --files` | nothing; it saves you reading the file |
 | Before committing | `/git-commit` | nothing; it just keeps commits reviewable |
 | Before merging | `/review-pony` | writes a verdict + `reason_code` + `regime` + note |
 | Merging | `/git-ship` (`pr` / `land` on a team) | nothing; pure git plumbing |
