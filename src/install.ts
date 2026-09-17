@@ -28,16 +28,10 @@ export {
   claudeGetPointsToFapony,
   cmdInstallClaude,
 } from "./install/claude.js";
-export {
-  cmdInstallCodex,
-  findCodexConfig,
-} from "./install/codex.js";
-export { cmdInstallCursor, findCursorDir } from "./install/cursor.js";
+export { cmdInstallCodex } from "./install/codex.js";
+export { cmdInstallCursor } from "./install/cursor.js";
 export { detectClients } from "./install/detect.js";
-export {
-  cmdInstallOpencode,
-  findOpencodeConfig,
-} from "./install/opencode.js";
+export { cmdInstallOpencode } from "./install/opencode.js";
 export {
   agentsSkillsDir,
   claudeSkillsDir,
@@ -45,14 +39,10 @@ export {
 } from "./install/skills.js";
 export {
   type ClaudeRunResult,
-  defaultExit,
   INSTALL_ROOT,
   type InstallDeps,
-  type SkillLinkAction,
-  type SkillLinkResult,
 } from "./install/types.js";
-export { cmdInstallZcode, findZcodeConfig } from "./install/zcode.js";
-export { ask, defaultCheckCmd } from "./setup.js";
+export { cmdInstallZcode } from "./install/zcode.js";
 
 export async function cmdInstall(
   args: string[],

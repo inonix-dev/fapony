@@ -141,7 +141,7 @@ function renderScope(
     }
   }
   const lines = [
-    `- scanned: ${roots.map((r) => relative(cwd, r) || ".").join(", ")} — ${files} file(s), ${exports} export(s) \`(fapony map)\``,
+    `- scanned: ${roots.map((r) => relative(cwd, r) || ".").join(", ")} — ${files} file(s), ${exports} export(s) \`(source scan)\``,
   ];
   const clusters = [...byToken.entries()]
     .filter(
@@ -174,7 +174,7 @@ function renderScope(
         ? `${shown} +${c.dirs.length - MAX_CLUSTER_DIRS} more`
         : shown;
     lines.push(
-      `- ${c.token}* — ${c.members.length} export(s) across ${where}: ${c.members.join(", ")} \`(fapony map)\``,
+      `- ${c.token}* — ${c.members.length} export(s) across ${where}: ${c.members.join(", ")} \`(source scan)\``,
     );
   }
   if (clusters.length > MAX_CLUSTERS) {
@@ -620,7 +620,7 @@ function specTemplate(
   const fixedHead = [
     `# SPEC-${name} — (agent เติมชื่อเรื่อง)`,
     "",
-    `> **Used by:** PLAN-${name} — signatures below come from \`fapony map <file>\` (live scan — re-seed after structural changes).`,
+    `> **Used by:** PLAN-${name} — signatures below come from a live source scan — re-seed after structural changes.`,
     ...(scopeEcho ? [`> **Scope:** ${scopeEcho}`] : []),
     "",
     "## Chunk index",

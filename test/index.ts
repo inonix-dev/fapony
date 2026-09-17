@@ -184,16 +184,11 @@ import {
   testInstallZcodePrimaryPath,
 } from "./install/zcode.test.js";
 import {
-  testMapDirCap,
-  testMapDirListing,
   testMapExtractExports,
   testMapExtractExportsParseError,
   testMapExtractIgnoresSampleText,
   testMapExtractMultilineTypeBlock,
   testMapExtractVarDeclaratorLists,
-  testMapFileAndBroken,
-  testMapFileShowsSignature,
-  testMapMissingPath,
 } from "./map.test.js";
 // MCP handcheck tests (split into test/mcp/)
 import {
@@ -592,11 +587,6 @@ export async function cmdTest(): Promise<void> {
   testMapExtractIgnoresSampleText();
   testMapExtractMultilineTypeBlock();
   testMapExtractVarDeclaratorLists();
-  testMapDirListing();
-  testMapDirCap();
-  testMapFileAndBroken();
-  testMapFileShowsSignature();
-  testMapMissingPath();
   testPlanSeedWritesPlan();
   testPlanSeedNoOverwrite();
   testPlanSeedSpecSignatures();

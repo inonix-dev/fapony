@@ -381,7 +381,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 - Vendor-neutral executor/reviewer roles — anything that reads stdin
 - Memory integration via shell adapter, per project (configurable or default-wired)
 - Opt-in telemetry, off by default ([TELEMETRY.md](TELEMETRY.md) lists exactly what leaves the machine)
-- Bun-only, zero runtime dependency (`bun:sqlite` for run state, WAL mode)
+- Bun-only; run state in SQLite via `bun:sqlite` (WAL mode)
 
 **Not supported (yet):**
 - Distributed runs across multiple machines

@@ -16,7 +16,7 @@ import {
   countPendingPlans,
   formatStatsText,
   getStatsData,
-} from "../src/stats.js";
+} from "../src/stats/index.js";
 import { withTmpDb } from "./helpers.js";
 
 export function testStatsEmptyDb(): void {
@@ -935,11 +935,20 @@ export function testStatsTokensPerPassNullWhenNoPass(): void {
         assert.equal(m.passes, 0);
         assert.equal(m.fails, 2, "uncertain counts as a non-pass");
         assert.equal(m.tokensPerPass, null, "no passes → null, never Infinity");
-        const row = formatStatsText(data)
+        const text = formatStatsText(data);
+        const header = text
           .split("\n")
-          .find((l) => l.includes("claude-sonnet-5"));
-        assert.ok(
-          row?.trimEnd().endsWith("—"),
+          .find((l) => l.includes("tokens/pass"))!
+          .split("|")
+          .map((c) => c.trim());
+        const row = text
+          .split("\n")
+          .find((l) => l.includes("claude-sonnet-5"))!
+          .split("|")
+          .map((c) => c.trim());
+        assert.strictEqual(
+          row[header.indexOf("tokens/pass")],
+          "—",
           "tokens/pass cell renders as —, not the agent column",
         );
       },

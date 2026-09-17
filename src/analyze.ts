@@ -1,8 +1,8 @@
 // src/analyze.ts — `fapony analyze`: structural health diagnosis for a TS/JS project.
 //
 // One file on purpose (plan cap: ≤1 new file in src/). Computes a file-level
-// import graph live with Bun.Transpiler.scan() — never persisted, no new table,
-// zero runtime dependency beyond Bun + node builtins. Read-only: never writes
+// import graph live with Bun.Transpiler.scan() — never persisted, no new table.
+// Read-only: never writes
 // into the analyzed directory.
 //
 // Same module also serves handoff_check / verification_report: blastRadius()

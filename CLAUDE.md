@@ -6,7 +6,13 @@ Measurement + verification layer for coding agents, shipped as an MCP server (`f
 
 **North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **`model × project × regime × quality` ข้าม run/client/project** — "งานแบบนี้ในโปรเจกต์นี้ ควรจ่ายให้ model ไหน" · session log ของทุกเจ้ามี token แต่ไม่มีเกรด, benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ — ต้องมี verdict + model + regime + token ครบสี่ในที่เดียวถึงจะถามได้ · **เคยเล็ง "project health / ไฟล์นี้เคยพัง" แล้วพลาด** — base rate ของ rework จริงคือ 1-9% ต่ำเกินจะเตือนอะไรได้ (ดูกฎ 8) `project_health_context` ยังอยู่แต่ไม่ใช่แกนอีกแล้ว fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
 
-**Runtime:** Bun-only, zero runtime dependency — ใช้แค่ `bun:sqlite`, `node:fs`, `node:child_process`
+**Runtime:** Bun-only — **กฎ zero-runtime-dependency ถอดแล้ว 2026-09-17** (มันมาจากยุคที่ fapony
+เป็น read/viewer ล้วน ๆ ตอนนี้เดินทาง ledger + ของที่ agent หยิบใช้สะดวก การห้าม dep แบบเหมาเข่ง
+เลยแลกความคล่องตัวไปโดยไม่ได้อะไรคืน — และไม่ใช่หนึ่งในสาม moat ด้วย) · สิ่งที่ยัง**ห้าม**คือให้
+`fapony mcp` จ่ายค่า dep ตอน startup: client ทุกเจ้าสตาร์ทมันทุก session และ `fapony.ts`
+static-import ทุก module ฉะนั้น dep ใหม่ต้อง `await import()` ในเส้นทางที่ใช้จริงเท่านั้น ·
+เช็ค: initialize round trip ≤ ~100ms (วัด 2026-09-17 = 63ms · `require("typescript")`
+อย่างเดียว = 92ms คือทำพังได้ด้วย dep เดียว)
 **State:** SQLite ที่ `~/.config/fapony/state.db` (WAL mode) — `FAPONY_STATE_DIR` env ย้ายได้
 **Topology:** `fapony/` = main checkout (คุณแตะคนเดียว) · `fapony/cl-fapony/` = dev (clone คนละ `.git` — agents ทำงานที่นี่เท่านั้น) — clone อยู่ใน repo จึงต้อง gitignore `cl-*/` ก่อน
 **License:** MIT, public ตั้งแต่ commit แรก
@@ -167,7 +173,7 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
      นี่คือข้อที่ทำให้ cross-worktree/cross-client ทำงานได้ และเป็นข้อที่ README ขายจริง
      ("db อยู่เครื่องคุณ ไม่มี server ไม่มี account") · เช็ค: path ของ db ห้ามมาจาก arg/config
      ที่ชี้เวิร์กทรี
-   - **5b คำสั่งที่อ่านโค้ด ห้ามมี write side effect** — `analyze` `map` `review-seed` `stats`
+   - **5b คำสั่งที่อ่านโค้ด ห้ามมี write side effect** — `analyze` `review-seed` `stats`
      `digest` `report` เขียนได้เฉพาะ path ที่ผู้ใช้ชี้เอง (`--out` / ชื่อไฟล์ใน argv)
      ไม่ใช่ path ที่คำสั่งคิดขึ้นเอง · เช็ค: `writeFileSync` ใน producer ต้องรับ path จาก argv
      เท่านั้น — คำสั่งใหม่ที่อ่านโค้ดตกอยู่ใต้ข้อนี้อัตโนมัติ ไม่ต้องมาเติมรายชื่อ
@@ -356,15 +362,21 @@ fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md
 fapony test                         # self-check
 fapony analyze [path]               # structural diagnosis (hub/orphan/cycle/changed-untested) — live graph via Bun.Transpiler.scan(), never persisted (no table: 114 files / 466 imports = 16.6ms, cache would be pure debt)
-fapony map [path]                   # on-demand source index: dirs list exports (name:line), files show declaration signatures, read-only, nothing persisted — no caller invokes this directly anymore (see PLAN-code-map, superseded); map.ts survives as a library used by plan-seed/review-seed
 fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): §2 = export-name prefixes repeating across 2+ dirs (single-dir = that dir's naming convention, not reported), §5 = scoped analyze findings, hard caps PLAN ≤ ~60 / SPEC ≤ 200 lines — caller: plan-with-pony Phase 1.6
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan <PLAN.md>]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"
 ```
 
+**Dead code ไม่ใช่งานของ fapony — ใช้ `bunx knip@6`** ([knip.json](knip.json) ignore `templates/**`
+ไว้แล้ว เพราะ `init-mem` ก๊อปโฟลเดอร์นั้นไปรีโปอื่น มันจึงไม่มีวันมี importer ที่นี่) · ไม่ใส่
+`devDependencies` ไม่ผูก CI — gate ที่ต้องปลดล็อกทุกครั้งแค่สอนให้ข้าม (กฎ 2) หยิบมารันทุกสองสาม
+เดือนพอ · **อ่านผลให้ถูก: มันรายงาน _unused export_ ไม่ใช่ unused function** ฟังก์ชันที่ถูกเรียก
+อยู่ในไฟล์เดียวกันจะขึ้นในลิสต์ ให้ถอดคำว่า `export` ไม่ใช่ลบฟังก์ชัน (เจอจริง 5 ตัวใน
+`src/stats/data.ts` 2026-09-17 — ทั้งหมด `getStatsData` เรียกเองอยู่)
+
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: fapony
 
-fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime dependency. 6 tools:
+fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC. 6 tools:
 
 | Tool | Purpose |
 |------|---------|

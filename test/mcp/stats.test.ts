@@ -13,7 +13,7 @@ import {
   setStatus,
 } from "../../src/db/index.js";
 import { toolFaponyStats } from "../../src/mcp/tools/stats.js";
-import { cmdStats } from "../../src/stats.js";
+import { cmdStats } from "../../src/stats/index.js";
 
 function withTempDb(fn: () => void): void {
   const oldEnv = process.env.FAPONY_STATE_DIR;

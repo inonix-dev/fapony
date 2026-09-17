@@ -97,7 +97,7 @@ goes on judgment — Goal, Done criteria, ordering — instead of on structure. 
   Correct a seeded line only where the dev's idea contradicts it, and say so when you do
   ("the scan shows X but you want Y").
 - **Fill the judgment sections** — §1/3/4/6/8 and the TL;DR. They start as `_agent เติม_` slots.
-- The seeded lines are tagged `(fapony map)` / `(fapony analyze)` — keep the tags so the dev can
+- The seeded lines are tagged `(source scan)` / `(fapony analyze)` — keep the tags so the dev can
   tell measured facts from your guesses.
 - **Signatures live in the SPEC chunks only.** Never paste them into plan §7 — link to the spec.
 - If the CLI is missing, skip silently and draft from scratch (Phase 2 as written) — never block

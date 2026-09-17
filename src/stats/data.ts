@@ -219,7 +219,7 @@ export interface FileRisk {
  * never safe. Read a row as a prior, not a score — at gates=1 it is one
  * anecdote.
  */
-export function getFileRisk(runs: Run[], events: Event[]): FileRisk[] {
+function getFileRisk(runs: Run[], events: Event[]): FileRisk[] {
   const wtByRun = new Map(runs.map((r) => [r.id, r.worktree]));
   const map = new Map<
     string,
@@ -277,7 +277,7 @@ export function getFileRisk(runs: Run[], events: Event[]): FileRisk[] {
 }
 
 /** Top reason_code per worktree, sorted by count desc (spec §2 query). */
-export function getReasonCodeBreakdown(
+function getReasonCodeBreakdown(
   runs: Run[],
   events: Event[],
 ): ReasonCodeCount[] {
@@ -319,7 +319,7 @@ export interface RecentVerdictNote {
  * (by worktree, by files[]) and slice it themselves, so pass enough to filter
  * over — see the getStatsData call site.
  */
-export function getRecentVerdictNotes(
+function getRecentVerdictNotes(
   runs: Run[],
   events: Event[],
   limit = 3,
@@ -464,10 +464,7 @@ export function getLastVerdictByPlan(
 }
 
 /** Runs past the round cap — plan-quality signal, not code (CLAUDE.md #2). */
-export function getEscalatedRuns(
-  runs: Run[],
-  maxRounds: number,
-): EscalatedRun[] {
+function getEscalatedRuns(runs: Run[], maxRounds: number): EscalatedRun[] {
   return runs
     .filter((r) => r.round > maxRounds)
     .map((r) => ({
@@ -480,7 +477,7 @@ export function getEscalatedRuns(
 }
 
 /** Plans that passed at round 1 — worth reusing as a template (spec §2). */
-export function getBestPassing(runs: Run[], events: Event[]): BestPassing[] {
+function getBestPassing(runs: Run[], events: Event[]): BestPassing[] {
   const passRunIds = new Set<number>();
   for (const e of events) {
     if (e.kind !== "gate" || !e.data) continue;
