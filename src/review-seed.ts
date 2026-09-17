@@ -44,6 +44,14 @@ const MAX_SIGNATURES_SHOWN = 5;
 const MAX_DYNAMIC_LINES = 2;
 const MAX_CROSS_CHECK_LINES = 2;
 const OUTPUT_CAP = 30;
+// `--files` is a lookup, not a review: the caller named the files, so the caps
+// that keep a 40-file diff readable only hide the answer they asked for. This
+// is the surface the deleted `fapony map <file>` used to be — an executor
+// asking "what is in here and who breaks if I change it" before editing, at a
+// fraction of reading the file. Still bounded: a hub with 60 importers is a
+// wall of text, not an answer.
+const LOOKUP_IMPORTERS_SHOWN = 12;
+const LOOKUP_OUTPUT_CAP = 120;
 // Signature text cap per symbol (same trim as map.ts's file view).
 const SIG_MAX = 90;
 const DISCLAIMER =
@@ -425,6 +433,16 @@ export function renderSeed(args: string[], cwd: string): string {
     return existsSync(join(worktree, e.path));
   });
 
+  // Lookup mode: caller named the files, so show them whole (see caps above).
+  const lookup = scope.kind === "files";
+  const importersShown = lookup ? LOOKUP_IMPORTERS_SHOWN : MAX_IMPORTERS_SHOWN;
+  const importerLineCap = lookup ? entries.length : MAX_IMPORTER_LINES;
+  const signaturesShown = lookup
+    ? Number.POSITIVE_INFINITY
+    : MAX_SIGNATURES_SHOWN;
+  const signatureLineCap = lookup ? entries.length : MAX_SIGNATURE_LINES;
+  const outputCap = lookup ? LOOKUP_OUTPUT_CAP : OUTPUT_CAP;
+
   const lines: string[] = [];
   lines.push(`worktree: ${worktree} (${resolved.label})`);
 
@@ -453,18 +471,18 @@ export function renderSeed(args: string[], cwd: string): string {
         ...(graph.dependents.get(e.path) ?? new Set<string>()),
       ].sort();
       if (deps.length === 0) continue;
-      const shown = deps.slice(0, MAX_IMPORTERS_SHOWN).join(", ");
+      const shown = deps.slice(0, importersShown).join(", ");
       const rest =
-        deps.length > MAX_IMPORTERS_SHOWN
-          ? ` (+${deps.length - MAX_IMPORTERS_SHOWN})`
+        deps.length > importersShown
+          ? ` (+${deps.length - importersShown})`
           : "";
       importerLines.push(`  ${e.path} ← ${shown}${rest}`);
     }
     if (importerLines.length > 0) {
       lines.push("importers (static):");
-      for (const l of importerLines.slice(0, MAX_IMPORTER_LINES)) lines.push(l);
-      if (importerLines.length > MAX_IMPORTER_LINES) {
-        lines.push(`  … +${importerLines.length - MAX_IMPORTER_LINES} more`);
+      for (const l of importerLines.slice(0, importerLineCap)) lines.push(l);
+      if (importerLines.length > importerLineCap) {
+        lines.push(`  … +${importerLines.length - importerLineCap} more`);
       }
     }
 
@@ -505,7 +523,7 @@ export function renderSeed(args: string[], cwd: string): string {
       // change" without opening the file. Same trim as map.ts's file view.
       const srcLines = source.split("\n");
       const shown = scan.symbols
-        .slice(0, MAX_SIGNATURES_SHOWN)
+        .slice(0, signaturesShown)
         .map((s) => {
           const raw = (srcLines[s.line - 1] ?? "").trim();
           const sig =
@@ -514,16 +532,16 @@ export function renderSeed(args: string[], cwd: string): string {
         })
         .join(" · ");
       const rest =
-        scan.symbols.length > MAX_SIGNATURES_SHOWN
-          ? ` (+${scan.symbols.length - MAX_SIGNATURES_SHOWN})`
+        scan.symbols.length > signaturesShown
+          ? ` (+${scan.symbols.length - signaturesShown})`
           : "";
       sigLines.push(`  ${e.path} — ${shown}${rest}`);
     }
     if (sigLines.length > 0) {
       lines.push("signatures (current):");
-      for (const l of sigLines.slice(0, MAX_SIGNATURE_LINES)) lines.push(l);
-      if (sigLines.length > MAX_SIGNATURE_LINES) {
-        lines.push(`  … +${sigLines.length - MAX_SIGNATURE_LINES} more`);
+      for (const l of sigLines.slice(0, signatureLineCap)) lines.push(l);
+      if (sigLines.length > signatureLineCap) {
+        lines.push(`  … +${sigLines.length - signatureLineCap} more`);
       }
     }
 
@@ -583,9 +601,9 @@ export function renderSeed(args: string[], cwd: string): string {
 
   // Disclaimer is mandatory on every output — reserve its line so cap
   // truncation (below) can never carry it off with the rest of the tail.
-  if (lines.length > OUTPUT_CAP - 1) {
-    const rest = lines.length - (OUTPUT_CAP - 2);
-    lines.length = OUTPUT_CAP - 2;
+  if (lines.length > outputCap - 1) {
+    const rest = lines.length - (outputCap - 2);
+    lines.length = outputCap - 2;
     lines.push(`… (+${rest} lines truncated)`);
   }
   lines.push(DISCLAIMER);
