@@ -396,6 +396,7 @@ import {
 } from "./report-html.test.js";
 import {
   testReviewSeedBarrelAndScopeList,
+  testReviewSeedBodyAndCallers,
   testReviewSeedDeterministicAndNoWrite,
   testReviewSeedFilesDirExpansion,
   testReviewSeedFilesLookupUncapped,
@@ -603,6 +604,7 @@ export async function cmdTest(): Promise<void> {
   testReviewSeedRenames();
   testReviewSeedDeterministicAndNoWrite();
   testReviewSeedBarrelAndScopeList();
+  testReviewSeedBodyAndCallers();
   testReviewSeedFilesLookupUncapped();
   testReviewSeedFilesDirExpansion();
   testReviewSeedPlanCrossCheck();
