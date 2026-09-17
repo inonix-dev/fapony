@@ -38,7 +38,12 @@ over the two-command opener instead of drafting**:
 ```bash
 fapony analyze <dir>                  # hub / orphan / cycle / changed-untested in that area
 fapony review-seed --files a.ts,b.ts,src/zone/  # exports + importers + untested — dirs expand to source files under them
+fapony review-seed --files a.ts --body doThing --callers doThing  # + the declaration slice and every call site, same call
 ```
+
+`--body`/`--callers` are the second step of that same lookup: use them instead of reading a file
+you only need one symbol out of. Exports only — a non-exported name answers "no export named X in
+scope", which is not the same as "not there".
 
 That is the same facts this skill would have seeded into §2/§5, without the file — roughly 1k
 tokens, deterministic, and it is the front half of the pair the dev already closes with
