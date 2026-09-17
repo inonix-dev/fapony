@@ -170,14 +170,25 @@ was; it is what puts this run in the `regime × model` table.
 | ship, nit-only findings | `pass-good` |
 | fix-then-ship | `pass-adequate` |
 | rework / reject | `fail` |
+| could not walk enough to have a verdict | `uncertain` |
+
+`uncertain` is not a softer `fail`. It is the honest answer when the walk never
+reached the thing under review — the branch wouldn't build, the path is behind a
+service you cannot run, every finding came out `PLAUSIBLE`. Say so in the report
+too. Guessing `pass` there is the one outcome that makes the ledger lie.
 
 `reason_code` — the *lead* (most severe) finding, not a generic bucket:
 
+- **0 findings, or a clean pass → `none`** — never `other`. `other` means "a real
+  finding that none of these buckets name", so filing clean passes there puts them
+  in the recurring-fail-reasons list, where they crowd out the reasons that mean
+  something. It is the one value in this table that costs other people accuracy.
 - missing or weak test coverage on the path you walked → `missing_test`
 - change is narrower or wider than the plan / PR description claims → `scope_mismatch`
 - a shell/eval/deploy command runs without the guard it needs → `unsafe_command`
 - the plan or spec didn't cover a case the walk exposed → `spec_gap`
-- anything else, or 0 findings → `other`
+- the change stops short of what it set out to do → `incomplete`
+- a real finding none of the above names → `other`, and then `note` is **required**
 
 Always attach a one-line `note` — the only field a later review can act on. Say what broke or
 was walked, not that a review happened.

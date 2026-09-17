@@ -196,6 +196,10 @@ export function testMapFileShowsSignature(): void {
     {
       "sig.ts": [
         "export function greet(name: string): string {",
+        // Fixture source, not this file's code: the ${...} is TypeScript that
+        // formatMapFile has to parse. Interpolating it here would substitute a
+        // variable from this test and change what is being parsed.
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: fixture source
         "  return `Hello, ${name}!`;",
         "}",
         "export class Point {",

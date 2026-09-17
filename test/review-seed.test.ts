@@ -308,3 +308,47 @@ export function testReviewSeedStateDbUntouched(): void {
   });
   console.log("  ✓ review-seed never touches the fapony state db");
 }
+
+export function testReviewSeedBarrelAndScopeList(): void {
+  withFixture((dir) => {
+    // A barrel between the test and the module: src/core.ts is exercised by
+    // test/a.test.ts through src/index.ts, so it must not read as untested.
+    // review-seed and `analyze` share one graph — they must not disagree.
+    writeFileSync(
+      join(dir, "src", "core.ts"),
+      "export function core(): number { return 7; }\n",
+    );
+    writeFileSync(join(dir, "src", "index.ts"), 'export * from "./core.js";\n');
+    writeFileSync(
+      join(dir, "test", "a.test.ts"),
+      'import { a } from "../src/a.js";\nimport { core } from "../src/index.js";\nexport const t = a() + core();\n',
+    );
+    const out = renderSeed(["--files", "src/core.ts"], dir);
+    assert.doesNotMatch(
+      out,
+      /untested/,
+      "a test reaching src/core.ts through the barrel is coverage",
+    );
+  });
+  withFixture((dir) => {
+    // The changed list is the review's scope: every file has to appear in it,
+    // not just the first few that fit on three wrapped lines.
+    const names: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const rel = `src/wide${i}.ts`;
+      names.push(rel);
+      writeFileSync(
+        join(dir, rel),
+        `export function wide${i}(): number { return ${i}; }\n`,
+      );
+    }
+    const out = renderSeed(["--files", names.join(",")], dir);
+    assert.match(out, /changed \(12\):/);
+    for (const rel of names) {
+      assert.ok(out.includes(rel), `${rel} missing from the changed list`);
+    }
+  });
+  console.log(
+    "  ✓ review-seed sees through barrels and lists every changed file",
+  );
+}

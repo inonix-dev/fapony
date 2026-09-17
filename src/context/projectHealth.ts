@@ -87,9 +87,11 @@ function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
 }
 
-// `[none]` says "no reason code given" — noise, not signal (it was the reason
-// three 1.4k-char notes read as a wall). A real reason tag stays: it is the
-// KPI axis the trend line counts by.
+// `none` asserts "checked, nothing was wrong" — it is not a missing value, and
+// verdict_submit's schema says to send it on every clean pass rather than
+// `other`. Either way it prints as no tag at all: a `[none]` prefix carries
+// nothing and was what made three 1.4k-char notes read as a wall. A real reason
+// tag stays — it is the KPI axis the trend line counts by.
 function fmtRecentNote(n: RecentVerdictNote): string {
   const body = truncate(n.note, RECENT_NOTE_CHARS);
   return n.reason === "none" ? body : `[${n.reason}] ${body}`;

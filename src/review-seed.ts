@@ -25,6 +25,7 @@ import { join } from "node:path";
 import {
   buildGraph,
   type ImportGraph,
+  isTestedThroughBarrels,
   isTestFile,
   SCAN_EXTS,
 } from "./analyze.js";
@@ -32,7 +33,10 @@ import { extractExports } from "./map.js";
 import { assertSafe } from "./safety.js";
 
 const WRAP_WIDTH = 88;
-const MAX_CHANGED_LINES = 3;
+// The changed list is the review's scope boundary, not context: a file hidden
+// here is a file the reviewer never walks. So it is capped by FILES, generously,
+// and the overflow counts files — the other caps below are context and stay tight.
+const MAX_CHANGED_FILES = 40;
 const MAX_IMPORTER_LINES = 4;
 const MAX_SIGNATURE_LINES = 4;
 const MAX_IMPORTERS_SHOWN = 4;
@@ -424,16 +428,16 @@ export function renderSeed(args: string[], cwd: string): string {
   const lines: string[] = [];
   lines.push(`worktree: ${worktree} (${resolved.label})`);
 
-  const changedParts = entries.map((e) => `${e.path}${fmtCounts(e)}`);
-  const changedLines = wrap(changedParts, " · ", "  ");
+  const shownEntries = entries.slice(0, MAX_CHANGED_FILES);
+  const changedParts = shownEntries.map((e) => `${e.path}${fmtCounts(e)}`);
   if (entries.length === 0) {
     lines.push("changed (0): nothing in this scope");
   } else {
     lines.push(`changed (${entries.length}):`);
-    for (const l of changedLines.slice(0, MAX_CHANGED_LINES)) lines.push(l);
-    if (changedLines.length > MAX_CHANGED_LINES) {
+    lines.push(...wrap(changedParts, " · ", "  "));
+    if (entries.length > shownEntries.length) {
       lines.push(
-        `  … +${changedLines.length - MAX_CHANGED_LINES} more changed lines`,
+        `  … +${entries.length - shownEntries.length} more file(s) — narrow the scope to see them`,
       );
     }
   }
@@ -464,10 +468,9 @@ export function renderSeed(args: string[], cwd: string): string {
       }
     }
 
-    const untested = structureTargets.filter((e) => {
-      const deps = graph?.dependents.get(e.path) ?? new Set<string>();
-      return ![...deps].some(isTestFile);
-    });
+    const untested = structureTargets.filter(
+      (e) => !(graph && isTestedThroughBarrels(graph, e.path)),
+    );
     if (testFiles === 0) {
       lines.push("untested: repo has no test files — flag uninformative");
     } else if (untested.length > 0) {

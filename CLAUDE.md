@@ -176,7 +176,11 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
      ทำให้ `report-web` ปฏิเสธ path ที่ผู้ใช้พิมพ์มาเอง ซึ่งไม่ได้กันอะไรนอกจากกันผู้ใช้
 6. **memory: null** = ปิดชั้น memory ทั้งหมด ไม่ error
 7. **ให้เกรดทุกหน่วยงานที่จบ = ยิง `verdict_submit` เอง ไม่ต้องรอให้สั่ง** — มันคือ *เกรดของงาน*
-   ไม่ใช่คำสารภาพ · **`regime` บังคับ** (`code | fix | review | plan`) ไม่ส่ง = call ถูก reject
+   ไม่ใช่คำสารภาพ · **`regime` บังคับ** (`code | fix | review | plan | inquiry | test`) ไม่ส่ง = call
+   ถูก reject · **`reason_code` ของงานที่สะอาดคือ `none` ไม่ใช่ `other`** — `other` แปลว่า "เจอปัญหาจริง
+   ที่ไม่มี bucket ไหนตรง" และมันโผล่ใน `project_health_context` ในฐานะ recurring fail reason ฉะนั้น
+   งานที่ผ่านสะอาดไปนั่งตรงนั้น = เบียดเหตุผลที่มีความหมายออก (วัดแล้ว: 50 แถวเป็น `other` ในนั้น 46
+   เป็น pass-family เพราะ skill เคยเขียนสั่งผิด — แก้ที่ skill แล้ว 2026-09-17)
    ตั้งใจให้ required เพราะ fill rate จริงในเครื่องนี้: required+enum (`reason_code`) = 50/50,
    optional (`files[]`) = 0 — **optional คือสิ่งที่ฆ่า fill rate ไม่ใช่การเพิ่ม field** ฉะนั้นงานที่ผ่านตั้งแต่รอบแรกก็ต้องบันทึก (เดิมกฎบอกไม่ต้อง — กลับด้านแล้ว
    เพราะค่าที่ใช้จริงย้ายจาก "ไฟล์นี้เคยพัง" ไปเป็น "model ไหนทำงานแบบไหนได้ดี" ซึ่ง n ต่อ model
@@ -348,7 +352,7 @@ fapony telemetry show|send          # opt-in only, default off — see TELEMETRY
 fapony test                         # self-check
 fapony analyze [path]               # structural diagnosis (hub/orphan/cycle/changed-untested) — live graph via Bun.Transpiler.scan(), never persisted (no table: 114 files / 466 imports = 16.6ms, cache would be pure debt)
 fapony map [path]                   # on-demand source index: dirs list exports (name:line), files show declaration signatures, read-only, nothing persisted — no caller invokes this directly anymore (see PLAN-code-map, superseded); map.ts survives as a library used by plan-seed/review-seed
-fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): §2 = repetition clusters (not a source map), §5 = scoped analyze findings, hard caps PLAN ≤ ~60 / SPEC ≤ 200 lines — caller: plan-with-pony Phase 1.6
+fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): §2 = export-name prefixes repeating across 2+ dirs (single-dir = that dir's naming convention, not reported), §5 = scoped analyze findings, hard caps PLAN ≤ ~60 / SPEC ≤ 200 lines — caller: plan-with-pony Phase 1.6
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan <PLAN.md>]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"
 ```
 
@@ -362,8 +366,8 @@ fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime depen
 | `plan_list` | Pending plan files grouped by state (`active` / `blocked` / `untouched` / `superseded` / `trackers`) + progress tally, joined with run history — not a raw `ls`. State comes from optional 4-key frontmatter; `format:"markdown"` renders the generated master checklist |
 | `handoff_collect` | Get machine facts from git (diff stat, commits, branch) |
 | `handoff_check` | Verify handoff conformance against facts |
-| `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) + required `regime` (`code\|fix\|review\|plan`) — the task-shape axis |
-| `fapony_stats` | Query KPIs: by-model (gates/fails/quality/tokens), by-grade, **planned vs dove-in** (`runs.plan` null/not-null), **regime × model**; `group_by: reason_code\|plan` for top-N slices |
+| `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) + required `regime` (`code\|fix\|review\|plan\|inquiry\|test`) — the task-shape axis. Clean work takes `reason_code: none`, never `other` |
+| `fapony_stats` | Query KPIs: by-model (gates/fails/quality/tokens), by-grade, **planned vs dove-in** (`runs.plan` null/not-null), **regime × model**; `group_by: reason_code\|plan\|file` for top-N slices |
 | `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `verification_report` | Full verification report: facts + checks + evidence + verdict, duration, rounds |
 | `project_health_context` | Known-patterns block keyed by `files[]` — recurring fail reasons, escalations, round-1-pass shapes. Pre-edit reflex for any task; `plan-with-pony` is one caller, not the only one |

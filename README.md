@@ -41,7 +41,7 @@ which kind of task" becomes a data question instead of a vibe. On top of measure
 claims against git facts: handoff conformance, allowlisted evidence, a 6-grade verdict — with
 everything the agent claimed but couldn't prove marked as such.
 
-**The reason to keep it running is the third layer: knowledge accumulation.** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: which model earns its keep on which kind of work **in this project**, at what token cost, graded by whoever reviewed it. Every verdict carries a `regime` (`code` / `fix` / `review` / `plan`), and runs split by whether there was a plan at all — so "does planning beat diving in, and for which model" is a table, not an argument. Session logs have the tokens but no grades; benchmarks have grades but not your codebase. fapony is the one layer that holds both, because it's the one every client reports into.
+**The reason to keep it running is the third layer: knowledge accumulation.** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: which model earns its keep on which kind of work **in this project**, at what token cost, graded by whoever reviewed it. Every verdict carries a `regime` (`code` / `fix` / `review` / `plan` / `inquiry` / `test`), and runs split by whether there was a plan at all — so "does planning beat diving in, and for which model" is a table, not an argument. Session logs have the tokens but no grades; benchmarks have grades but not your codebase. fapony is the one layer that holds both, because it's the one every client reports into.
 
 Three tiers, deliberately: **measurement ships today** and needs no per-project setup — raw facts nobody can call unfair. **Verification is the sharper edge** but stays beta until its evidence layer is hardened; fapony doesn't control your agent's flow, so it never promises "verified" as a headline. **Knowledge accumulation is the compounding one** — it's worthless on run 1 and gets more useful every run after, which is exactly why it's the layer competitors can't clone by copying a feature list.
 
@@ -344,7 +344,7 @@ fapony price-scan                        # fetch model price table → prices.js
 fapony usage-web [port]                   # live usage comparison dashboard from cache
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page summary: decisions, open bugs, in-flight plans, cost, pass/fail — from what's already on disk
-fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN (+SPEC): §2 = repetition clusters, §5 = scoped analyze findings, every section capped — agent fills judgment sections
+fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN (+SPEC): §2 = export-name prefixes repeating across 2+ directories, §5 = scoped analyze findings, every section capped — agent fills judgment sections
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan <PLAN.md>]  # read-only scope facts for a review (changed files, importers, untested, signatures, plan cross-check)
 
 # Setup & maintenance

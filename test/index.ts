@@ -5,6 +5,7 @@ import {
   testFindSessionAt,
 } from "./activeSession.test.js";
 import {
+  testAnalyzeBarrelHidesTests,
   testAnalyzeBlastRadius,
   testAnalyzeBlastRadiusTransitive,
   testAnalyzeBlastRadiusTransitiveCycle,
@@ -385,6 +386,7 @@ import {
   testReportWebWarnsOnlyWhenCommittable,
 } from "./report-html.test.js";
 import {
+  testReviewSeedBarrelAndScopeList,
   testReviewSeedDeterministicAndNoWrite,
   testReviewSeedNotARepo,
   testReviewSeedPlanCrossCheck,
@@ -569,6 +571,7 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeBlastRadiusTransitive();
   testAnalyzeBlastRadiusTransitiveCycle();
   testAnalyzeIsTestFile();
+  testAnalyzeBarrelHidesTests();
   testMapExtractExports();
   testMapExtractExportsParseError();
   testMapExtractIgnoresSampleText();
@@ -592,6 +595,7 @@ export async function cmdTest(): Promise<void> {
   testReviewSeedStructure();
   testReviewSeedRenames();
   testReviewSeedDeterministicAndNoWrite();
+  testReviewSeedBarrelAndScopeList();
   testReviewSeedPlanCrossCheck();
   testReviewSeedNotARepo();
   testReviewSeedStateDbUntouched();
