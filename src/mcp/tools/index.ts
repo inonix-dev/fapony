@@ -218,8 +218,11 @@ export const TOOLS = [
   {
     name: "fapony_usage",
     description:
-      "Query passive usage from opencode sessions: token counts, cost, " +
-      "and breakdown by model. Filter by worktree and time range.",
+      "Query passive usage across every coding client on this machine — " +
+      "OpenCode, Claude Code, Codex, and ZCode — on one ruler: token counts, " +
+      "cost, and breakdown by model. No client's own session log can see " +
+      "another's, so this is the only way to compare them. Filter by " +
+      "worktree and time range.",
     inputSchema: {
       type: "object" as const,
       properties: {
