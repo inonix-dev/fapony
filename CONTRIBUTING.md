@@ -24,7 +24,10 @@ bun run check
 
 ## Project Rules
 
-- **No runtime dependencies** — fapony uses only Bun builtins (`bun:sqlite`, `Bun.spawn`, `node:fs`, `node:child_process`)
+- **Dependencies are allowed — but they must not reach `fapony mcp` startup** — every MCP client
+  launches that server on every session, and `fapony.ts` static-imports every module, so anything
+  new is `await import()`ed on the CLI path that needs it. Budget: the `initialize` round trip
+  stays under ~100ms (63ms as of 2026-09-17)
 - **No abstraction for abstraction's sake** — don't scaffold for a future that may not come
 - **No git push** — push is done manually after review
 - **fapony must not write files into the target worktree** — DB lives in `~/.config/fapony/` only

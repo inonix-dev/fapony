@@ -6,7 +6,13 @@ Measurement + verification layer for coding agents, shipped as an MCP server (`f
 
 **North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **`model × project × regime × quality` ข้าม run/client/project** — "งานแบบนี้ในโปรเจกต์นี้ ควรจ่ายให้ model ไหน" · session log ของทุกเจ้ามี token แต่ไม่มีเกรด, benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ — ต้องมี verdict + model + regime + token ครบสี่ในที่เดียวถึงจะถามได้ · **เคยเล็ง "project health / ไฟล์นี้เคยพัง" แล้วพลาด** — base rate ของ rework จริงคือ 1-9% ต่ำเกินจะเตือนอะไรได้ (ดูกฎ 8) `project_health_context` ยังอยู่แต่ไม่ใช่แกนอีกแล้ว fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
 
-**Runtime:** Bun-only, zero runtime dependency — ใช้แค่ `bun:sqlite`, `node:fs`, `node:child_process`
+**Runtime:** Bun-only — **กฎ zero-runtime-dependency ถอดแล้ว 2026-09-17** (มันมาจากยุคที่ fapony
+เป็น read/viewer ล้วน ๆ ตอนนี้เดินทาง ledger + ของที่ agent หยิบใช้สะดวก การห้าม dep แบบเหมาเข่ง
+เลยแลกความคล่องตัวไปโดยไม่ได้อะไรคืน — และไม่ใช่หนึ่งในสาม moat ด้วย) · สิ่งที่ยัง**ห้าม**คือให้
+`fapony mcp` จ่ายค่า dep ตอน startup: client ทุกเจ้าสตาร์ทมันทุก session และ `fapony.ts`
+static-import ทุก module ฉะนั้น dep ใหม่ต้อง `await import()` ในเส้นทางที่ใช้จริงเท่านั้น ·
+เช็ค: initialize round trip ≤ ~100ms (วัด 2026-09-17 = 63ms · `require("typescript")`
+อย่างเดียว = 92ms คือทำพังได้ด้วย dep เดียว)
 **State:** SQLite ที่ `~/.config/fapony/state.db` (WAL mode) — `FAPONY_STATE_DIR` env ย้ายได้
 **Topology:** `fapony/` = main checkout (คุณแตะคนเดียว) · `fapony/cl-fapony/` = dev (clone คนละ `.git` — agents ทำงานที่นี่เท่านั้น) — clone อยู่ใน repo จึงต้อง gitignore `cl-*/` ก่อน
 **License:** MIT, public ตั้งแต่ commit แรก
@@ -364,7 +370,7 @@ fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: fapony
 
-fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime dependency. 6 tools:
+fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC. 6 tools:
 
 | Tool | Purpose |
 |------|---------|
