@@ -212,13 +212,16 @@ function expandFilesScope(
   const seen = new Set<string>();
   const notFound: string[] = [];
   const emptyDirs: string[] = [];
+  const dirs: string[] = [];
   let dirExpanded = false;
-  let cut = 0;
+  let cutNamed = 0;
+  let cutExpanded = 0;
   const add = (p: string, expanded: boolean): void => {
     if (seen.has(p)) return;
     seen.add(p);
     if (files.length >= MAX_CHANGED_FILES) {
-      cut++;
+      if (expanded) cutExpanded++;
+      else cutNamed++;
       return;
     }
     files.push({
@@ -229,26 +232,28 @@ function expandFilesScope(
       ...(expanded ? { expanded: true } : {}),
     });
   };
+  // Named files are placed before any dir expands. A path the caller typed
+  // outranks one a walk inferred, so `--files src/,fapony.ts` can never spend
+  // the whole cap on src/ and drop fapony.ts — the quiet disappearance this
+  // flag exists to stop. Dirs are collected here, expanded in the pass below.
   for (const raw of list) {
     const p = raw.replace(/\/+$/, "");
-    const abs = join(worktree, p);
     let st: Stats;
     try {
-      st = statSync(abs);
+      st = statSync(join(worktree, p));
     } catch {
       notFound.push(p);
       continue;
     }
-    if (st.isFile()) {
-      add(p, false);
-    } else if (st.isDirectory()) {
-      dirExpanded = true;
-      const rels = collectSourceFiles(abs);
-      if (rels.length === 0) emptyDirs.push(p);
-      for (const r of rels) add(p === "." ? r : `${p}/${r}`, true);
-    } else {
-      notFound.push(p);
-    }
+    if (st.isFile()) add(p, false);
+    else if (st.isDirectory()) dirs.push(p);
+    else notFound.push(p);
+  }
+  for (const p of dirs) {
+    dirExpanded = true;
+    const rels = collectSourceFiles(join(worktree, p));
+    if (rels.length === 0) emptyDirs.push(p);
+    for (const r of rels) add(p === "." ? r : `${p}/${r}`, true);
   }
   if (notFound.length > 0) {
     notes.push(
@@ -258,9 +263,14 @@ function expandFilesScope(
   for (const d of emptyDirs) {
     notes.push(`${d} (dir) — no source files under it`);
   }
-  if (cut > 0) {
+  if (cutNamed > 0) {
     notes.push(
-      `… +${cut} more file(s) under the expanded dirs — capped at ${MAX_CHANGED_FILES}, narrow the scope`,
+      `… +${cutNamed} named file(s) past the ${MAX_CHANGED_FILES} cap — narrow the scope`,
+    );
+  }
+  if (cutExpanded > 0) {
+    notes.push(
+      `… +${cutExpanded} more file(s) under the expanded dirs — capped at ${MAX_CHANGED_FILES}, narrow the scope`,
     );
   }
   return { files, notes, dirExpanded };

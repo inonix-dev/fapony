@@ -412,14 +412,37 @@ export function testReviewSeedFilesDirExpansion(): void {
       out,
       /\+5 more file\(s\) under the expanded dirs — capped at 40, narrow the scope/,
     );
-    // explicit files are the caller's words — never capped by expansion
+    // Explicit files are the caller's words — a dir listed FIRST must not
+    // spend the cap on inferred paths and drop them. Argument order is the
+    // trap here: naming the files first passes even when placement is wrong.
     const mixed = renderSeed(
-      ["--files", "src/a.ts,src/b.ts,src/c.ts,src/d.ts,bulk"],
+      ["--files", "bulk,src/a.ts,src/b.ts,src/c.ts,src/d.ts"],
       dir,
     );
     assert.match(mixed, /changed \(40\):/);
-    assert.match(mixed, /src\/a\.ts/);
-    assert.match(mixed, /src\/d\.ts/);
+    for (const p of ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"]) {
+      assert.ok(
+        mixed.includes(p),
+        `named ${p} lost to dir expansion:\n${mixed}`,
+      );
+    }
+    // and the cut is blamed on the dirs, because that is where it came from
+    assert.match(mixed, /under the expanded dirs/);
+    assert.doesNotMatch(mixed, /named file\(s\) past/);
+  });
+  withFixture((dir) => {
+    // named files past the cap get their own note — not "under the expanded
+    // dirs", which would be a lie about where the cut happened
+    const names: string[] = [];
+    for (let i = 0; i < 45; i++) {
+      const rel = `src/n${String(i).padStart(2, "0")}.ts`;
+      names.push(rel);
+      writeFileSync(join(dir, rel), `export const n${i} = ${i};\n`);
+    }
+    const out = renderSeed(["--files", names.join(",")], dir);
+    assert.match(out, /--files \(as given\)/);
+    assert.match(out, /\+5 named file\(s\) past the 40 cap — narrow the scope/);
+    assert.doesNotMatch(out, /under the expanded dirs/);
   });
   console.log(
     "  ✓ review-seed --files expands dirs (zone lookup), speaks on empty/wrong paths, counts cuts",
