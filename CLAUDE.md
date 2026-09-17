@@ -345,6 +345,7 @@ Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)
 ```bash
 fapony mcp                          # MCP server — stdio JSON-RPC, 6 tools
 fapony hook-stop                    # Claude Code Stop hook (stdin JSON) — blocks a turn that has ungraded commits
+fapony hook-read-hint               # Read hint (claude PreToolUse / opencode plugin) — annotates a full-file read of a large source file with one factual line pointing at review-seed; annotate-only, never blocks, never dedupes (context compaction makes "อ่านไปแล้ว" เป็นเท็จ)
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page project summary from existing sources (mem log, plans, usage cache, verdicts)
 fapony report <run-id>              # verification report for a run
 fapony report-web [file]            # static HTML report page
