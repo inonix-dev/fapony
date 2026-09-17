@@ -230,8 +230,13 @@ bun .fapony/.memory/mem.ts find "usage-web"                  # grep text/spec
 ```
 
 เขียนแต่ละแถวให้ **standalone** — มันถูกอ่านอีกทีในอีกหลายเดือนโดยไม่มีบทสนทนานี้ให้ย้อนดู ·
-`close` เป็นตัวเดียวที่ปิด `bug` ไม่มีมัน list จะโตอย่างเดียว · `next`/`claim`/`synced`/`stale`
-เลิกใช้แล้ว (ดู vela CLAUDE.md ว่าทำไม)
+`close` เป็นตัวเดียวที่ปิด `bug` ไม่มีมัน list จะโตอย่างเดียว · **`decision`/`bug`/`note` คือ kind
+ที่ agent เลือกเองด้วยมือ ส่วน `next`/`hold`/`claim`/`release`/`synced`/`stale` เป็น bookkeeping
+ของ `mem.ts` เอง — ยังใช้งานอยู่จริง ไม่ได้ถูกยกเลิก** (ไฟล์นี้เคยเขียนว่าเลิกใช้แล้ว ผิด: วัดที่
+`apps/vela/.fapony/.memory/log.jsonl` 2026-09-17 ได้ `synced` 931 แถว บรรทัดล่าสุด 2511,
+`next` 384 ที่ 2519, `claim` 53 ที่ 2522 จากทั้งหมด 2,529 — เขียนจนเกือบบรรทัดสุดท้าย และ
+`mem.ts` ยัง implement ครบทุกตัว) · **บทเรียน: กฎที่เขียนว่า "เลิกใช้" แต่โค้ดยังรับอยู่
+ไม่ได้หยุดอะไรเลย มันแค่ทำให้คนอ่านกฎเข้าใจผิด** — รูปเดียวกับ `reason_code` 50 แถว
 
 **ทำไมไม่ยัดกฎนี้ลง `SERVER_INSTRUCTIONS`:** mem.ts เป็นของ *โปรเจกต์* ไม่ใช่ของ fapony และมี
 เฉพาะคนที่รัน `fapony init` · `SERVER_INSTRUCTIONS` จ่ายทุก session ของทุกคนที่ต่อ MCP —
