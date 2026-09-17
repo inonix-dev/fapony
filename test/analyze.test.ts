@@ -190,6 +190,33 @@ export function testAnalyzeIsTestFile(): void {
   console.log("  ✓ analyze isTestFile matches collect criteria");
 }
 
+export function testAnalyzeSkipsNestedCheckouts(): void {
+  withFixture(
+    {
+      "core.ts": "export const a = 1;\n",
+      "core.test.ts": 'import { a } from "./core.js";\nexport const t = a;\n',
+      // A clone has `.git` as a directory, a `git worktree` has it as a file.
+      // Neither is part of this project; both used to be walked unless their
+      // name happened to start with `wt-`.
+      "clone/.git/HEAD": "ref: refs/heads/main\n",
+      "clone/core.ts": "export const a = 1;\n",
+      "sub/.git": "gitdir: /elsewhere/.git/worktrees/sub\n",
+      "sub/core.ts": "export const a = 1;\n",
+      // A plain directory named like someone's worktree convention is still
+      // this project and must be walked.
+      "wt-real/core.ts": "export const a = 1;\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.deepEqual(
+        graph.files.filter((f) => f.includes("/")).sort(),
+        ["wt-real/core.ts"],
+        "nested checkouts walked, or a plain dir skipped by name",
+      );
+    },
+  );
+}
+
 export function testAnalyzeBarrelHidesTests(): void {
   withFixture(
     {

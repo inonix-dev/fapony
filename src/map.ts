@@ -309,7 +309,7 @@ function immediateChildren(absDir: string): Children {
   for (const e of entries) {
     if (e.isSymbolicLink()) continue;
     if (e.isDirectory()) {
-      if (isSkippedDir(e.name) || e.name.startsWith(".")) continue;
+      if (isSkippedDir(e.name, absDir) || e.name.startsWith(".")) continue;
       dirs.push(e.name);
     } else if (e.isFile()) {
       const dot = e.name.lastIndexOf(".");

@@ -127,8 +127,15 @@ export const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 // Always skipped, hardcoded — no config (per plan: no .faponyignore in v1).
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", ".git"]);
 
-export function isSkippedDir(name: string): boolean {
-  return SKIP_DIRS.has(name) || name.startsWith("wt-");
+// A nested checkout (clone or `git worktree add`) is a different project that
+// happens to live inside this one — walking it doubles the graph and makes every
+// single-directory pattern look like it repeats across two. `parentDir` is
+// required so this can be detected rather than guessed from the name: prefixes
+// like `wt-`/`cl-` are one person's convention, `.git` is the actual invariant
+// (a dir for a clone, a file for a worktree — existsSync covers both).
+export function isSkippedDir(name: string, parentDir: string): boolean {
+  if (SKIP_DIRS.has(name)) return true;
+  return existsSync(join(parentDir, name, ".git"));
 }
 
 function isEntryPoint(rel: string): boolean {
@@ -156,7 +163,7 @@ export function collectSourceFiles(
       // Never follow symlinks — loop-proof without extra code.
       if (e.isSymbolicLink()) continue;
       if (e.isDirectory()) {
-        if (isSkippedDir(e.name)) continue;
+        if (isSkippedDir(e.name, dir)) continue;
         if (opts?.skipHidden && e.name.startsWith(".")) continue;
         stack.push(join(dir, e.name));
       } else if (e.isFile()) {

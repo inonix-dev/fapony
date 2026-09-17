@@ -13,6 +13,7 @@ import {
   testAnalyzeEmptyDir,
   testAnalyzeHubOrphanCycle,
   testAnalyzeIsTestFile,
+  testAnalyzeSkipsNestedCheckouts,
   testAnalyzeSkipsUnresolvableAndBroken,
 } from "./analyze.test.js";
 import {
@@ -572,6 +573,7 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeBlastRadiusTransitiveCycle();
   testAnalyzeIsTestFile();
   testAnalyzeBarrelHidesTests();
+  testAnalyzeSkipsNestedCheckouts();
   testMapExtractExports();
   testMapExtractExportsParseError();
   testMapExtractIgnoresSampleText();

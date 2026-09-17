@@ -420,7 +420,7 @@ function moduleChunk(absDir: string, rel: string): Chunk | null {
         (e) =>
           !e.isSymbolicLink() &&
           !e.name.startsWith(".") &&
-          !isSkippedDir(e.name),
+          !isSkippedDir(e.name, absDir),
       )
       .map((e) => e.name)
       .sort();
@@ -476,7 +476,7 @@ function rootChunks(absDir: string): Chunk[] {
         (e) =>
           !e.isSymbolicLink() &&
           !e.name.startsWith(".") &&
-          !isSkippedDir(e.name),
+          !isSkippedDir(e.name, absDir),
       )
       .map((e) => e.name)
       .sort();
