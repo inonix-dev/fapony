@@ -230,7 +230,13 @@ function renderRisks(scanBase: string, roots: string[]): string {
     return roots.some((r) => abs === r || abs.startsWith(`${r}${sep}`));
   };
   const scoped = findings.filter((f) => f.file.split(" ↔ ").some(inScope));
-  if (scoped.length === 0) return "no findings — โครงสร้างไม่มีอะไรน่าห่วง";
+  if (scoped.length === 0) {
+    // Never "nothing is wrong": analyze judges whole files (hub / orphan /
+    // cycle / changed-untested) and cannot see an export nobody calls, because
+    // one re-export keeps its file reachable. Silence read as a clean bill is
+    // what makes a seeded §5 more dangerous than an empty one.
+    return "no findings — analyze ดูระดับไฟล์ (hub/orphan/cycle/changed-untested) ไม่เห็น export ที่ไม่มีคนเรียก `(fapony analyze)`";
+  }
   const ordered = scoped.sort(
     (a, b) =>
       RISK_KINDS.indexOf(a.kind) - RISK_KINDS.indexOf(b.kind) ||
