@@ -352,3 +352,41 @@ export function testReviewSeedBarrelAndScopeList(): void {
     "  ✓ review-seed sees through barrels and lists every changed file",
   );
 }
+
+/**
+ * `--files` is a lookup, not a review: the caller named the paths, so the caps
+ * that keep a 40-file diff readable must not hide the answer. Same file seen
+ * through a diff scope stays capped — that is the review budget, unchanged.
+ */
+export function testReviewSeedFilesLookupUncapped(): void {
+  withFixture((dir) => {
+    const names = Array.from({ length: 9 }, (_, i) => `many${i}`);
+    writeFileSync(
+      join(dir, "src/many.ts"),
+      `${names.map((n) => `export function ${n}(): number { return 0; }`).join("\n")}\n`,
+    );
+
+    const lookup = renderSeed(["--files", "src/many.ts"], dir);
+    for (const n of names) {
+      assert.ok(lookup.includes(`${n}:`), `${n} missing from --files lookup`);
+    }
+    assert.ok(
+      !/\(\+\d+\)/.test(lookup),
+      `--files must not truncate signatures:\n${lookup}`,
+    );
+
+    execSync("git add -A", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "many"', { cwd: dir, stdio: "ignore" });
+    const sha = execSync("git rev-parse HEAD", {
+      cwd: dir,
+      encoding: "utf-8",
+    }).trim();
+    const review = renderSeed(["--commit", sha], dir);
+    assert.match(
+      review,
+      /\(\+4\)/,
+      `a diff scope still caps at 5 signatures:\n${review}`,
+    );
+  });
+  console.log("  ✓ review-seed --files shows every signature, diff scopes cap");
+}
