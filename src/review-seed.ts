@@ -1,4 +1,4 @@
-// src/review-seed.ts — `fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan <PLAN.md>]`
+// src/review-seed.ts — `fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]`
 //
 // Seeds a code review with the deterministic facts of the scope the agent
 // asked about: which files changed (per the exact git expression, echoed),
@@ -20,10 +20,12 @@
 // no magic parsing.
 
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import type { Stats } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
   buildGraph,
+  collectSourceFiles,
   type ImportGraph,
   isTestedThroughBarrels,
   isTestFile,
@@ -52,12 +54,15 @@ const OUTPUT_CAP = 30;
 // wall of text, not an answer.
 const LOOKUP_IMPORTERS_SHOWN = 12;
 const LOOKUP_OUTPUT_CAP = 120;
+// Dir expansion inside --files reuses the diff cap (MAX_CHANGED_FILES): 40
+// files is already past "this component area" into "the whole tree" — cut
+// there and say so, a folder-shaped wall is not an answer either.
 // Signature text cap per symbol (same trim as map.ts's file view).
 const SIG_MAX = 90;
 const DISCLAIMER =
   "static graph only — seed is where to enter, not what is verified";
 const USAGE =
-  "usage: fapony review-seed [--staged | --commit <sha> | --range <a...b> | --files f1,f2 | --plan <PLAN.md>]";
+  "usage: fapony review-seed [--staged | --commit <sha> | --range <a...b> | --files f1,f2,dir | --plan <PLAN.md>]";
 
 export class SeedError extends Error {}
 
@@ -178,6 +183,8 @@ interface FileEntry {
   untracked: boolean;
   /** Set when -M paired this path with a deleted source (a rename). */
   renamedFrom?: string;
+  /** Set when this path was found by expanding a --files directory. */
+  expanded?: true;
 }
 
 interface ResolvedScope {
@@ -185,6 +192,88 @@ interface ResolvedScope {
   entries: FileEntry[];
   /** For --plan: default-diff paths, for the cross-check. */
   crossCheck?: { planFiles: string[]; changed: string[] };
+  /** For --files: dropped paths and expansion cuts, printed after changed. */
+  filesNotes?: string[];
+}
+
+// `--files` accepts directories: the caller thinks in zones ("this component
+// area"), not file names — asking is how the names get learned. A dir expands
+// to source files under it via the same walk buildGraph keys the graph by
+// (collectSourceFiles — node_modules/.git/nested checkouts skipped, no
+// hidden-dir filter, same as the graph), so importers and signatures still
+// hit. A path that is neither file nor dir is dropped from the scope and
+// reported, never silently counted as a one-row scope.
+function expandFilesScope(
+  list: string[],
+  worktree: string,
+): { files: FileEntry[]; notes: string[]; dirExpanded: boolean } {
+  const files: FileEntry[] = [];
+  const notes: string[] = [];
+  const seen = new Set<string>();
+  const notFound: string[] = [];
+  const emptyDirs: string[] = [];
+  const dirs: string[] = [];
+  let dirExpanded = false;
+  let cutNamed = 0;
+  let cutExpanded = 0;
+  const add = (p: string, expanded: boolean): void => {
+    if (seen.has(p)) return;
+    seen.add(p);
+    if (files.length >= MAX_CHANGED_FILES) {
+      if (expanded) cutExpanded++;
+      else cutNamed++;
+      return;
+    }
+    files.push({
+      path: p,
+      ins: null,
+      del: null,
+      untracked: false,
+      ...(expanded ? { expanded: true } : {}),
+    });
+  };
+  // Named files are placed before any dir expands. A path the caller typed
+  // outranks one a walk inferred, so `--files src/,fapony.ts` can never spend
+  // the whole cap on src/ and drop fapony.ts — the quiet disappearance this
+  // flag exists to stop. Dirs are collected here, expanded in the pass below.
+  for (const raw of list) {
+    const p = raw.replace(/\/+$/, "");
+    let st: Stats;
+    try {
+      st = statSync(join(worktree, p));
+    } catch {
+      notFound.push(p);
+      continue;
+    }
+    if (st.isFile()) add(p, false);
+    else if (st.isDirectory()) dirs.push(p);
+    else notFound.push(p);
+  }
+  for (const p of dirs) {
+    dirExpanded = true;
+    const rels = collectSourceFiles(join(worktree, p));
+    if (rels.length === 0) emptyDirs.push(p);
+    for (const r of rels) add(p === "." ? r : `${p}/${r}`, true);
+  }
+  if (notFound.length > 0) {
+    notes.push(
+      `not found (${notFound.length}): ${notFound.join(", ")} — dropped from scope`,
+    );
+  }
+  for (const d of emptyDirs) {
+    notes.push(`${d} (dir) — no source files under it`);
+  }
+  if (cutNamed > 0) {
+    notes.push(
+      `… +${cutNamed} named file(s) past the ${MAX_CHANGED_FILES} cap — narrow the scope`,
+    );
+  }
+  if (cutExpanded > 0) {
+    notes.push(
+      `… +${cutExpanded} more file(s) under the expanded dirs — capped at ${MAX_CHANGED_FILES}, narrow the scope`,
+    );
+  }
+  return { files, notes, dirExpanded };
 }
 
 // numstat with -M reports renames as `old => new` (whole path) or git's
@@ -241,14 +330,11 @@ function shortSha(cwd: string, ref: string): string | null {
 
 function resolveScope(scope: Scope, cwd: string): ResolvedScope {
   if (scope.kind === "files") {
+    const { files, notes, dirExpanded } = expandFilesScope(scope.list, cwd);
     return {
-      label: "--files (as given)",
-      entries: scope.list.map((p) => ({
-        path: p,
-        ins: null,
-        del: null,
-        untracked: false,
-      })),
+      label: dirExpanded ? "--files (dir-expanded)" : "--files (as given)",
+      entries: files,
+      ...(notes.length > 0 ? { filesNotes: notes } : {}),
     };
   }
   if (scope.kind === "plan") {
@@ -382,6 +468,8 @@ function wrap(parts: string[], joiner: string, indent: string): string[] {
 function fmtCounts(e: FileEntry): string {
   const rename = e.renamedFrom ? ` (renamed from ${e.renamedFrom})` : "";
   if (e.untracked) return " (untracked)";
+  // Dir-expanded files were not named by the caller — "as given" would lie.
+  if (e.expanded) return rename;
   if (e.ins === null || e.del === null) return rename || " (as given)";
   if (e.ins === 0 && e.del === 0) return rename;
   return ` +${e.ins}-${e.del}${rename}`;
@@ -459,6 +547,7 @@ export function renderSeed(args: string[], cwd: string): string {
       );
     }
   }
+  for (const n of resolved.filesNotes ?? []) lines.push(n);
 
   if (!graph) {
     lines.push(

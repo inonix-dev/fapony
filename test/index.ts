@@ -397,6 +397,7 @@ import {
 import {
   testReviewSeedBarrelAndScopeList,
   testReviewSeedDeterministicAndNoWrite,
+  testReviewSeedFilesDirExpansion,
   testReviewSeedFilesLookupUncapped,
   testReviewSeedNotARepo,
   testReviewSeedPlanCrossCheck,
@@ -603,6 +604,7 @@ export async function cmdTest(): Promise<void> {
   testReviewSeedDeterministicAndNoWrite();
   testReviewSeedBarrelAndScopeList();
   testReviewSeedFilesLookupUncapped();
+  testReviewSeedFilesDirExpansion();
   testReviewSeedPlanCrossCheck();
   testReviewSeedNotARepo();
   testReviewSeedStateDbUntouched();

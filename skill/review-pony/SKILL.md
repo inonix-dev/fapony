@@ -33,7 +33,7 @@ proof that you looked. Start at pass 1.
 ## Before: scope facts (fapony, optional)
 
 Run `fapony review-seed` with the scope flag matching what you're reviewing (default = uncommitted,
-`--commit <sha>`, `--range <a...b>`, `--files f1,f2`, `--plan <PLAN.md>`). The output is where to
+`--commit <sha>`, `--range <a...b>`, `--files f1,f2,dir`, `--plan <PLAN.md>`). The output is where to
 enter, never coverage — walk it, run it, kill your findings as normal. No fapony CLI or the call
 errors → skip silently and review anyway — a hint, not a gate.
 
