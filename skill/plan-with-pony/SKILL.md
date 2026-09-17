@@ -37,7 +37,7 @@ over the two-command opener instead of drafting**:
 
 ```bash
 fapony analyze <dir>                  # hub / orphan / cycle / changed-untested in that area
-fapony review-seed --files a.ts,b.ts  # exports with line numbers + importers + untested
+fapony review-seed --files a.ts,b.ts,src/zone/  # exports + importers + untested — dirs expand to source files under them
 ```
 
 That is the same facts this skill would have seeded into §2/§5, without the file — roughly 1k

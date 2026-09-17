@@ -117,10 +117,13 @@ export function testReviewSeedScopeFlags(): void {
     assert.doesNotMatch(range, /src\/b\.ts \+1-1/);
     assert.doesNotMatch(range, /src\/c\.ts/);
     assert.doesNotMatch(range, /src\/d\.ts/);
-    // --files = pass-through, marked as given
+    // --files = pass-through for named files, marked as given; a path that
+    // exists as neither file nor dir is dropped and reported, never counted
+    // as a one-row scope
     const files = renderSeed(["--files", "src/b.ts,missing.ts"], dir);
     assert.match(files, /--files \(as given\)/);
-    assert.match(files, /missing\.ts \(as given\)/);
+    assert.match(files, /not found \(1\): missing\.ts — dropped from scope/);
+    assert.doesNotMatch(files, /missing\.ts \(as given\)/);
     // one scope flag at a time
     assert.throws(
       () => renderSeed(["--staged", "--files", "x.ts"], dir),
@@ -350,6 +353,76 @@ export function testReviewSeedBarrelAndScopeList(): void {
   });
   console.log(
     "  ✓ review-seed sees through barrels and lists every changed file",
+  );
+}
+
+/**
+ * `--files` accepts directories: the caller thinks in zones, not file names.
+ * A dir expands to source files under it (same walk the graph uses, so
+ * importers/signatures still hit); an empty dir speaks; a wrong path is
+ * reported, never silent; expansion past the cap says what was cut.
+ */
+export function testReviewSeedFilesDirExpansion(): void {
+  withFixture((dir) => {
+    const out = renderSeed(["--files", "src/"], dir);
+    assert.match(out, /--files \(dir-expanded\)/);
+    for (const p of ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"]) {
+      assert.ok(out.includes(p), `${p} missing from dir expansion`);
+    }
+    assert.ok(
+      !out.includes("(as given)"),
+      `expanded files are not "as given":\n${out}`,
+    );
+    // graph facts still attach to expanded paths (same walk keys the graph)
+    assert.match(out, /src\/a\.ts ← test\/a\.test\.ts/);
+    assert.match(out, /signatures \(current\):/);
+    assert.match(out, /src\/b\.ts — b:1 export function b\(\): number/);
+  });
+  withFixture((dir) => {
+    // mixed: named file + wrong path + empty dir — each says its piece
+    mkdirSync(join(dir, "src", "void"), { recursive: true });
+    const out = renderSeed(["--files", "src/a.ts,ghost.ts,src/void"], dir);
+    assert.match(out, /--files \(dir-expanded\)/);
+    assert.match(out, /not found \(1\): ghost\.ts — dropped from scope/);
+    assert.match(out, /src\/void \(dir\) — no source files under it/);
+    assert.match(out, /src\/a\.ts ← test\/a\.test\.ts/);
+    assert.doesNotMatch(out, /changed \(0\)/);
+  });
+  withFixture((dir) => {
+    // every path wrong → the seed says so, it is never an empty look
+    const out = renderSeed(["--files", "ghost.ts,also-gone.ts"], dir);
+    assert.match(out, /not found \(2\): ghost\.ts, also-gone\.ts/);
+    assert.match(out, /changed \(0\): nothing in this scope/);
+  });
+  withFixture((dir) => {
+    // dir bigger than the cap → capped, and the cut is counted out loud
+    mkdirSync(join(dir, "bulk"), { recursive: true });
+    for (let i = 0; i < 45; i++) {
+      const n = String(i).padStart(2, "0");
+      writeFileSync(
+        join(dir, "bulk", `f${n}.ts`),
+        `export const f${n} = ${i};\n`,
+      );
+    }
+    const out = renderSeed(["--files", "bulk"], dir);
+    assert.match(out, /changed \(40\):/);
+    assert.ok(out.includes("bulk/f00.ts"));
+    assert.ok(!out.includes("bulk/f44.ts"), "cut file stays out of the list");
+    assert.match(
+      out,
+      /\+5 more file\(s\) under the expanded dirs — capped at 40, narrow the scope/,
+    );
+    // explicit files are the caller's words — never capped by expansion
+    const mixed = renderSeed(
+      ["--files", "src/a.ts,src/b.ts,src/c.ts,src/d.ts,bulk"],
+      dir,
+    );
+    assert.match(mixed, /changed \(40\):/);
+    assert.match(mixed, /src\/a\.ts/);
+    assert.match(mixed, /src\/d\.ts/);
+  });
+  console.log(
+    "  ✓ review-seed --files expands dirs (zone lookup), speaks on empty/wrong paths, counts cuts",
   );
 }
 

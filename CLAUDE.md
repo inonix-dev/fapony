@@ -363,7 +363,7 @@ fapony telemetry show|send          # opt-in only, default off — see TELEMETRY
 fapony test                         # self-check
 fapony analyze [path]               # structural diagnosis (hub/orphan/cycle/changed-untested) — live graph via Bun.Transpiler.scan(), never persisted (no table: 114 files / 466 imports = 16.6ms, cache would be pure debt)
 fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): §2 = export-name prefixes repeating across 2+ dirs (single-dir = that dir's naming convention, not reported), §5 = scoped analyze findings, hard caps PLAN ≤ ~60 / SPEC ≤ 200 lines — caller: plan-with-pony Phase 1.6
-fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan <PLAN.md>]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"
+fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"
 ```
 
 **`review-seed --files` คือ lookup ตอน *execute* ไม่ใช่แค่ "Before" ของ review-pony** — โหมดนี้
@@ -372,7 +372,11 @@ fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan
 2,146 บรรทัด = 3.7KB (~940 tokens) เทียบกับอ่านทั้ง 5 ไฟล์ ~35k tokens · **ก่อนแก้ไฟล์ที่ยัง
 ไม่รู้จัก ยิงอันนี้แทนการ Read ทั้งไฟล์** แล้วค่อย Read เฉพาะช่วงบรรทัดที่มันชี้ · นี่คือที่อยู่
 ใหม่ของสิ่งที่ `fapony map <file>` เคยพิมพ์ (คำสั่งนั้นถูกลบเพราะไม่มี caller — ตัว engine
-`extractExports()` ไม่เคยหายไปไหน) · scope แบบ diff (`--commit`/`--range`/`--staged`) ยัง cap
+`extractExports()` ไม่เคยหายไปไหน) · **รับ directory ได้ด้วย** (zone lookup — งาน "รวม
+component นี้ / เปลี่ยน UX โซนนี้" คิดเป็นโซน ไม่ใช่รายชื่อไฟล์ ถามเพราะยังไม่รู้ชื่อ): dir
+ขยายเป็นไฟล์ source ใต้นั้น (walk เดียวกับ graph — importers/signatures ยัง hit) cap 40
+แล้วบอกตรง ๆ เมื่อตัด · path ที่ไม่มีจริงถูก drop พร้อมแจ้ง not found แทนที่จะนับเป็น
+changed เงียบ ๆ (2026-09-17) · scope แบบ diff (`--commit`/`--range`/`--staged`) ยัง cap
 เท่าเดิม นั่นคืองบของ review ไม่ใช่ของ lookup
 
 **งาน wire/refactor ไม่ต้องมี PLAN.md** — `plan-with-pony` Phase −1 bail ออกเองแล้วเมื่องานจบใน
