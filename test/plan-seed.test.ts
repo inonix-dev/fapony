@@ -55,7 +55,10 @@ export function testPlanSeedWritesPlan(): void {
         body,
         /- scanned: \. — 1 file\(s\), 1 export\(s\) `\(fapony map\)`/,
       );
-      assert.match(body, /no export name sharing a first token/);
+      assert.match(
+        body,
+        /no export-name prefix repeating across 2\+ directories/,
+      );
       // §5 exists (analyze output — an unimported calc.ts is an orphan row)
       assert.match(body, /## 5\. Risks/);
       assert.match(body, /\*\*orphan\*\*/);
@@ -131,11 +134,25 @@ export function testPlanSeedSpecSignatures(): void {
 export function testPlanSeedRepetitionCluster(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-rep-"));
   try {
-    mkdirSync(join(dir, "fmt"), { recursive: true });
-    for (const name of ["User", "Order", "Date"]) {
+    // format* spans fmt/ and render/ → a real cross-directory repetition.
+    // parse* lives entirely in fmt/ → that is just fmt/'s naming convention,
+    // and reporting it would spend §2 telling the reader the folder's own rule.
+    const place: [string, string][] = [
+      ["fmt", "User"],
+      ["fmt", "Order"],
+      ["render", "Date"],
+    ];
+    for (const [sub, name] of place) {
+      mkdirSync(join(dir, sub), { recursive: true });
       writeFileSync(
-        join(dir, "fmt", `format${name}.ts`),
+        join(dir, sub, `format${name}.ts`),
         `export function format${name}(x: string): string { return x; }\n`,
+      );
+    }
+    for (const name of ["Json", "Yaml", "Toml"]) {
+      writeFileSync(
+        join(dir, "fmt", `parse${name}.ts`),
+        `export function parse${name}(x: string): string { return x; }\n`,
       );
     }
     withCwd(dir, () => {
@@ -146,13 +163,17 @@ export function testPlanSeedRepetitionCluster(): void {
       );
       assert.match(
         body,
-        /- format\* — 3 export\(s\): formatDate, formatOrder, formatUser `\(fapony map\)`/,
+        /- format\* — 3 export\(s\) across fmt, render: formatDate, formatOrder, formatUser `\(fapony map\)`/,
+      );
+      assert.ok(
+        !body.includes("parse*"),
+        "a cluster inside one directory is that directory's naming convention",
       );
     });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-  console.log("  ✓ plan-seed §2 reports repetition clusters (≥ 3 members)");
+  console.log("  ✓ plan-seed §2 reports cross-directory repetition only");
 }
 
 export function testPlanSeedScopeFilters(): void {
@@ -214,8 +235,9 @@ export function testPlanSeedCapsHold(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-caps-"));
   try {
     // 6 modules × 10 files × 4 exports — enough to trip the per-chunk cap,
-    // the whole-SPEC cap, the §2 cluster cap and the §5 risks cap. Names are
-    // module-unique so §2 sees 6 distinct clusters (over the 5 shown).
+    // the whole-SPEC cap, the §2 cluster cap and the §5 risks cap. The token
+    // is keyed by FILE index, so each alpha<f> family appears in all 6
+    // modules: 10 cross-directory clusters, over the 5 §2 shows.
     for (let m = 0; m < 6; m++) {
       const mod = join(dir, `mod${m}`);
       mkdirSync(mod, { recursive: true });
@@ -223,10 +245,10 @@ export function testPlanSeedCapsHold(): void {
         writeFileSync(
           join(mod, `file${f}.ts`),
           [
-            `export function alpha${m}One(): void {}`,
-            `export function alpha${m}Two(): void {}`,
-            `export function alpha${m}Three(): void {}`,
-            `export function beta${m}One(): void {}`,
+            `export function alpha${f}One(): void {}`,
+            `export function alpha${f}Two(): void {}`,
+            `export function alpha${f}Three(): void {}`,
+            `export function beta${f}One(): void {}`,
             "",
           ].join("\n"),
         );
@@ -260,11 +282,11 @@ export function testPlanSeedCapsHold(): void {
         plan,
         /… \+\d+ more \(run `fapony analyze` for the full list\)/,
       );
-      // §2 cluster cap: 5 shown — each module's alpha token reports its
-      // full 3-member list (members are never dropped)
+      // §2 cluster cap: 5 shown — members are never dropped, the directory
+      // list is what gets cut, and it says how many it cut.
       assert.match(
         plan,
-        /- alpha0\* — 3 export\(s\): alpha0One, alpha0Three, alpha0Two/,
+        /- alpha0\* — 3 export\(s\) across mod0, mod1, mod2 \+3 more: alpha0One, alpha0Three, alpha0Two/,
       );
     });
   } finally {

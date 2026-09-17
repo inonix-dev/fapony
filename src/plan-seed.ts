@@ -22,7 +22,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import {
   buildGraph,
   collectSourceFiles,
@@ -61,12 +61,19 @@ const slug = (s: string): string =>
 // --- §2 Repetition — what repeats, not what exists ---
 // A directory listing is free (Glob); what repeats across many files costs
 // real reads to notice. Tokenize export names camelCase, group by the FIRST
-// token (guess — a `use*` prefix across a whole app will cluster too), report
-// clusters of ≥ 3 members and never judge them: whether a cluster is
-// duplication is the agent's call. Threshold + full member list are the
-// escape hatches (PLAN §5).
+// token, report clusters of ≥ 3 members and never judge them: whether a
+// cluster is duplication is the agent's call.
+//
+// Cross-directory only. A cluster inside ONE directory is the naming
+// convention of that directory (`get*` × 12 in src/db/ says getters are
+// called get), and reporting it spends the plan's §2 budget telling the
+// reader a rule they can see from the folder name. The same token showing up
+// in two directories is the thing worth a look. Threshold + full member list
+// are the escape hatches (PLAN §5).
 
 const REPETITION_MIN = 3;
+const REPETITION_MIN_DIRS = 2;
+const MAX_CLUSTER_DIRS = 3;
 const MAX_CLUSTERS = 5;
 
 function camelTokens(name: string): string[] {
@@ -99,7 +106,7 @@ function renderScope(
   filesByRoot: Map<string, string[]>,
   cwd: string,
 ): string {
-  const byToken = new Map<string, Set<string>>();
+  const byToken = new Map<string, { names: Set<string>; dirs: Set<string> }>();
   let files = 0;
   let exports = 0;
   for (const root of roots) {
@@ -114,12 +121,17 @@ function renderScope(
       if (scan.error) continue;
       files++;
       exports += scan.symbols.length;
+      const dir = dirname(relative(cwd, abs)) || ".";
       for (const s of scan.symbols) {
         const head = camelTokens(s.name)[0];
         if (!head) continue;
-        const members = byToken.get(head) ?? new Set<string>();
-        members.add(s.name);
-        byToken.set(head, members);
+        let cluster = byToken.get(head);
+        if (!cluster) {
+          cluster = { names: new Set<string>(), dirs: new Set<string>() };
+          byToken.set(head, cluster);
+        }
+        cluster.names.add(s.name);
+        cluster.dirs.add(dir);
       }
     }
   }
@@ -127,21 +139,37 @@ function renderScope(
     `- scanned: ${roots.map((r) => relative(cwd, r) || ".").join(", ")} — ${files} file(s), ${exports} export(s) \`(fapony map)\``,
   ];
   const clusters = [...byToken.entries()]
-    .filter(([, members]) => members.size >= REPETITION_MIN)
-    .map(([token, members]) => ({ token, members: [...members].sort() }))
+    .filter(
+      ([, c]) =>
+        c.names.size >= REPETITION_MIN && c.dirs.size >= REPETITION_MIN_DIRS,
+    )
+    .map(([token, c]) => ({
+      token,
+      members: [...c.names].sort(),
+      dirs: [...c.dirs].sort(),
+    }))
     .sort(
       (a, b) =>
-        b.members.length - a.members.length || (a.token < b.token ? -1 : 1),
+        b.dirs.length - a.dirs.length ||
+        b.members.length - a.members.length ||
+        (a.token < b.token ? -1 : 1),
     );
   if (clusters.length === 0) {
     lines.push(
-      `_(no export name sharing a first token with ≥ ${REPETITION_MIN - 1} others)_`,
+      `_(no export-name prefix repeating across ${REPETITION_MIN_DIRS}+ directories — nothing here but each directory's own naming convention)_`,
     );
     return lines.join("\n");
   }
   for (const c of clusters.slice(0, MAX_CLUSTERS)) {
+    // Members are never dropped (they are the finding); the directory list is
+    // context, so it is the one that gets cut — always saying how much.
+    const shown = c.dirs.slice(0, MAX_CLUSTER_DIRS).join(", ");
+    const where =
+      c.dirs.length > MAX_CLUSTER_DIRS
+        ? `${shown} +${c.dirs.length - MAX_CLUSTER_DIRS} more`
+        : shown;
     lines.push(
-      `- ${c.token}* — ${c.members.length} export(s): ${c.members.join(", ")} \`(fapony map)\``,
+      `- ${c.token}* — ${c.members.length} export(s) across ${where}: ${c.members.join(", ")} \`(fapony map)\``,
     );
   }
   if (clusters.length > MAX_CLUSTERS) {
