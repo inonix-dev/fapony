@@ -579,7 +579,7 @@ function specTemplate(
     budget,
     "lines (narrow with --scope <path>)",
   );
-  return [...head, ...cappedBody, ...tail].join("\n") + "\n";
+  return `${[...head, ...cappedBody, ...tail].join("\n")}\n`;
 }
 
 // --- CLI entry ---
