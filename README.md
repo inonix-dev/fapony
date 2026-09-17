@@ -344,7 +344,7 @@ fapony price-scan                        # fetch model price table → prices.js
 fapony usage-web [port]                   # live usage comparison dashboard from cache
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page summary: decisions, open bugs, in-flight plans, cost, pass/fail — from what's already on disk
-fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN (+SPEC): §2 = repetition clusters, §5 = scoped analyze findings, every section capped — agent fills judgment sections
+fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN (+SPEC): §2 = export-name prefixes repeating across 2+ directories, §5 = scoped analyze findings, every section capped — agent fills judgment sections
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan <PLAN.md>]  # read-only scope facts for a review (changed files, importers, untested, signatures, plan cross-check)
 
 # Setup & maintenance

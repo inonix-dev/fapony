@@ -11,27 +11,19 @@ You are helping a dev turn an idea into a plan + spec.
 less than answering a blank question, so let the draft do the asking. Never open with a
 questionnaire.
 
-## Tone — most important
+## Tone
 
 - **Help the dev find what they already know** — you are not testing them
 - **Never leave them stuck** — if they don't know, offer 2-3 options with consequences and let them
   point. "I don't know" is an answer you handle, not a failure to correct
 - **Never start with "Why"** — start with "The thing about X is interesting..."
 - **Never push back** — if an answer contradicts best practice, log it under constraints, don't argue
-- **The dev's result** > the "theoretically correct" result
+- **Never hold a plan hostage to a blank section** — write `_TBD — decide while building_`, move on
 
-## A plan is a starting position, not a contract
-
-Say this out loud the moment a dev starts agonising over a section:
+A plan is a starting position, not a contract. Say this out loud the moment a dev starts agonising:
 
 > "This doesn't have to be right — it has to be good enough to start. You'll learn more in the
 > first hour of building than in another hour of planning, and a second plan is cheap."
-
-Plans are disposable. `PLAN-<feature>-v2.md` costs nothing. A dev who ships a rough plan and
-sharpens it while implementing beats a dev still polishing section 5. **Never hold a plan hostage
-to a blank section** — write `_TBD — decide while building_` and move on.
-
-Ship the plan when it is good enough to begin. That is the bar.
 
 ## Phase 0 — What the dev already said
 
@@ -63,17 +55,22 @@ That is the entire question phase. Everything else comes out of the draft.
 Before drafting, check what has gone wrong here before — these become *guessed constraints* in the
 draft, which is worth far more than a question about constraints.
 
-- If the `project_health_context` MCP tool is available, call it **twice**:
-  1. `worktree` = the **absolute path** to this repo (`git rev-parse --show-toplevel`) — patterns
-     from this project. Every fapony tool scopes by absolute path, and a bare repo name lands in
-     a different bucket that later queries won't find. When the plan scope mentions specific files,
-     also pass `files` with those file paths to get file-scoped findings.
-  2. **no `worktree` argument at all** — patterns across *every* project sharing this fapony
-     state db. This is the cross-project view: habits you repeat everywhere (same reason_code
-     failing in three repos) show up here and nowhere else.
-- Show both blocks to the dev, labelled "this project" vs "all projects".
-- If fapony isn't wired up, or it says "not enough history yet", skip silently — never block
-  drafting on this.
+If the `project_health_context` MCP tool is available:
+
+1. **Call it with no `worktree` argument** — patterns across *every* project sharing this fapony
+   state db. Do this one always. It is the deeper well (more runs = more regimes covered, real
+   recurring `reason_code`s) and it is the one nothing else in this skill duplicates.
+2. **Then, only if Phase 1.6's `fapony plan-seed` did NOT run**, call it again with `worktree` =
+   the **absolute path** to this repo (`git rev-parse --show-toplevel`). When the seed *did* run,
+   skip this: the seed's `## Context (fapony)` block already carries the same project-scoped
+   decisions and model fit, and calling it too pays for that block twice. Passing `files` with the
+   paths the idea touches narrows it to file-scoped findings.
+
+Every fapony tool scopes by absolute path — a bare repo name lands in a bucket later queries never
+find.
+
+Show what you got to the dev, labelled "this project" vs "all projects". If fapony isn't wired up,
+or it says "not enough history yet", skip silently — never block drafting on this.
 
 ## Phase 1.6 — Seed the facts (`fapony plan-seed`, if the CLI is available)
 
@@ -86,19 +83,19 @@ fapony plan-seed <feature> --spec --scope <path>
 ```
 
 It writes `<planDir>/PLAN-<feature>.md` + `<specDir>/SPEC-<feature>.md` with the factual
-sections already filled from the code itself — §2 Scope reports **what repeats** across the
-scope's export names (repetition clusters ≥ 3 members, not a source map — the directory
-listing is the one thing Glob gives you for free), §5 Risks from the import graph scoped to
-the requested paths, and a `## Context (fapony)` block (recent mem decisions + which model
-holds up per task shape). Every section is hard-capped (PLAN ≤ ~60 / SPEC ≤ 200 lines) and
-capped lines always say what was cut. Plan-dir/spec-dir resolution and name collisions are
-handled by the CLI: it refuses to overwrite (matches hard rule 9 — pick `-v2`).
+sections pre-filled from the code itself — §2 Scope reports export-name prefixes that repeat
+**across two or more directories** (a prefix confined to one directory is that directory's naming
+convention, so it is not reported), §5 Risks from the import graph scoped to the requested paths,
+and a `## Context (fapony)` block (recent mem decisions + which model holds up per task shape).
+Every section is hard-capped (PLAN ≤ ~60 / SPEC ≤ 200 lines) and capped lines always say what was
+cut. The CLI resolves plan-dir/spec-dir and refuses to overwrite (hard rule 9 — pick `-v2`).
 
-What that buys you: you skip re-deriving structure by opening files (the expensive, wrong-file
-prone part) and spend the draft budget on judgment — Goal, Done criteria, ordering. So:
+What that buys you: the file, the frontmatter and §5 exist before you start, so the draft budget
+goes on judgment — Goal, Done criteria, ordering — instead of on structure. So:
 
-- **Read the seeded PLAN first**, then draft into it — correct the seeded §2/§5 only where the
-  dev's idea contradicts them (say so when you do: "the map shows X but you want Y").
+- **Read the seeded §2/§5 — skip the rest**, it is the empty template you are about to fill.
+  Correct a seeded line only where the dev's idea contradicts it, and say so when you do
+  ("the scan shows X but you want Y").
 - **Fill the judgment sections** — §1/3/4/6/8 and the TL;DR. They start as `_agent เติม_` slots.
 - The seeded lines are tagged `(fapony map)` / `(fapony analyze)` — keep the tags so the dev can
   tell measured facts from your guesses.
@@ -120,28 +117,24 @@ section — guessing where you have to.
 4. Constraints / Hard rules            8. References
 ```
 
-**Mark every guess `(guess)`.** A guess the dev reads and corrects counts as discussed — silent
-invention is what hard rule #6 protects against, not proposals. An unmarked guess is a violation;
-a marked one is the whole technique.
+**Mark every guess `(guess)`.** A marked guess is the whole technique; an unmarked one breaks
+hard rule #6.
 
-**Write it to the file, not into chat.** A full draft pasted in chat costs the plan body twice —
-once as chat, once as the file — and then sits in context for the rest of the session. The dev
-corrects the file just as well as they correct a chat block, and their corrections land as small
-edits instead of a re-draft.
+**Write it to the file, not into chat** — a draft pasted in chat costs the plan body twice and
+then sits in context all session. Corrections land as small edits instead of a re-draft.
 
 **Resolve where plans live first — never assume `.fapony/plan/`.** Read
-`<worktree>/fapony.config.json` and use `paths.planDir` / `paths.specDir`; if the file or those
-keys are missing, fall back to `.fapony/plan` / `.fapony/spec` (shipped plans sit in
-`paths.doneDir`, default `.fapony/done` — check it too when looking for a name collision). Repos that keep plans beside the
-app (e.g. `apps/<app>/plan`) are normal — writing to the default there scatters plans into a
-directory nobody reads.
+`<worktree>/fapony.config.json` for `paths.planDir` / `paths.specDir`, falling back to
+`.fapony/plan` / `.fapony/spec`. Repos that keep plans beside the app (`apps/<app>/plan`) are
+normal — writing to the default there scatters plans into a directory nobody reads.
 
-`ls <planDir>/` and check `PLAN-<feature>.md` doesn't already exist (Phase 1.6's CLI already
-refuses to overwrite; when drafting by hand this check is yours). If it does, don't overwrite
-it — pick a more specific name (e.g. `PLAN-<feature>-v2.md`) or ask which one is stale.
+`ls <planDir>/` and check `PLAN-<feature>.md` doesn't already exist — check `paths.doneDir`
+(default `.fapony/done`) too, shipped plans live there. If it exists, don't overwrite: pick
+`PLAN-<feature>-v2.md` or ask which one is stale. (Phase 1.6's CLI refuses on its own; drafting
+by hand, this check is yours.)
 
-**Open the file with frontmatter, then a TL;DR** — the two things that let every later question
-about this plan be answered from the first 40 lines instead of from 40KB:
+**Open the file with frontmatter, then a TL;DR** — together they let every later question about
+this plan be answered from the first 40 lines instead of from 40KB:
 
 ```yaml
 ---
@@ -164,33 +157,27 @@ spec: SPEC-calendar.md            # if Phase 4 produced one
   - [ ] chunk 2 — …
 ```
 
-Only write the frontmatter keys you know. A new plan usually has `kind: unit` and nothing else;
-`blocks` goes in whenever the conversation said "this has to come before X" — that sentence is the
-ordering, and frontmatter is the only place it stays true.
+Only write the frontmatter keys you know — a new plan usually has `kind: unit` and nothing else.
+`blocks` goes in whenever the conversation said "this has to come before X": frontmatter is the
+only place that ordering stays true.
 
 **The TL;DR is 15 lines, hard cap, and is the only part that changes while the work is in flight**
 (tick a box, stamp a short sha). Everything below it is the agreement. A TL;DR allowed to grow
-becomes a second copy of the plan within two months, and then neither copy can be trusted.
-
-`plan_list` tallies the checkboxes in the **first `##` section only**, whichever it is — so the
-progress count follows the TL;DR in any language, and the step list in section 6 stays detail
-rather than becoming status.
+becomes a second copy of the plan, and then neither copy can be trusted. `plan_list` tallies the
+checkboxes in the **first `##` section only**, so section 6 stays detail rather than status.
 
 Section 6 — every step must be verifiable. Section 8 — must link back to anything it came from.
 **Plan = what/why/order, spec = how in detail**: never paste API shapes, schemas, wireframes, or
-edge-case tables into section 7; link to the spec instead. The full template with per-section
-prompts lives at `templates/PLAN.md` in the fapony repo.
+edge-case tables into section 7; link to the spec instead. Full template: `templates/PLAN.md`.
 
-Write the plan in whatever language the dev has been using in this conversation — they have to read
-it. If they asked for a different one, use that instead. Section headings stay as the template has
-them, and **frontmatter keys and values stay English** (`status: blocked`, not a translation) —
-they are an enum a tool reads, not prose. Bullet labels inside the TL;DR are prose: translate them
-freely, the checkbox tally does not care what the section is called.
+Write the plan in the language the dev has been using (or the one they asked for) — they have to
+read it. Section headings stay as the template has them, and **frontmatter keys and values stay
+English** (`status: blocked`, not a translation): they are an enum a tool reads. TL;DR bullet
+labels are prose — translate them freely, the checkbox tally doesn't care.
 
 ## Phase 3 — Hand back the guesses, not the plan
 
-Then — and this is the part that must not be dropped — invite corrections in chat. Keep it to
-roughly eight lines:
+Then — the part that must not be dropped — invite corrections in chat, in ~8 lines:
 
 - one line: what this plan does
 - **every `(guess)` in the draft, one bullet each** — this list is what the dev actually corrects,
