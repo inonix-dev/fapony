@@ -367,6 +367,13 @@ fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): §2 =
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan <PLAN.md>]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"
 ```
 
+**Dead code ไม่ใช่งานของ fapony — ใช้ `bunx knip@6`** ([knip.json](knip.json) ignore `templates/**`
+ไว้แล้ว เพราะ `init-mem` ก๊อปโฟลเดอร์นั้นไปรีโปอื่น มันจึงไม่มีวันมี importer ที่นี่) · ไม่ใส่
+`devDependencies` ไม่ผูก CI — gate ที่ต้องปลดล็อกทุกครั้งแค่สอนให้ข้าม (กฎ 2) หยิบมารันทุกสองสาม
+เดือนพอ · **อ่านผลให้ถูก: มันรายงาน _unused export_ ไม่ใช่ unused function** ฟังก์ชันที่ถูกเรียก
+อยู่ในไฟล์เดียวกันจะขึ้นในลิสต์ ให้ถอดคำว่า `export` ไม่ใช่ลบฟังก์ชัน (เจอจริง 5 ตัวใน
+`src/stats/data.ts` 2026-09-17 — ทั้งหมด `getStatsData` เรียกเองอยู่)
+
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: fapony
 
