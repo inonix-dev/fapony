@@ -108,8 +108,10 @@ export function testAnalyzeSkipsUnresolvableAndBroken(): void {
     },
     (dir) => {
       const graph = buildGraph(dir);
-      // 3 unresolvable in ok.ts + 1 skipped broken file — no throw
-      assert.equal(graph.unresolved, 4);
+      // alias + relative miss in ok.ts + 1 skipped broken file — no throw
+      assert.equal(graph.unresolved, 3);
+      // bun:sqlite is a builtin: counted apart, never a hidden project edge
+      assert.equal(graph.external, 1);
       assert.equal(graph.files.length, 2);
     },
   );

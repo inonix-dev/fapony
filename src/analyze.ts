@@ -27,7 +27,12 @@ export interface ImportGraph {
   /** file → files that import it (reverse). */
   dependents: Map<string, Set<string>>;
   /** Imports that could not be resolved (bare specifier / alias / builtin). */
+  /** Imports that may hide a real edge: relative misses, path aliases, bare
+   * package names, and files too broken to read. Worth warning about. */
   unresolved: number;
+  /** `node:` / `bun:` builtins — never an edge between two project files, so
+   * counting them as "unresolved" only inflates the warning. */
+  external: number;
   /** Files that only re-export (`export ... from`) — they hide the real importer. */
   barrels: Set<string>;
 }
@@ -214,6 +219,7 @@ export function buildGraph(dir: string): ImportGraph {
   for (const f of files) dependents.set(f, new Set());
   const barrels = new Set<string>();
   let unresolved = 0;
+  let external = 0;
 
   const transpiler = new Bun.Transpiler({ loader: "ts" });
 
@@ -251,8 +257,15 @@ export function buildGraph(dir: string): ImportGraph {
         const hit = resolveRelative(rel, raw, filesSet);
         if (hit) edges.add(hit);
         else unresolved++;
+      } else if (raw.startsWith("node:") || raw.startsWith("bun:")) {
+        // A builtin is never an edge between two project files, so it can
+        // never be the reason a dependent count came out low. Lumping it in
+        // made the warning fire on every repo — 311 of this one's 312 were
+        // builtins — and a warning that always fires is not read.
+        external++;
       } else {
-        // Bare specifier, path alias, bun:/node: builtin — out of scope in v1.
+        // Package name or path alias — out of scope in v1, and unlike a
+        // builtin this one CAN be a project edge (`@app/core` in a monorepo).
         unresolved++;
       }
     }
@@ -265,7 +278,7 @@ export function buildGraph(dir: string): ImportGraph {
     }
   }
 
-  return { files, deps, dependents, unresolved, barrels };
+  return { files, deps, dependents, unresolved, external, barrels };
 }
 
 // --- Diagnosis ---
@@ -416,7 +429,7 @@ export function formatAnalyze(graph: ImportGraph, findings: Finding[]): string {
   for (const s of graph.deps.values()) imports += s.size;
   const lines: string[] = [];
   lines.push(
-    `fapony analyze — ${graph.files.length} files scanned (.ts/.tsx/.js/.jsx), ${imports} imports, ${graph.unresolved} unresolved`,
+    `fapony analyze — ${graph.files.length} files scanned (.ts/.tsx/.js/.jsx), ${imports} imports, ${graph.external} builtin, ${graph.unresolved} unresolved`,
   );
   lines.push("");
 
@@ -433,7 +446,9 @@ export function formatAnalyze(graph: ImportGraph, findings: Finding[]): string {
     const rest = findings.length - Math.min(findings.length, 5);
     if (rest > 0) lines.push(`… and ${rest} more`);
     lines.push(
-      `${findings.length} findings. ${graph.unresolved} unresolved imports (path alias / bare specifier) — ตัวเลข dependent อาจต่ำกว่าจริง`,
+      graph.unresolved > 0
+        ? `${findings.length} findings. ${graph.unresolved} unresolved imports (path alias / package name) — ตัวเลข dependent อาจต่ำกว่าจริง`
+        : `${findings.length} findings.`,
     );
   }
   return lines.join("\n");
