@@ -33,8 +33,9 @@ import {
   SCAN_EXTS,
 } from "./analyze.js";
 import { computeModelFit } from "./context/projectHealth.js";
-import { planDir, specDir } from "./db/getters.js";
+import { doneDir, planDir, specDir } from "./db/getters.js";
 import { loadConfig } from "./db/load.js";
+import type { Config } from "./db/types.js";
 import { extractExports } from "./map.js";
 import { readRecentMemDecisions } from "./memory.js";
 import { parseNumstat, untrackedFiles } from "./review-seed.js";
@@ -50,6 +51,10 @@ const MAX_SPEC_LINES = 200;
 const SCOPE_WARN_FILES = 300;
 // The plan is a starting position, not a contract — cap §5 at the worst findings.
 const MAX_RISKS = 5;
+
+// Shipped plans/specs that already touched this scope. Capped low on purpose:
+// this is a "go read that first" pointer, not a bibliography.
+const MAX_PRIOR_ART = 5;
 const SIG_MAX = 90;
 // Anchor-safe slug: lowercase, non-alphanumerics → dash.
 const slug = (s: string): string =>
@@ -215,6 +220,69 @@ function gitChangedFiles(repoRoot: string): string[] {
   ];
 }
 
+// The overwrite check catches a filename collision. It does not catch the
+// expensive mistake: planning again what a shipped plan already decided —
+// PLAN-cost-per-pass froze the tokens/pass formula, and a later seed over
+// src/stats gave no hint it existed. Scope paths are the join key: a shipped
+// plan that names this directory decided something about the code this seed
+// is about to plan. Headers only (title + shipped date) — pulling the bodies
+// in would recreate the reading task the plan exists to avoid.
+function renderPriorArt(cwd: string, config: Config, roots: string[]): string {
+  const placeholder = "- _(agent เติม)_";
+  const keys = roots
+    .map((r) => relative(cwd, r))
+    .filter((r) => r !== "" && r !== ".");
+  // No --scope means every shipped plan matches — a list of everything points
+  // at nothing.
+  if (keys.length === 0) return placeholder;
+
+  const hits: { shipped: string; line: string }[] = [];
+  for (const dir of [doneDir(config), specDir(config)]) {
+    const abs = join(cwd, dir);
+    let names: string[];
+    try {
+      names = readdirSync(abs)
+        .filter((n) => n.endsWith(".md"))
+        .sort();
+    } catch {
+      continue; // dir missing — a repo without shipped plans yet
+    }
+    const label = dir.split("/").pop() ?? dir;
+    for (const n of names) {
+      let content: string;
+      try {
+        content = readFileSync(join(abs, n), "utf-8");
+      } catch {
+        continue;
+      }
+      if (!keys.some((k) => content.includes(k))) continue;
+      // The H1 usually repeats the filename ("PLAN-x.md — real title") and
+      // the filename is already the link text — keep only what it adds.
+      const title = (content.match(/^#\s+(.+)$/m)?.[1] ?? n)
+        .trim()
+        .replace(/^(?:PLAN|SPEC)-[\w.-]+\s+[—-]\s+/, "");
+      const shipped = content.match(/shipped\s+(\d{4}-\d{2}-\d{2})/)?.[1] ?? "";
+      hits.push({
+        shipped,
+        line: `- ✅ ตัดสินไปแล้ว: [${n}](../${label}/${n}) — ${title}${shipped ? ` (shipped ${shipped})` : ""} \`(fapony plan-seed)\``,
+      });
+    }
+  }
+  if (hits.length === 0) return placeholder;
+  // Newest decision first — alphabetical order cuts by filename, which is the
+  // one thing that says nothing about whether the decision still binds.
+  // Undated (specs, unshipped) sort last rather than disappearing.
+  hits.sort((a, b) =>
+    a.shipped < b.shipped ? 1 : a.shipped > b.shipped ? -1 : 0,
+  );
+  const shown = hits.slice(0, MAX_PRIOR_ART).map((h) => h.line);
+  if (hits.length > MAX_PRIOR_ART) {
+    shown.push(`- … +${hits.length - MAX_PRIOR_ART} more ที่แตะ scope เดียวกัน`);
+  }
+  shown.push(placeholder);
+  return shown.join("\n");
+}
+
 function renderRisks(scanBase: string, roots: string[]): string {
   let findings: Finding[];
   try {
@@ -289,6 +357,7 @@ function planTemplate(
   name: string,
   scope: string,
   risks: string,
+  priorArt: string,
   contextFapony: string,
   specLink: string | null,
 ): string {
@@ -333,7 +402,7 @@ ${
 }
 
 ## 8. References
-_(agent เติม)_
+${priorArt}
 
 ## Context (agent)
 _(slot ว่าง — agent dump graph/code-summary ของตัวเอง)_
@@ -682,6 +751,7 @@ export function cmdPlanSeed(args: string[]): void {
 
   const scope = renderScope(roots, filesByRoot, cwd);
   const risks = renderRisks(worktree, roots);
+  const priorArt = renderPriorArt(cwd, config, roots);
   const contextFapony = renderContextFapony(worktree);
 
   let specLink: string | null = null;
@@ -712,7 +782,7 @@ export function cmdPlanSeed(args: string[]): void {
   mkdirSync(planDirAbs, { recursive: true });
   writeFileSync(
     planPath,
-    planTemplate(name, scope, risks, contextFapony, specLink),
+    planTemplate(name, scope, risks, priorArt, contextFapony, specLink),
   );
   console.log(`wrote ${planPath}${specLink ? ` + SPEC-${name}.md` : ""}`);
 }
