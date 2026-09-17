@@ -189,3 +189,50 @@ export function testAnalyzeIsTestFile(): void {
   assert.equal(isTestFile("src/foo.ts"), false);
   console.log("  ✓ analyze isTestFile matches collect criteria");
 }
+
+export function testAnalyzeBarrelHidesTests(): void {
+  withFixture(
+    {
+      // Four modules behind a barrel, one test importing only the barrel —
+      // the real-world shape of src/db/index.ts and src/stats.ts.
+      "core.ts": "export const a = 1;\n",
+      "index.ts": 'export * from "./core.js";\n',
+      "u1.ts": 'import { a } from "./core.js";\nexport const x = a;\n',
+      "u2.ts": 'import { a } from "./core.js";\nexport const y = a;\n',
+      "u3.ts": 'import { a } from "./core.js";\nexport const z = a;\n',
+      "core.test.ts": 'import { a } from "./index.js";\nexport const t = a;\n',
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(graph.barrels.has("index.ts"), "barrel not detected");
+      assert.ok(!graph.barrels.has("u1.ts"), "plain module flagged as barrel");
+      const hubs = diagnose(graph).filter((f) => f.kind === "hub-untested");
+      assert.deepEqual(
+        hubs.map((f) => f.file),
+        [],
+        "test reaching core.ts through the barrel must count as coverage",
+      );
+      assert.equal(blastRadius(graph, ["core.ts"])["core.ts"].tested, true);
+    },
+  );
+  withFixture(
+    {
+      // Same shape, no test anywhere: the finding must still fire.
+      "core.ts": "export const a = 1;\n",
+      "index.ts": 'export * from "./core.js";\n',
+      "u1.ts": 'import { a } from "./core.js";\nexport const x = a;\n',
+      "u2.ts": 'import { a } from "./core.js";\nexport const y = a;\n',
+      "u3.ts": 'import { a } from "./core.js";\nexport const z = a;\n',
+    },
+    (dir) => {
+      const hubs = diagnose(buildGraph(dir)).filter(
+        (f) => f.kind === "hub-untested",
+      );
+      assert.ok(
+        hubs.some((f) => f.file === "core.ts"),
+        "untested hub must still be reported",
+      );
+    },
+  );
+  console.log("  ✓ analyze sees tests that import through a barrel file");
+}

@@ -5,6 +5,7 @@ import {
   testFindSessionAt,
 } from "./activeSession.test.js";
 import {
+  testAnalyzeBarrelHidesTests,
   testAnalyzeBlastRadius,
   testAnalyzeBlastRadiusTransitive,
   testAnalyzeBlastRadiusTransitiveCycle,
@@ -569,6 +570,7 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeBlastRadiusTransitive();
   testAnalyzeBlastRadiusTransitiveCycle();
   testAnalyzeIsTestFile();
+  testAnalyzeBarrelHidesTests();
   testMapExtractExports();
   testMapExtractExportsParseError();
   testMapExtractIgnoresSampleText();

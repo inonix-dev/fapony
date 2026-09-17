@@ -28,6 +28,8 @@ export interface ImportGraph {
   dependents: Map<string, Set<string>>;
   /** Imports that could not be resolved (bare specifier / alias / builtin). */
   unresolved: number;
+  /** Files that only re-export (`export ... from`) — they hide the real importer. */
+  barrels: Set<string>;
 }
 
 export type FindingKind =
@@ -84,6 +86,40 @@ export const TEST_PATH_RE =
 
 export function isTestFile(p: string): boolean {
   return TEST_PATH_RE.test(p);
+}
+
+// A file whose entire body is `export ... from "..."`. Detected because a test
+// importing a barrel is still a test importing everything behind it — without
+// this, every module under src/db/index.ts or src/stats.ts reads as untested.
+const EXPORT_FROM_RE =
+  /export\s+(?:\*|\{[^}]*\}|type\s+\*|type\s+\{[^}]*\})(?:\s+as\s+[\w$]+)?\s+from\s*["'][^"']+["']\s*;?/g;
+
+export function isBarrelSource(content: string): boolean {
+  const code = content
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^[ \t]*\/\/.*$/gm, "");
+  if (!/\bexport\b/.test(code)) return false;
+  EXPORT_FROM_RE.lastIndex = 0;
+  return code.replace(EXPORT_FROM_RE, "").trim() === "";
+}
+
+// Is any test file an importer of `file`, walking *through* barrels only?
+// Barrels can nest (db/*.ts → db/index.ts → db.ts), so recurse, but never
+// through a normal module — that would make every file in a tested repo
+// count as tested and kill the signal entirely.
+export function isTestedThroughBarrels(
+  graph: ImportGraph,
+  file: string,
+  seen = new Set<string>(),
+): boolean {
+  if (seen.has(file)) return false;
+  seen.add(file);
+  for (const dep of graph.dependents.get(file) ?? []) {
+    if (isTestFile(dep)) return true;
+    if (graph.barrels.has(dep) && isTestedThroughBarrels(graph, dep, seen))
+      return true;
+  }
+  return false;
 }
 
 export const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx"]);
@@ -169,6 +205,7 @@ export function buildGraph(dir: string): ImportGraph {
   const deps = new Map<string, Set<string>>();
   const dependents = new Map<string, Set<string>>();
   for (const f of files) dependents.set(f, new Set());
+  const barrels = new Set<string>();
   let unresolved = 0;
 
   const transpiler = new Bun.Transpiler({ loader: "ts" });
@@ -181,6 +218,7 @@ export function buildGraph(dir: string): ImportGraph {
       unresolved++;
       continue;
     }
+    if (isBarrelSource(content)) barrels.add(rel);
     const raws: string[] = [];
     try {
       const scanned = transpiler.scan(content) as {
@@ -220,7 +258,7 @@ export function buildGraph(dir: string): ImportGraph {
     }
   }
 
-  return { files, deps, dependents, unresolved };
+  return { files, deps, dependents, unresolved, barrels };
 }
 
 // --- Diagnosis ---
@@ -294,7 +332,7 @@ export function diagnose(
           evidence: "0 dependents",
         });
       }
-    } else if (deps.size >= 3 && ![...deps].some(isTestFile)) {
+    } else if (deps.size >= 3 && !isTestedThroughBarrels(graph, f)) {
       hubUntested.push({ file: f, n: deps.size });
     }
   }
@@ -314,7 +352,7 @@ export function diagnose(
   for (const c of changed) {
     if (!filesSet.has(c)) continue;
     const deps = graph.dependents.get(c) ?? new Set<string>();
-    if (![...deps].some(isTestFile)) {
+    if (!isTestedThroughBarrels(graph, c)) {
       findings.push({
         kind: "changed-untested",
         file: c,
@@ -342,7 +380,7 @@ export function blastRadius(
     const deps = graph.dependents.get(f) ?? new Set<string>();
     out[f] = {
       dependents: deps.size,
-      tested: [...deps].some(isTestFile),
+      tested: isTestedThroughBarrels(graph, f),
       transitive: transitiveDependentsCount(graph, f),
     };
   }
