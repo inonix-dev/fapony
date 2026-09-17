@@ -2,7 +2,7 @@
 
 ## What is fapony
 
-Measurement + verification layer for coding agents, shipped as an MCP server (`fapony mcp` — 8 tools, stdio JSON-RPC). No loop, no spawning, no executor role — fapony doesn't drive agents, it measures what already happened (git facts, session cost/tokens) and verifies claims against those facts. Any agent that speaks MCP can call it. อยู่นอก worktree ของ product เพราะ state ของผู้วัดไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้
+Measurement + verification layer for coding agents, shipped as an MCP server (`fapony mcp` — 5 tools, stdio JSON-RPC). No loop, no spawning, no executor role — fapony doesn't drive agents, it measures what already happened (git facts, session cost/tokens) and verifies claims against those facts. Any agent that speaks MCP can call it. อยู่นอก worktree ของ product เพราะ state ของผู้วัดไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้
 
 **North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **`model × project × regime × quality` ข้าม run/client/project** — "งานแบบนี้ในโปรเจกต์นี้ ควรจ่ายให้ model ไหน" · session log ของทุกเจ้ามี token แต่ไม่มีเกรด, benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ — ต้องมี verdict + model + regime + token ครบสี่ในที่เดียวถึงจะถามได้ · **เคยเล็ง "project health / ไฟล์นี้เคยพัง" แล้วพลาด** — base rate ของ rework จริงคือ 1-9% ต่ำเกินจะเตือนอะไรได้ (ดูกฎ 8) `project_health_context` ยังอยู่แต่ไม่ใช่แกนอีกแล้ว fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
 
@@ -31,7 +31,7 @@ src/usage/      fapony usage-web — อ่าน cache ไม่แตะ sessi
 src/digest/     fapony digest — รวม 4 แหล่ง (mem log, plans, usage cache, verdicts) เป็นรายงานหน้าเดียว
 src/context/    project-health block keyed by files[]
 src/install/    หนึ่งไฟล์ต่อ client + skills.ts
-src/mcp/        MCP server — transport (SERVER_INSTRUCTIONS), evidence allowlist, tools/ 8 ตัว
+src/mcp/        MCP server — transport (SERVER_INSTRUCTIONS), evidence allowlist, tools/ 5 ตัว
 src/*.ts        gates · parse · memory · safety · math · init · init-mem · telemetry · setup · update · util
                 · analyze · map · plan-seed · review-seed · hook
 test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · test/install/ · test/telemetry/
@@ -63,7 +63,7 @@ events(
 )
 ```
 
-**หลักคิด:** events คือ audit trail ที่เป็นข้อเท็จจริง (ไม่ใช่ transcript) — มาแทน "copy chat ทั้งหมด" · `runs` row = 1 measured/verified unit of work ที่ MCP client สร้างผ่าน `handoff_collect`, ไม่ใช่ 1 spawned execution loop
+**หลักคิด:** events คือ audit trail ที่เป็นข้อเท็จจริง (ไม่ใช่ transcript) — มาแทน "copy chat ทั้งหมด" · `runs` row = 1 measured/verified unit of work ที่ `verdict_submit` สร้างให้เมื่อยังไม่มี run เปิดค้างอยู่, ไม่ใช่ 1 spawned execution loop
 
 ---
 
@@ -332,7 +332,7 @@ Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)
 ## CLI Commands
 
 ```bash
-fapony mcp                          # MCP server — stdio JSON-RPC, 8 tools
+fapony mcp                          # MCP server — stdio JSON-RPC, 5 tools
 fapony hook-stop                    # Claude Code Stop hook (stdin JSON) — blocks a turn that has ungraded commits
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page project summary from existing sources (mem log, plans, usage cache, verdicts)
 fapony report <run-id>              # verification report for a run
@@ -359,17 +359,14 @@ fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2|--plan
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: fapony
 
-fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime dependency. 8 tools:
+fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime dependency. 5 tools:
 
 | Tool | Purpose |
 |------|---------|
 | `plan_list` | Pending plan files grouped by state (`active` / `blocked` / `untouched` / `superseded` / `trackers`) + progress tally, joined with run history — not a raw `ls`. State comes from optional 4-key frontmatter; `format:"markdown"` renders the generated master checklist |
-| `handoff_collect` | Get machine facts from git (diff stat, commits, branch) |
-| `handoff_check` | Verify handoff conformance against facts |
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) + required `regime` (`code\|fix\|review\|plan\|inquiry\|test`) — the task-shape axis. Clean work takes `reason_code: none`, never `other` |
 | `fapony_stats` | Query KPIs: by-model (gates/fails/quality/tokens), by-grade, **planned vs dove-in** (`runs.plan` null/not-null), **regime × model**; `group_by: reason_code\|plan\|file` for top-N slices |
 | `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
-| `verification_report` | Full verification report: facts + checks + evidence + verdict, duration, rounds |
 | `project_health_context` | Known-patterns block keyed by `files[]` — recurring fail reasons, escalations, round-1-pass shapes. Pre-edit reflex for any task; `plan-with-pony` is one caller, not the only one |
 
 See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.

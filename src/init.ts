@@ -25,7 +25,7 @@ const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
 # memory lives in .fapony/.memory/, the evidence allowlist in .fapony/evidence.json.
 #
 # evidence.json SHOULD be committed — it is the shared allowlist that decides
-# which commands verification_report may run, and the team must run the same
+# which commands 'fapony report' may run, and the team must run the same
 # set. If your .gitignore ignores .fapony/ wholesale, re-include it:
 #   **/.fapony/*
 #   !**/.fapony/evidence.json
@@ -41,7 +41,7 @@ const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
 
 // Static template — deliberately NOT derived from the repo (reading package.json
 // etc. to guess commands would produce a fake allowlist, which is worse than none).
-// verification_report only runs commands listed here; agent-proposed commands
+// `fapony report` only runs commands listed here; agent-proposed commands
 // outside the allowlist are reported, never executed.
 const EVIDENCE_JSON = `{
   "commands": [
@@ -142,7 +142,7 @@ export function initProject(targetPath: string, config?: Config): void {
   console.log(`  ${doneDir(config)}/    — shipped plans (archive)`);
   console.log(`  ${specDir(config)}/    — spec files`);
   console.log(
-    `  ${evidenceFile(config)}    — allowlist for verification_report (edit the cmds!)`,
+    `  ${evidenceFile(config)}    — allowlist for 'fapony report' (edit the cmds!)`,
   );
   console.log(
     `  ${relative(targetPath, memoryDir)}/ — ${files.length} files from template`,

@@ -213,17 +213,17 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
     // --- done ---
     console.log(`
   ┌─────────────────────────────────────────┐
-  │  Setup complete! Next steps:             │
+  │  Setup complete! Next steps:            │
   │                                         │
-  │  1. Wire fapony into your MCP client:    │
+  │  1. Wire fapony into your MCP client:   │
   │     fapony install --platform opencode  │
   │     fapony install --platform claude    │
   │                                         │
   │  2. Ask your agent:                     │
   │     "Run fapony_stats and fapony_usage" │
   │                                         │
-  │  3. Verify a change:                    │
-  │     "Run verification_report on this repo" │
+  │  3. Read a run's report:                │
+  │     fapony report <run-id>              │
   └─────────────────────────────────────────┘
 `);
   } finally {

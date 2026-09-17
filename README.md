@@ -161,28 +161,24 @@ sequenceDiagram
 `verdict_submit` is the only step that creates knowledge — grade, `reason_code`, `regime`.
 Everything in between is the agent's own business.
 
-## The 8 tools
+## The 5 tools
 
 ```
 discover: plan_list (plans grouped by state, joined with their run history)
-measure:  handoff_collect ── fapony_stats ── fapony_usage
-verify:   handoff_check ── verdict_submit ── verification_report
+measure:  fapony_stats ── fapony_usage
+verify:   verdict_submit
 recall:   project_health_context (what failed in these files before — optional, never required)
-          (facts + checks + evidence + verdict, in one call)
 ```
 
 | Tool | Tier | Purpose |
 |------|------|---------|
 | `plan_list` | discover | Plan files grouped by state — active / blocked / untouched / superseded / trackers — with a progress tally and each one's run history. Not a raw `ls`; see [Plans your agent can answer questions about](#plans-your-agent-can-answer-questions-about) |
-| `handoff_collect` | measure | Machine facts from git (diff stat, commits, branch) |
 | `fapony_stats` | measure | KPIs across runs: by-model (gates, fail rate, quality, tokens), by-grade, planned vs dove-in, regime x model, per-file risk; `group_by: reason_code\|plan\|file` for top-N slices |
 | `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
-| `handoff_check` | verify | Check the agent's handoff claims against those facts |
 | `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) with a required `regime` — the task shape the grade applies to |
-| `verification_report` | verify | Full report: facts + checks + evidence + verdict |
 | `project_health_context` | recall | Known-patterns block for the files you are about to touch. Useful when a file does have history; measured across real repos, most do not (1-9% of shipped files come back under a `fix:` within two weeks), so it is optional — never a precondition for editing |
 
-Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
+The handoff/report family is CLI-only — the schemas cost every session of every client and no skill called them. `fapony report <run-id>` prints the full report for a run (facts + handoff conformance + evidence + verdict); `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
 
 Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](docs/mcp-handcheck.md).
 
@@ -336,7 +332,7 @@ Example plans produced by it live in [examples/](examples/).
 
 ```bash
 # Verification & reporting
-fapony mcp                               # MCP server (stdio JSON-RPC — 8 tools)
+fapony mcp                               # MCP server (stdio JSON-RPC — 5 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
@@ -375,7 +371,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 ## Scope
 
 **Supported:**
-- MCP server — 8 tools via stdio JSON-RPC, works with any MCP client
+- MCP server — 5 tools via stdio JSON-RPC, works with any MCP client
 - Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
 - Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
 - Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file
