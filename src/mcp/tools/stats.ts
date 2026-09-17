@@ -3,11 +3,12 @@
 import type { Run } from "../../db/index.js";
 import { openDb } from "../../db/index.js";
 import {
+  formatStatsText,
   getPlanBreakdown,
+  getStatsData,
   type PlanBreakdown,
   resolveMaxRounds,
-} from "../../stats/data.js";
-import { formatStatsText, getStatsData } from "../../stats.js";
+} from "../../stats/index.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
 
 export function toolFaponyStats(args: Record<string, unknown>): ToolResult {

@@ -16,7 +16,7 @@ import {
   countPendingPlans,
   formatStatsText,
   getStatsData,
-} from "../src/stats.js";
+} from "../src/stats/index.js";
 import { withTmpDb } from "./helpers.js";
 
 export function testStatsEmptyDb(): void {

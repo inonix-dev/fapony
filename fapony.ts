@@ -16,7 +16,7 @@ import { cmdPriceScan } from "./src/price/index.js";
 import { cmdReport, cmdReportWeb } from "./src/report/index.js";
 import { cmdReviewSeed } from "./src/review-seed.js";
 import { cmdSetup } from "./src/setup.js";
-import { cmdStats } from "./src/stats.js";
+import { cmdStats } from "./src/stats/index.js";
 import { cmdTelemetry } from "./src/telemetry.js";
 import { cmdTest } from "./src/test.js";
 import { cmdUpdate } from "./src/update.js";

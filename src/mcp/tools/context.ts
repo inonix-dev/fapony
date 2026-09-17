@@ -14,7 +14,7 @@ import {
   type HubEntry,
 } from "../../context/index.js";
 import { readRecentMemDecisions } from "../../memory.js";
-import { getStatsData } from "../../stats.js";
+import { getStatsData } from "../../stats/index.js";
 import type { ToolResult } from "../types.js";
 
 export function toolProjectHealthContext(

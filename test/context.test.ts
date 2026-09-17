@@ -15,7 +15,7 @@ import {
 } from "../src/db/index.js";
 import { toolProjectHealthContext } from "../src/mcp/tools/context.js";
 import { EMPTY_RESULT } from "../src/session/index.js";
-import { getStatsData, type StatsData } from "../src/stats.js";
+import { getStatsData, type StatsData } from "../src/stats/index.js";
 import { withTempRepo, withTmpDb } from "./helpers.js";
 
 function statsFixture(): StatsData {
