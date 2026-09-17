@@ -74,8 +74,11 @@ You are about to move a PLAN that has been shipped to the archive.
    - `verdict`: `pass` (adjust if the ship had known rough edges — see VERDICT_GRADES)
    - `regime`: **required** — the shape of the work that shipped: `code` for a feature or
      refactor, `fix` for a bug fix, `plan` when what shipped was the plan or spec itself
-   - `reason_code`: `missing_test` / `scope_mismatch` / `unsafe_command` / `spec_gap` / `other`
-     — `other` when the ship was clean and nothing fits
+   - `reason_code`: **`none` when the ship was clean** — not `other`. `other` means "a real
+     problem none of the buckets name", so a clean ship filed there shows up in the
+     recurring-fail-reasons list and crowds out the reasons that mean something. Otherwise
+     `missing_test` / `scope_mismatch` / `unsafe_command` / `spec_gap` / `incomplete`, and
+     `other` (with a `note`, which it requires) only when a real finding fits none of them
    - `note`: **omit it on a clean ship.** A verdict with no note still counts toward the plan
      history future drafts read ("passed round 1 before"), but only notes reach the three
      free-text slots `project_health_context` shows — so "clean ship" evicts a note that would
