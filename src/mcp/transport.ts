@@ -9,13 +9,11 @@ import { getServerSha } from "./primitives.js";
 import {
   TOOLS,
   toolFaponyStats,
-  toolHandoffCheck,
-  toolHandoffCollect,
+  toolMemFind,
   toolPassiveUsage,
   toolPlanList,
   toolProjectHealthContext,
   toolVerdictSubmit,
-  toolVerificationReport,
 } from "./tools/index.js";
 import { errorResult, type ToolResult } from "./types.js";
 
@@ -153,12 +151,6 @@ function dispatchToolCall(params: {
   const args = params.arguments ?? {};
   let result: ToolResult;
   switch (params.name) {
-    case "handoff_collect":
-      result = toolHandoffCollect(args);
-      break;
-    case "handoff_check":
-      result = toolHandoffCheck(args);
-      break;
     case "verdict_submit":
       result = toolVerdictSubmit(args);
       break;
@@ -174,8 +166,8 @@ function dispatchToolCall(params: {
     case "plan_list":
       result = toolPlanList(args);
       break;
-    case "verification_report":
-      result = toolVerificationReport(args);
+    case "mem_find":
+      result = toolMemFind(args);
       break;
     default:
       return errorResult(`unknown tool: ${params.name}`);

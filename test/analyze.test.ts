@@ -108,8 +108,10 @@ export function testAnalyzeSkipsUnresolvableAndBroken(): void {
     },
     (dir) => {
       const graph = buildGraph(dir);
-      // 3 unresolvable in ok.ts + 1 skipped broken file — no throw
-      assert.equal(graph.unresolved, 4);
+      // alias + relative miss in ok.ts + 1 skipped broken file — no throw
+      assert.equal(graph.unresolved, 3);
+      // bun:sqlite is a builtin: counted apart, never a hidden project edge
+      assert.equal(graph.external, 1);
       assert.equal(graph.files.length, 2);
     },
   );
@@ -188,6 +190,33 @@ export function testAnalyzeIsTestFile(): void {
   assert.equal(isTestFile("test/bar.ts"), true);
   assert.equal(isTestFile("src/foo.ts"), false);
   console.log("  ✓ analyze isTestFile matches collect criteria");
+}
+
+export function testAnalyzeSkipsNestedCheckouts(): void {
+  withFixture(
+    {
+      "core.ts": "export const a = 1;\n",
+      "core.test.ts": 'import { a } from "./core.js";\nexport const t = a;\n',
+      // A clone has `.git` as a directory, a `git worktree` has it as a file.
+      // Neither is part of this project; both used to be walked unless their
+      // name happened to start with `wt-`.
+      "clone/.git/HEAD": "ref: refs/heads/main\n",
+      "clone/core.ts": "export const a = 1;\n",
+      "sub/.git": "gitdir: /elsewhere/.git/worktrees/sub\n",
+      "sub/core.ts": "export const a = 1;\n",
+      // A plain directory named like someone's worktree convention is still
+      // this project and must be walked.
+      "wt-real/core.ts": "export const a = 1;\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.deepEqual(
+        graph.files.filter((f) => f.includes("/")).sort(),
+        ["wt-real/core.ts"],
+        "nested checkouts walked, or a plain dir skipped by name",
+      );
+    },
+  );
 }
 
 export function testAnalyzeBarrelHidesTests(): void {

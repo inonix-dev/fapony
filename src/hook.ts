@@ -17,6 +17,7 @@ import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "./db/index.js";
+import { readMemLog } from "./memory.js";
 
 export interface RawStopPayload {
   // Claude Code
@@ -48,25 +49,48 @@ export function utcStamp(d: Date): string {
  * Pure decision: block only when this session produced commits and none of
  * them got graded. Every unknown (no git, no transcript, hook already fired)
  * resolves to "allow" — a hook that guesses wrong must never trap the agent.
+ *
+ * PLAN-mem-mcp chunk 3: the block message now carries the commit list and the
+ * mem-log status (last row date). Both are *information*, never conditions —
+ * the block condition stays verdict-only (กฎ 7: the hook does not judge, it
+ * reports what is pending so the agent decides what deserves recording).
  */
 export function decideStop(opts: {
   stopHookActive: boolean;
   worktree: string | null;
   commits: number;
   verdicts: number;
+  commitList?: string[];
+  memLastTs?: string | null;
 }): string | null {
   if (opts.stopHookActive) return null; // already blocked once — let it end
   if (!opts.worktree) return null;
   if (opts.commits < 1) return null;
   if (opts.verdicts > 0) return null;
-  return (
-    `${opts.commits} commit(s) landed in ${opts.worktree} this session with no verdict filed.\n` +
+
+  const lines: string[] = [
+    `${opts.commits} commit(s) landed in ${opts.worktree} this session with no verdict filed.`,
+  ];
+  // ≤ 5 commits listed, rest folded into "… +N more" (spec §6: ≤ 12 lines).
+  const list = opts.commitList ?? [];
+  for (const c of list.slice(0, 5)) lines.push(`  ${c}`);
+  if (list.length > 5) lines.push(`  … +${list.length - 5} more`);
+  if (opts.memLastTs) {
+    lines.push(
+      `mem: last row ${opts.memLastTs.slice(0, 10)} — nothing newer this session`,
+    );
+  } else {
+    lines.push("mem: no rows at all — nothing recorded in this project yet");
+  }
+  lines.push(
     `Call verdict_submit before ending: worktree must be the absolute path above, ` +
-    `regime is one of code|fix|review|plan|inquiry|test, and the note must stand alone ` +
-    `(it is read months from now with no access to this conversation). ` +
-    `Grade what actually happened — pass-family when it held up, fail if the first ` +
-    `attempt was wrong, uncertain when you could not verify it.`
+      `regime is one of code|fix|review|plan|inquiry|test, and the note must stand alone ` +
+      `(it is read months from now with no access to this conversation). ` +
+      `Grade what actually happened — pass-family when it held up, fail if the first ` +
+      `attempt was wrong, uncertain when you could not verify it. What deserves a mem ` +
+      `row (decision/bug/note) is your call — not every unit needs one.`,
   );
+  return lines.join("\n");
 }
 
 function git(args: string[], cwd: string): string | null {
@@ -178,13 +202,16 @@ export async function cmdHookStop(): Promise<void> {
     }
 
     let commits = 0;
+    let commitList: string[] = [];
     let verdicts = 0;
+    let memLastTs: string | null = null;
     if (worktree && since) {
       const log = git(
-        ["log", "--since", `${since} +0000`, "--oneline"],
+        ["log", "--since", `${since} +0000`, "--format=%h %s"],
         norm.cwd,
       );
-      commits = log ? log.split("\n").filter(Boolean).length : 0;
+      commitList = log ? log.split("\n").filter(Boolean) : [];
+      commits = commitList.length;
       if (commits > 0) {
         const db = openDb();
         const row = db
@@ -194,6 +221,14 @@ export async function cmdHookStop(): Promise<void> {
           )
           .get(worktree, since) as { n: number } | null;
         verdicts = row?.n ?? 0;
+        // Informational only — read-only, degrade silently (mem status never
+        // becomes a block condition, กฎ 7).
+        try {
+          const mem = readMemLog(worktree);
+          memLastTs = mem.rows[0]?.ts ?? null;
+        } catch {
+          memLastTs = null;
+        }
       }
     }
 
@@ -202,6 +237,8 @@ export async function cmdHookStop(): Promise<void> {
       worktree: since ? worktree : null,
       commits,
       verdicts,
+      commitList,
+      memLastTs,
     });
   } catch {
     reason = null; // any failure = allow the turn to end

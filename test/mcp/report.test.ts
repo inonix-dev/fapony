@@ -89,15 +89,22 @@ export function testVerificationReportWorktreeOnlyCreatesNoRun(): void {
 }
 
 export function testVerificationReportToolCount(): void {
-  // Verify the tool is registered by checking tools/list includes it
-  // (integration test — depends on transport.ts registration)
+  // The handoff trio is CLI-only: the logic below still ships (fapony report
+  // calls toolVerificationReport directly), but the MCP schemas cost every
+  // session of every client and nothing called them. Guard the boundary.
   const { TOOLS } =
     require("../../src/mcp/tools/index.js") as typeof import("../../src/mcp/tools/index.js");
   const names = TOOLS.map((t: { name: string }) => t.name);
-  assert.ok(names.includes("verification_report"));
+  for (const gone of [
+    "verification_report",
+    "handoff_check",
+    "handoff_collect",
+  ]) {
+    assert.ok(!names.includes(gone), `${gone} is back on the MCP surface`);
+  }
   assert.ok(names.includes("project_health_context"));
-  assert.equal(TOOLS.length, 8);
-  console.log("  ✓ verification_report registered in TOOLS (8 tools total)");
+  assert.equal(TOOLS.length, 6);
+  console.log("  ✓ handoff trio stays off the MCP surface (5 tools total)");
 }
 
 export function testVerificationReportVerdictFromGateEvent(): void {

@@ -127,7 +127,7 @@ interface RawMemRow {
  * (app guessed from the dir name, `wt-` prefix stripped; MEM_APP overrides), not
  * at the git root. Single repos fall back to the root-relative layout.
  */
-function resolveMemDir(worktree: string): string | null {
+export function resolveMemDir(worktree: string): string | null {
   const app = process.env.MEM_APP ?? basename(worktree).replace(/^wt-/, "");
   const appBase = ["apps", "packages", "services"]
     .map((d) => join(worktree, d, app))

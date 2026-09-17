@@ -18,17 +18,23 @@ These three tools are the low-level surface, documented here in full because ada
 build on them directly:
 
 ```
-handoff_collect  →  handoff_check  →  verdict_submit
-     ↓                    ↓                 ↓
-  git facts         conformance         store verdict
+git facts  →  conformance  →  verdict_submit
+                                    ↓
+                              store verdict
 ```
 
-The server exposes 8 tools in total. The other five are higher-level and take plain
-arguments — see [README](../README.md#the-8-tools) for what each one answers:
+The first two steps are CLI-only: `fapony report <run-id>` runs the whole chain —
+git facts, handoff conformance, evidence, verdict — and prints it. They were MCP
+tools until 2026-09-17; the schemas cost every session of every connected client
+and no skill ever called them, so they moved behind the CLI that already did the
+same job. The logic is unchanged.
+
+The server exposes 5 tools in total, all higher-level and taking plain arguments —
+see [README](../README.md#the-5-tools) for what each one answers:
 
 | Tool | In one line |
 |------|-------------|
-| `verification_report` | The three above plus evidence, in one call — what most agents should use |
+| `verdict_submit` | Grade a finished unit of work — the one habit the ledger needs |
 | `plan_list` | Pending plan files joined with their run history |
 | `project_health_context` | Recurring fail reasons and past verdict notes, as a text block |
 | `fapony_stats` | Cross-run KPIs (by model, grade, reason code, plan, file) |

@@ -133,6 +133,17 @@ normal — writing to the default there scatters plans into a directory nobody r
 `PLAN-<feature>-v2.md` or ask which one is stale. (Phase 1.6's CLI refuses on its own; drafting
 by hand, this check is yours.)
 
+**Editing a plan someone is executing right now is a different job from drafting one.** Ask the
+dev, or call `plan_list` — it joins plan files against run history, so a plan with an open run is
+one an agent is working from this minute. When that is the case:
+
+- **Anything you add is an instruction, not a note.** A measured fact parked under "don't do"
+  still reads as a to-do to an agent mid-execution — the numbers are what make it tempting.
+- Park it in its own plan instead and leave **one line** in the live one, naming the *files* the
+  live plan does not touch. A boundary in files survives a re-read; a boundary in intent does not.
+- Never re-order or re-scope the chunks under it. Correct a wrong line, add nothing else, and tell
+  the dev what moved so they can decide whether the running agent needs to know.
+
 **Open the file with frontmatter, then a TL;DR** — together they let every later question about
 this plan be answered from the first 40 lines instead of from 40KB:
 
@@ -238,7 +249,9 @@ Then draft `<specDir>/SPEC-<feature>.md` (same config lookup as Phase 2) by:
 7. **Every output is a file** — not chat (so git can track it)
 8. **Plan must have all eight sections** — `_TBD_` is a legitimate value, a missing heading is not
 9. **Never overwrite an existing PLAN-<feature>.md** — check first, pick a different name
-10. **Ordering and blockers go in frontmatter, not only in prose** — "ต้องอยู่ก่อน X" buried in
+10. **A plan with an open run is live — add nothing to it that reads as work** (Phase 2). Park the
+    new thing in its own plan and leave a one-line pointer naming the files this one doesn't touch
+11. **Ordering and blockers go in frontmatter, not only in prose** — "ต้องอยู่ก่อน X" buried in
     paragraph 2 of a 40KB file is invisible to every later question about what to do next
 
 ## Piping into a non-MCP agent

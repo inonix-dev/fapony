@@ -192,6 +192,17 @@ export function testPlanSeedScopeFilters(): void {
       join(dir, "other", "lonely.ts"),
       "export function lonelyThing(): void {}\n",
     );
+    // §8 prior art: one shipped plan that names the scope, one that doesn't.
+    mkdirSync(join(dir, ".fapony", "done"), { recursive: true });
+    mkdirSync(join(dir, ".fapony", "spec"), { recursive: true });
+    writeFileSync(
+      join(dir, ".fapony", "done", "PLAN-formatters.md"),
+      "# PLAN-formatters — money formatting\n\n> shipped 2026-01-02\n\ntouched apps/vela/src/components\n",
+    );
+    writeFileSync(
+      join(dir, ".fapony", "done", "PLAN-elsewhere.md"),
+      "# PLAN-elsewhere\n\nonly ever touched other/\n",
+    );
     withCwd(dir, () => {
       // --scope value comes FIRST — it must never be mistaken for the name
       cmdPlanSeed(["--scope", "apps/vela/src/components", "scoped"]);
@@ -217,6 +228,15 @@ export function testPlanSeedScopeFilters(): void {
         "in-scope findings stay",
       );
 
+      // §8 points at the shipped plan that already decided something here —
+      // and never at the one that didn't (that list would match everything)
+      assert.match(
+        plan,
+        // title keeps only what the filename doesn't already say
+        /ตัดสินไปแล้ว: \[PLAN-formatters\.md\]\(\.\.\/done\/PLAN-formatters\.md\) — money formatting \(shipped 2026-01-02\)/,
+      );
+      assert.ok(!plan.includes("PLAN-elsewhere"), "§8 stays inside the scope");
+
       // Same tree, no --scope → the whole cwd is in scope, lonely shows up
       cmdPlanSeed(["wide"]);
       const wide = readFileSync(
@@ -224,11 +244,17 @@ export function testPlanSeedScopeFilters(): void {
         "utf-8",
       );
       assert.match(wide, /\*\*orphan\*\* other\/lonely\.ts/);
+      // …and §8 goes quiet: with no scope every shipped plan matches, so a
+      // list of everything would point at nothing
+      assert.ok(
+        !wide.includes("ตัดสินไปแล้ว"),
+        "§8 prior art needs a --scope to join on",
+      );
     });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-  console.log("  ✓ plan-seed --scope filters §2/§5 and never eats the name");
+  console.log("  ✓ plan-seed --scope filters §2/§5/§8 and never eats the name");
 }
 
 export function testPlanSeedCapsHold(): void {

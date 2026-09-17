@@ -83,7 +83,7 @@ fapony/
       utils.ts          # shared JSON(C) helpers
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative
-    mcp/                   # MCP server — stdio JSON-RPC, 8 tools
+    mcp/                   # MCP server — stdio JSON-RPC, 6 tools
       index.ts             # MCP entry point + tool registration
       transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn the grading habit without editing their own rules file
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
