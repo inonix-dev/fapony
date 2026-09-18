@@ -78,7 +78,25 @@ Log as you work — do not wait to be asked. Nothing writes it for you:
 
 Write each entry standalone — it is read months later with no chat to refer to.
 --files is required: rows that name no file cannot be recalled when that file is
-touched later (add refuses without it).`;
+touched later (add refuses without it).
+
+## Executing a plan chunk-by-chunk
+
+A long plan run in one unbroken session accumulates context with nothing to shrink
+it — token cost and coherence both degrade with session length, not with amount of
+work done. Cut at chunk boundaries instead:
+
+Finish a chunk, before starting the next:
+1. Tick its checkbox + stamp the TL;DR in the plan file
+2. Commit — separate from other chunks
+3. \`verdict_submit\` (fapony MCP), grading what actually happened
+4. \`bun ${memEntry} add note "what the next chunk needs" --files f1,f2 <path/to/PLAN-x.md>\`
+   — pass the exact same plan path every time; kickoff matches it as a literal string
+5. Stop. Do not continue to the next chunk in the same session unless told to.
+
+Next chunk, new session — open with \`bun ${memEntry} kickoff <path/to/PLAN-x.md>\` (same
+path) instead of carrying the old transcript forward. kickoff already filters to the
+rows written against that exact path.`;
 
 export function initProject(targetPath: string, config?: Config): void {
   // Create target root
