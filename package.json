@@ -32,6 +32,7 @@
     "test": "bun fapony.ts test",
     "test:fast": "SKIP_SLOW=1 bun fapony.ts test",
     "check": "bun run lint && bun run typecheck && bun fapony.ts test",
+    "prepublishOnly": "bash scripts/smoke-publish.sh",
     "overview": "bun fapony.ts report-web /tmp/fapony-overview.html && open /tmp/fapony-overview.html"
   },
   "devDependencies": {

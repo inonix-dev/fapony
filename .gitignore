@@ -8,7 +8,8 @@ cl-*/
 # Personal machine config — see fapony.config.example.json
 .fapony/
 fapony.config.json
-scripts
+scripts/*
+!scripts/smoke-publish.sh
 
 # Added by code-review-graph
 .code-review-graph/
