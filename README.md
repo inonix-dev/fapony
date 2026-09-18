@@ -60,7 +60,7 @@ floor before a model counts toward the frontier at all; below that it's a data p
 
 Three tiers, deliberately: **measurement ships today** and needs no per-project setup — raw facts nobody can call unfair. **Verification is the sharper edge** but stays beta until its evidence layer is hardened; fapony doesn't control your agent's flow, so it never promises "verified" as a headline. **Knowledge accumulation is the compounding one** — it's worthless on run 1 and gets more useful every run after, which is exactly why it's the layer competitors can't clone by copying a feature list.
 
-Adopting it doesn't change your workflow. There is no loop to join and no framework to learn: install the MCP server, point your agent at it, and read the reports.
+Adopting it doesn't change your workflow. There is no loop to join and no framework to learn: install the MCP server, point your agent at it, and read the reports. fapony also ships plans, skills and read-only seed commands from its own dogfooding — those are conveniences, kept in their own section below, and deleting all of them costs you nothing the ledger can measure.
 
 ## What fapony is not
 
@@ -155,30 +155,25 @@ flowchart LR
 ```
 
 fapony never drives the agent. It sits on two sides of your work that never touch each
-other, and they are worth reading separately — the first is optional and shaped like however
-you already work, the second is the product.
+other, and **the rest of this README is organised along that line**: the ledger below is the
+product, and everything under "The work side" after it is a convenience you can delete without
+losing a single number.
 
-### Side one — getting the work done (optional, nothing recorded)
+| | The ledger | The work side |
+|---|---|---|
+| What it is | 6 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
+| Needs | an MCP client | nothing — or your own tooling instead |
+| Writes | one graded row per unit of work | nothing |
+| Skip it and | there is no fapony | fapony still answers every question |
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant A as You + your agent
-    participant F as fapony CLI (read-only)
-    participant W as your worktree
+## The ledger — this is the product
 
-    A->>F: review-seed --files src/thing/
-    F->>W: static scan — exports, importers, untested
-    W-->>F: facts, no LLM in the middle
-    F-->>A: the lines worth reading, instead of the whole files
-    A->>W: build, then commit
-    Note over A,F: nothing is stored — skip this side entirely and fapony still works
-```
+One habit feeds it: grade a unit of work when it ends. Everything else on this page is
+optional around that. `verdict_submit` needs no plan file, no skill and no `.fapony/`
+directory — any agent that speaks MCP can call it, and calling it is what turns a pile of
+session logs into an answer.
 
-Read-only, deterministic, and it writes nothing to the ledger. Use it, use your client's own
-search, or use neither — plans, skills and seeds are conveniences, not the contract.
-
-### Side two — the one habit that makes fapony worth installing
+### One turn, end to end
 
 ```mermaid
 sequenceDiagram
@@ -199,14 +194,10 @@ sequenceDiagram
     L-->>A: model x regime x quality — which model to pay for this shape
 ```
 
-`verdict_submit` is the only step that creates knowledge, and it needs nothing from side one:
-no plan file, no skill, no `.fapony/` directory. Any agent that speaks MCP can grade a unit of
-work, and grading it is what turns a pile of session logs into an answer.
-
 The Stop hook is the only thing fapony does *to* you — once per turn, when a commit ends
 ungraded. It never picks the grade; it cannot see whether the work held up.
 
-## The 6 tools
+### The 6 tools
 
 ```
 discover: plan_list (plans grouped by state, joined with their run history)
@@ -229,72 +220,7 @@ The handoff/report family is CLI-only — the schemas cost every session of ever
 
 Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](docs/mcp-handcheck.md).
 
-## Plans your agent can answer questions about
-
-Plans stay markdown files in your repo — nothing moves into a database. Four optional
-frontmatter keys are enough to make a folder of them queryable:
-
-```yaml
----
-kind: unit                     # tracker = a checklist that never finishes
-status: blocked                # active | blocked | superseded
-blocked_by: PLAN-documents.md  # a plan, or a sentence
-blocks: PLAN-export.md         # ordering, stated once instead of buried in prose
----
-
-# PLAN — month view in /quick
-
-## TL;DR                       # 15 lines; the only part that changes mid-flight
-- **Why:** two menu entries for the same data at different granularity
-- [x] chunk 1 — month grid   `a1b2c3` 2026-09-13
-- [ ] chunk 2 — move overdue out
-```
-
-Then ask your agent *"what's left, and what's blocked?"* — `plan_list` answers from the
-frontmatter and from fapony's own run history, without reading a single 100KB plan body into
-context (`format: "markdown"`):
-
-```
-## active — in order (2)
-- [ ] PLAN-calendar — 1/3 · unblocks PLAN-export
-- [ ] PLAN-export — never attempted
-## blocked (1)
-- [ ] PLAN-attendance — waiting: PLAN-documents.md
-## untouched (14) · trackers (3)
-done: 63 archived
-```
-
-**Plans with no frontmatter still work** — they are grouped by run history alone (attempted =
-active, never attempted = untouched), so an existing folder of plans is queryable before anyone
-annotates anything. Two details that keep it honest over years:
-
-- The progress tally counts checkboxes in the **first `##` section only**, anchored by position
-  rather than by the word "TL;DR" — so it works in any language, and a step list deeper in the
-  file stays detail instead of becoming status.
-- **There is no `MASTER.md`.** Every line of the list above is derived from frontmatter and
-  checkboxes, so it cannot drift; a hand-kept master file always does.
-
-The layout, and why archiving is a plain `git mv`:
-
-```
-.fapony/plan/PLAN-calendar.md    live
-.fapony/done/PLAN-calendar.md    shipped — same name, same depth, so every relative
-                                 link inside the file survives the move untouched
-.fapony/spec/SPEC-calendar.md    specs are a reference library; they are never archived
-```
-
-Ship dates live in the plan's own header (`> ✅ **shipped 2026-09-13** (a1b2c3)`), not in the
-filename — `grep -h shipped .fapony/done/*.md | sort` answers "what landed when" without paying
-to rewrite every inbound link on every ship. Example plans, including an un-annotated one and an
-archived one: [examples/](examples/).
-
-## Why measure from the outside
-
-- **Raw facts are hard to argue with.** Cost, rounds, diff sizes, pass rates — collected from git and session logs, not self-reported. A vendor can dispute a verdict as unfair; they can't dispute their own token count.
-- **Agent platforms grading their own homework is a conflict of interest.** fapony is a separate layer that measures any agent the same way, which is what makes "model X vs. model Y" or "workflow A vs. workflow B" answerable with real data instead of vibes.
-- **Verification stays honest about its limits.** The collector runs only commands listed in `.fapony/evidence.json`; commands proposed by the agent outside the allowlist are reported as *proposed — not executed*, never run. And because fapony doesn't control your agent's flow, verdicts are labeled as one signal — not promised as truth.
-
-## Verdict grades
+### Verdict grades
 
 Verification produces a quality grade, not just pass/fail:
 
@@ -307,7 +233,40 @@ Verification produces a quality grade, not just pass/fail:
 | `fail` | Needs fixes |
 | `uncertain` | Reviewer can't judge — plan may have a problem |
 
-## Skills
+### Why measure from the outside
+
+- **Raw facts are hard to argue with.** Cost, rounds, diff sizes, pass rates — collected from git and session logs, not self-reported. A vendor can dispute a verdict as unfair; they can't dispute their own token count.
+- **Agent platforms grading their own homework is a conflict of interest.** fapony is a separate layer that measures any agent the same way, which is what makes "model X vs. model Y" or "workflow A vs. workflow B" answerable with real data instead of vibes.
+- **Verification stays honest about its limits.** The collector runs only commands listed in `.fapony/evidence.json`; commands proposed by the agent outside the allowlist are reported as *proposed — not executed*, never run. And because fapony doesn't control your agent's flow, verdicts are labeled as one signal — not promised as truth.
+
+## The work side — conveniences, not the contract
+
+Read-only, deterministic, and none of it writes to the ledger. These exist because they were
+useful in this project's own dogfooding; use them, use your client's own search, or use
+neither. **Nothing here is a precondition for anything in the section above.**
+
+### A lookup instead of a file read
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as You + your agent
+    participant F as fapony CLI (read-only)
+    participant W as your worktree
+
+    A->>F: review-seed --files src/thing/
+    F->>W: static scan — exports, importers, untested
+    W-->>F: facts, no LLM in the middle
+    F-->>A: the lines worth reading, instead of the whole files
+    A->>W: build, then commit
+    Note over A,F: nothing is stored — skip this side entirely and fapony still works
+```
+
+`review-seed --files` takes file names or a directory and answers "what is in here, who
+imports it, what is untested" for roughly a thirtieth of the tokens reading those files costs.
+That is the whole trick; there is no model in the middle.
+
+### Skills
 
 fapony ships five portable skills, each as `skill/<name>/SKILL.md` — the layout Claude
 Code expects, so a client can symlink the directory rather than copy the file:
@@ -388,6 +347,65 @@ cat skill/plan-with-pony/SKILL.md | <your-agent>  # anything that reads stdin
 
 Example plans produced by it live in [examples/](examples/).
 
+### Plans your agent can answer questions about
+
+Plans stay markdown files in your repo — nothing moves into a database. Four optional
+frontmatter keys are enough to make a folder of them queryable:
+
+```yaml
+---
+kind: unit                     # tracker = a checklist that never finishes
+status: blocked                # active | blocked | superseded
+blocked_by: PLAN-documents.md  # a plan, or a sentence
+blocks: PLAN-export.md         # ordering, stated once instead of buried in prose
+---
+
+# PLAN — month view in /quick
+
+## TL;DR                       # 15 lines; the only part that changes mid-flight
+- **Why:** two menu entries for the same data at different granularity
+- [x] chunk 1 — month grid   `a1b2c3` 2026-09-13
+- [ ] chunk 2 — move overdue out
+```
+
+Then ask your agent *"what's left, and what's blocked?"* — `plan_list` answers from the
+frontmatter and from fapony's own run history, without reading a single 100KB plan body into
+context (`format: "markdown"`):
+
+```
+## active — in order (2)
+- [ ] PLAN-calendar — 1/3 · unblocks PLAN-export
+- [ ] PLAN-export — never attempted
+## blocked (1)
+- [ ] PLAN-attendance — waiting: PLAN-documents.md
+## untouched (14) · trackers (3)
+done: 63 archived
+```
+
+**Plans with no frontmatter still work** — they are grouped by run history alone (attempted =
+active, never attempted = untouched), so an existing folder of plans is queryable before anyone
+annotates anything. Two details that keep it honest over years:
+
+- The progress tally counts checkboxes in the **first `##` section only**, anchored by position
+  rather than by the word "TL;DR" — so it works in any language, and a step list deeper in the
+  file stays detail instead of becoming status.
+- **There is no `MASTER.md`.** Every line of the list above is derived from frontmatter and
+  checkboxes, so it cannot drift; a hand-kept master file always does.
+
+The layout, and why archiving is a plain `git mv`:
+
+```
+.fapony/plan/PLAN-calendar.md    live
+.fapony/done/PLAN-calendar.md    shipped — same name, same depth, so every relative
+                                 link inside the file survives the move untouched
+.fapony/spec/SPEC-calendar.md    specs are a reference library; they are never archived
+```
+
+Ship dates live in the plan's own header (`> ✅ **shipped 2026-09-13** (a1b2c3)`), not in the
+filename — `grep -h shipped .fapony/done/*.md | sort` answers "what landed when" without paying
+to rewrite every inbound link on every ship. Example plans, including an un-annotated one and an
+archived one: [examples/](examples/).
+
 ## CLI
 
 ```bash
@@ -400,7 +418,7 @@ fapony price-scan                        # fetch model price table → prices.js
 fapony usage-web [port]                   # live usage comparison dashboard from cache
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]  # KPIs: pass/stall rate, by-model, by-grade — --mode verdict ranks by quality/tokens instead
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page summary: decisions, open bugs, in-flight plans, cost, pass/fail — from what's already on disk
-fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN (+SPEC): §2 = export-name prefixes repeating across 2+ directories, §5 = scoped analyze findings, every section capped — agent fills judgment sections
+fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN (+SPEC): frontmatter, 8 empty sections, prior-art list, ledger context; SPEC chunks carry signatures, every section capped — the agent fills the judgment
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]  # read-only scope facts for a review (changed files, importers, untested, signatures, plan cross-check)
 
 # Setup & maintenance

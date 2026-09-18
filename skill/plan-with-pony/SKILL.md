@@ -45,8 +45,7 @@ fapony review-seed --files a.ts --body doThing --callers doThing  # + the declar
 you only need one symbol out of. Exports only — a non-exported name answers "no export named X in
 scope", which is not the same as "not there".
 
-That is the same facts this skill would have seeded into §2/§5, without the file — roughly 1k
-tokens, deterministic, and it is the front half of the pair the dev already closes with
+That is the fact-gathering, without the file — roughly 1k tokens, deterministic, and it is the front half of the pair the dev already closes with
 `review-pony`. Hand it over and stop; do not draft a plan nobody asked to keep.
 
 Go on to Phase 0 only when the work is a feature with a life beyond today.
@@ -86,24 +85,26 @@ warns past ~300 files):
 fapony plan-seed <feature> --spec --scope <path>
 ```
 
-That is the whole fact-gathering phase — one command, no MCP round trip. It writes
-`<planDir>/PLAN-<feature>.md` + `<specDir>/SPEC-<feature>.md` with the factual sections
-pre-filled from the code itself: §2 Scope reports export-name prefixes that repeat **across two
-or more directories** (a prefix confined to one directory is that directory's naming convention,
-so it is not reported), §5 Risks from the import graph scoped to the requested paths, and a
-`## Context (fapony)` block — recent mem decisions plus which model holds up per task shape here.
-Sections are hard-capped (PLAN ≤ ~60 / SPEC ≤ 200 lines) and capped lines say what was cut. The
-CLI resolves plan-dir/spec-dir and refuses to overwrite (pick `-v2` — see Phase 2).
+One command, no MCP round trip. It writes `<planDir>/PLAN-<feature>.md` +
+`<specDir>/SPEC-<feature>.md` — the frontmatter, the 8 empty sections, a `## 8. References` list
+of shipped plans that already touched this scope, and a `## Context (fapony)` block under the
+TL;DR (recent mem decisions plus which model holds up per task shape here). SPEC chunks carry
+verbatim signatures, hard-capped (PLAN ≤ ~60 / SPEC ≤ 200 lines), and capped lines say what was
+cut. The CLI resolves plan-dir/spec-dir and refuses to overwrite (pick `-v2` — see Phase 2).
 
-The file, the frontmatter and §5 exist before you start, so the draft budget goes on judgment —
-Goal, Done criteria, ordering — instead of on structure. So:
+**§2/§5 arrive empty on purpose (2026-09-18).** They used to hold a repetition scan and analyze
+findings; measured over every plan that ever used them, §5 printed "no findings" 3 times out of 3
+and §2 printed a naming observation nobody cited — `--scope` narrows to the files about to change
+while both producers report whole-repo properties. A judgment heading pre-filled with a shrug
+teaches the reader that every seeded line is noise. Facts come from the Phase −1 commands run on
+the real scope instead.
 
-- **Read the seeded §2/§5 and the Context block — skip the rest**, it is the empty template you
-  are about to fill. Correct a seeded line only where the dev's idea contradicts it, and say so
-  when you do ("the scan shows X but you want Y").
-- **Fill the judgment sections** — §1/3/4/6/8 and the TL;DR. They start as `_agent เติม_` slots.
-- Seeded lines are tagged `(source scan)` / `(fapony analyze)` — keep the tags so the dev can
-  tell measured facts from your guesses.
+So the seed buys you structure; the draft budget goes on judgment:
+
+- **Read the Context block, then skip to filling** — everything else is the empty template.
+- **Fill every section yourself** — §1–§6 and the TL;DR start as `_agent เติม_` slots.
+- **Run the Phase −1 commands for facts** when the idea needs them, and put the numbers in the
+  section they answer — a number you measured beats a number the seed guessed at.
 - **Signatures live in the SPEC chunks only.** Never paste them into plan §7 — link to the spec.
 - If the CLI is missing, skip silently and draft from scratch (Phase 2 as written) — never block
   on a missing tool.
@@ -111,9 +112,9 @@ Goal, Done criteria, ordering — instead of on structure. So:
 ## Phase 2 — Draft straight to the file
 
 Write the full draft **now**, all eight sections, from the Phase 0 harvest + the Phase 1 answer
-— **or, when Phase 1.5 seeded a file, correct and complete that file instead of writing from
-scratch** (its §2/§5 already hold the measured facts). Fill every section — guessing where you
-have to.
+— **or, when Phase 1.5 seeded a file, complete that file instead of writing from scratch**
+(its frontmatter, §8 and Context block are already there). Fill every section — guessing where
+you have to.
 
 ```
 1. Goal (why)                          5. Risks & Escape hatches (if it fails)

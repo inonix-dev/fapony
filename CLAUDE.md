@@ -6,6 +6,24 @@ Measurement + verification layer for coding agents, shipped as an MCP server (`f
 
 **North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **`model × project × regime × quality` ข้าม run/client/project** — "งานแบบนี้ในโปรเจกต์นี้ ควรจ่ายให้ model ไหน" · session log ของทุกเจ้ามี token แต่ไม่มีเกรด, benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ — ต้องมี verdict + model + regime + token ครบสี่ในที่เดียวถึงจะถามได้ · **เคยเล็ง "project health / ไฟล์นี้เคยพัง" แล้วพลาด** — base rate ของ rework จริงคือ 1-9% ต่ำเกินจะเตือนอะไรได้ (ดูกฎ 8) `project_health_context` ยังอยู่แต่ไม่ใช่แกนอีกแล้ว fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
 
+**สองฝั่งที่ห้ามปนกัน — เส้นนี้ตัดสินข้อขัดแย้งทุกครั้ง:**
+
+| | **ledger (ตัวสินค้า)** | **work side (ของอำนวยความสะดวก)** |
+| --- | --- | --- |
+| โค้ด | `src/mcp/` `src/db/` `src/stats/` `src/report/` `src/session/` `src/hook.ts` | `src/plan-seed.ts` `src/review-seed.ts` `src/analyze.ts` `skill/` `templates/` |
+| เขียนอะไร | 1 graded row ต่อ 1 หน่วยงาน ลง `~/.config/fapony/state.db` | ไม่เขียน ledger เลย |
+| ถ้าลบทิ้ง | ไม่เหลือ fapony | fapony ตอบคำถามได้เหมือนเดิมทุกข้อ |
+| ใครใช้ได้ | agent ไหนก็ได้ที่พูด MCP | คนที่รัน `fapony init` เท่านั้น |
+
+**กฎที่ตามมา** (ทั้งสามข้อเคยถูกละเมิดมาแล้ว):
+1. **ของฝั่ง work ห้ามเป็นเงื่อนไขของฝั่ง ledger** — `verdict_submit` ต้องทำงานได้โดยไม่มี
+   plan file / skill / `.fapony/` (กฎ 7: `runs.plan` เป็น nullable ตั้งแต่ schema แรก)
+2. **ฝั่ง work พิสูจน์ตัวเองด้วยการถูกใช้ ไม่ใช่ด้วยการมีอยู่** — ฟีเจอร์ที่ไม่มีแผน ship
+   ไหนอ้างผลของมันเลย = ลบ (ทำจริงแล้ว: `fapony map` ไม่มี caller, `plan-seed` §2/§5
+   วัดได้ 3/3 ว่าง → −257 บรรทัด 2026-09-18)
+3. **ตอนโปรโมทนำด้วยฝั่ง ledger** — ฝั่ง work คือรสนิยมของ repo นี้ ไม่ใช่ข้อเสนอ
+   (Positioning ข้อ 1: ledger ไม่ใช่ judge)
+
 **Runtime:** Bun-only — **กฎ zero-runtime-dependency ถอดแล้ว 2026-09-17** (มันมาจากยุคที่ fapony
 เป็น read/viewer ล้วน ๆ ตอนนี้เดินทาง ledger + ของที่ agent หยิบใช้สะดวก การห้าม dep แบบเหมาเข่ง
 เลยแลกความคล่องตัวไปโดยไม่ได้อะไรคืน — และไม่ใช่หนึ่งในสาม moat ด้วย) · สิ่งที่ยัง**ห้าม**คือให้
@@ -347,6 +365,7 @@ Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)
 ## CLI Commands
 
 ```bash
+# ── ledger — ตัวสินค้า ──
 fapony mcp                          # MCP server — stdio JSON-RPC, 6 tools
 fapony hook-stop                    # Claude Code Stop hook (stdin JSON) — blocks a turn that has ungraded commits
 fapony hook-read-hint               # Read hint (claude PreToolUse / opencode plugin) — annotates a full-file read of a large source file with one factual line pointing at review-seed; annotate-only, never blocks, never dedupes (context compaction makes "อ่านไปแล้ว" เป็นเท็จ)
@@ -356,6 +375,7 @@ fapony report-web [file]            # static HTML report page
 fapony usage-scan                    # scan session logs → usage-cache.jsonl (incremental, progress bar)
 fapony usage-web [port]              # live usage comparison dashboard from cache (no session log access)
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]  # KPIs: pass/stall rate, by-model, by-grade — --mode verdict ranks by quality/tokens instead
+# ── setup ──
 fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
 fapony init-mem [--update]          # re-copy templates/mem/ into this repo's memory dir (path from paths.memoryEntry) — data files (log.jsonl) untouched
 fapony install                            # detect installed clients, prompt to wire each
@@ -366,8 +386,9 @@ fapony setup                        # interactive wizard: config + scaffold in o
 fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md
 fapony test                         # self-check
+# ── work side — read-only, ไม่แตะ ledger, ลบทิ้งได้ ──
 fapony analyze [path]               # structural diagnosis (hub/orphan/cycle/changed-untested) — live graph via Bun.Transpiler.scan(), never persisted (no table: 114 files / 466 imports = 16.6ms, cache would be pure debt)
-fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): §2 = export-name prefixes repeating across 2+ dirs (single-dir = that dir's naming convention, not reported), §5 = scoped analyze findings, hard caps PLAN ≤ ~60 / SPEC ≤ 200 lines — caller: plan-with-pony Phase 1.6
+fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): frontmatter + 8 empty sections + §8 prior art + Context (fapony) under the TL;DR; SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200 lines — **§2/§5 seed nothing (2026-09-18)**, see src/plan-seed.ts header — caller: plan-with-pony Phase 1.5
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"; --body/--callers = the executor's symbol lookup (one call answers both)
 ```
 

@@ -295,6 +295,7 @@ import {
 import {
   testStatsTextMatchesCli,
   testStatsToolByGradeSeparation,
+  testStatsToolDefaultsToCurrentWorktree,
   testStatsToolEmptyDb,
   testStatsToolGroupByInvalid,
   testStatsToolGroupByPlan,
@@ -373,7 +374,6 @@ import {
   testPlanSeedConfigFallback,
   testPlanSeedNoOverwrite,
   testPlanSeedOverlapScopeDedup,
-  testPlanSeedRepetitionCluster,
   testPlanSeedScopeFilters,
   testPlanSeedSingleFileScope,
   testPlanSeedSpecSignatures,
@@ -606,7 +606,6 @@ export async function cmdTest(): Promise<void> {
   testPlanSeedWritesPlan();
   testPlanSeedNoOverwrite();
   testPlanSeedSpecSignatures();
-  testPlanSeedRepetitionCluster();
   testPlanSeedScopeFilters();
   testPlanSeedCapsHold();
   testPlanSeedSingleFileScope();
@@ -843,6 +842,7 @@ export async function cmdTest(): Promise<void> {
   testStatsToolTextMode();
   testStatsTextMatchesCli();
   testStatsToolByGradeSeparation();
+  testStatsToolDefaultsToCurrentWorktree();
   testStatsToolGroupByReasonCode();
   testStatsToolGroupByPlan();
   testStatsToolGroupByPlanWorktreeScoped();

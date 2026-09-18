@@ -4,8 +4,8 @@ import { execFileSync } from "node:child_process";
 import { getStatsData } from "./data.js";
 import { formatStatsText, formatVerdictText } from "./format.js";
 
-/** Absolute path of the repo/worktree the CLI was run in, or null outside git. */
-function currentWorktree(): string | null {
+/** Absolute path of the repo/worktree the process was started in, or null outside git. */
+export function currentWorktree(): string | null {
   try {
     return execFileSync("git", ["rev-parse", "--show-toplevel"], {
       encoding: "utf-8",

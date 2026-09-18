@@ -1,12 +1,24 @@
 // src/plan-seed.ts — `fapony plan-seed <name> [--spec] [--scope <path>]...`
 //
-// Writes PLAN + SPEC straight into planDir/specDir, with the factual sections
-// pre-filled from map/analyze/mem/ledger. §2 reports what REPEATS across the
-// scope's exports (a directory listing is the one thing Glob gives the agent
-// for free); §5 carries analyze findings scoped to the requested paths. Every
-// section is hard-capped review-seed style — PLAN ≤ ~60 and SPEC ≤ 200 lines
-// are the contract (PLAN-seed-scope-and-cap §3, measured against an 18,175-
-// line SPEC innominix deleted by hand). The agent is left with judgment only.
+// Writes PLAN + SPEC straight into planDir/specDir. What it pre-fills is the
+// structure (frontmatter, the 8 sections, prior art, ledger context) — the
+// agent is left with judgment only.
+//
+// **§2/§5 no longer carry seeded facts (2026-09-18).** They held a repetition
+// scan and analyze findings; measured across every plan that ever used them,
+// §5 printed "no findings" 3 times out of 3 and §2 printed a naming
+// observation nobody cited. The cause is structural: `--scope` narrows to the
+// files about to change, while both producers report whole-repo properties
+// (hub/orphan/cycle across directories) — empty when scoped, noisy when not.
+// Worse, a judgment heading pre-filled with a shrug teaches the reader that
+// every seeded line is noise. Facts now come from `fapony analyze <dir>` and
+// `review-seed --files` run at draft time on the real scope, where they do not
+// go stale. Do not re-add a producer here without measuring that its output is
+// cited in a shipped plan.
+//
+// SPEC chunks are hard-capped review-seed style — PLAN ≤ ~60 and SPEC ≤ 200
+// lines are the contract (PLAN-seed-scope-and-cap §3, measured against an
+// 18,175-line SPEC innominix deleted by hand).
 // init-family: writes only the files the user asked for, inside planDir/
 // specDir — never runtime state (that stays in ~/.config/fapony/).
 // Deterministic: same input, same output, no LLM call.
@@ -22,23 +34,14 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import {
-  buildGraph,
-  collectSourceFiles,
-  diagnose,
-  type Finding,
-  type FindingKind,
-  isSkippedDir,
-  SCAN_EXTS,
-} from "./analyze.js";
+import { basename, join, relative, resolve, sep } from "node:path";
+import { collectSourceFiles, isSkippedDir, SCAN_EXTS } from "./analyze.js";
 import { computeModelFit } from "./context/projectHealth.js";
 import { doneDir, planDir, specDir } from "./db/getters.js";
 import { loadConfig } from "./db/load.js";
 import type { Config } from "./db/types.js";
 import { extractExports } from "./map.js";
 import { readRecentMemDecisions } from "./memory.js";
-import { parseNumstat, untrackedFiles } from "./review-seed.js";
 import { getStatsData } from "./stats/data.js";
 
 // One chunk = one module's signatures — past ~40 lines a module is its own
@@ -49,9 +52,6 @@ const MAX_SPEC_LINES = 200;
 // Above this many files in scope the caps start eating output silently —
 // warn so the shortness is explained. (guess — first cutoff that felt right)
 const SCOPE_WARN_FILES = 300;
-// The plan is a starting position, not a contract — cap §5 at the worst findings.
-const MAX_RISKS = 5;
-
 // Shipped plans/specs that already touched this scope. Capped low on purpose:
 // this is a "go read that first" pointer, not a bibliography.
 const MAX_PRIOR_ART = 5;
@@ -62,32 +62,6 @@ const slug = (s: string): string =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-
-// --- §2 Repetition — what repeats, not what exists ---
-// A directory listing is free (Glob); what repeats across many files costs
-// real reads to notice. Tokenize export names camelCase, group by the FIRST
-// token, report clusters of ≥ 3 members and never judge them: whether a
-// cluster is duplication is the agent's call.
-//
-// Cross-directory only. A cluster inside ONE directory is the naming
-// convention of that directory (`get*` × 12 in src/db/ says getters are
-// called get), and reporting it spends the plan's §2 budget telling the
-// reader a rule they can see from the folder name. The same token showing up
-// in two directories is the thing worth a look. Threshold + full member list
-// are the escape hatches (PLAN §5).
-
-const REPETITION_MIN = 3;
-const REPETITION_MIN_DIRS = 2;
-const MAX_CLUSTER_DIRS = 3;
-const MAX_CLUSTERS = 5;
-
-function camelTokens(name: string): string[] {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean)
-    .map((t) => t.toLowerCase());
-}
 
 // Absolute source files under a scope root. A single-file scope counts as
 // itself — collectSourceFiles only walks dirs, so a file root would vanish.
@@ -104,120 +78,6 @@ function scopeSourceFiles(root: string): string[] {
   return collectSourceFiles(root, { skipHidden: true }).map((rel) =>
     join(root, rel),
   );
-}
-
-function renderScope(
-  roots: string[],
-  filesByRoot: Map<string, string[]>,
-  cwd: string,
-): string {
-  const byToken = new Map<string, { names: Set<string>; dirs: Set<string> }>();
-  let files = 0;
-  let exports = 0;
-  for (const root of roots) {
-    for (const abs of filesByRoot.get(root) ?? []) {
-      let source: string;
-      try {
-        source = readFileSync(abs, "utf-8");
-      } catch {
-        continue;
-      }
-      const scan = extractExports(source);
-      if (scan.error) continue;
-      files++;
-      exports += scan.symbols.length;
-      const dir = dirname(relative(cwd, abs)) || ".";
-      for (const s of scan.symbols) {
-        const head = camelTokens(s.name)[0];
-        if (!head) continue;
-        let cluster = byToken.get(head);
-        if (!cluster) {
-          cluster = { names: new Set<string>(), dirs: new Set<string>() };
-          byToken.set(head, cluster);
-        }
-        cluster.names.add(s.name);
-        cluster.dirs.add(dir);
-      }
-    }
-  }
-  const lines = [
-    `- scanned: ${roots.map((r) => relative(cwd, r) || ".").join(", ")} — ${files} file(s), ${exports} export(s) \`(source scan)\``,
-  ];
-  const clusters = [...byToken.entries()]
-    .filter(
-      ([, c]) =>
-        c.names.size >= REPETITION_MIN && c.dirs.size >= REPETITION_MIN_DIRS,
-    )
-    .map(([token, c]) => ({
-      token,
-      members: [...c.names].sort(),
-      dirs: [...c.dirs].sort(),
-    }))
-    .sort(
-      (a, b) =>
-        b.dirs.length - a.dirs.length ||
-        b.members.length - a.members.length ||
-        (a.token < b.token ? -1 : 1),
-    );
-  if (clusters.length === 0) {
-    lines.push(
-      `_(no export-name prefix repeating across ${REPETITION_MIN_DIRS}+ directories — nothing here but each directory's own naming convention)_`,
-    );
-    return lines.join("\n");
-  }
-  for (const c of clusters.slice(0, MAX_CLUSTERS)) {
-    // Members are never dropped (they are the finding); the directory list is
-    // context, so it is the one that gets cut — always saying how much.
-    const shown = c.dirs.slice(0, MAX_CLUSTER_DIRS).join(", ");
-    const where =
-      c.dirs.length > MAX_CLUSTER_DIRS
-        ? `${shown} +${c.dirs.length - MAX_CLUSTER_DIRS} more`
-        : shown;
-    lines.push(
-      `- ${c.token}* — ${c.members.length} export(s) across ${where}: ${c.members.join(", ")} \`(source scan)\``,
-    );
-  }
-  if (clusters.length > MAX_CLUSTERS) {
-    lines.push(
-      `- … +${clusters.length - MAX_CLUSTERS} more clusters (narrow with --scope)`,
-    );
-  }
-  return lines.join("\n");
-}
-
-// --- Risks (§5) from analyze findings ---
-
-// §5 order — the finding tied to the work about to happen leads. analyze's own
-// KIND_RANK leads with cycles; a plan reads top-down, so changed-first here.
-const RISK_KINDS: FindingKind[] = [
-  "changed-untested",
-  "hub-untested",
-  "cycle",
-  "orphan",
-];
-
-// Changed files (diff HEAD + untracked), repo-root-relative — the same two
-// declared git calls review-seed makes. This is what makes changed-untested
-// findings possible at all; without it §5 lost the one finding tied to the
-// work this plan is about to do. Git failures (not a repo, detached oddities)
-// degrade to "no changed files", never a throw.
-function gitChangedFiles(repoRoot: string): string[] {
-  const run = (cmd: string): string => {
-    try {
-      return execSync(cmd, {
-        cwd: repoRoot,
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-        timeout: 15_000,
-      });
-    } catch {
-      return "";
-    }
-  };
-  return [
-    ...parseNumstat(run("git diff HEAD --numstat -M")).map((e) => e.path),
-    ...untrackedFiles(run("git status --porcelain -uall")).map((e) => e.path),
-  ];
 }
 
 // The overwrite check catches a filename collision. It does not catch the
@@ -283,45 +143,6 @@ function renderPriorArt(cwd: string, config: Config, roots: string[]): string {
   return shown.join("\n");
 }
 
-function renderRisks(scanBase: string, roots: string[]): string {
-  let findings: Finding[];
-  try {
-    findings = diagnose(buildGraph(scanBase), gitChangedFiles(scanBase));
-  } catch {
-    return "_(analyze failed to scan this tree — run `fapony analyze` manually)_";
-  }
-  // Findings outside the scope are another plan's problem — a seed for
-  // apps/vela/src/layouts/quick must not carry apps/mdl's findings. Cycle
-  // rows join their members with " ↔ ", so any member in scope keeps the row.
-  const inScope = (rel: string): boolean => {
-    const abs = resolve(scanBase, rel);
-    return roots.some((r) => abs === r || abs.startsWith(`${r}${sep}`));
-  };
-  const scoped = findings.filter((f) => f.file.split(" ↔ ").some(inScope));
-  if (scoped.length === 0) {
-    // Never "nothing is wrong": analyze judges whole files (hub / orphan /
-    // cycle / changed-untested) and cannot see an export nobody calls, because
-    // one re-export keeps its file reachable. Silence read as a clean bill is
-    // what makes a seeded §5 more dangerous than an empty one.
-    return "no findings — analyze ดูระดับไฟล์ (hub/orphan/cycle/changed-untested) ไม่เห็น export ที่ไม่มีคนเรียก `(fapony analyze)`";
-  }
-  const ordered = scoped.sort(
-    (a, b) =>
-      RISK_KINDS.indexOf(a.kind) - RISK_KINDS.indexOf(b.kind) ||
-      (a.file < b.file ? -1 : 1),
-  );
-  const lines = ordered.slice(0, MAX_RISKS).map((f) => {
-    const icon = f.kind === "orphan" ? "·" : "⚠";
-    return `- ${icon} **${f.kind}** ${f.file} — ${f.detail} \`(fapony analyze)\``;
-  });
-  if (ordered.length > MAX_RISKS) {
-    lines.push(
-      `- … +${ordered.length - MAX_RISKS} more (run \`fapony analyze\` for the full list)`,
-    );
-  }
-  return lines.join("\n");
-}
-
 // --- Context (fapony): mem decisions + model fit ---
 
 function renderContextFapony(worktree: string): string {
@@ -355,8 +176,6 @@ function renderContextFapony(worktree: string): string {
 
 function planTemplate(
   name: string,
-  scope: string,
-  risks: string,
   priorArt: string,
   contextFapony: string,
   specLink: string | null,
@@ -376,11 +195,14 @@ status: active
 - **Progress:**
   - [ ] chunk 1 — (agent เติม)
 
+## Context (fapony)
+${contextFapony}
+
 ## 1. Goal (why)
 _(agent เติม)_
 
-## 2. Scope — what repeats
-${scope}
+## 2. Scope (do / don't do)
+_(agent เติม)_
 
 ## 3. Done criteria (how we know it's finished)
 _(agent เติม — ต้อง verify ได้)_
@@ -388,8 +210,8 @@ _(agent เติม — ต้อง verify ได้)_
 ## 4. Constraints / Hard rules (must not violate)
 _(agent เติม)_
 
-## 5. Risks — from the import graph
-${risks}
+## 5. Risks & Escape hatches (if it fails)
+_(agent เติม)_
 
 ## 6. Steps (what in which order)
 1. _(agent เติม — แต่ละขั้น verify ได้)_
@@ -406,9 +228,6 @@ ${priorArt}
 
 ## Context (agent)
 _(slot ว่าง — agent dump graph/code-summary ของตัวเอง)_
-
-## Context (fapony)
-${contextFapony}
 `;
 }
 
@@ -724,16 +543,10 @@ export function cmdPlanSeed(args: string[]): void {
     }
   }
   if (roots.length === 0) roots.push(resolve(cwd, "."));
-  // Past a few hundred files the caps start eating output — say why it looks
-  // short instead of letting the seed silently truncate. 300 is a guess. Walk
-  // the scope once here; renderScope reuses the result without a second walk.
-  const filesByRoot = new Map<string, string[]>();
+  // Past a few hundred files the SPEC caps start eating output — say why it
+  // looks short instead of letting the seed silently truncate. 300 is a guess.
   let totalFiles = 0;
-  for (const r of roots) {
-    const files = scopeSourceFiles(r);
-    filesByRoot.set(r, files);
-    totalFiles += files.length;
-  }
+  for (const r of roots) totalFiles += scopeSourceFiles(r).length;
   if (totalFiles > SCOPE_WARN_FILES) {
     console.error(
       `plan-seed: ${totalFiles} source files in scope (> ${SCOPE_WARN_FILES}) — output is capped; narrow with --scope <path>`,
@@ -749,8 +562,6 @@ export function cmdPlanSeed(args: string[]): void {
     process.exit(1);
   }
 
-  const scope = renderScope(roots, filesByRoot, cwd);
-  const risks = renderRisks(worktree, roots);
   const priorArt = renderPriorArt(cwd, config, roots);
   const contextFapony = renderContextFapony(worktree);
 
@@ -782,7 +593,7 @@ export function cmdPlanSeed(args: string[]): void {
   mkdirSync(planDirAbs, { recursive: true });
   writeFileSync(
     planPath,
-    planTemplate(name, scope, risks, priorArt, contextFapony, specLink),
+    planTemplate(name, priorArt, contextFapony, specLink),
   );
   console.log(`wrote ${planPath}${specLink ? ` + SPEC-${name}.md` : ""}`);
 }
