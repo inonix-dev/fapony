@@ -263,10 +263,6 @@ export function testPlanSeedSingleFileScope(): void {
         join(dir, ".fapony", "spec", "SPEC-file.md"),
         "utf-8",
       );
-      const plan = readFileSync(
-        join(dir, ".fapony", "plan", "PLAN-file.md"),
-        "utf-8",
-      );
       // SPEC chunk index links the file
       assert.match(spec, /\[util\.ts\]\(#util-ts\)/);
       // Signatures are present

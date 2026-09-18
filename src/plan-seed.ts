@@ -34,7 +34,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import { collectSourceFiles, isSkippedDir, SCAN_EXTS } from "./analyze.js";
 import { computeModelFit } from "./context/projectHealth.js";
 import { doneDir, planDir, specDir } from "./db/getters.js";
