@@ -80,7 +80,11 @@ export function openDb(config?: Config): Database {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
   const db = new Database(`${dir}/state.db`);
+  // bun default busy_timeout=0 = no retry on SQLITE_BUSY; multiple agent
+  // processes share this db, so concurrent writers throw immediately without this.
+  db.run("PRAGMA busy_timeout=5000");
   db.run("PRAGMA journal_mode=WAL");
+  db.run("PRAGMA synchronous=NORMAL");
 
   migrateDb(db);
 
