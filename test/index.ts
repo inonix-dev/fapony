@@ -11,6 +11,7 @@ import {
   testAnalyzeBlastRadiusTransitiveCycle,
   testAnalyzeChangedUntested,
   testAnalyzeEmptyDir,
+  testAnalyzeExportsThroughBarrels,
   testAnalyzeHubOrphanCycle,
   testAnalyzeIsTestFile,
   testAnalyzeSkipsNestedCheckouts,
@@ -595,6 +596,7 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeBlastRadius();
   testAnalyzeBlastRadiusTransitive();
   testAnalyzeBlastRadiusTransitiveCycle();
+  testAnalyzeExportsThroughBarrels();
   testAnalyzeIsTestFile();
   testAnalyzeBarrelHidesTests();
   testAnalyzeSkipsNestedCheckouts();

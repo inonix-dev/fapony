@@ -17,6 +17,8 @@ import {
   normalize as posixNormalize,
 } from "node:path/posix";
 
+import { extractExports } from "./map.js";
+
 // --- Types (mirror SPEC-analyze-checkup.md) ---
 
 export interface ImportGraph {
@@ -208,6 +210,45 @@ function resolveRelative(
     if (filesSet.has(c)) return c;
   }
   return null;
+}
+
+// --- Exports, seen through barrels ---
+
+// `export * from "./x"` is reported by Bun.Transpiler.scan as an IMPORT edge and
+// never as an export, so a barrel file scans as having zero exports. Measured on
+// vela 2026-09-18: 211 barrels out of 1,996 source files, and `@innominix/ui`
+// alone is imported 462 times — the blind spot hides most of the cross-package
+// graph, which is why a wrapper reached through a barrel reads as unused. Named
+// re-exports (`export { x } from "./y"`) are already reported correctly; only the
+// star form needs this. Cost to close it: 1.9ms on a 17-export barrel. tsc answers
+// the same question type-accurately for 2,176ms — see SPEC-convention-debt.md §2.2
+// for why that 1,145x is not worth paying here.
+const STAR_REEXPORT_RE =
+  /^[ \t]*export\s+\*\s+(?:as\s+[\w$]+\s+)?from\s*["'](\.[^"']+)["']/gm;
+
+export function exportsThroughBarrels(
+  absDir: string,
+  rel: string,
+  filesSet: Set<string>,
+  seen = new Set<string>(),
+): string[] {
+  if (seen.has(rel)) return []; // barrels re-export each other; stop the cycle
+  seen.add(rel);
+  let source: string;
+  try {
+    source = readFileSync(join(absDir, rel), "utf-8");
+  } catch {
+    return [];
+  }
+  const out = extractExports(source)
+    .symbols.filter((s) => s.name !== "*")
+    .map((s) => s.name);
+  STAR_REEXPORT_RE.lastIndex = 0;
+  for (const m of source.matchAll(STAR_REEXPORT_RE)) {
+    const hit = resolveRelative(rel, m[1], filesSet);
+    if (hit) out.push(...exportsThroughBarrels(absDir, hit, filesSet, seen));
+  }
+  return [...new Set(out)];
 }
 
 export function buildGraph(dir: string): ImportGraph {
