@@ -117,6 +117,12 @@ import {
   testGateOnceUncertain,
 } from "./gate.test.js";
 import {
+  testCommitHintMinCommitsConstant,
+  testCommitHintNullForNonCommit,
+  testCommitHintNullOutsideGitRepo,
+  testCommitHintPluginSource,
+  testCommitHintWhenGradedVerdictsExist,
+  testCommitHintWhenNoGradedVerdicts,
   testCursorPayloadEdges,
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
@@ -192,6 +198,10 @@ import {
   testCmdInstallDispatchesOpencode,
   testInstallOpencodeAlreadyConfiguredLinksSkills,
   testInstallOpencodeAlreadyConfiguredNoOp,
+  testInstallOpencodeCommitHintDryRun,
+  testInstallOpencodeCommitHintForeignFileUntouched,
+  testInstallOpencodeCommitHintIdempotent,
+  testInstallOpencodeCommitHintPlugin,
   testInstallOpencodeDryRunNoWrite,
   testInstallOpencodeNewFile,
   testInstallOpencodeParseErrorFails,
@@ -660,6 +670,12 @@ export async function cmdTest(): Promise<void> {
   testReadHintNeedsGitRepo();
   testReadHintClaudeOutputShape();
   testReadHintPluginSource();
+  testCommitHintMinCommitsConstant();
+  testCommitHintNullForNonCommit();
+  testCommitHintNullOutsideGitRepo();
+  testCommitHintWhenNoGradedVerdicts();
+  testCommitHintWhenGradedVerdictsExist();
+  testCommitHintPluginSource();
   testReadContextShowsDebtBeforeFix();
   testReadContextMemRowsByFilesAndPath();
   testReadContextBasenameAmbiguityStaysSilent();
@@ -846,6 +862,10 @@ export async function cmdTest(): Promise<void> {
   testInstallOpencodeNewFile();
   testInstallOpencodeReadHintPlugin();
   testInstallOpencodeReadHintForeignFileUntouched();
+  testInstallOpencodeCommitHintPlugin();
+  testInstallOpencodeCommitHintIdempotent();
+  testInstallOpencodeCommitHintForeignFileUntouched();
+  testInstallOpencodeCommitHintDryRun();
   testInstallOpencodeAlreadyConfiguredNoOp();
   testInstallOpencodeAlreadyConfiguredLinksSkills();
   testInstallOpencodeDryRunNoWrite();

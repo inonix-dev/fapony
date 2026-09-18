@@ -314,6 +314,97 @@ export function readHintFor(opts: ReadHintInput): string | null {
   }
 }
 
+// --- Commit hint (tool.execute.after — annotate only, never block) ---
+//
+// OpenCode ไม่มี Stop hook (Cursor มีอยู่แล้ว — ดู cursor.ts hook-stop wiring)
+// จึงไม่สามารถ block เทิร์นได้ แทนด้วย annotate ที่ต่อท้าย output ของ bash
+// tool ทุกครั้งที่มี git commit แล้วไม่มี verdict ค้างอยู่ เป็น nudge แบบ
+// เดียวกับ read hint: ไม่ block, ไม่ dedupe, ทุก unknown → เงียบ · เรียกจาก
+// opencode plugin โดย import ตรง (เหมือน readHintFor) ไม่มี CLI subcommand
+// เพราะไม่มี client ไหนต้องการแบบ subprocess (Cursor ใช้ hook-stop ของตัวเองแทน)
+//
+// ข้อความเป็น fact ล้วน (commit list + verdict status) ไม่ใช่ estimate
+
+/** Below this number of commits, the hint is unnecessary noise. */
+export const COMMIT_HINT_MIN_COMMITS = 1;
+/** Cap commits shown in the hint message. */
+const COMMIT_HINT_MAX_LIST = 5;
+
+export interface CommitHintInput {
+  command: unknown;
+  cwd: string;
+}
+
+/**
+ * Nudge for bash commands containing `git commit` that produced
+ * ungraded commits. Returns a one-to-two line hint string, or null
+ * when there is nothing to nudge about (already graded, no commits,
+ * not a git commit command, not a git repo, any failure).
+ *
+ * Every unknown resolves to null — a hint must never fire on a
+ * guess. The work is cheap: one git rev-parse + one git log + one
+ * SQLite count.
+ */
+export function commitHintFor(opts: CommitHintInput): string | null {
+  try {
+    if (typeof opts.command !== "string" || opts.command === "") return null;
+    // Only fire on git commit commands — not `git push`, `git pull`, etc.
+    if (!/\bgit\s+commit\b/.test(opts.command)) return null;
+
+    const worktree = git(["rev-parse", "--show-toplevel"], opts.cwd);
+    if (!worktree) return null;
+
+    // Window = commits since the worktree's last verdict, not "does a
+    // verdict exist anywhere in its history" — a worktree that earned one
+    // verdict months ago must still nudge on every commit made since, the
+    // same way cmdHookStop windows on `e.ts >= since` (session start) rather
+    // than "any verdict this worktree has ever had".
+    const db = openDb();
+    const lastVerdict = db
+      .query(
+        `SELECT MAX(e.ts) AS ts FROM events e JOIN runs r ON r.id = e.run_id
+         WHERE e.kind = 'gate' AND r.worktree = ?`,
+      )
+      .get(worktree) as { ts: string | null } | null;
+    // git's --since is inclusive to the second, and the commit a verdict
+    // just graded often lands in the same UTC second as the verdict itself
+    // (verdict_submit runs right after the commit) — bump by 1s so that
+    // commit isn't re-flagged as ungraded because of its own grade.
+    const since = lastVerdict?.ts
+      ? utcStamp(
+          new Date(
+            new Date(`${lastVerdict.ts.replace(" ", "T")}Z`).getTime() + 1000,
+          ),
+        )
+      : null;
+
+    const log = since
+      ? git(["log", "--since", `${since} +0000`, "--format=%h %s"], worktree)
+      : git(["log", "--format=%h %s"], worktree);
+    const commitList = log ? log.split("\n").filter(Boolean) : [];
+    if (commitList.length < COMMIT_HINT_MIN_COMMITS) return null;
+
+    const reason = decideStop({
+      stopHookActive: false, // annotate-only: never "already blocked"
+      worktree,
+      commits: commitList.length,
+      verdicts: 0, // every commit left in the window is, by construction, ungraded
+      commitList: commitList.slice(0, COMMIT_HINT_MAX_LIST),
+    });
+    if (!reason) return null;
+
+    // Prefix each line with "fapony:" so it's visually distinct
+    // from normal bash output in the agent's context.
+    const prefixed = reason
+      .split("\n")
+      .map((l) => `fapony: ${l}`)
+      .join("\n");
+    return prefixed;
+  } catch {
+    return null; // any failure = no hint
+  }
+}
+
 /** Claude Code PreToolUse (matcher Read): stdin JSON in, additionalContext out.
  *  No permissionDecision ever — the tool call always proceeds. */
 export async function cmdHookReadHint(): Promise<void> {
