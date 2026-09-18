@@ -24,7 +24,7 @@ spec: SPEC-<feature>.md           # if any
 - **Done when:** one line, testable
 - **Order:** what this waits on / what it unblocks (mirrors the frontmatter)
 - **Progress:**
-  - [x] chunk 1 — <what landed>  `<short sha>` <YYYY-MM-DD>
+  - [x] chunk 1 — <what landed>  `<short sha>` <YYYY-MM-DD> · verdict: <grade>
   - [ ] chunk 2 — <what is next>
 
 ---

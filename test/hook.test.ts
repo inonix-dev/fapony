@@ -327,6 +327,10 @@ export function testReadHintPluginSource(): void {
   assert.ok(src.includes('input.tool !== "read"'), "guards the tool name");
   assert.ok(src.includes("output.output"), "mutates the tool output");
   assert.ok(!src.includes("throw"), "must never throw into the tool call");
+  assert.ok(
+    src.includes("readContextLines"),
+    "must also wire debt/mem context, matching Claude's cmdHookReadHint",
+  );
   console.log(
     "  ✓ read hint opencode plugin imports shared logic, annotate-only",
   );
