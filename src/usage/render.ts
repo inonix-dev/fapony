@@ -304,8 +304,9 @@ function shareSection(
 }
 
 /**
- * เติมราคาตั้งให้แถวที่ client ไม่บันทึก cost (0) — ของที่มีราคาจริงอยู่แล้ว
- * ไม่แตะ · คืน view ไว้ render + note ไว้ใต้ตาราง (ป้าย list-price ทุกจุด)
+ * Imputes list prices for rows where the client records no cost (0) — rows
+ * that already have a real price are left alone · returns a view to render
+ * plus a note for below the table (list-price label everywhere)
  */
 function withImputed(
   data: PassiveUsageResult | null,
@@ -332,7 +333,7 @@ function withImputed(
       tokens_reasoning: real?.tokens_reasoning ?? 0,
       tokens_cache_read: m.tokens_cache_read,
       tokens_cache_write: m.tokens_cache_write,
-      // รวมกับ cost จริงรายรุ่น (opencode บันทึกเอง) — ข้างไหนมีค่ากว่ากันเอาข้างนั้น
+      // combine with the real per-model cost (OpenCode records its own) — whichever has a value wins
       cost: real && real.cost > 0 ? real.cost : m.imputed_cost,
     };
   });
@@ -363,7 +364,7 @@ export function renderUsageHtml(
     .filter((k) => k !== "__global__")
     .sort();
 
-  // ราคา list จาก cache อย่างเดียว — serve ไม่ fetch เอง (offline ได้)
+  // list price from cache only — serving never fetches itself (works offline)
   const table = prices === undefined ? loadPrices() : prices;
 
   const owner = ownerName?.trim() ? esc(ownerName.trim()) : "";
@@ -395,7 +396,7 @@ export function renderUsageHtml(
 
     const heading = isGlobal ? "All projects" : shortWt(label);
 
-    // การ์ดที่ไม่มี session เลยไม่มีอะไรให้ดู — ซ่อนแทนที่จะโชว์ "no sessions"
+    // a card with no sessions has nothing to show — hide it instead of showing "no sessions"
     const cards = [
       ["OpenCode", "var(--green)", pOc],
       ["ZCode", "var(--accent)", pZc],

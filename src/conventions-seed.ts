@@ -1,15 +1,15 @@
 // src/conventions-seed.ts — `fapony init` fill-signal (PLAN-convention-debt chunk 2).
 //
-// คำถาม: "การ fill signal ตอน init ทำได้แค่ไหน" (SPEC-convention-debt §2.2) —
-// วัดสองรอบ คำตอบรอบแรกผิด: eslint คือของที่ทีมส่วนใหญ่ปล่อย default ตอนติดตั้ง,
-// pair-mining พังกับ commit ก้อนใหญ่และ cap ผ่อนไม่ได้ (วัดแล้ว) — ของที่**ทุกรีโปมี**
-// คือโค้ดตัวเอง ฐานจึงเป็น wrapper detector (อ่าน snapshot อย่างเดียว ไม่แตะ history),
-// eslint เป็น bonus เมื่อมี, pair-mining ยังไม่ทำ (chunk 7 วัด precision ก่อน)
+// Question: "how far can signal-filling at init go" (SPEC-convention-debt §2.2) —
+// Measured twice; the first answer was wrong: eslint is what most teams leave at default on install,
+// pair-mining breaks on large commits and the cap cannot be relaxed (measured) — what **every repo has**
+// is its own code, so the base is a wrapper detector (reads the snapshot only, never touches history),
+// eslint is a bonus when present, pair-mining is not done yet (chunk 7 measures precision first)
 //
-// เขียนได้ที่เดียว: <target>/.fapony/conventions.json — นิยาม convention อยู่ในรีโปที่
-// ถูกวัด (SPEC §2.1), commit ได้เพราะทุก field เป็น repo-relative · มีอยู่แล้ว = ไม่แตะ
-// (rule 5c) · fapony ไม่เดา convention ที่ไม่มีร่องรอย — อันที่ยังไม่เคย migrate และ
-// ไม่มี wrapper ไม่มีร่องรอยทั้งใน snapshot และ history ช่องนั้นเหลือให้คนเติม (stale)
+// Written to one place: <target>/.fapony/conventions.json — the convention definition lives in the repo being
+// measured (SPEC §2.1), committable because every field is repo-relative · already exists = leave untouched
+// (rule 5c) · fapony does not guess a convention with no trace — one never migrated and
+// with no wrapper has no trace in either snapshot or history, that slot is left for a human to fill (stale)
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
@@ -108,7 +108,7 @@ function rowsFromBlock(block: Block, whereBase: string): SeedRow[] {
     whereGlob && whereGlob !== "." ? `${dir}${whereGlob}` : whereBase || ".";
   const push = (message: unknown, stale: string | null, ruleId: string) => {
     const text = flatText(message);
-    if (!text) return; // checker โดยไม่มีข้อความ = ไม่รู้ว่ากฎคืออะไร
+    if (!text) return; // a checker without a message = the rule is unknown
     out.push({ id: "", rule: text, where, stale, checker: ruleId });
   };
   for (const [ruleId, value] of Object.entries(block.rules ?? {})) {

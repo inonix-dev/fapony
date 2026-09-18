@@ -13,7 +13,7 @@ import {
 } from "../../session/index.js";
 import { jsonResult, type ToolResult } from "../types.js";
 
-/** สรุป list-price ต่อ client — additive ไม่แตะบรรทัดเดิม */
+/** list-price summary per client — additive, leaves existing lines untouched */
 function imputationOf(
   result: PassiveUsageResult,
   prices: PriceTable | null,
@@ -45,7 +45,7 @@ function imputedTextLines(
   return [`  ${label}list-price equivalent: ${parts.join(" · ")}`];
 }
 
-/** ราคา list ราย model ต่อท้ายชื่อรุ่น — เฉพาะแถวที่ client ไม่บันทึก cost */
+/** list price per model appended to the model name — only rows where the client records no cost */
 function imputedSuffix(
   provider: string,
   model: string,
@@ -78,7 +78,7 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
     result: client.read(worktree, since, until, detail),
   }));
 
-  // ราคา list จาก cache อย่างเดียว — อ่านครั้งเดียวต่อ call ไม่ใช่ต่อ section
+  // list prices from the cache only — read once per call, not per section
   const prices = loadPrices();
 
   if (args.json === true) {

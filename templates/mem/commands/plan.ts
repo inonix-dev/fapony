@@ -1,9 +1,9 @@
-// commands/plan.ts — plan-sweep: หา PLAN-*.md ที่ header บอก shipped แล้วแต่ยังไม่ย้ายเข้า done/
-// เหตุผล: ย้ายมือ = ต้องไล่แก้ relative link เอง (ในไฟล์ + ไฟล์อื่นที่ลิงก์มา) → ข้ามขั้นตอนบ่อย
-// ไม่มี arg = report เฉยๆ (ปลอดภัย โชว์ทุก kickoff/stale run ได้)
-// <file.md> = เช็คไฟล์เดียวว่าพร้อมย้ายไหม
-// <file.md> --apply = git mv + แก้ markdown link ในไฟล์เอง + แก้ inbound link จากไฟล์อื่นใน plan/
-//                      + แจ้ง warning plain-text mention (detect-only, ไม่ auto-fix)
+// commands/plan.ts — plan-sweep: find PLAN-*.md whose header says shipped but not yet moved into done/
+// rationale: moving by hand = chasing relative links yourself (in the file + files that link to it) → the step gets skipped often
+// no arg = report only (safe, shows every kickoff/stale run)
+// <file.md> = check a single file, is it ready to move
+// <file.md> --apply = git mv + fix markdown links inside the file + fix inbound links from other files in plan/
+//                      + warn about plain-text mentions (detect-only, no auto-fix)
 
 import {
   existsSync,
@@ -21,13 +21,13 @@ const SHIPPED = /^>\s*✅/m;
 const FRONT = /^---\r?\n([\s\S]*?)\r?\n---/;
 const HELD = /^status:\s*(blocked|superseded)\b/m;
 
-// header ✅ shipped ไม่ได้อยู่บรรทัดแรกอีกแล้ว — plan format ปัจจุบันขึ้นต้นด้วย frontmatter
-// แล้วตามด้วย `# title` (ดู templates/PLAN.md) เช็กหัวไฟล์แทนที่จะเช็กบรรทัดแรกบรรทัดเดียว
+// the ✅ shipped header is no longer on the first line — the current plan format starts with frontmatter
+// then `# title` (see templates/PLAN.md); check the file's head rather than a single first line
 //
-// frontmatter ชนะ header ✅ เสมอ: plan ที่ ship ไปบาง chunk แล้วติดรอของข้างนอก (VPS, คนใช้,
-// การตัดสินใจ) เขียน `status: blocked` ไว้ = ตั้งใจให้อยู่ใน plan/ ต่อ ไม่ใช่ของที่ลืมย้าย
-// ถ้าไม่ดูตรงนี้ plan แบบนั้นจะขึ้น "shipped but never archived" ทุกครั้งไปตลอด แล้วคนก็เลิกอ่าน
-// รายการนี้ทั้งรายการ — ซึ่งเป็นอาการเดียวกับที่ทำให้ done/ ไม่เคยขยับตั้งแต่แรก
+// frontmatter always beats the ✅ header: a plan that shipped some chunks and is waiting on externals (VPS, users,
+// a decision) writes `status: blocked` = it is meant to stay in plan/, not forgotten to move
+// if this is not checked, such plans show "shipped but never archived" forever, and people stop reading
+// the whole list — the same symptom that kept done/ from ever moving in the first place
 export const hasShippedHeader = (file: string): boolean => {
   const head = readFileSync(file, "utf8").slice(0, 2048);
   if (!SHIPPED.test(head)) return false;
@@ -49,10 +49,10 @@ const mdFiles = (dir: string): string[] =>
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-// ไฟล์ย้าย dir แล้ว (เนื้อหาเดิม) — markdown link เดิมหมายถึง path เดิมเมื่ออิง oldDir, ต้อง re-relativize ผ่าน newDir
-// resolve จาก newDir (ที่ไฟล์อยู่ตอนนี้) — ถ้า target ก็ย้ายมา same dir → ได้ชื่อไฟล์ล้วน,
-// ถ้า target ยังอยู่ oldDir → ได้ ../target (ถูกทั้งสองทาง)
-// pass 1 only — แก้เฉพาะ [text](target) markdown links, ไม่แตะ plain text
+// the file moved dir (same content) — an old markdown link meant the old path relative to oldDir, must re-relativize via newDir
+// resolve from newDir (where the file is now) — if the target also moved to the same dir → plain filename,
+// if the target stayed in oldDir → ../target (both correct)
+// pass 1 only — fix only [text](target) markdown links, do not touch plain text
 export const rewriteMovedFileLinks = (
   file: string,
   oldDir: string,
@@ -76,8 +76,8 @@ export const rewriteMovedFileLinks = (
   return n;
 };
 
-// ไฟล์อื่นที่ลิงก์ชี้มาที่ path เดิม (oldAbs) → แก้ให้ชี้ path ใหม่ (newAbs) แทน
-// pass 1 only — แก้เฉพาะ [text](target) markdown links, ไม่แตะ plain text
+// other files whose links point at the old path (oldAbs) → repoint them at the new path (newAbs)
+// pass 1 only — fix only [text](target) markdown links, do not touch plain text
 export const rewriteMarkdownLinks = (
   file: string,
   oldAbs: string,
@@ -99,18 +99,18 @@ export const rewriteMarkdownLinks = (
   return n;
 };
 
-// นับ plain-text mention ของ target filename ในไฟล์ (detect-only, ไม่เขียนไฟล์)
-// regex: ไม่ใช่ markdown link [text](url) — จับทั้งแบบมี/ไม่มี .md extension
-// ครอบคลุม: prose, backtick code span, code fence — ทุก context ที่ไม่ใช่ markdown link
+// count plain-text mentions of the target filename in a file (detect-only, writes nothing)
+// regex: not a markdown link [text](url) — catches both with/without the .md extension
+// covers: prose, backtick code span, code fence — every context that is not a markdown link
 //
-// Fix (2026-09-02): ตัด markdown link ทั้งก้อน [text](target) ออกก่อน (ทั้ง display text และ
-// target — ไม่ใช่แค่ target) แล้วค่อยรัน plain-text regex บน string ที่เหลือ โดยไม่ต้องพึ่ง
-// lookbehind แล้ว — lookbehind เดิม `(?<![/\[(])` ตั้งใจกัน false-positive จาก markdown link
-// แต่ผลข้างเคียงคือ exclude ทุก mention ที่มี `/` นำหน้าไปด้วย (เช่น `done/PLAN-x.md` หรือ
-// `apps/vela/plan/PLAN-x.md`) — false-negative ตัวจริงที่พลาดใน 6e411042
-// Fix รอบแรก (ตัดแค่ `](target)`) พลาด — เหลือ `[display-text]` ไว้ไม่ได้ตัด ทำให้ link ที่ถูกต้อง
-// อยู่แล้วอย่าง `[PLAN-x.md](../done/PLAN-x.md)` (pattern จริงในไฟล์นี้ทั้งหมด) โดน count ซ้ำเป็น
-// plain-text mention — ต้องตัดทั้งก้อน [..](..)  ไม่ใช่แค่ส่วน (..)
+// Fix (2026-09-02): strip the whole markdown link [text](target) first (both display text and
+// target — not just target), then run the plain-text regex on the remainder, no longer needing
+// lookbehind — the old lookbehind `(?<![/\[(])` was meant to stop markdown-link false-positives
+// but its side effect was excluding every mention with a leading `/` too (e.g. `done/PLAN-x.md` or
+// `apps/vela/plan/PLAN-x.md`) — the real false-negative that slipped through in 6e411042
+// The first fix (stripping only `](target)`) missed — it left `[display-text]` unwrapped, making an already
+// valid link like `[PLAN-x.md](../done/PLAN-x.md)` (the actual pattern throughout this file) get double-counted as a
+// plain-text mention — strip the whole [..](..) block, not just the (..) part
 export const countPlainTextMentions = (
   file: string,
   target: string,
@@ -128,7 +128,7 @@ export const countPlainTextMentions = (
   return count;
 };
 
-// ใช้ร่วมกับ dashboard (now/kickoff) — ไฟล์ plan/ ที่มี header shipped แต่ยังไม่ย้ายเข้า done/
+// shared with the dashboard (now/kickoff) — plan/ files with a shipped header but not yet moved into done/
 export const shippedNotMoved = (): string[] => {
   const dir = planDir;
   if (!existsSync(dir)) return [];
@@ -187,8 +187,8 @@ export const cmdPlanSweep = (a: string[]) => {
     return;
   }
 
-  // ponytail: --apply เดิม (ก่อนหน้านี้) ไม่บังคับ 2 เงื่อนไขนี้เลย — ผ่าน dry-run message ได้ก็จริง
-  // แต่รัน --apply ตรง ๆ ข้ามได้หมด → เสี่ยงเวลา agent ship เองอัตโนมัติไม่มีคนเช็ค แก้เป็น hard block
+  // ponytail: the old --apply enforced neither of these two conditions — you could pass the dry-run message
+  // but then run --apply directly and skip everything → risky when an agent ships automatically with no human check, so hard block
   if (!shipped && !process.env.MEM_FORCE) {
     console.error(
       `${target}: no ✅ shipped header at the top — refusing to move (MEM_FORCE=1 to override)`,
@@ -211,8 +211,8 @@ export const cmdPlanSweep = (a: string[]) => {
     process.exit(1);
   }
 
-  // ponytail: ไฟล์ที่เพิ่งเขียนในรอบนี้อาจยังไม่ git add — `git mv` fail แบบเงียบ (exit 128, ไม่ throw)
-  // แล้วโค้ดต่อไปพัง ENOENT ตอนอ่าน dst ที่ไม่มีจริง — stage ก่อนเสมอ (no-op ถ้า track อยู่แล้ว)
+  // ponytail: a file just written this round may not be git add'ed yet — `git mv` fails silently (exit 128, no throw)
+  // then the next code hits ENOENT reading a dst that does not exist — always stage first (no-op if already tracked)
   mkdirSync(doneDir, { recursive: true });
   Bun.spawnSync(["git", "add", src]);
   const mv = Bun.spawnSync(["git", "mv", src, dst]);
@@ -221,8 +221,8 @@ export const cmdPlanSweep = (a: string[]) => {
     process.exit(1);
   }
 
-  // done/ เป็นพี่น้องกับ plan/ = ลึกเท่าเดิม ลิงก์ในไฟล์ยังชี้ถูกทุกเส้น ไม่ต้องแตะ
-  // layout เก่า (plan/done/) ลึกขึ้น 1 ชั้น ถึงจะต้อง re-relativize
+  // done/ is a sibling of plan/ = same depth, links in the file still resolve, no need to touch
+  // the old layout (plan/done/) is one level deeper, so it does need re-relativizing
   const nested = dirname(doneDir) !== dirname(dir);
   const ownLinks = nested ? rewriteMovedFileLinks(dst, dir, doneDir) : 0;
 
@@ -247,7 +247,7 @@ export const cmdPlanSweep = (a: string[]) => {
     `inbound links rewritten: ${inbound} in ${inboundFiles} file(s) (scanned ${rel(dir)}/** only)`,
   );
 
-  // log decision — record ship event (reuse existing kind, ไม่ต้อง schema ใหม่)
+  // log decision — record ship event (reuse existing kind, no new schema)
   const doneSpec = `${rel(dst)}`;
   put({
     id: nextId(rows()),
@@ -255,11 +255,11 @@ export const cmdPlanSweep = (a: string[]) => {
     text: `${target} shipped → ${rel(dst)}`,
     spec: doneSpec,
   });
-  // ponytail: decision นี้ *คือ* การย้ายเอง ไม่มีอะไรต้องเขียนกลับเข้า spec อีก — ไม่ mark synced
-  // ทันที staleReport จะขึ้น "decision ยังไม่เข้า spec" ทุกครั้งที่ ship (เห็นจริงใน kickoff 2026-09-02)
+  // ponytail: this decision *is* the move itself, nothing to write back into the spec — do not mark synced
+  // immediately or staleReport shows "decision never made it into the spec" on every ship (seen in kickoff 2026-09-02)
   put({ kind: "synced", spec: doneSpec });
 
-  // plain-text mention detection (detect-only, ไม่ auto-fix)
+  // plain-text mention detection (detect-only, no auto-fix)
   let plainTextTotal = 0;
   const plainTextFiles: string[] = [];
   for (const f of mdFiles(dir)) {
@@ -275,14 +275,14 @@ export const cmdPlanSweep = (a: string[]) => {
     );
   }
 
-  // ไฟล์นอก plan/ ที่ mention target — detect-only
+  // files outside plan/ that mention the target — detect-only
   const grep = Bun.spawnSync([
     "git",
     "grep",
     "-l",
     target,
     "--",
-    // ขอบเขต "ไฟล์นอก plan/" = โฟลเดอร์ที่ plan/ อยู่ใต้มัน (apps/vela, .fapony, …)
+    // the "files outside plan/" scope = the folder plan/ lives under (apps/vela, .fapony, …)
     rel(dirname(planDir)),
     `:!${rel(dir)}`,
   ])
@@ -324,8 +324,8 @@ export const cmdPlanCheck = (a: string[]) => {
   //    only check active files (not done/) — done/ files are historical snapshots with external refs
   const linkRe = /\]\(([^)]+)\)/g;
   for (const f of active) {
-    // ตัด fenced block + inline code ทิ้งก่อน (แทนที่ด้วย spaces เพื่อคง line offset) —
-    // ตัวอย่าง link ใน code (เช่น spec ของเครื่องมือนี้เอง) ต้องไม่ถูกนับเป็น link จริง
+    // strip fenced blocks + inline code first (replace with spaces to preserve line offset) —
+    // example links in code (e.g. this tool's own spec) must not be counted as real links
     const src = readFileSync(f, "utf8")
       .replace(/```[\s\S]*?```/g, (b) => b.replace(/[^\n]/g, " "))
       .replace(/`[^`\n]*`/g, (b) => " ".repeat(b.length));

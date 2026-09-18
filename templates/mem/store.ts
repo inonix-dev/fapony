@@ -60,43 +60,43 @@ type LogRow = WorkRow | CloseRow | ClaimRow | ReleaseRow | SyncedRow;
 const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"])
   .stdout.toString()
   .trim();
-// ponytail: worktree ชื่อ wt-<app> = monorepo scope (apps/<app>/.fapony/.memory).
-// fapony template: repo เดี่ยว (ไม่มี apps/) → fallback ไป .fapony/.memory ที่ root ตรงๆ
-// ไม่ต้อง config/flag ทั้งสองแบบ
+// ponytail: worktree named wt-<app> = monorepo scope (apps/<app>/.fapony/.memory).
+// fapony template: single repo (no apps/) → fallback straight to .fapony/.memory at root
+// no config/flag needed for either shape
 const app = process.env.MEM_APP ?? basename(root).replace(/^wt-/, "");
-// โฟลเดอร์รวม app หาจาก {apps,packages,services}/<app> ตัวแรกที่มีจริง — ลำดับคงที่
-// apps → packages → services ตัวแรกที่เจอชนะ (ลำดับคือสัญญา ไม่ใช่บังเอิญ)
-// guard `unknown app` ข้างล่างยังผูกกับ apps/ เหมือนเดิม — ไม่ขยายในรอบนี้
+// app container folder found from {apps,packages,services}/<app>, first that exists — fixed order
+// apps → packages → services, first hit wins (the order is the contract, not an accident)
+// the `unknown app` guard below is still tied to apps/ as before — not widened this round
 const appBase: string | undefined = ["apps", "packages", "services"]
   .map((d) => `${root}/${d}/${app}`)
   .find((p) => existsSync(p));
 const monorepo = appBase !== undefined;
 
-// สำเนาที่ `fapony init` วางไว้ อยู่ใน <project>/.fapony/.memory/ — log กับ plan ของมัน
-// ต้องอิงโฟลเดอร์ตัวเอง ไม่ใช่ git root: เคสที่พังจริงคือ apps/<x>/.fapony/.memory/ ใน monorepo
-// ซึ่ง heuristic ด้านล่างจะชี้ไป apps/<ชื่อ worktree>/.fapony/.memory = เขียน log ปนโปรเจกต์อื่น
-// แต่สำเนากลางที่ย้ายเข้า .fapony/.memory ที่ root ของ monorepo เอง (โค้ดชุดเดียว, log แยกราย
-// app — เช่น vela) ต้อง "ไม่" ถือเป็น scaffolded แม้ path จะแมตช์เหมือนกัน เพราะยังต้องเดา app
-// จาก monorepo อยู่ — ตัวแยกคือ "เดา app ได้ไหม" (`monorepo`) ไม่ใช่ "มีโฟลเดอร์รวม app ไหม":
-// แค่มี apps/ อยู่ที่ root ไม่ได้แปลว่าสำเนานี้เป็นสำเนากลาง — `fapony init <monorepo root>` ก็วาง
-// .fapony/.memory ที่ root เหมือนกัน แล้วมันต้องอิงโฟลเดอร์ตัวเอง ไม่งั้นตายที่ guard ข้างล่าง
-// ตั้งแต่คำสั่งแรกทั้งที่ plan ของมันอยู่ข้าง ๆ นั่นเอง
+// The copy `fapony init` places lives in <project>/.fapony/.memory/ — its log and plan
+// must key off their own folder, not the git root: the real broken case is apps/<x>/.fapony/.memory/ in a monorepo,
+// where the heuristic below would point at apps/<worktree name>/.fapony/.memory = writing a log mixed into another project.
+// But the central copy that was moved into .fapony/.memory at the monorepo root itself (single code copy, logs split per
+// app — e.g. vela) must "not" count as scaffolded even though the path matches, because it still has to guess the app
+// from the monorepo — the discriminator is "can the app be guessed" (`monorepo`), not "is there an app container folder":
+// just having apps/ at the root does not make this copy the central one — `fapony init <monorepo root>` also places
+// .fapony/.memory at the root, and it must key off its own folder, or it dies at the guard below
+// from the very first command even though its plan sits right next to it.
 const centralAtMonorepoRoot =
   import.meta.dir === `${root}/.fapony/.memory` && monorepo;
 const scaffolded =
   import.meta.dir.includes("/.fapony/.memory") && !centralAtMonorepoRoot;
 
-// มี apps/ แต่ไม่มี apps/<app> = เดา app ผิด (worktree ชื่อไม่ตรง / typo ใน MEM_APP) — ตายตรงนี้
-// ดีกว่า fallback เงียบ ๆ ไปเขียน log ที่ root ซึ่งจะกลายเป็น log กำพร้าที่ไม่มีใครอ่าน
-// (สำเนาที่ scaffold ไว้ใต้ apps/<x>/.fapony/.memory/ อิงโฟลเดอร์ตัวเอง ไม่ต้องเดา จึงไม่เข้าเงื่อนไขนี้)
+// apps/ exists but apps/<app> does not = guessed the app wrong (worktree name mismatch / typo in MEM_APP) — die here
+// rather than fall back silently and write a log at the root that becomes an orphan nobody reads
+// (a copy scaffolded under apps/<x>/.fapony/.memory/ keys off its own folder, needs no guess, so it does not hit this)
 if (!scaffolded && !monorepo && existsSync(`${root}/apps`)) {
   console.error(
     `unknown app (guessed "${app}" from ${basename(root)}) — pass MEM_APP=<app>`,
   );
   process.exit(1);
 }
-// default ใหม่: log อยู่ใต้ .fapony/.memory — fallback ไป .memory/ เดิมเมื่อมี log เก่าอยู่จริง
-// เช็ค log.jsonl ไม่ใช่ dir: โฟลเดอร์ว่างที่ใครเผลอ mkdir ทิ้งไว้ต้องไม่ล็อก repo ไว้กับ layout เก่า
+// new default: log lives under .fapony/.memory — fall back to the old .memory/ only when an old log actually exists
+// check for log.jsonl, not the dir: an empty folder someone accidentally mkdir'd must not lock the repo to the old layout
 const newDir = appBase
   ? `${appBase}/.fapony/.memory`
   : `${root}/.fapony/.memory`;
@@ -106,12 +106,12 @@ const dir = scaffolded
   : existsSync(`${legacyDir}/log.jsonl`)
     ? legacyDir
     : newDir;
-// ใครเขียนแถวนี้ — client ตั้ง MEM_AGENT ทับได้ ("claude-code", "opencode")
+// who wrote this row — the client can override with MEM_AGENT ("claude-code", "opencode")
 const agent = process.env.MEM_AGENT || process.env.USER || "unknown";
 
-// ชื่อไฟล์ = *คน* ไม่ใช่ client ตั้งใจให้ต่างจาก agent ข้างบน: ถ้าใช้ MEM_AGENT ตั้งชื่อไฟล์
-// สองคนที่เปิด Claude Code จะกลับไปเขียน log.claude-code.jsonl ใบเดียวกัน = ชนเหมือนเดิม
-// git user.name มีอยู่แล้วทุกเครื่องที่ commit ได้ จึงไม่ต้องตั้ง env และไม่ต้องเพิ่ม config
+// filename = *person*, not client, deliberately different from agent above: naming files by MEM_AGENT
+// would put two people running Claude Code back into the same log.claude-code.jsonl = same collision as before
+// git user.name exists on every machine that can commit, so no env to set and no config to add
 const person = (
   Bun.spawnSync(["git", "config", "user.name"]).stdout.toString().trim() ||
   process.env.USER ||
@@ -121,12 +121,12 @@ const person = (
   .replace(/[^a-z0-9._-]+/g, "-")
   .replace(/^-+|-+$/g, "");
 
-// เขียนไฟล์ของตัวเอง อ่านของทุกคน — สองคนไม่เคยแตะไฟล์เดียวกัน = merge conflict
-// เป็นศูนย์โดยโครงสร้าง ไม่ต้องพึ่ง merge=union หรือให้ GitHub ทำตัวดีตอน merge PR
+// write your own file, read everyone's — two people never touch the same file = merge conflicts
+// are structurally zero, no need for merge=union or GitHub behaving itself on PR merge
 const LOG = `${dir}/log.${person || "unknown"}.jsonl`;
 
-// log.jsonl = ของเดิมก่อนแยกไฟล์ (ยังอ่านตลอดไป ไม่ต้อง migrate)
-// ข้าม log.YYYY-MM-DD.jsonl ที่ rotate สร้าง ไม่งั้น rotate จะไม่ลดอะไรเลยเพราะอ่านกลับเข้ามา
+// log.jsonl = the pre-split original (still read forever, no migration needed)
+// skip the log.YYYY-MM-DD.jsonl that rotate creates, or rotate reduces nothing because they get read back in
 const isLogFile = (f: string): boolean =>
   f === "log.jsonl" ||
   (/^log\.[A-Za-z0-9._-]+\.jsonl$/.test(f) &&
@@ -140,17 +140,17 @@ const logFiles = (): string[] =>
         .map((f) => join(dir, f))
     : [];
 
-// โฟลเดอร์ที่ plan/ กับ done/ ของโปรเจกต์นี้อยู่ใต้มัน — จุดเดียวที่ประกอบ path เหล่านี้
-// (ก่อนหน้านี้ commands/plan.ts hardcode `apps/<app>/plan` 10 จุด = ตายสนิทกับ repo เดี่ยว)
+// the folder this project's plan/ and done/ live under — the single place these paths are assembled
+// (previously commands/plan.ts hardcoded `apps/<app>/plan` in 10 places = dead on arrival for a single repo)
 const planBase = scaffolded
   ? dirname(import.meta.dir) // <project>/.fapony
   : (appBase ?? root);
 
-// fapony.config.json คือ *ข้อตกลง* ว่า plan อยู่ไหน ส่วน planBase ข้างบนเป็นแค่การเดา —
-// มีไฟล์เมื่อไหร่ต้องชนะการเดาเสมอ (vela ประกาศ `apps/vela/plan` ไว้ตรง ๆ บังเอิญตรงกับที่เดาได้
-// แต่ repo ที่วาง plan ไว้ที่อื่นจะพังเงียบ ๆ ถ้าไม่อ่าน)
-// อ่านที่ระดับโปรเจกต์เท่านั้น: สำเนาที่ scaffold ใน apps/<x>/.fapony/ ต้องไม่หยิบ config ของ
-// monorepo ที่ root มาใช้ เพราะนั่นเป็น path ของอีกโปรเจกต์หนึ่ง
+// fapony.config.json is the *agreement* on where plan lives; planBase above is only a guess —
+// whenever the file exists it must beat the guess (vela declares `apps/vela/plan` outright, which happens to match the guess
+// but a repo that puts plan elsewhere breaks silently if this is not read)
+// read only at the project level: a copy scaffolded in apps/<x>/.fapony/ must not pick up the root
+// monorepo's config, because that is another project's path
 const configDir = scaffolded ? dirname(planBase) : root;
 
 const configPaths = ((): Record<string, string> => {
@@ -158,7 +158,7 @@ const configPaths = ((): Record<string, string> => {
     const raw = readFileSync(`${configDir}/fapony.config.json`, "utf8");
     return (JSON.parse(raw)?.paths ?? {}) as Record<string, string>;
   } catch {
-    // ไม่มีไฟล์ / JSON เสีย → ใช้ค่าที่เดาได้ ไม่ใช่ error: memory ต้องทำงานได้โดยไม่มี fapony
+    // no file / broken JSON → use the guessed values, not an error: memory must work without fapony
     return {};
   }
 })();
@@ -168,27 +168,27 @@ const fromConfig = (key: string): string | null =>
     ? join(configDir, configPaths[key])
     : null;
 
-// app ที่ย้าย plan เข้า .fapony/ แล้วให้ใช้ของใหม่ ที่ยังไม่ย้ายใช้ของเดิม — โมโนเรโปจึงย้ายทีละ app ได้
-// โดยไม่ต้องแตะ config (config มี planDir ค่าเดียว ประกาศเมื่อไหร่ app อื่นก็ชี้ผิดตามไปด้วย)
+// an app that moved plan into .fapony/ uses the new location; one that has not uses the old — so a monorepo migrates app by app
+// without touching config (config has a single planDir, so declaring it points the other apps wrong too)
 const base = existsSync(`${planBase}/.fapony`)
   ? `${planBase}/.fapony`
   : planBase;
 
 const planDir = fromConfig("planDir") ?? `${base}/plan`;
 
-// done/ อยู่ข้าง plan/ (ย้ายแล้วลึกเท่าเดิม ลิงก์ relative ในไฟล์รอด) — repo ที่ยัง layout เก่า
-// เก็บ plan/done/ ไว้ ก็ใช้ของเดิมต่อ ไม่ต้องย้ายก่อนถึงจะ sweep ได้
+// done/ sits beside plan/ (same depth after the move, relative links in files survive) — a repo still on the old layout
+// with plan/done/ keeps using it, no need to move before sweeping
 const doneDir =
   fromConfig("doneDir") ??
   (!existsSync(`${base}/done`) && existsSync(`${planDir}/done`)
     ? `${planDir}/done`
     : `${base}/done`);
 
-// path ที่เอาไว้โชว์/บันทึกลง log — อิง repo root เสมอ (`apps/vela/plan`, `.fapony/plan`)
+// path used for display/logging — always relative to repo root (`apps/vela/plan`, `.fapony/plan`)
 const rel = (p: string) => relative(root, p) || ".";
 
-// คำสั่งที่บอกให้ผู้ใช้พิมพ์ ต้องเป็น path ของ mem.ts ตัวที่กำลังรันอยู่จริง ไม่ใช่ค่าคงที่ —
-// สำเนาที่ `fapony init` วางไว้อยู่ที่ .fapony/.memory/ ไม่ใช่ .memory/ ที่ help text เดิม hardcode
+// the command we tell the user to type must be the path of the mem.ts actually running, not a constant —
+// the copy `fapony init` places lives in .fapony/.memory/, not the .memory/ the old help text hardcoded
 const memCmd = `bun ${rel(dir)}/mem.ts`;
 
 const KINDS: WorkKind[] = ["next", "bug", "decision", "note", "hold"];
@@ -205,7 +205,7 @@ const rows = (): LogRow[] =>
           try {
             return [JSON.parse(l) as LogRow];
           } catch {
-            // ponytail: 1 บรรทัดพัง (escape เสีย) ไม่ควรทำให้ทั้ง log อ่านไม่ได้ — ข้ามแล้วเตือน
+            // ponytail: one broken line (bad escape) must not make the whole log unreadable — skip it and warn
             console.error(
               `[mem] skipped ${basename(f)} line ${i + 1} (bad JSON)`,
             );
@@ -213,7 +213,7 @@ const rows = (): LogRow[] =>
           }
         }),
     )
-    // หลายไฟล์ต่อกันแล้วลำดับเวลาสลับ — ทุก selector อ่านจากบนลงล่างโดยถือว่าเรียงตาม ts
+    // concatenating several files scrambles the time order — every selector reads top-down assuming ts order
     .sort((a, b) => a.ts.localeCompare(b.ts));
 
 function put(r: Omit<WorkRow, "ts" | "agent">): void;
@@ -236,9 +236,9 @@ function put(
   );
 }
 
-// ponytail: กัน id ชน — base36 + increment ต่อ retry + random suffix
-// ใช้ร่วมกันทุกที่ที่ต้อง generate WorkRow.id (cmdAdd, ship-log ใน cmdPlanSweep)
-// ห้าม copy loop นี้ไปวางที่ใหม่ — แก้ scheme ที่นี่ที่เดียว
+// ponytail: prevent id collisions — base36 + increment per retry + random suffix
+// shared everywhere a WorkRow.id must be generated (cmdAdd, ship-log in cmdPlanSweep)
+// do not copy this loop elsewhere — change the scheme here only
 function nextId(all: LogRow[]): string {
   const used = new Set(all.map((r) => ("id" in r ? r.id : "")));
   let base = Date.now();
@@ -250,8 +250,8 @@ function nextId(all: LogRow[]): string {
   return id;
 }
 
-// เขียนแถวดิบ (ts/agent เดิม ไม่ generate ใหม่) — ใช้ตอน rotate ย้าย row เก่าไปไฟล์ใหม่
-// ปกติเขียน log ต้องผ่าน put() เท่านั้น อันนี้ทางเดียวที่ยกเว้น
+// write a raw row (original ts/agent, no regeneration) — used when rotate moves old rows to a new file
+// normally writing to the log must go through put(); this is the only exception
 const appendRaw = (path: string, r: LogRow): void =>
   appendFileSync(path, `${JSON.stringify(r)}\n`);
 

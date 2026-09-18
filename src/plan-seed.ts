@@ -88,7 +88,7 @@ function scopeSourceFiles(root: string): string[] {
 // is about to plan. Headers only (title + shipped date) — pulling the bodies
 // in would recreate the reading task the plan exists to avoid.
 function renderPriorArt(cwd: string, config: Config, roots: string[]): string {
-  const placeholder = "- _(agent เติม)_";
+  const placeholder = "- _(agent fills in)_";
   const keys = roots
     .map((r) => relative(cwd, r))
     .filter((r) => r !== "" && r !== ".");
@@ -124,7 +124,7 @@ function renderPriorArt(cwd: string, config: Config, roots: string[]): string {
       const shipped = content.match(/shipped\s+(\d{4}-\d{2}-\d{2})/)?.[1] ?? "";
       hits.push({
         shipped,
-        line: `- ✅ ตัดสินไปแล้ว: [${n}](../${label}/${n}) — ${title}${shipped ? ` (shipped ${shipped})` : ""} \`(fapony plan-seed)\``,
+        line: `- ✅ Already decided: [${n}](../${label}/${n}) — ${title}${shipped ? ` (shipped ${shipped})` : ""} \`(fapony plan-seed)\``,
       });
     }
   }
@@ -137,7 +137,9 @@ function renderPriorArt(cwd: string, config: Config, roots: string[]): string {
   );
   const shown = hits.slice(0, MAX_PRIOR_ART).map((h) => h.line);
   if (hits.length > MAX_PRIOR_ART) {
-    shown.push(`- … +${hits.length - MAX_PRIOR_ART} more ที่แตะ scope เดียวกัน`);
+    shown.push(
+      `- … +${hits.length - MAX_PRIOR_ART} more touching the same scope`,
+    );
   }
   shown.push(placeholder);
   return shown.join("\n");
@@ -185,49 +187,49 @@ kind: unit
 status: active
 ---
 
-# PLAN-${name} — (agent เติมชื่อเรื่อง)
+# PLAN-${name} — (agent fills in a title)
 
-> **Status:** 🚧 in-progress · **Created:** (agent เติมวันที่)
+> **Status:** 🚧 in-progress · **Created:** (agent fills in the date)
 
 ## TL;DR
-- **What:** (agent เติม) · **Why:** (agent เติม) · **Done when:** (agent เติม)
-- **Order:** (agent เติม)
+- **What:** (agent fills in) · **Why:** (agent fills in) · **Done when:** (agent fills in)
+- **Order:** (agent fills in)
 - **Progress:**
-  - [ ] chunk 1 — (agent เติม)
+  - [ ] chunk 1 — (agent fills in)
 
 ## Context (fapony)
 ${contextFapony}
 
 ## 1. Goal (why)
-_(agent เติม)_
+_(agent fills in)_
 
 ## 2. Scope (do / don't do)
-_(agent เติม)_
+_(agent fills in)_
 
 ## 3. Done criteria (how we know it's finished)
-_(agent เติม — ต้อง verify ได้)_
+_(agent fills in — must be verifiable)_
 
 ## 4. Constraints / Hard rules (must not violate)
-_(agent เติม)_
+_(agent fills in)_
 
 ## 5. Risks & Escape hatches (if it fails)
-_(agent เติม)_
+_(agent fills in)_
 
 ## 6. Steps (what in which order)
-1. _(agent เติม — แต่ละขั้น verify ได้)_
+1. _(agent fills in — each step must be verifiable)_
 
 ## 7. Examples
 ${
   specLink
-    ? `→ ${specLink}  (signature อยู่ spec ไม่ใช่ plan)`
-    : "_(agent เติม — หรือเพิ่ม SPEC ด้วย plan-seed --spec)_"
+    ? `→ ${specLink}  (signatures live in the spec, not the plan)`
+    : "_(agent fills in — or add a SPEC with plan-seed --spec)_"
 }
 
 ## 8. References
 ${priorArt}
 
 ## Context (agent)
-_(slot ว่าง — agent dump graph/code-summary ของตัวเอง)_
+_(empty slot — the agent dumps its own graph/code-summary)_
 `;
 }
 
@@ -437,7 +439,7 @@ function specTemplate(
   // undershot the cap by that many lines (the 18k-SPEC failure mode). Cap the
   // index separately so the body's capLines has a bounded head to work with.
   const fixedHead = [
-    `# SPEC-${name} — (agent เติมชื่อเรื่อง)`,
+    `# SPEC-${name} — (agent fills in a title)`,
     "",
     `> **Used by:** PLAN-${name} — signatures below come from a live source scan — re-seed after structural changes.`,
     ...(scopeEcho ? [`> **Scope:** ${scopeEcho}`] : []),
@@ -456,7 +458,7 @@ function specTemplate(
   );
   const head = [...fixedHead, ...cappedIndex, ""];
   const tail = [
-    "## (agent เติม — wireframes / edge cases / API shapes ที่ plan อ้างถึง)",
+    "## (agent fills in — wireframes / edge cases / API shapes the plan references)",
   ];
   const bodyLines = chunks.flatMap((c) => [
     `## <a id="${c.slug}"></a>${c.title}`,
@@ -557,7 +559,7 @@ export function cmdPlanSeed(args: string[]): void {
   const planPath = join(planDirAbs, `PLAN-${name}.md`);
   if (existsSync(planPath)) {
     console.error(
-      `${planPath} already exists — not overwriting. ใช้ชื่อใหม่ เช่น PLAN-${name}-v2`,
+      `${planPath} already exists — not overwriting. Use a new name, e.g. PLAN-${name}-v2`,
     );
     process.exit(1);
   }
@@ -571,7 +573,7 @@ export function cmdPlanSeed(args: string[]): void {
     const specPath = join(specDirAbs, `SPEC-${name}.md`);
     if (existsSync(specPath)) {
       console.error(
-        `${specPath} already exists — not overwriting. ใช้ชื่อใหม่ เช่น SPEC-${name}-v2`,
+        `${specPath} already exists — not overwriting. Use a new name, e.g. SPEC-${name}-v2`,
       );
       process.exit(1);
     }

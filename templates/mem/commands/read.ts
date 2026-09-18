@@ -22,7 +22,7 @@ const planSweepLine = () => {
 };
 
 export const cmdNow = () => {
-  // mem now (default) — next+bug+hold. decision/note ไม่ใช่งานค้าง → ค้นด้วย find แทน
+  // mem now (default) — next+bug+hold. decision/note is not pending work → search with find instead
   const all = rows();
   console.log(`# ${app} — ${all.length} entries`);
   printOpenRows(all, { showHold: true });
@@ -53,7 +53,7 @@ export const cmdStale = () => {
 };
 
 export const cmdFind = (a: string[]) => {
-  // mem find <คำ> — grep text/spec ไม่สนตัวพิมพ์เล็กใหญ่, ล่าสุดก่อน, จำกัด 20 แถว
+  // mem find <word> — grep text/spec case-insensitively, newest first, capped at 20 rows
   const q = a.join(" ").toLowerCase();
   if (!q) {
     console.error(`usage: ${memCmd} find <word>`);
@@ -86,7 +86,7 @@ export const cmdKickoff = (a: string[]) => {
   const arg = a[0] ?? "";
 
   if (!arg) {
-    // ไม่มี args = now + section "ล่าสุด" = closes 10 รายการล่าสุด
+    // no args = now + a "recent" section = the last 10 closes
     console.log(`# ${app} — ${all.length} entries`);
     printOpenRows(all, { showHold: true });
     console.log(`\n## recent\n${doneLines(all, 10).join("\n")}`);
@@ -101,7 +101,7 @@ export const cmdKickoff = (a: string[]) => {
     const rotate = rotateLine(all.length);
     if (rotate) console.log(rotate);
   } else if (arg.endsWith(".md")) {
-    // spec.md = brief ของ spec นั้น
+    // spec.md = a brief for that spec
     const workAll = all.filter((r): r is WorkRow => "id" in r);
     const byId = new Map(workAll.map((r) => [r.id, r] as const));
     const open = openRows(all);
@@ -135,7 +135,7 @@ export const cmdKickoff = (a: string[]) => {
       console.log("(no entries for this spec)");
     }
   } else {
-    // id = brief ของงานนั้น
+    // id = a brief for that task
     const workAll = all.filter((r): r is WorkRow => "id" in r);
     const byId = new Map(workAll.map((r) => [r.id, r] as const));
     const target = byId.get(arg);

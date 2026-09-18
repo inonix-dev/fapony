@@ -1,9 +1,9 @@
-// src/price/fetch.ts — ดึงตารางราคา OpenRouter + cache เป็น prices.json
+// src/price/fetch.ts — fetch OpenRouter's price table + cache it as prices.json
 //
-// ราคาเป็น cache ไม่ใช่ state: เก็บที่ ~/.config/fapony/prices.json (เคารพ
-// FAPONY_STATE_DIR) ห้ามเพิ่มตาราง SQLite (กฎ DB Schema: 2 ตารางเท่านั้น)
-// refresh เกิดตอนคนสั่ง `fapony price-scan` เท่านั้น — query ไม่ fetch เอง
-// (วินัยเดียวกับ usage-scan) offline แล้วอ่าน cache เดิม
+// prices are cache, not state: stored at ~/.config/fapony/prices.json (honors
+// FAPONY_STATE_DIR) no new SQLite tables (DB Schema rule: 2 tables only)
+// refresh happens only when someone runs `fapony price-scan` — a query never fetches on its own
+// (same discipline as usage-scan) offline, read the existing cache
 
 import {
   existsSync,
@@ -19,12 +19,12 @@ import type { Config } from "../db/types.js";
 const PRICES_FILENAME = "prices.json";
 const MODELS_URL = "https://openrouter.ai/api/v1/models";
 
-/** เรตราย token (ดอลลาร์) — ทุกเรตมาจาก OpenRouter ตรง ๆ ไม่เดา */
+/** per-token rates (dollars) — every rate comes straight from OpenRouter, no guessing */
 export interface ModelRates {
   input: number;
   output: number;
   cacheRead: number;
-  /** null = ตารางไม่ให้มา → ใช้เรต input แทน (ดู calcCost) */
+  /** null = the table does not provide it → use the input rate instead (see calcCost) */
   cacheWrite: number | null;
 }
 
@@ -37,7 +37,7 @@ export function pricesPath(config?: Config): string {
   return join(faponyDir(config), PRICES_FILENAME);
 }
 
-/** อ่าน cache — คืน null เมื่อไม่มีไฟล์หรือพัง (caller แสดง — + hint) */
+/** Read the cache — null when the file is missing or broken (caller shows "—" + hint) */
 export function loadPrices(config?: Config): PriceTable | null {
   const p = pricesPath(config);
   if (!existsSync(p)) return null;
@@ -53,7 +53,7 @@ export function loadPrices(config?: Config): PriceTable | null {
   }
 }
 
-/** เขียนแบบ atomic (tmp + rename) สร้าง state dir เมื่อยังไม่มี */
+/** Write atomically (tmp + rename), create the state dir when absent */
 export function writePrices(table: PriceTable, config?: Config): void {
   const p = pricesPath(config);
   mkdirSync(dirname(p), { recursive: true });
@@ -72,14 +72,14 @@ function toRate(v: unknown): number | null {
 }
 
 /**
- * แปลง response ดิบของ OpenRouter เป็นตารางเรต (pure — เทสต์ได้โดยไม่ยิงเน็ต)
+ * Turn OpenRouter's raw response into a rate table (pure — testable without hitting the network)
  *
- * ฟิลด์จริง (ยืนยัน 2026-09-14, 445 models): pricing.prompt / .completion /
+ * Real fields (confirmed 2026-09-14, 445 models): pricing.prompt / .completion /
  * .input_cache_read / .input_cache_write (optional) / .input_cache_write_1h
- * (เรต 1h TTL ของบางรุ่น — ใช้เรต 5m มาตรฐานพอ เพราะ log ไม่บอก TTL)
- * เมิน pricing.web_search / pricing.overrides (tier ตาม min_prompt_tokens /
- * utc_days — ใช้ base rate แล้วประกาศข้อจำกัด) · id ขึ้นต้น ~ (alias) ตัดทิ้ง
- * id ลงท้าย :free / :batch เก็บตามนั้น (เป็นแถวราคาของมันเอง)
+ * (the 1h TTL rate of some models — the standard 5m rate suffices because logs do not report TTL)
+ * ignore pricing.web_search / pricing.overrides (tiers based on min_prompt_tokens /
+ * utc_days — use the base rate and state the limitation) · ids starting with ~ (alias) are dropped
+ * ids ending :free / :batch are kept as-is (they are their own price rows)
  */
 export function parsePricesResponse(json: unknown): Record<string, ModelRates> {
   const out: Record<string, ModelRates> = {};
@@ -102,8 +102,8 @@ export function parsePricesResponse(json: unknown): Record<string, ModelRates> {
 }
 
 /**
- * รวมตารางใหม่เข้ากับ cache เดิม — merge ไม่ replace: id ที่หายไปจาก
- * response รอบนี้ (รุ่นเก่าหลุดตาราง) ต้องยังคิดราคาได้ด้วยเรตเดิม
+ * Merge the new table into the old cache — merge, not replace: an id missing from
+ * this response (an old model dropped from the table) must still be priced with its old rate
  */
 export function mergePriceTables(
   old: PriceTable | null,
@@ -115,7 +115,7 @@ export function mergePriceTables(
   };
 }
 
-/** ดึงตารางจาก OpenRouter (public, ไม่ต้อง auth) — fetcher แทรกได้ไว้เทสต์ */
+/** Fetch the table from OpenRouter (public, no auth) — fetcher is injectable for tests */
 export async function fetchPriceTable(
   fetcher: typeof fetch = fetch,
 ): Promise<Record<string, ModelRates>> {
@@ -134,7 +134,7 @@ export async function cmdPriceScan(rawArgs: string[]): Promise<void> {
     fresh = await fetchPriceTable();
   } catch (err) {
     console.error(
-      `fapony price-scan: fetch failed (${String(err)}) — cache เดิมยังอยู่ ใช้ราคาที่มีได้`,
+      `fapony price-scan: fetch failed (${String(err)}) — the existing cache is still here, use the prices you have`,
     );
     process.exit(1);
   }

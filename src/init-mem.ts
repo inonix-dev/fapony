@@ -31,9 +31,9 @@ export function cmdInitMem(args: string[]): void {
   const worktreeKey = args.find((x) => !x.startsWith("-"));
   const config = loadConfig();
 
-  // ไม่ระบุ key = repo ที่ยืนอยู่ตอนนี้ — ทำให้ `fapony init-mem --update` รันในโปรเจกต์ของใครก็ได้
-  // โดยไม่ต้องลงทะเบียน worktree ก่อน (loadConfig อ่าน fapony.config.json ของ cwd อยู่แล้ว
-  // จึงได้ paths.memoryEntry ของโปรเจกต์นั้นมาเอง)
+  // no key given = the repo you are standing in — so `fapony init-mem --update` runs in anyone's project
+  // without registering the worktree first (loadConfig already reads the cwd's fapony.config.json,
+  // so it picks up that project's paths.memoryEntry by itself)
   const worktree = worktreeKey ? config.worktrees[worktreeKey] : process.cwd();
   if (!worktree) {
     console.error(`unknown worktree key: ${worktreeKey}`);

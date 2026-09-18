@@ -37,7 +37,7 @@ const runSelectorTests = () => {
     { id: "a2", kind: "next", text: "work B", ts: "", agent: "" },
     { kind: "close", ref: "a2", text: "done", ts: "", agent: "" },
     { kind: "claim", ref: "a1", ts: "2026-01-01T00:00:00Z", agent: "agent-1" },
-    // (1) claim เดียว → active
+    // (1) single claim → active
     { id: "a3", kind: "bug", text: "work C", ts: "", agent: "" },
     { kind: "claim", ref: "a3", ts: "2026-01-01T01:00:00Z", agent: "agent-1" },
     {
@@ -55,7 +55,7 @@ const runSelectorTests = () => {
     { id: "a5", kind: "next", text: "work E", ts: "", agent: "" },
     { kind: "claim", ref: "a5", ts: "2026-01-01T04:00:00Z", agent: "agent-1" },
     { kind: "claim", ref: "a5", ts: "2026-01-01T05:00:00Z", agent: "agent-3" },
-    // (4) double claim → หลังชนะ (agent-3)
+    // (4) double claim → the later one wins (agent-3)
   ];
 
   const claims = claimsOf(t);
@@ -70,12 +70,12 @@ const runSelectorTests = () => {
   assert(!claims.has("a3"), "release did not void the claim");
   // (3) a4 close → inactive
   assert(!claims.has("a4"), "close void claim");
-  // (4) a5 double claim → agent-3 ชนะ
+  // (4) a5 double claim → agent-3 wins
   assert(
     claims.has("a5") && claims.get("a5")?.agent === "agent-3",
     "double claim after the winner",
   );
-  // a2 closed → ไม่ควรอยู่ใน open
+  // a2 closed → should not appear in open
   assert(!open.some((r) => r.id === "a2"), "tombstone broken");
   // open = a1, a3 (released but still open), a5
   assert(
@@ -91,12 +91,12 @@ const runRotateTests = () => {
   const t: LogRow[] = [
     { id: "r1", kind: "next", text: "keep me", ts: "", agent: "" },
     { kind: "claim", ref: "r1", ts: "2026-01-01T00:00:00Z", agent: "agent-1" },
-    // r1: open + claimed → work row + claim row ต้องเก็บทั้งคู่
+    // r1: open + claimed → both the work row and the claim row must be kept
 
     { id: "r2", kind: "bug", text: "closed already", ts: "", agent: "" },
     { kind: "claim", ref: "r2", ts: "2026-01-01T00:00:00Z", agent: "agent-1" },
     { kind: "close", ref: "r2", text: "shipped", ts: "", agent: "" },
-    // r2: ปิดแล้ว → work row, claim row, close tombstone ทิ้งหมด
+    // r2: closed → work row, claim row, close tombstone all dropped
 
     {
       id: "r3",
@@ -112,7 +112,7 @@ const runRotateTests = () => {
       ts: "2026-01-02T00:00:00Z",
       agent: "",
     },
-    // r3: spec synced *หลัง* decision นี้ → resolved แล้ว archive ได้
+    // r3: spec synced *after* this decision → resolved, can be archived
 
     {
       id: "r4",
@@ -122,10 +122,10 @@ const runRotateTests = () => {
       agent: "",
       spec: "PLAN-a.md",
     },
-    // r4: decision ใหม่กว่า synced ล่าสุด → ยังไม่ resolved เก็บไว้
+    // r4: decision newer than the latest synced → not resolved yet, keep it
 
     { id: "r5", kind: "note", text: "note no spec", ts: "", agent: "" },
-    // r5: note ไม่มี spec → ไม่มีทางรู้ resolved หรือยัง เก็บไว้เสมอ
+    // r5: a note with no spec → no way to know if resolved, always kept
   ];
 
   const kept = rotateKeep(t);
@@ -167,17 +167,17 @@ const runPlanSweepTests = () => {
   const tmpDir = mkdtempSync(join(tmpdir(), "mem-test-"));
   try {
     // === Case A: rewriteMarkdownLinks + countPlainTextMentions ===
-    // สร้าง fixture: ไฟล์ที่ reference ไปที่ plan/PLAN-page-style.md หลายแบบ
+    // build fixture: a file that references plan/PLAN-page-style.md several ways
     const planDir = join(tmpDir, "plan");
     const doneDir = join(tmpDir, "plan", "done");
     mkdirSync(planDir, { recursive: true });
     mkdirSync(doneDir, { recursive: true });
 
-    // "old" file — จำลอง apps/vela/plan/PLAN-page-style.md (touch only)
+    // "old" file — simulates apps/vela/plan/PLAN-page-style.md (touch only)
     const oldFile = join(planDir, "PLAN-page-style.md");
     writeFileSync(oldFile, "# PLAN-page-style\n");
 
-    // inbound file — จำลอง apps/vela/plan/PLAN-people-style.md
+    // inbound file — simulates apps/vela/plan/PLAN-people-style.md
     const inbound = [
       "# PLAN-people-style — refs",
       "",
@@ -361,13 +361,13 @@ const runPlanCheckTests = () => {
     );
     writeFileSync(join(planDir, "PLAN-active.md"), "# active plan\n");
 
-    // plan ที่เขียนด้วย format ปัจจุบัน: frontmatter + title มาก่อน header ✅ shipped
+    // a plan in the current format: frontmatter + title come before the ✅ shipped header
     writeFileSync(
       join(planDir, "PLAN-frontmatter.md"),
       "---\nkind: unit\n---\n\n# shipped with frontmatter\n\n> ✅ **shipped 2026-09-13** (abc1234)\n",
     );
 
-    // ship ไปบาง chunk แล้วติดรอของข้างนอก — frontmatter บอกว่าตั้งใจให้อยู่ต่อ ห้ามนับว่าลืมย้าย
+    // shipped some chunks and waiting on externals — frontmatter says it is meant to stay, do not count as forgotten
     writeFileSync(
       join(planDir, "PLAN-blocked.md"),
       "---\nstatus: blocked\nblocked_by: VPS#2\n---\n\n# partly shipped\n\n> ✅ **chunk 1 shipped 2026-09-13** (abc1234)\n",

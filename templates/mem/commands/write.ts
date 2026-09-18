@@ -7,17 +7,17 @@ import { KINDS, memCmd, nextId, put, root, rows } from "../store.js";
 export const cmdAdd = async (a: string[]) => {
   // mem add <next|bug|decision|note|hold> "<text>" --files f1,f2 [path/to/SPEC.md]
   // mem add <kind> --stdin --files f1,f2 [spec.md]  ← read text from stdin (avoids shell metachar issues)
-  // ponytail: kind ผิด = แถวนั้นหายจาก view เงียบๆ — ตายตั้งแต่ตรงนี้ดีกว่า
+  // ponytail: a wrong kind = that row silently vanishes from the view — better to die right here
   if (!KINDS.includes(a[0] as WorkKind)) {
     console.error(
       `kind must be one of ${KINDS.join("|")} — got "${a[0] ?? ""}"`,
     );
     process.exit(1);
   }
-  // hold บังคับ spec — ตรวจหลัง parse (spec อยู่ก่อน --files ได้)
-  // PLAN-convention-debt chunk 3: files[] เป็น required — optional field ที่วัดแล้ว
-  // fill rate = 0 (required+enum = 50/50) และ recall ของ log เก่าที่ไม่มี files[] จับได้แค่
-  // 48.1% — แก้ที่ขาเขียน ไม่ใช่ขาอ่าน: แถวไหนไม่บอกไฟล์ = ค้นไม่เจอตอนแตะไฟล์นั้น
+  // hold requires a spec — checked after parse (the spec may come before --files)
+  // PLAN-convention-debt chunk 3: files[] is required — a measured optional field
+  // had fill rate 0 (required+enum = 50/50) and recall on old logs without files[] caught only
+  // 48.1% — fix the write side, not the read side: a row that does not name the file = unfindable when you touch that file
   const filesFlagIdx = a.indexOf("--files");
   const filesVal = filesFlagIdx >= 0 ? a[filesFlagIdx + 1] : undefined;
   if (!filesVal || filesVal.startsWith("--")) {
@@ -56,7 +56,7 @@ export const cmdAdd = async (a: string[]) => {
       process.exit(1);
     }
   } else {
-    // ต้องมีข้อความ
+    // text is required
     if (!filtered.length || (filtered.length === 0 && !spec)) {
       console.error(
         `text is required — usage: ${memCmd} add <kind> "<text>" --files f1,f2 [spec.md]`,
@@ -67,7 +67,7 @@ export const cmdAdd = async (a: string[]) => {
   }
   // read once — cap check + id collision
   const all = rows();
-  // ponytail: เพดาน open next/hold กันสะสมไม่มีที่สิ้นสุด — บังคับ triage ของเก่าก่อนเปิดใหม่
+  // ponytail: a cap on open next/hold stops endless accumulation — forces triage of the old before opening new
   const CAP = 15;
   const CAP_HOLD = 10;
   if (a[0] === "next" && !process.env.MEM_FORCE) {
@@ -88,14 +88,14 @@ export const cmdAdd = async (a: string[]) => {
       process.exit(1);
     }
   }
-  // ponytail: กัน id ชน — logic รวมไว้ที่ nextId (store.ts)
+  // ponytail: prevent id collisions — logic centralized in nextId (store.ts)
   const id = nextId(all);
   put({ id, kind: a[0] as WorkKind, text, spec, files });
   console.log(id);
 };
 
 export const cmdClose = async (a: string[]) => {
-  // mem close <id> "<ทำอะไร / commit>" — tombstone ทำให้ claim void เอง
+  // mem close <id> "<what was done / commit>" — the tombstone voids the claim by itself
   // mem close <id> --stdin ← read text from stdin
   if (!a[0]) {
     console.error(`id is required — usage: ${memCmd} close <id> "<text>"`);
@@ -117,7 +117,7 @@ export const cmdClose = async (a: string[]) => {
 };
 
 export const cmdClaim = (a: string[]) => {
-  // mem claim <id> — ต้องมี id จริง, open, kind=next|bug, ไม่มี active claim ค้าง
+  // mem claim <id> — id must be real, open, kind=next|bug, with no active claim pending
   if (!a[0]) {
     console.error(`id is required — usage: ${memCmd} claim <id>`);
     process.exit(1);
@@ -153,7 +153,7 @@ export const cmdClaim = (a: string[]) => {
 };
 
 export const cmdRelease = async (a: string[]) => {
-  // mem release <id> "<เหตุผล>?"
+  // mem release <id> "<reason>?"
   // mem release <id> --stdin ← read text from stdin
   if (!a[0]) {
     console.error(`id is required — usage: ${memCmd} release <id> [reason]`);
@@ -179,7 +179,7 @@ export const cmdRelease = async (a: string[]) => {
 };
 
 export const cmdSynced = (a: string[]) => {
-  // mem synced [path.md ...] — ประกาศว่า spec ตรงกับ log แล้ว (ไม่ระบุ = ทุก spec ที่ log อ้างถึง)
+  // mem synced [path.md ...] — declare the spec now matches the log (none given = every spec the log mentions)
   const specs = a.length
     ? a
     : [
@@ -195,7 +195,7 @@ export const cmdSynced = (a: string[]) => {
 };
 
 export const cmdHook = async () => {
-  // PostToolUse: stdin = {tool_input:{file_path}} → แก้ spec ของ app นี้เสร็จ = synced ให้เอง
+  // PostToolUse: stdin = {tool_input:{file_path}} → editing this app's spec is done = mark synced automatically
   const j = (await Bun.stdin.json().catch(() => null)) as Record<
     string,
     unknown

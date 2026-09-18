@@ -376,7 +376,7 @@ export function diagnose(
     findings.push({
       kind: "cycle",
       file: cycle.join(" ↔ "),
-      detail: "import วนกลับหากัน — refactor ฝั่งไหนก่อนก็พังอีกฝั่ง",
+      detail: "circular imports — refactoring either side breaks the other",
       evidence: [...cycle, cycle[0]].join(" → "),
     });
   }
@@ -389,7 +389,8 @@ export function diagnose(
         findings.push({
           kind: "orphan",
           file: f,
-          detail: "ไม่มีใคร import และไม่ใช่ entry point — dead code candidate",
+          detail:
+            "no one imports it and it is not an entry point — dead code candidate",
           evidence: "0 dependents",
         });
       }
@@ -405,8 +406,8 @@ export function diagnose(
     findings.push({
       kind: "hub-untested",
       file,
-      detail: `${n} ไฟล์พึ่งอยู่ ไม่มีเทสไหน import มันเลย — แก้ตรงนี้ไม่มีอะไรจับตอนพัง`,
-      evidence: `พึ่งอยู่: ${shown}${rest}`,
+      detail: `${n} files depend on it; no test imports it — edit here and nothing catches the break`,
+      evidence: `dependents: ${shown}${rest}`,
     });
   }
 
@@ -417,10 +418,10 @@ export function diagnose(
       findings.push({
         kind: "changed-untested",
         file: c,
-        detail: `เพิ่งแก้แต่ไม่มีเทสไหนพึ่งอยู่ (${deps.size} dependent) — พังแล้วไม่มีอะไรจับ`,
+        detail: `recently changed but no test depends on it (${deps.size} dependent) — nothing catches it if it breaks`,
         evidence:
           deps.size > 0
-            ? `พึ่งอยู่: ${[...deps].sort().join(", ")}`
+            ? `dependents: ${[...deps].sort().join(", ")}`
             : "0 dependents",
       });
     }
@@ -475,7 +476,7 @@ export function formatAnalyze(graph: ImportGraph, findings: Finding[]): string {
   lines.push("");
 
   if (findings.length === 0) {
-    lines.push("no findings — โครงสร้างไม่มีอะไรน่าห่วง");
+    lines.push("no findings — structure looks healthy");
   } else {
     for (const f of findings.slice(0, 5)) {
       const icon = f.kind === "orphan" ? "·" : "⚠";
@@ -488,7 +489,7 @@ export function formatAnalyze(graph: ImportGraph, findings: Finding[]): string {
     if (rest > 0) lines.push(`… and ${rest} more`);
     lines.push(
       graph.unresolved > 0
-        ? `${findings.length} findings. ${graph.unresolved} unresolved imports (path alias / package name) — ตัวเลข dependent อาจต่ำกว่าจริง`
+        ? `${findings.length} findings. ${graph.unresolved} unresolved imports (path alias / package name) — dependent counts may be lower than reality`
         : `${findings.length} findings.`,
     );
   }

@@ -1,7 +1,7 @@
-// src/price/resolve.ts — normalize model id + คิด list-price equivalent
+// src/price/resolve.ts — normalize model id + compute list-price equivalent
 //
-// กฎเหล็ก: map ไม่ได้ต้องเป็น unpriced ห้ามตีเป็น 0 เงียบ ๆ (failure mode หลัก
-// ของฟีเจอร์นี้) · free มีแต่ของที่ราคา 0 จริง (local / แถว :free ในตาราง)
+// Hard rule: an unmappable model must be unpriced, never silently counted as 0 (the main failure mode
+// of this feature) · free only applies to things that truly cost 0 (local / :free rows in the table)
 
 import type { ModelBreakdown, PassiveUsageResult } from "../session/types.js";
 import type { ModelRates, PriceTable } from "./fetch.js";
@@ -13,10 +13,10 @@ export interface PriceResolution {
   rates: ModelRates | null;
 }
 
-/** prefix ของ client ที่แปะหน้าทุก model id — ตัดทิ้งแล้ว lookup ใหม่ */
+/** client prefix prepended to every model id — strip it, then look up again */
 const CLIENT_PREFIXES = ["openrouter/", "opencode-go/", "opencode/"];
 
-/** tier ต่อท้ายของ OpenRouter — :free คือ endpoint ฟรีจริง :batch คือส่วนลด */
+/** OpenRouter's trailing tier — :free is a genuinely free endpoint, :batch is a discount */
 function stripTier(id: string): string {
   return id.endsWith(":free") || id.endsWith(":batch")
     ? id.slice(0, id.lastIndexOf(":"))
@@ -24,8 +24,8 @@ function stripTier(id: string): string {
 }
 
 /**
- * รายชื่อ candidate id ตามลำดับความเฉพาะ: ตรงตัวก่อน กว้างทีหลัง
- * (ตรงตัวชนก่อนเสมอ — bare slug แมตช์กว้างสุดอยู่ท้าย)
+ * Candidate ids ordered by specificity: exact first, broad later
+ * (an exact match always wins — the bare slug is the broadest match and goes last)
  */
 export function candidateIds(provider: string, model: string): string[] {
   const full = provider ? `${provider}/${model}` : model;
@@ -38,14 +38,14 @@ export function candidateIds(provider: string, model: string): string[] {
       break;
     }
   }
-  // opencode ต่อ -free ท้าย slug ของรุ่นฟรี (deepseek-v4-flash-free)
+  // opencode appends -free to the slug of a free model (deepseek-v4-flash-free)
   if (rest.endsWith("-free")) out.push(rest.slice(0, -"-free".length));
   return out;
 }
 
 /**
- * หาเรตให้ model หนึ่งตัว — คืน null เฉพาะของ local เท่านั้นที่ข้ามตาราง
- * (local ไม่เคยมีราคาตั้งแต่แรก ไม่ใช่ "หาไม่เจอ")
+ * Find rates for one model — null only for local, which skips the table
+ * (local never had a price to begin with, it is not "not found")
  */
 function isLocalProvider(provider: string): boolean {
   return provider === "lmstudio_local";
@@ -59,14 +59,14 @@ export function resolvePrice(
   if (!model || model === "(no model id)" || model === "(unknown)")
     return { status: "unpriced", rates: null };
   if (isLocalProvider(provider)) return { status: "free", rates: null };
-  // ลงท้าย :free หรือ -free = เรียกผ่าน free endpoint / รุ่นฟรีของ client มา
-  // ราคาจริงคือ 0 (ไม่ใช่ list price) ไม่ว่าจะ map OpenRouter ได้หรือไม่
+  // ends with :free or -free = used a free endpoint / the client's free model
+  // the real price is 0 (not list price), whether or not OpenRouter maps it
   if (model.endsWith(":free") || model.endsWith("-free"))
     return { status: "free", rates: null };
   for (const id of candidateIds(provider, model)) {
     const rates = table.models[id] ?? table.models[stripTier(id)];
     if (rates) {
-      // แถวราคา 0 ทั้งแถว (:free / รุ่นฟรี) = free จริง ไม่ใช่ unpriced
+      // an all-zero rate row (:free / free model) = genuinely free, not unpriced
       if (
         rates.input === 0 &&
         rates.output === 0 &&
@@ -77,10 +77,10 @@ export function resolvePrice(
       return { status: "priced", rates };
     }
   }
-  // zcode เก็บแค่ slug ไม่มี vendor (GLM-5.3-Flash) — เทียบส่วนหลัง / ตรงตัว
-  // แบบ case-insensitive (exact ไม่ใช่ fuzzy: ยาวเท่ากันทั้งสตริง)
-  // ฝั่งตารางตัด tier (:free/:batch) ก่อนเทียบ — slug เปลือยจะได้ชนแถว :free
-  // ที่ราคา 0 จริง (เช่น ling-3.0-flash-fin) กลายเป็น free ไม่ใช่ unpriced
+  // zcode stores only the slug with no vendor (GLM-5.3-Flash) — compare the suffix / exact
+  // case-insensitive match (exact, not fuzzy: the whole string must be equal in length)
+  // the table side strips the tier (:free/:batch) before comparing — so a bare slug hits the :free
+  // row that is truly 0 (e.g. ling-3.0-flash-fin) and becomes free, not unpriced
   const slug = stripTier(
     candidateIds(provider, model).at(-1) ?? "",
   ).toLowerCase();
@@ -114,11 +114,11 @@ export interface TokenCounts {
 }
 
 /**
- * คิดเงิน pure: แยกเรต input / cache-read / cache-write — ห้ามใช้เรตเดียวรวบ
+ * Pure costing: separate rates for input / cache-read / cache-write — never one rate for all
  *
- * reasoning ไม่คูณแยก: ของ Anthropic-family thinking รวมอยู่ใน output อยู่แล้ว
- * (reader แยกเก็บไว้ดูเฉย ๆ) คูณแยก = double count · cache_write ไม่มีในตาราง
- * → fallback เรต input (เขียน cache แพงกว่า/เท่าอ่านสด ไม่มีทางถูกกว่า)
+ * reasoning is not multiplied separately: Anthropic-family thinking is already included in output
+ * (the reader keeps it separately just for visibility); multiplying separately = double counting · cache_write absent from the table
+ * → fall back to the input rate (writing cache costs more than or equal to a fresh read, never less)
  */
 export function calcCost(t: TokenCounts, rates: ModelRates): number {
   return (
@@ -138,7 +138,7 @@ export interface ImputedModel {
   tokens_cache_read: number;
   tokens_cache_write: number;
   status: PriceStatus;
-  /** ดอลลาร์ list-price — 0 เมื่อ free/unpriced (ดู status อย่าอ่านเลขอย่างเดียว) */
+  /** dollars at list-price — 0 when free/unpriced (check status, do not read the number alone) */
   imputed_cost: number;
 }
 
@@ -152,8 +152,8 @@ export interface ImputeSummary {
 }
 
 /**
- * ตีราคาทั้ง PassiveUsageResult — ใช้กับผลสด (stats/usage) หรือแถว cache
- * (usage-web) ก็ได้เพราะรับแค่ token ต่อ model
+ * Price an entire PassiveUsageResult — works on live results (stats/usage) or cache rows
+ * (usage-web) alike, because it only takes tokens per model
  */
 export function imputeResult(
   result: PassiveUsageResult,
