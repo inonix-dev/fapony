@@ -69,8 +69,7 @@ Adopting it doesn't change your workflow. There is no loop to join and no framew
 Stated up front, because the gap between these two things is where most tooling oversells:
 
 - **It does not run your test suite.** The evidence collector runs an allowlist *you* write in
-  `.fapony/evidence.json`, and never a command an agent proposes. No allowlist, no evidence — and
-  the report says `not_run` rather than staying quiet.
+  `.fapony/evidence.json`, and never a command an agent proposes. No allowlist, no evidence.
 - **It does not judge your code.** `verdict_submit` *stores* a verdict; a human or a reviewing
   agent supplies it. fapony is the ledger, not the judge.
 - **`handoff_check` checks conformance, not correctness.** It verifies that what the agent claimed
@@ -83,7 +82,7 @@ Stated up front, because the gap between these two things is where most tooling 
   reviews and files the verdict, the grade lands on the reviewer. Reports label it `inferred`;
   read it as such.
 - **The knowledge layer is empty on run 1.** It is worth something around run 5 and more every run
-  after. That is the trade for it being the layer nobody can clone from a feature list.
+  after.
 
 ## Quick start (MCP)
 
@@ -440,7 +439,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 - Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
 - Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
 - Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file
-- Verification (beta): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json` — agent-proposed commands are never executed); reports stamped with the producing build's `server_sha`
+- Verification (beta): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json`); reports stamped with the producing build's `server_sha`
 - Vendor-neutral executor/reviewer roles — anything that reads stdin
 - Memory integration via shell adapter, per project (configurable or default-wired)
 - Opt-in telemetry, off by default ([TELEMETRY.md](https://github.com/kire21b/fapony/blob/main/TELEMETRY.md) lists exactly what leaves the machine)
