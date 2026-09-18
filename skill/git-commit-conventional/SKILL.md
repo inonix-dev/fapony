@@ -7,6 +7,13 @@ description: Commit split by concern with conventional message — use with Clau
 
 **Hard rule: 1 commit per concern.** Never bundle unrelated changes.
 
+Splitting is not only for the reader: a repo whose commits each carry one concern is the
+only kind whose history can be mined for convention migrations (a commit that deletes
+`A(` and adds `B(` is evidence that `B` replaced `A`). Measured on a real repo
+2026-09-18: restricting the mine to commits touching 10+ files erased every real
+convention it had found, and loosening the matcher to compensate produced only noise.
+Bundled commits destroy that signal permanently — history cannot be re-split later.
+
 ## Before commit
 
 1. `git status --porcelain` — in a shared/multi-agent worktree (fapony's `wt-*`), files already
