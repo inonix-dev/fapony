@@ -3,6 +3,18 @@
   "version": "0.1.0",
   "description": "Measurement layer for coding agents — measure what agents do, verify what they claim. 6 MCP tools, any agent, no loop required",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kire21b/fapony.git"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "agent",
+    "claude-code",
+    "opencode",
+    "coding-agent"
+  ],
   "bin": {
     "fapony": "./fapony.ts"
   },
