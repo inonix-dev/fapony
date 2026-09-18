@@ -1,15 +1,15 @@
 // src/lint-baseline.ts — `fapony lint-baseline`: separate "was red before" from "I made it red".
 //
-// warning กับ error ที่แดงอยู่ก่อนหน้า agent เข้ามา ทำให้ agent ต้อง `fix all` ก่อน
-// แล้วงานจริงถูกกลบใน diff ก้อนเดียว (SPEC-convention-debt §4 — จากปากเจ้าของ:
-// "138 จุดใน ~40 ไฟล์ที่ไม่เกี่ยวกับงาน") ตัวเลขของรีโปที่แดงอยู่แล้ว 212 จุด —
-// agent ที่ไม่ได้ทำอะไรผิดต้องเห็น **0**
+// warnings and errors already red before the agent arrived force the agent to `fix all` first
+// and then the real work is buried in one large diff (SPEC-convention-debt §4 — from the owner:
+// "138 spots across ~40 files unrelated to the work") the repo's own red count is 212 —
+// an agent that did nothing wrong must see **0**
 //
-// กลไก — ไม่รู้จัก eslint: รันคำสั่งที่รีโปบอก (--cmd หรือ evidence.json ชื่อ "lint"),
-// parse เป็นชุด `path:rule-id` (**ไม่ใช่เลขบรรทัด** — บรรทัดขยับทุกครั้งที่แก้ไฟล์),
-// เก็บ baseline ไว้ที่ base_sha · ผลลัพธ์ไม่เข้า state.db (2 ตารางห้ามเพิ่ม) —
-// เป็นไฟล์ชั่วคราวใต้ state dir และถูกทิ้งเมื่อ --diff รายงานแล้ว · รายงานอย่างเดียว
-// ไม่ block — agent ตัดสินเองว่าจะแก้ของเก่าด้วยไหม
+// Mechanism — does not know eslint: runs the command the repo declares (--cmd or evidence.json named "lint"),
+// parses into a set of `path:rule-id` (**not line numbers** — lines shift every time a file is edited),
+// stores the baseline at base_sha · results never enter state.db (2 tables, no additions) —
+// it is a temporary file under the state dir and is discarded once --diff reports · report only
+// never blocks — the agent decides whether to fix the old issues too
 
 import { execSync } from "node:child_process";
 import {

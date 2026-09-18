@@ -86,11 +86,11 @@ export function toolFaponyStats(args: Record<string, unknown>): ToolResult {
     };
   }
 
-  // json:true → StatsData ล้วน (SPEC-verdict-stats) — ห้ามแทรก text อื่น
+  // json:true → pure StatsData (SPEC-verdict-stats) — no other text may be inserted
   if (args.json === true) {
     return jsonResult(data);
   }
 
-  // json:false → text เดียวกับ `fapony stats` — same formatter, raw (not JSON-wrapped)
+  // json:false → the same text as `fapony stats` — same formatter, raw (not JSON-wrapped)
   return { content: [{ type: "text", text: formatStatsText(data) }] };
 }

@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 
-// append-only memory log. ห้ามแก้บรรทัดเก่า — ปิดงาน = close (tombstone), git = ประวัติ
-// log อยู่ข้างไฟล์นี้เสมอเมื่อถูกวางโดย `fapony init` (<project>/.fapony/.memory/log.jsonl);
-// สำเนากลางใน monorepo (โค้ดชุดเดียวที่ root) ยังแยก log ราย app: apps/<app>/.fapony/.memory/log.jsonl
-// (repo ที่ยังไม่ย้ายซึ่งมี log เก่าที่ apps/<app>/.memory/log.jsonl จะอ่านที่เดิมต่อ)
+// append-only memory log. Never edit old lines — close a task = close (tombstone), git = history
+// the log always sits beside this file when placed by `fapony init` (<project>/.fapony/.memory/log.jsonl);
+// the central copy in a monorepo (single code copy at the root) still splits logs per app: apps/<app>/.fapony/.memory/log.jsonl
+// (a repo not yet migrated with an old log at apps/<app>/.memory/log.jsonl keeps reading that location)
 //
 // CLI entry point — all logic lives in:
 //   store.ts       (types + config + rows/put)
@@ -63,6 +63,6 @@ if (cmd === "add") {
 } else if (cmd === "rotate") {
   cmdRotate(a);
 } else {
-  // mem now (default) — next+bug+hold. decision/note ไม่ใช่งานค้าง → ค้นด้วย find แทน
+  // mem now (default) — next+bug+hold. decision/note is not pending work → search with find instead
   cmdNow();
 }

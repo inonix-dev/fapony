@@ -1,6 +1,6 @@
 // src/digest/text.ts — render digest as terminal text
 //
-// ลำดับ section ตาม SPEC §3 (เล่าเรื่อง ไม่ใช่ dashboard)
+// Section order per SPEC §3 (tells a story, not a dashboard)
 
 import type { CostRow, DigestData, MemRow, PlanRow } from "./collect.js";
 

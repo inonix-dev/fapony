@@ -102,7 +102,7 @@ the real scope instead.
 So the seed buys you structure; the draft budget goes on judgment:
 
 - **Read the Context block, then skip to filling** — everything else is the empty template.
-- **Fill every section yourself** — §1–§6 and the TL;DR start as `_agent เติม_` slots.
+- **Fill every section yourself** — §1–§6 and the TL;DR start as `_agent fills in_` slots.
 - **Run the Phase −1 commands for facts** when the idea needs them, and put the numbers in the
   section they answer — a number you measured beats a number the seed guessed at.
 - **Signatures live in the SPEC chunks only.** Never paste them into plan §7 — link to the spec.

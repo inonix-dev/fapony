@@ -622,15 +622,16 @@ function addSessionTokens(
 }
 
 /**
- * tokens/pass — retry tax ที่มองเห็นได้ (SPEC-cost-per-pass).
+ * tokens/pass — the visible retry tax (SPEC-cost-per-pass).
  *
- * ตัวหารคือ pass-family gate ไม่ใช่ run: bucket เป็น gate อยู่แล้ว และงานที่
- * "จบ" คือ gate ที่ผ่าน · token เป็นยอดต่อ session (dedupe แล้ว) ไม่ใช่ต่อ gate —
- * session เดียวออกหลาย gate ได้ ถ้า sum ต่อ gate จะคูณเกินไม่เท่ากันทุกโมเดล
+ * The divisor is a pass-family gate, not a run: bucket is already a gate, and
+ * work "finished" is a gate that passed · token is a per-session total (deduped),
+ * not per gate — one session can emit several gates, so summing per gate would
+ * multiply unevenly across models.
  *
- * `passes=0` หรือ token รวม 0 → null (ไม่ใช่ Infinity/NaN/0): "วัดไม่ได้" ต้อง
- * แยกจาก "ฟรี" และห้ามหารศูนย์ · cost/pass ยังไม่มีใน v1 — ไม่มี cache split
- * (tokensInput คือ fresh+cache_read+cache_write รวมกัน) จึงคิดราคาไม่ได้โดยไม่เดา
+ * `passes=0` or total token 0 → null (not Infinity/NaN/0): "unmeasurable" is not
+ * "free" and never divide by zero · no cost/pass in v1 — no cache split
+ * (tokensInput is fresh+cache_read+cache_write), so price needs a guess.
  */
 function tokensPerPass(
   passes: number,

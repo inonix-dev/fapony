@@ -1,6 +1,6 @@
 // src/mcp/tools/mem.ts — mem_find: read-only search over the project's mem log
 //
-// "เขียนได้ ≠ อ่านกลับได้" — the write side works from the CLI with no MCP
+// "writable ≠ readable back" — the write side works from the CLI with no MCP
 // (vela: 2,920 rows / 49 days); what was missing is "which rows are about the
 // files I am about to touch". Read-only over readMemLog (PLAN-mem-mcp chunk 2).
 //

@@ -1,15 +1,15 @@
 // commands/rotate.ts — compact log.jsonl once it grows past a row-count threshold
-// เก็บ open work rows + active claim ไว้ ที่เหลือ (close/release/synced ของ ref ที่ปิดแล้ว)
-// git mv ไปไฟล์ archive แยก (ไม่ลบ) — ประวัติเก่ายังอยู่ ค้นย้อนหลังได้ผ่าน git log/git show
+// keep open work rows + active claims; the rest (close/release/synced of already-closed refs)
+// is git mv'd to a separate archive file (not deleted) — old history remains, searchable via git log/git show
 
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { rotateKeep } from "../selectors.js";
 import { appendRaw, dir, LOG, rows } from "../store.js";
 
-// ponytail: threshold = จำนวนแถวทั้งหมด ไม่ใช่แค่ open — ที่กลัวคือไฟล์บวม/grep ช้าตอนหลายคนใช้พร้อมกัน
-// (view อ่านไม่รู้เรื่องเป็นปัญหาคนละอันที่ CAP ใน write.ts จัดการอยู่แล้ว)
-// 3000 กะจาก solo 1 สัปดาห์ = ~2k แถว — ปรับได้ด้วย MEM_ROTATE_THRESHOLD ถ้า pace ต่างจากนี้มาก
+// ponytail: threshold = total row count, not just open — the fear is a bloated file / slow grep when many people use it at once
+// (the view being unreadable is a separate problem the CAP in write.ts already handles)
+// 3000 estimated from one solo week = ~2k rows — tune with MEM_ROTATE_THRESHOLD if the pace differs a lot from this
 export const THRESHOLD = Number(process.env.MEM_ROTATE_THRESHOLD) || 3000;
 
 export const cmdRotate = (a: string[]) => {
@@ -40,7 +40,7 @@ export const cmdRotate = (a: string[]) => {
     process.exit(1);
   }
 
-  // เหมือน plan-sweep: stage ก่อนกัน git mv fail เงียบถ้าไฟล์ยังไม่ track (exit 128)
+  // like plan-sweep: stage first to stop git mv failing silently if the file is untracked (exit 128)
   Bun.spawnSync(["git", "add", LOG]);
   const mv = Bun.spawnSync(["git", "mv", LOG, archived]);
   if (mv.exitCode !== 0) {

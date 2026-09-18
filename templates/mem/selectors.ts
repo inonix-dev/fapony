@@ -8,8 +8,8 @@ import type {
   WorkRow,
 } from "./store.js";
 
-// ponytail: reducer = filter + tombstone set. 50k บรรทัด = 9.6MB/26ms — ไฟล์ไม่ใช่คอขวด
-// เพดานจริง = แถวที่ยังเปิดเยอะจน view อ่านไม่รู้เรื่อง → ตอนนั้นค่อย rotate: git mv + append openRows(เก่า) ลงไฟล์ใหม่
+// ponytail: reducer = filter + tombstone set. 50k lines = 9.6MB/26ms — the file is not the bottleneck
+// the real ceiling = too many open rows for the view to make sense → rotate then: git mv + append openRows(old) into a new file
 export const openRows = (all: LogRow[]): WorkRow[] => {
   const dead = new Set(
     all.filter((r): r is CloseRow => r.kind === "close").map((r) => r.ref),
@@ -25,8 +25,8 @@ export const openRows = (all: LogRow[]): WorkRow[] => {
   );
 };
 
-// C) claimsOf: คืน Map ref → latest claim row ที่ยัง active
-// active = แถวล่าสุดของ claim|release เป็น claim และ ref ไม่อยู่ใน dead (close)
+// C) claimsOf: returns Map ref → latest claim row still active
+// active = the latest claim|release row is a claim and ref is not in dead (close)
 export const claimsOf = (all: LogRow[]): Map<string, ClaimRow> => {
   const dead = new Set(
     all.filter((r): r is CloseRow => r.kind === "close").map((r) => r.ref),
@@ -46,9 +46,9 @@ export const claimsOf = (all: LogRow[]): Map<string, ClaimRow> => {
   return active;
 };
 
-// decision ที่ใหม่กว่าทั้ง commit ล่าสุดของ spec และ synced marker = spec ยังไม่ได้อัปเดตตาม
-// + next/hold ที่มี spec ถูกแก้หลังสร้าง = อาจปิดไปแล้วแต่ไม่มีใคร close — เคสจริง: msbnndmt
-// + active claim ที่อายุเกิน 4 ชม. = agent อาจตายกลางงาน
+// a decision newer than both the spec's latest commit and the synced marker = spec not updated to match
+// + next/hold whose spec was edited after creation = may be done already but nobody closed it — real case: msbnndmt
+// + an active claim older than 4h = the agent may have died mid-task
 export const staleReport = (all: LogRow[]): string[] => {
   const out: string[] = [];
   const mark: Record<string, number> = {};
@@ -67,7 +67,7 @@ export const staleReport = (all: LogRow[]): string[] => {
   }
   const gitDates = new Map<string, number>();
   for (const spec of specPaths) {
-    // --follow: spec path ที่ถูก git mv (เช่น ย้ายเข้า plan/done/) ยังตามประวัติต่อได้
+    // --follow: a spec path that was git mv'd (e.g. moved into plan/done/) can still follow its history
     const git = Bun.spawnSync([
       "git",
       "log",
@@ -94,9 +94,9 @@ export const staleReport = (all: LogRow[]): string[] => {
   for (const r of openRows(all)) {
     if ((r.kind === "next" || r.kind === "hold") && r.spec) {
       const gitDate = gitDates.get(r.spec);
-      // ponytail: grace 24 ชม. — "log next แล้วเขียน/commit plan ต่อในวันเดียวกัน" คือ workflow ปกติ
-      // ไม่ใช่สัญญาณว่างานจบแล้วลืมปิด (เคสจริงที่ต้องจับอย่าง msbnndmt ห่างกันเป็นวัน) —
-      // ไม่มี grace = SUSPECT ขึ้นทุกแผนที่เพิ่งเขียน แล้วทุกคนเรียนรู้ที่จะเลื่อนผ่าน stale ทั้งบล็อก
+      // ponytail: 24h grace — "log next then write/commit the plan the same day" is normal workflow
+      // not a signal that the work finished and was forgotten (the real case to catch, msbnndmt, is days apart) —
+      // without grace = SUSPECT fires on every freshly written plan, and everyone learns to skim past the whole stale block
       if (gitDate && gitDate > Date.parse(r.ts) + 86_400_000)
         out.push(
           `SUSPECT [${r.id}] ${r.spec} changed after this ${r.kind} (${r.ts.slice(0, 10)}) — check whether it is already done`,
@@ -115,13 +115,13 @@ export const staleReport = (all: LogRow[]): string[] => {
   return out;
 };
 
-// rotate: แถวที่ต้องแบกต่อในไฟล์ log ใหม่หลัง archive
-// - next/bug/hold ที่ยังเปิด + claim ที่ยัง active อยู่บนแถวนั้น (close/claim ของ ref ที่ปิดแล้ว = ทิ้งได้)
-// - decision/note ยังไม่มี "close" ของตัวเอง (ประวัติถาวรตามดีไซน์) แต่ resolved ได้ทางอ้อมผ่าน synced:
-//   spec ถูก synced *หลัง* แถวนี้แล้ว = ข้อมูลเข้า spec แล้วจริง เก็บใน archive (git) พอ ไม่ต้องแบกในไฟล์ hot
-//   (logic เดียวกับ staleReport's decision check — ไม่มี spec หรือยังไม่ synced ทันแถวนี้ = ยังถือว่า relevant, เก็บไว้)
-// ponytail: decision/note ที่ไม่มี spec ไม่มีทางรู้ว่า resolved แล้วหรือยัง — เก็บไว้ตลอด (เพดานจริงคือ
-// ต้อง attach spec ตั้งแต่ log ถ้าอยากให้ rotate ออกได้ในอนาคต ไม่ใช่ปัญหาของ rotate เอง)
+// rotate: rows that must carry over into the new log file after archiving
+// - open next/bug/hold + still-active claims on those rows (close/claim of already-closed refs = discardable)
+// - decision/note has no "close" of its own (permanent history by design) but resolves indirectly via synced:
+//   spec was synced *after* this row = the info really made it into the spec, archive (git) is enough, no need to carry it in the hot file
+//   (same logic as staleReport's decision check — no spec or not yet synced by this row = still considered relevant, keep it)
+// ponytail: a decision/note with no spec gives no way to know if it is resolved — keep it forever (the real ceiling is
+// attaching a spec at log time if you want rotate to be able to drop it later, not rotate's own problem)
 export const rotateKeep = (all: LogRow[]): LogRow[] => {
   const open = openRows(all);
   const workOpen = open.filter(

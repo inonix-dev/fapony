@@ -1,18 +1,20 @@
 // src/debt.ts — `fapony debt`: which files have not moved to a shipped convention yet.
 //
-// คำถามที่ไม่มีใครตอบได้: "ไฟล์ไหนยังไม่ย้าย" — rules files (CLAUDE.md, Cursor rules)
-// บอกได้แค่ว่า "กฎคืออะไร" (ชั้น 2) และ "ก๊อปไฟล์ไหน" (ชั้น 1) — ตำแหน่งของหนี้
-// (ชั้น 3) อยู่ในหัวเจ้าของ และหายเมื่อลืม (SPEC-convention-debt §1)
+// The question nobody can answer: "which files have not moved" — rules files
+// (CLAUDE.md, Cursor rules) can only say "what the rule is" (layer 2) and
+// "which files were copied" (layer 1) — where the debt is (layer 3) lives in
+// the owner's head and vanishes when forgotten (SPEC-convention-debt §1)
 //
-// นิยามของ convention อยู่ในรีโปที่ถูกวัด (<repo>/.fapony/conventions.json — ผ่าน
-// resolver เดียวกับ mem log, SPEC §2.1) — fapony ไม่รู้จัก React หรือ Hono และ
-// ต้องไม่รู้จัก · หนึ่ง convention = pattern ที่ควรใช้ (ok) + pattern ที่แปลว่า
-// ยังไม่ย้าย (stale) + ขอบเขต (where) + เงื่อนไขของไฟล์ (guard, เช่น extends Base)
+// The convention definition lives in the measured repo (<repo>/.fapony/conventions.json
+// — via the same resolver as the mem log, SPEC §2.1) — fapony does not know React
+// or Hono and must not · one convention = pattern to use (ok) + pattern meaning
+// not-yet-migrated (stale) + scope (where) + file condition (guard, e.g. extends Base)
 //
-// หนี้ถูกคำนวณสดทุกครั้ง ไม่เขียนลงที่ใดเลย (แบบเดียวกับ analyze: cache คือหนี้ล้วน —
-// ลิสต์ที่ freeze ไว้ตกรุ่นเงียบ ๆ เหมือน MASTER.md) · กฎเหล็ก: checker ไม่ null =
-// fapony ไม่รายงานหนี้ข้อนั้น — การรายงานซ้ำกับ eslint คือ abstraction ที่มี
-// implementation เดียว (กฎ 1) และสอนให้ agent ข้ามทั้งคู่ (SPEC §2)
+// Debt is computed live every time, never written anywhere (same as analyze:
+// a cache is pure debt — a frozen list goes stale silently like MASTER.md) ·
+// Iron rule: checker not null = fapony does not report that debt item — reporting
+// twice with eslint is an abstraction with one implementation (rule 1) and
+// teaches the agent to skip both (SPEC §2)
 //
 // Read-only stdout: no file writes, no state.db, no cache (rule 5b).
 
@@ -242,12 +244,12 @@ export function debtScan(
   const compiled: Compiled[] = [];
   for (const conv of loaded.convs) {
     if (conv.checker) {
-      // กฎเหล็ก — fapony เงียบ ปล่อยให้ checker ทำงาน (SPEC §2)
+      // Iron rule — fapony stays silent, leave it to the checker (SPEC §2)
       checkedCount++;
       continue;
     }
     if (!conv.stale) {
-      // ช่องเดียวที่คนเติม (SPEC §2.2) — โชว์ว่าค้าง ไม่เดาแทน
+      // The one slot a human fills (SPEC §2.2) — show it as pending, don't guess
       declared.push(conv);
       continue;
     }
@@ -352,16 +354,18 @@ export function debtForFile(
   return out;
 }
 
-// --- Promotion signal (chunk 5) — "เรื่องนี้ซ้ำครั้งที่ N แล้ว ทำ checker ไหม" ---
+// --- Promotion signal (chunk 5) — "this recurred N times, time for a checker?" ---
 //
-// "ผมจะทำ eslint ตอนที่คิดได้" — จังหวะ "คิดได้" คือสิ่งที่หายไป (SPEC §3) fapony
-// เห็นประวัติข้าม session (mem + verdicts) จึงนับได้ว่าเรื่องเดียวกันถูกแก้ซ้ำกี่ครั้ง
-// แล้วยื่นคำถามให้คนตัดสิน — ไม่ตัดสินเอง ไม่เขียน eslint rule เอง (SPEC §6 fail list)
+// "I'll write eslint when I think of it" — the "think of it" moment is what goes
+// missing (SPEC §3) · fapony sees history across sessions (mem + verdicts), so it
+// can count how often the same thing was fixed, then put the question to a human —
+// it does not decide, does not write the eslint rule itself (SPEC §6 fail list)
 //
-// การ match "เรื่องเดียวกัน" — แม่นยำเท่าที่ข้อมูลให้ (SPEC §7: แถวเก่าไม่มี files[]
-// ยังไม่ตัดสิน): แถวที่มี files[] ต้อง intersect กับ debt list · ข้อความต้องเอ่ยถึง
-// สัญลักษณ์ของ convention (ok เช่น fmtMoney, หรือ identifier ≥ 6 ตัวจาก stale เช่น
-// toLocaleString/useMutation — "throw"/"Error" สั้นเกินจึงไม่นับ กัน over-match)
+// Matching "the same thing" — only as precise as the data allows (SPEC §7: old rows
+// lack files[], still undecided): a row with files[] must intersect the debt list ·
+// the text must mention a convention symbol (ok such as fmtMoney, or an identifier
+// ≥ 6 chars from stale such as toLocaleString/useMutation — "throw"/"Error" are too
+// short and don't count, to avoid over-matching)
 
 export const PROMOTION_THRESHOLD = 3;
 const PROMOTION_MAX = 3;
@@ -642,7 +646,7 @@ export function cmdDebt(args: string[]): void {
   }
 
   if (loaded.path === null) {
-    // SPEC §6: ไม่มี conventions.json = เงียบสนิท ไม่ error ไม่ชวนสร้าง
+    // SPEC §6: no conventions.json = completely silent, no error, no prompt to create one
     console.log(
       `fapony debt — no conventions.json in ${worktree} (nothing tracked yet)`,
     );

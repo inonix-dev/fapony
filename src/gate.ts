@@ -53,9 +53,9 @@ export function gateOnce(
   }
 
   const config = loadConfig();
-  // runs.worktree เก็บ absolute path (SERVER_INSTRUCTIONS บังคับ) — ไม่ใช่ key ของ config.worktrees
-  // การ lookup จึงพลาดเสมอ และ fallback เดิม "." ทำให้คำสั่ง memory ของโปรเจกต์ไปรันใน cwd ของ
-  // MCP server แทนที่จะเป็นโปรเจกต์นั้น · lookup ยังอยู่เผื่อ row เก่าที่เคยเก็บเป็น key
+  // runs.worktree stores an absolute path (SERVER_INSTRUCTIONS mandates it) — not a key in config.worktrees
+  // so the lookup always misses, and the old "." fallback ran the project's memory commands in the cwd of
+  // the MCP server instead of that project · the lookup stays in case an old row was stored as a key
   const worktree = config.worktrees[run.worktree] ?? run.worktree;
 
   // --- pass family (4 grades) ---

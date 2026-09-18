@@ -56,7 +56,7 @@ export function testPlanSeedWritesPlan(): void {
       assert.match(body, /## 2\. Scope \(do \/ don't do\)/);
       assert.match(body, /## 5\. Risks & Escape hatches/);
       // judgment sections are agent slots, not pre-invented
-      assert.match(body, /_\(agent เติม\)_/);
+      assert.match(body, /_\(agent fills in\)_/);
       // ledger context sits under the TL;DR, above §1 — below §8 nobody read it
       assert.ok(
         body.indexOf("## Context (fapony)") < body.indexOf("## 1. Goal"),
@@ -169,7 +169,7 @@ export function testPlanSeedScopeFilters(): void {
       assert.match(
         plan,
         // title keeps only what the filename doesn't already say
-        /ตัดสินไปแล้ว: \[PLAN-formatters\.md\]\(\.\.\/done\/PLAN-formatters\.md\) — money formatting \(shipped 2026-01-02\)/,
+        /Already decided: \[PLAN-formatters\.md\]\(\.\.\/done\/PLAN-formatters\.md\) — money formatting \(shipped 2026-01-02\)/,
       );
       assert.ok(!plan.includes("PLAN-elsewhere"), "§8 stays inside the scope");
 
@@ -181,7 +181,7 @@ export function testPlanSeedScopeFilters(): void {
         "utf-8",
       );
       assert.ok(
-        !wide.includes("ตัดสินไปแล้ว"),
+        !wide.includes("Already decided"),
         "§8 prior art needs a --scope to join on",
       );
     });

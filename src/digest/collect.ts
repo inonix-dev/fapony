@@ -1,6 +1,6 @@
-// src/digest/collect.ts — รวมข้อมูลจาก 4 แหล่งเป็น DigestData ก้อนเดียว
+// src/digest/collect.ts — merge data from 4 sources into a single DigestData
 //
-// ไม่ render อะไรเลย — แค่อ่าน + จัดรูป struct
+// Renders nothing — just reads + shapes into structs
 
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -144,7 +144,7 @@ function parseFrontmatter(text: string): { status?: string; kind?: string } {
 }
 
 function countCheckboxes(text: string): { done: number; total: number } {
-  // นับ checkbox ใน section ## แรกเท่านั้น (same logic as plans.ts)
+  // Count checkboxes in the first ## section only (same logic as plans.ts)
   const body = text.replace(/^---\r?\n[\s\S]*?\r?\n---/, "");
   const start = body.search(/^##\s+/m);
   if (start < 0) return { done: 0, total: 0 };
@@ -216,7 +216,7 @@ function readUsageAndCost(_worktree: string): {
   detail: string;
 } {
   const cache = readCache();
-  // หา global entry (worktree=null) หรือรวมทุก entry
+  // Find a global entry (worktree=null), otherwise merge every entry
   const globalEntries = cache.filter((e) => !e.worktree);
   if (globalEntries.length === 0 && cache.length === 0) {
     return {
@@ -232,11 +232,11 @@ function readUsageAndCost(_worktree: string): {
     };
   }
 
-  // ใช้ global entries ถ้ามี ไม่งั้นรวมทุก entry
+  // Use global entries if present, otherwise merge every entry
   const entries = globalEntries.length > 0 ? globalEntries : cache;
   const usage = entriesToUsage(entries);
 
-  // คำนวณราคา
+  // Compute the price
   const prices = loadPrices();
   if (!prices) {
     return {
@@ -271,7 +271,7 @@ function readUsageAndCost(_worktree: string): {
     imputed: m.imputed_cost,
   }));
 
-  // เพิ่ม cost จริงจาก cache
+  // Attach the real cost from the cache
   const cacheByKey = new Map(
     entries.flatMap((e) =>
       e.by_model.map((m) => [`${m.provider}\0${m.model}`, m]),

@@ -61,7 +61,7 @@ export function testAnalyzeHubOrphanCycle(): void {
       const hubs = byKind("hub-untested");
       assert.equal(hubs.length, 1);
       assert.equal(hubs[0].file, "hub.ts");
-      assert.ok(hubs[0].detail.includes("3 ไฟล์พึ่งอยู่"));
+      assert.ok(hubs[0].detail.includes("3 files depend on it"));
       assert.ok(hubs[0].evidence.includes("a.ts"));
 
       const orphans = byKind("orphan");

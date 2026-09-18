@@ -51,9 +51,10 @@ function modelLine(
 }
 
 /**
- * บรรทัด list-price equivalent ต่อท้ายแต่ละ usage section — หน่วยเดียวที่
- * เทียบข้าม client ได้ (client ที่ไม่บันทึก cost มีราคาติดตรงนี้)
- * ราคา list ไม่ใช่เงินที่จ่ายจริง · unpriced แยกออกมาให้เห็น ไม่รวมใน 0
+ * list-price equivalent line appended to each usage section — the one unit
+ * that compares across clients (clients that do not record cost get a price
+ * attached here). List price is not money paid · unpriced is broken out
+ * separately, never folded into 0.
  */
 function imputedLines(
   result: PassiveUsageResult,
@@ -103,8 +104,8 @@ export function formatStatsText(data: StatsData): string {
   if (data.runs.total === 0) return "no runs yet";
 
   const lines: string[] = [];
-  // ราคา list จาก cache อย่างเดียว — query ไม่ fetch เอง (offline ได้, ไม่มี
-  // ไฟล์ = แสดง — + hint ไม่ throw)
+  // list price from cache only — the query never fetches itself (works
+  // offline, missing file = shows — + hint, never throws)
   const prices = loadPrices();
 
   if (data.scope) {

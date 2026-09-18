@@ -1,7 +1,7 @@
 // src/digest/html.ts — render digest as a single HTML page
 //
-// คอลัมน์เดียว max-width: 68rem · ไม่มี tab ไม่มีปุ่มพับ ไม่มี JS
-// ใช้ DARK_THEME_CSS + TABLE_CSS จาก src/web/html.ts
+// single column max-width: 68rem · no tabs, no collapse buttons, no JS
+// uses DARK_THEME_CSS + TABLE_CSS from src/web/html.ts
 
 import { DARK_THEME_CSS, esc, TABLE_CSS } from "../web/html.js";
 import type {

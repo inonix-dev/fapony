@@ -1,17 +1,20 @@
 // src/hook.ts — Claude Code / Cursor Stop hook: refuse to end a turn that produced
 // commits but no verdict.
 //
-// ทำไมต้องเป็น hook ไม่ใช่ข้อความ: SERVER_INSTRUCTIONS เป็นการ *ขอ* ให้ agent จำ
-// วัดแล้วว่าไม่พอ · hook ไม่ได้ตัดสินเกรดแทน (ตัดสินไม่ได้ — มันไม่เห็นว่างานผ่านหรือพัง)
-// มันแค่ไม่ให้จบเทิร์นจนกว่า agent จะตัดสินเอง แยก "ใครตัดสิน" ออกจาก "ใครบังคับให้ตัดสิน"
+// Why a hook and not a message: SERVER_INSTRUCTIONS is a *request* that the
+// agent remember, and it measured as not enough · the hook does not grade in
+// the agent's place (it cannot — it does not see whether the work passed or
+// broke) it merely won't let the turn end until the agent grades itself,
+// separating "who judges" from "who forces judgment"
 //
-// สัญญาณคือ commit ไม่ใช่ dirty tree — dirty = กำลังทำอยู่, commit = หน่วยงานจบแล้ว
-// ตรงกับนิยาม "1 run = 1 หน่วยงานที่วัดได้" (กฎ 7)
+// The signal is a commit, not a dirty tree — dirty = still working, commit =
+// the unit of work is done, matching the definition "1 run = 1 measurable
+// unit of work" (rule 7)
 //
-// สอง payload หนึ่งการตัดสิน — field-mapping เท่านั้น:
+// Two payloads, one decision — field-mapping only:
 //   claude  {cwd, transcript_path, stop_hook_active} → {"decision":"block"}
 //   cursor  {workspace_roots, conversation_id, loop_count, status} → {"followup_message"}
-//   (cursor: loop_count ≥ 1 = hook เคยยิงแล้ว, status ≠ completed = ปล่อยผ่าน)
+//   (cursor: loop_count ≥ 1 = the hook already fired, status ≠ completed = allow)
 
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
@@ -54,7 +57,7 @@ export function utcStamp(d: Date): string {
  *
  * PLAN-mem-mcp chunk 3: the block message now carries the commit list and the
  * mem-log status (last row date). Both are *information*, never conditions —
- * the block condition stays verdict-only (กฎ 7: the hook does not judge, it
+ * the block condition stays verdict-only (rule 7: the hook does not judge, it
  * reports what is pending so the agent decides what deserves recording).
  */
 export function decideStop(opts: {
@@ -224,7 +227,7 @@ export async function cmdHookStop(): Promise<void> {
           .get(worktree, since) as { n: number } | null;
         verdicts = row?.n ?? 0;
         // Informational only — read-only, degrade silently (mem status never
-        // becomes a block condition, กฎ 7).
+        // becomes a block condition, rule 7).
         try {
           const mem = readMemLog(worktree);
           memLastTs = mem.rows[0]?.ts ?? null;
@@ -251,15 +254,17 @@ export async function cmdHookStop(): Promise<void> {
 
 // --- Read hint (PreToolUse annotate — never block, never dedupe) ---
 //
-// การอ่านไฟล์ใหญ่ทั้งไฟล์เป็นจุดที่ agent จ่าย token โดยไม่รู้ตัว — เสียงเตือน
-// ใน skill ไม่เคยพอ (หลักเดียวกับ Stop hook: พูดตอนมันกำลังจ่าย) แต่ hook นี้
-// **annotate เท่านั้น**: ไม่มี permissionDecision, ไม่มี "อ่านไปแล้ว" dedupe —
-// context compaction ทำให้ "อ่านไปแล้ว" กลายเป็นเท็จ และ hook ที่เดาผิดแล้วขัง
-// agent แย่กว่าไม่มี hook (กฎของ hook.ts เดิม) — annotate ขังไม่ได้ด้วย
-// construction, ต้นทุนพลาดสูงสุดคือบรรทัดเดียวที่ไม่จำเป็น
+// Reading a large file in full is where an agent spends tokens without
+// noticing — warnings in a skill were never enough (same principle as the
+// Stop hook: speak while it is spending). But this hook **annotates only**:
+// no permissionDecision, no "already read" dedupe — context compaction makes
+// "already read" false, and a hook that guesses wrong and traps the agent is
+// worse than no hook (the rule from the original hook.ts) — annotate cannot
+// trap by construction, the worst cost of a miss is one unnecessary line
 //
-// ข้อความเป็น fact ล้วน (จำนวนบรรทัด + คำสั่ง + ค่าที่วัดครั้งเดียว) ไม่ใช่
-// estimate ต่อไฟล์ — เดา token เป็นการแต่งตัวเป็นข้อมูล ขัด "facts only"
+// The text is facts only (line count + command + a one-time measurement), not
+// a per-file estimate — guessing tokens is dressing up as data, against
+// "facts only"
 
 /** Below this size a full read is already cheap — stay silent. */
 export const READ_HINT_MIN_BYTES = 24_000;
@@ -316,14 +321,15 @@ export function readHintFor(opts: ReadHintInput): string | null {
 
 // --- Commit hint (tool.execute.after — annotate only, never block) ---
 //
-// OpenCode ไม่มี Stop hook (Cursor มีอยู่แล้ว — ดู cursor.ts hook-stop wiring)
-// จึงไม่สามารถ block เทิร์นได้ แทนด้วย annotate ที่ต่อท้าย output ของ bash
-// tool ทุกครั้งที่มี git commit แล้วไม่มี verdict ค้างอยู่ เป็น nudge แบบ
-// เดียวกับ read hint: ไม่ block, ไม่ dedupe, ทุก unknown → เงียบ · เรียกจาก
-// opencode plugin โดย import ตรง (เหมือน readHintFor) ไม่มี CLI subcommand
-// เพราะไม่มี client ไหนต้องการแบบ subprocess (Cursor ใช้ hook-stop ของตัวเองแทน)
+// OpenCode has no Stop hook (Cursor does — see cursor.ts hook-stop wiring)
+// so it cannot block a turn; instead it appends an annotate to the bash tool
+// output whenever there is a git commit with no verdict pending. It is the
+// same kind of nudge as the read hint: no block, no dedupe, every unknown →
+// silent · called from the opencode plugin by direct import (like
+// readHintFor), no CLI subcommand because no client needs it as a subprocess
+// (Cursor uses its own hook-stop instead)
 //
-// ข้อความเป็น fact ล้วน (commit list + verdict status) ไม่ใช่ estimate
+// The text is facts only (commit list + verdict status), not an estimate
 
 /** Below this number of commits, the hint is unnecessary noise. */
 export const COMMIT_HINT_MIN_COMMITS = 1;
@@ -446,10 +452,11 @@ export async function cmdHookReadHint(): Promise<void> {
 
 // --- Debt + mem context (PLAN-convention-debt chunk 4) ---
 //
-// จังหวะเดียวที่การแก้หนี้คุ้ม token คือตอนที่เปิดไฟล์นั้นอยู่แล้ว — hook-read-hint
-// จึงแนบสองอย่างต่อท้าย size hint: convention ที่ไฟล์ยังค้าง (debt detector, คำนวณสด)
-// และแถว mem ที่เอ่ยถึงไฟล์นั้น (ข้าม session) · **annotate เท่านั้น** เหมือนเดิม —
-// ไม่ block, ไม่ dedupe, ทุก unknown → เงียบ · cap รวม 5 บรรทัด (หนี้ 3 · mem 2)
+// The one moment paying down debt is worth tokens is when the file is already
+// open — so hook-read-hint appends two things after the size hint: conventions
+// the file still violates (debt detector, computed live) and mem rows that
+// mention the file (across sessions) · **annotate only**, as before — no
+// block, no dedupe, every unknown → silent · combined cap 5 lines (debt 3 · mem 2)
 
 const DEBT_HINT_MAX = 3;
 const MEM_HINT_MAX = 2;
