@@ -4,6 +4,8 @@
 
 # fapony
 
+[![npm](https://img.shields.io/npm/v/fapony.svg)](https://www.npmjs.com/package/fapony)
+
 **Where did your tokens go?** fapony reads the session logs Claude Code, Codex, OpenCode and ZCode
 already write, and puts them all on one yardstick — tokens, cost and time per model, per client,
 per workflow. Nothing to instrument, no per-project setup, no waiting for data to accumulate: it
@@ -87,9 +89,9 @@ Stated up front, because the gap between these two things is where most tooling 
 
 ```bash
 # 1. Install (needs Bun — https://bun.sh)
-git clone https://github.com/kire21b/fapony.git && cd fapony
-bun install
-bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
+npm install -g fapony       # or: bun add -g fapony
+#    from source instead:
+#    git clone https://github.com/kire21b/fapony.git && cd fapony && bun install && bun link
 #    note: `bun link` claims the global `fapony` bin by package name, not path — running it
 #    from a second checkout silently repoints the command there. Re-run it in the one you want.
 
