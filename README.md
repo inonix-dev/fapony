@@ -86,7 +86,7 @@ Stated up front, because the gap between these two things is where most tooling 
 ## Quick start (MCP)
 
 ```bash
-# 1. Install (Bun is the only runtime dependency — fapony itself has zero packages)
+# 1. Install (needs Bun — https://bun.sh)
 git clone https://github.com/kire21b/fapony.git && cd fapony
 bun install
 bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
