@@ -31,7 +31,11 @@ export {
 export { cmdInstallCodex } from "./install/codex.js";
 export { cmdInstallCursor } from "./install/cursor.js";
 export { detectClients } from "./install/detect.js";
-export { cmdInstallOpencode } from "./install/opencode.js";
+export {
+  cmdInstallOpencode,
+  commitHintPluginSource,
+  readHintPluginSource,
+} from "./install/opencode.js";
 export {
   agentsSkillsDir,
   claudeSkillsDir,

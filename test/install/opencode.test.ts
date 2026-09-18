@@ -216,3 +216,98 @@ export function testInstallOpencodeReadHintForeignFileUntouched(): void {
   });
   console.log("  ✓ install opencode read hint → foreign plugin untouched");
 }
+
+export function testInstallOpencodeCommitHintPlugin(): void {
+  withTempHome((home) => {
+    const pluginPath = join(
+      home,
+      ".config",
+      "opencode",
+      "plugins",
+      "fapony-commit-hint.ts",
+    );
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.ok(
+      existsSync(pluginPath),
+      "commit hint plugin file should be written",
+    );
+    const src = readFileSync(pluginPath, "utf-8");
+    assert.ok(src.includes("commitHintFor"), "must import the shared logic");
+    assert.ok(src.includes('input.tool !== "bash"'), "must hook the bash tool");
+    assert.ok(src.includes("output.output"), "must mutate the tool output");
+    assert.ok(err.includes("commit hint"), `got: ${err}`);
+    console.log("  ✓ install opencode commit hint → plugin written");
+  });
+}
+
+export function testInstallOpencodeCommitHintIdempotent(): void {
+  withTempHome((home) => {
+    const pluginPath = join(
+      home,
+      ".config",
+      "opencode",
+      "plugins",
+      "fapony-commit-hint.ts",
+    );
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const src = readFileSync(pluginPath, "utf-8");
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(pluginPath, "utf-8");
+    assert.equal(src, after, "second install must not rewrite the plugin");
+    console.log("  ✓ install opencode commit hint → idempotent");
+  });
+}
+
+export function testInstallOpencodeCommitHintForeignFileUntouched(): void {
+  withTempHome((home) => {
+    const pluginsDir = join(home, ".config", "opencode", "plugins");
+    mkdirSync(pluginsDir, { recursive: true });
+    const pluginPath = join(pluginsDir, "fapony-commit-hint.ts");
+    writeFileSync(pluginPath, "// someone else's plugin\n");
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.equal(
+      readFileSync(pluginPath, "utf-8"),
+      "// someone else's plugin\n",
+      "a foreign file at our name must never be overwritten",
+    );
+    console.log("  ✓ install opencode commit hint → foreign plugin untouched");
+  });
+}
+
+export function testInstallOpencodeCommitHintDryRun(): void {
+  withTempHome((home) => {
+    const pluginPath = join(
+      home,
+      ".config",
+      "opencode",
+      "plugins",
+      "fapony-commit-hint.ts",
+    );
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(true, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.ok(
+      !existsSync(pluginPath),
+      "dry-run must not write the commit hint plugin",
+    );
+    console.log("  ✓ install opencode commit hint → dry-run no write");
+  });
+}

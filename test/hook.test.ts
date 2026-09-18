@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  COMMIT_HINT_MIN_COMMITS,
+  commitHintFor,
   cursorTranscriptPath,
   decideStop,
   isCursorPayload,
@@ -12,7 +14,10 @@ import {
   stopOutput,
   utcStamp,
 } from "../src/hook.js";
-import { readHintPluginSource } from "../src/install/opencode.js";
+import {
+  commitHintPluginSource,
+  readHintPluginSource,
+} from "../src/install/opencode.js";
 
 const base = {
   stopHookActive: false,
@@ -322,6 +327,10 @@ export function testReadHintPluginSource(): void {
   assert.ok(src.includes('input.tool !== "read"'), "guards the tool name");
   assert.ok(src.includes("output.output"), "mutates the tool output");
   assert.ok(!src.includes("throw"), "must never throw into the tool call");
+  assert.ok(
+    src.includes("readContextLines"),
+    "must also wire debt/mem context, matching Claude's cmdHookReadHint",
+  );
   console.log(
     "  ✓ read hint opencode plugin imports shared logic, annotate-only",
   );
@@ -462,4 +471,171 @@ export function testReadContextCombinedCapAndOutsideRepo(): void {
     }
   });
   console.log("  ✓ read context → ≤5 lines, silent outside a repo");
+}
+
+// --- Commit hint (tool.execute.after annotate-only) ---
+
+import { execSync } from "node:child_process";
+import { openDb } from "../src/db/index.js";
+
+export function testCommitHintNullForNonCommit(): void {
+  assert.strictEqual(
+    commitHintFor({ command: "git push origin main", cwd: "/tmp" }),
+    null,
+    "git push must not trigger the hint",
+  );
+  assert.strictEqual(
+    commitHintFor({ command: "git status", cwd: "/tmp" }),
+    null,
+    "git status must not trigger the hint",
+  );
+  assert.strictEqual(
+    commitHintFor({ command: "", cwd: "/tmp" }),
+    null,
+    "empty command must not trigger the hint",
+  );
+  assert.strictEqual(
+    commitHintFor({ command: null, cwd: "/tmp" }),
+    null,
+    "null command must not trigger the hint",
+  );
+  console.log("  ✓ commit hint → silent for non-commit bash commands");
+}
+
+export function testCommitHintNullOutsideGitRepo(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-ch-norepo-"));
+  try {
+    const hint = commitHintFor({
+      command: "git commit -m 'test'",
+      cwd: dir,
+    });
+    assert.strictEqual(hint, null, "outside a git repo must be silent");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ commit hint → silent outside a git repo");
+}
+
+export function testCommitHintWhenNoGradedVerdicts(): void {
+  // Create a git repo with a commit and no verdicts in the DB.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
+  try {
+    execSync("git init", { cwd: dir, stdio: "ignore" });
+    execSync("git config user.email 'test@test.com'", {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    execSync("git config user.name 'Test'", { cwd: dir, stdio: "ignore" });
+    writeFileSync(join(dir, "README.md"), "# test\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "init"', { cwd: dir, stdio: "ignore" });
+
+    // Set FAPONY_STATE_DIR so openDb() uses an isolated db.
+    const orig = process.env.FAPONY_STATE_DIR;
+    process.env.FAPONY_STATE_DIR = dir;
+    try {
+      const hint = commitHintFor({
+        command: "git commit -m 'test'",
+        cwd: dir,
+      });
+      assert.ok(hint, "must return a hint when commits have no verdicts");
+      assert.ok(hint.includes("fapony:"), "hint must be prefixed with fapony:");
+      assert.ok(
+        hint.includes("verdict_submit"),
+        "hint must name verdict_submit",
+      );
+    } finally {
+      if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+      else process.env.FAPONY_STATE_DIR = orig;
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ commit hint → returns hint when ungraded commits exist");
+}
+
+export function testCommitHintWhenGradedVerdictsExist(): void {
+  // Create a git repo + DB with a verdict, then check the hint is null.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = dir;
+  try {
+    execSync("git init", { cwd: dir, stdio: "ignore" });
+    execSync("git config user.email 'test@test.com'", {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    execSync("git config user.name 'Test'", { cwd: dir, stdio: "ignore" });
+    writeFileSync(join(dir, "README.md"), "# test\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "init"', { cwd: dir, stdio: "ignore" });
+    // commitHintFor resolves the worktree via `git rev-parse --show-toplevel`,
+    // which canonicalizes symlinks (macOS: /tmp → /private/tmp) — the row
+    // must be keyed on that same resolved path, not the raw mkdtemp path.
+    const worktree = execSync("git rev-parse --show-toplevel", {
+      cwd: dir,
+    })
+      .toString()
+      .trim();
+
+    const db = openDb();
+    try {
+      db.exec(`INSERT INTO runs (worktree, status) VALUES (?, 'passed')`, [
+        worktree,
+      ]);
+      db.run("PRAGMA wal_checkpoint(TRUNCATE)");
+      const row = db
+        .query(`SELECT id FROM runs WHERE worktree = ?`)
+        .get(worktree) as { id: number } | null;
+      if (row) {
+        db.exec(`INSERT INTO events (run_id, kind) VALUES (?, 'gate')`, [
+          row.id,
+        ]);
+        db.run("PRAGMA wal_checkpoint(TRUNCATE)");
+      }
+
+      const hint = commitHintFor({
+        command: "git commit -m 'test'",
+        cwd: dir,
+      });
+      assert.strictEqual(
+        hint,
+        null,
+        "must be silent when verdicts already exist",
+      );
+    } finally {
+      db.close();
+    }
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ commit hint → silent when verdicts already exist");
+}
+
+export function testCommitHintPluginSource(): void {
+  // The generated OpenCode plugin must import the shared commitHintFor
+  // logic (no second implementation), target the bash tool, and mutate
+  // output only.
+  const src = commitHintPluginSource("/install/root");
+  assert.ok(
+    src.includes("/install/root/src/hook.ts"),
+    "bakes the install root",
+  );
+  assert.ok(src.includes('input.tool !== "bash"'), "guards the bash tool");
+  assert.ok(src.includes("output.output"), "mutates the tool output");
+  assert.ok(!src.includes("throw"), "must never throw into the tool call");
+  assert.ok(
+    src.includes("commitHintFor"),
+    "must import commitHintFor from the shared module",
+  );
+  console.log(
+    "  ✓ commit hint opencode plugin imports shared logic, annotate-only",
+  );
+}
+
+export function testCommitHintMinCommitsConstant(): void {
+  assert.strictEqual(COMMIT_HINT_MIN_COMMITS, 1);
+  console.log("  ✓ commit hint min commits constant is 1");
 }
