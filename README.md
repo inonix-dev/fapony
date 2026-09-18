@@ -4,6 +4,8 @@
 
 # fapony
 
+[![npm](https://img.shields.io/npm/v/fapony.svg)](https://www.npmjs.com/package/fapony)
+
 **Where did your tokens go?** fapony reads the session logs Claude Code, Codex, OpenCode and ZCode
 already write, and puts them all on one yardstick — tokens, cost and time per model, per client,
 per workflow. Nothing to instrument, no per-project setup, no waiting for data to accumulate: it
@@ -41,8 +43,8 @@ which kind of task" becomes a data question instead of a vibe. On top of measure
 claims against git facts: handoff conformance, allowlisted evidence, a 6-grade verdict — with
 everything the agent claimed but couldn't prove marked as such.
 
-**What that question looks like answered, from one project's own ledger (52 graded `code`-regime
-runs, `fapony stats --mode verdict --regime code`):**
+**What that question looks like answered, from one project's own ledger — the top of the `n≥5`
+frontier (`fapony stats --mode verdict --regime code`):**
 
 | model | tokens/pass | quality | n |
 |---|---|---|---|
@@ -56,7 +58,7 @@ on you to hold: work isn't randomly assigned to models, so a gap this size is a 
 controlled trial — you likely route easy tasks to the cheap model already. `n≥5` is fapony's own
 floor before a model counts toward the frontier at all; below that it's a data point, not a pick.
 
-**The reason to keep it running is the third layer: knowledge accumulation.** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: which model earns its keep on which kind of work **in this project**, at what token cost, graded by whoever reviewed it. Every verdict carries a `regime` (`code` / `fix` / `review` / `plan` / `inquiry` / `test`), and runs split by whether there was a plan at all — so "does planning beat diving in, and for which model" is a table, not an argument. Session logs have the tokens but no grades; benchmarks have grades but not your codebase. fapony is the one layer that holds both, because it's the one every client reports into.
+**The reason to keep it running is the third layer: knowledge accumulation.** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: which model earns its keep on which kind of work **in this project**, at what token cost, graded by whoever reviewed it. Every verdict carries a `regime` (`code` / `fix` / `review` / `plan` / `inquiry` / `test`), and runs split by whether there was a plan at all — so "does planning beat diving in, and for which model" is a table, not an argument.
 
 Three tiers, deliberately: **measurement ships today** and needs no per-project setup — raw facts nobody can call unfair. **Verification is the sharper edge** but stays beta until its evidence layer is hardened; fapony doesn't control your agent's flow, so it never promises "verified" as a headline. **Knowledge accumulation is the compounding one** — it's worthless on run 1 and gets more useful every run after, which is exactly why it's the layer competitors can't clone by copying a feature list.
 
@@ -67,8 +69,7 @@ Adopting it doesn't change your workflow. There is no loop to join and no framew
 Stated up front, because the gap between these two things is where most tooling oversells:
 
 - **It does not run your test suite.** The evidence collector runs an allowlist *you* write in
-  `.fapony/evidence.json`, and never a command an agent proposes. No allowlist, no evidence — and
-  the report says `not_run` rather than staying quiet.
+  `.fapony/evidence.json`, and never a command an agent proposes. No allowlist, no evidence.
 - **It does not judge your code.** `verdict_submit` *stores* a verdict; a human or a reviewing
   agent supplies it. fapony is the ledger, not the judge.
 - **`handoff_check` checks conformance, not correctness.** It verifies that what the agent claimed
@@ -81,15 +82,15 @@ Stated up front, because the gap between these two things is where most tooling 
   reviews and files the verdict, the grade lands on the reviewer. Reports label it `inferred`;
   read it as such.
 - **The knowledge layer is empty on run 1.** It is worth something around run 5 and more every run
-  after. That is the trade for it being the layer nobody can clone from a feature list.
+  after.
 
 ## Quick start (MCP)
 
 ```bash
 # 1. Install (needs Bun — https://bun.sh)
-git clone https://github.com/kire21b/fapony.git && cd fapony
-bun install
-bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
+npm install -g fapony       # or: bun add -g fapony
+#    from source instead:
+#    git clone https://github.com/kire21b/fapony.git && cd fapony && bun install && bun link
 #    note: `bun link` claims the global `fapony` bin by package name, not path — running it
 #    from a second checkout silently repoints the command there. Re-run it in the one you want.
 
@@ -112,14 +113,7 @@ fapony usage-web                          # dashboard; re-run the scans to refre
 
 # 4. Verify (optional, per project) — scaffold the evidence allowlist
 fapony init /path/to/your-worktree
-#    .fapony/evidence.json lists the commands the evidence collector may run —
-#    edit the placeholder cmds to your real test/typecheck commands
-#    commit it: the allowlist is a security boundary your whole team shares.
-#    If your .gitignore ignores .fapony/ wholesale, re-include it (dir before file):
-#      **/.fapony/*
-#      !**/.fapony/evidence.json
-#    Monorepo: give an app its own apps/<app>/.fapony/evidence.json and reports whose
-#    changed files all sit under that app use it; anything else uses the root one.
+#    edit .fapony/evidence.json to your real test/typecheck commands, then commit it
 ```
 
 With `.fapony/evidence.json` in place, any graded run can be replayed as a report. This one is
@@ -134,6 +128,8 @@ fapony report <run-id>        # run ids come from `fapony stats`
 You get one report: git facts (files, commits, branch), handoff conformance (claims vs. reality), evidence from the allowlisted commands (pass/fail/timeout/unverified), a 6-grade verdict, and cost — with anything the agent claimed but couldn't prove marked as such.
 
 Sections that have nothing to report say so (`not_run`, `unavailable`) rather than disappearing — a report with no evidence must not read like a report that passed.
+
+Two details for the allowlist once it is under version control. If your `.gitignore` ignores `.fapony/` wholesale, re-include the file (dir before file): `**/.fapony/*`, then `!**/.fapony/evidence.json`. In a monorepo, give an app its own `apps/<app>/.fapony/evidence.json` — reports whose changed files all sit under that app use it; anything else uses the root one.
 
 Two things worth knowing about the report header and budget:
 
@@ -199,14 +195,6 @@ ungraded. It never picks the grade; it cannot see whether the work held up.
 
 ### The 6 tools
 
-```
-discover: plan_list (plans grouped by state, joined with their run history)
-measure:  fapony_stats ── fapony_usage
-verify:   verdict_submit
-recall:   project_health_context (what failed in these files before — optional, never required)
-          mem_find (what was ever decided about these files — reads the project's mem log)
-```
-
 | Tool | Tier | Purpose |
 |------|------|---------|
 | `plan_list` | discover | Plan files grouped by state — active / blocked / untouched / superseded / trackers — with a progress tally and each one's run history. Not a raw `ls`; see [Plans your agent can answer questions about](#plans-your-agent-can-answer-questions-about) |
@@ -218,7 +206,7 @@ recall:   project_health_context (what failed in these files before — optional
 
 The handoff/report family is CLI-only — the schemas cost every session of every client and no skill called them. `fapony report <run-id>` prints the full report for a run (facts + handoff conformance + evidence + verdict); `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
 
-Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](docs/mcp-handcheck.md).
+Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](https://github.com/kire21b/fapony/blob/main/docs/mcp-handcheck.md).
 
 ### Verdict grades
 
@@ -304,9 +292,7 @@ flowchart TD
 **The fork at the top is load-bearing.** A plan file is an artifact for work the next session has
 to pick up. Wiring, refactors and UI passes finish in one sitting and the PLAN.md gets archived
 unread — so `/plan-with-pony` declines those itself and hands over the two seed commands instead.
-`fapony review-seed --files` takes a directory as well as file names, and answers "what is in
-here, who imports it, what is untested" for about a thirtieth of the tokens reading those files
-costs. Both arms meet at the same review and the same ledger.
+Both arms meet at the same review and the same ledger.
 
 **The dotted edges are the whole point.** Verdicts carry `regime` and `reason_code`, so the
 ledger can answer the one question no single client can: *in this project, which model is worth
@@ -345,7 +331,7 @@ cat skill/plan-with-pony/SKILL.md | opencode run  # OpenCode
 cat skill/plan-with-pony/SKILL.md | <your-agent>  # anything that reads stdin
 ```
 
-Example plans produced by it live in [examples/](examples/).
+Example plans produced by it live in [examples/](https://github.com/kire21b/fapony/tree/main/examples).
 
 ### Plans your agent can answer questions about
 
@@ -404,7 +390,7 @@ The layout, and why archiving is a plain `git mv`:
 Ship dates live in the plan's own header (`> ✅ **shipped 2026-09-13** (a1b2c3)`), not in the
 filename — `grep -h shipped .fapony/done/*.md | sort` answers "what landed when" without paying
 to rewrite every inbound link on every ship. Example plans, including an un-annotated one and an
-archived one: [examples/](examples/).
+archived one: [examples/](https://github.com/kire21b/fapony/tree/main/examples).
 
 ## CLI
 
@@ -430,13 +416,13 @@ fapony install --platform <name>          # force a specific client (bypasses de
 fapony install --dry-run                  # show what would happen without writing files
 fapony setup                             # interactive wizard: config + scaffold in one step
 fapony update                            # self-update via git pull
-fapony telemetry show|send               # opt-in only, default off — see TELEMETRY.md
+fapony telemetry show|send               # opt-in only, default off — see https://github.com/kire21b/fapony/blob/main/TELEMETRY.md
 fapony test                              # self-check
 ```
 
 ## Config
 
-`fapony.config.json` lives in the fapony checkout and is gitignored (it's per-machine). Copy [fapony.config.example.json](fapony.config.example.json) for a complete working reference; every section is optional with sane defaults. Key fields:
+`fapony.config.json` lives in the fapony checkout and is gitignored (it's per-machine). Copy [fapony.config.example.json](https://github.com/kire21b/fapony/blob/main/fapony.config.example.json) for a complete working reference; every section is optional with sane defaults. Key fields:
 
 - `worktrees` — name → absolute path mapping
 - `review.maxRounds` — round cap enforced by the gate
@@ -444,7 +430,7 @@ fapony test                              # self-check
 - `paths` (`planDir`/`doneDir`/`specDir`/`memoryEntry`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
 - `usageWeb` — optional `{ port, hostname }` for `fapony usage-web` server defaults. Run `fapony usage-scan` first to populate the cache.
 
-Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases are documented in [CLAUDE.md](CLAUDE.md) — this README intentionally doesn't duplicate them.
+Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases live with the code in the repo — this README intentionally doesn't duplicate them.
 
 ## Scope
 
@@ -453,10 +439,10 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 - Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
 - Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
 - Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file
-- Verification (beta): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json` — agent-proposed commands are never executed); reports stamped with the producing build's `server_sha`
+- Verification (beta): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json`); reports stamped with the producing build's `server_sha`
 - Vendor-neutral executor/reviewer roles — anything that reads stdin
 - Memory integration via shell adapter, per project (configurable or default-wired)
-- Opt-in telemetry, off by default ([TELEMETRY.md](TELEMETRY.md) lists exactly what leaves the machine)
+- Opt-in telemetry, off by default ([TELEMETRY.md](https://github.com/kire21b/fapony/blob/main/TELEMETRY.md) lists exactly what leaves the machine)
 - Bun-only; run state in SQLite via `bun:sqlite` (WAL mode)
 
 **Not supported (yet):**
