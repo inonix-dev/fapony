@@ -8,11 +8,12 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import {
   claudeSkillsDir,
   cmdInstall,
   cmdInstallOpencode,
+  INSTALL_ROOT,
 } from "../../src/install.js";
 import {
   captureErrors,
@@ -27,8 +28,34 @@ import {
 function opencodeEntry(): Record<string, unknown> {
   return {
     type: "local",
-    command: ["bun", "run", "fapony.ts", "mcp"],
+    command: ["bun", "run", join(INSTALL_ROOT, "fapony.ts"), "mcp"],
   };
+}
+
+/** Regression guard: OpenCode spawns MCP servers with cwd = the open project,
+ *  so a relative `fapony.ts` only resolves when cwd is the fapony checkout.
+ *  Installs for real and inspects the written command (tests production). */
+export function testInstallOpencodeMcpCommandIsAbsolute(): void {
+  withTempHome((home) => {
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const cfg = JSON.parse(
+      readFileSync(join(home, ".config", "opencode", "opencode.json"), "utf-8"),
+    ) as Record<string, unknown>;
+    const entry = (cfg.mcp as Record<string, unknown>).fapony as {
+      command: string[];
+    };
+    const script = entry.command[2];
+    assert.ok(
+      isAbsolute(script),
+      `installed MCP command must be absolute, got: ${script}`,
+    );
+    assert.ok(script.endsWith("fapony.ts"), `got: ${script}`);
+    console.log("  ✓ install opencode MCP command → absolute fapony.ts path");
+  });
 }
 
 export function testInstallOpencodeNewFile(): void {

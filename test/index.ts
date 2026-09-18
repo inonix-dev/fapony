@@ -203,6 +203,7 @@ import {
   testInstallOpencodeCommitHintIdempotent,
   testInstallOpencodeCommitHintPlugin,
   testInstallOpencodeDryRunNoWrite,
+  testInstallOpencodeMcpCommandIsAbsolute,
   testInstallOpencodeNewFile,
   testInstallOpencodeParseErrorFails,
   testInstallOpencodeReadHintForeignFileUntouched,
@@ -860,6 +861,7 @@ export async function cmdTest(): Promise<void> {
   testLinkSkillsDryRunNoWrite();
   testCmdInstallRejectsUnknownPlatform();
   testInstallOpencodeNewFile();
+  testInstallOpencodeMcpCommandIsAbsolute();
   testInstallOpencodeReadHintPlugin();
   testInstallOpencodeReadHintForeignFileUntouched();
   testInstallOpencodeCommitHintPlugin();

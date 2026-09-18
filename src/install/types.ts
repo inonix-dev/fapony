@@ -11,7 +11,7 @@ export const MCP_KEY = "fapony";
 
 export const MCP_CONFIG = {
   type: "local",
-  command: ["bun", "run", "fapony.ts", "mcp"],
+  command: ["bun", "run", join(INSTALL_ROOT, "fapony.ts"), "mcp"],
 };
 
 /** ZCode uses the stdio MCP shape: command is a string, args is an array.
