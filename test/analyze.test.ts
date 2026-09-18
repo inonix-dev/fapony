@@ -7,7 +7,9 @@ import { join } from "node:path";
 import {
   blastRadius,
   buildGraph,
+  collectSourceFiles,
   diagnose,
+  exportsThroughBarrels,
   formatAnalyze,
   isTestFile,
 } from "../src/analyze.js";
@@ -264,4 +266,30 @@ export function testAnalyzeBarrelHidesTests(): void {
     },
   );
   console.log("  ✓ analyze sees tests that import through a barrel file");
+}
+
+// Bun.Transpiler.scan() reports `export * from` as an import, never an export,
+// so a barrel reads as zero exports and a symbol behind one looks unused.
+export function testAnalyzeExportsThroughBarrels(): void {
+  withFixture(
+    {
+      "src/fail-with.ts": "export function failWith(): never { throw 1; }\n",
+      "src/helper.ts": "export const helper = 1;\n",
+      "src/inner/index.ts": 'export * from "../helper";\n',
+      "src/index.ts":
+        'export * from "./fail-with";\nexport * from "./inner";\nexport const own = 2;\n',
+      // a barrel that re-exports its own parent must not loop forever
+      "src/cycle-a.ts": 'export * from "./cycle-b";\n',
+      "src/cycle-b.ts": 'export * from "./cycle-a";\nexport const b = 1;\n',
+    },
+    (dir) => {
+      const files = new Set(collectSourceFiles(dir));
+      const got = exportsThroughBarrels(dir, "src/index.ts", files).sort();
+      assert.deepStrictEqual(got, ["failWith", "helper", "own"]);
+      assert.deepStrictEqual(
+        exportsThroughBarrels(dir, "src/cycle-a.ts", files),
+        ["b"],
+      );
+    },
+  );
 }

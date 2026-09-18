@@ -13,11 +13,12 @@
 //   cursor  {workspace_roots, conversation_id, loop_count, status} → {"followup_message"}
 //   (cursor: loop_count ≥ 1 = hook เคยยิงแล้ว, status ≠ completed = ปล่อยผ่าน)
 
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, relative } from "node:path";
-import { SCAN_EXTS } from "./analyze.js";
+import { basename, join, relative } from "node:path";
+import { collectSourceFiles, SCAN_EXTS } from "./analyze.js";
 import { openDb } from "./db/index.js";
+import { debtForFile, loadConventions } from "./debt.js";
 import { readMemLog } from "./memory.js";
 
 export interface RawStopPayload {
@@ -325,23 +326,111 @@ export async function cmdHookReadHint(): Promise<void> {
         limit?: unknown;
       };
     };
+    const cwd = raw.cwd ?? process.cwd();
+    const parts: string[] = [];
     const hint = readHintFor({
       filePath: raw.tool_input?.file_path,
       offset: raw.tool_input?.offset,
       limit: raw.tool_input?.limit,
-      cwd: raw.cwd ?? process.cwd(),
+      cwd,
     });
-    if (hint) {
+    if (hint) parts.push(hint);
+    for (const line of readContextLines(raw.tool_input?.file_path, cwd)) {
+      parts.push(line);
+    }
+    if (parts.length > 0) {
       console.log(
         JSON.stringify({
           hookSpecificOutput: {
             hookEventName: "PreToolUse",
-            additionalContext: hint,
+            additionalContext: parts.join("\n"),
           },
         }),
       );
     }
   } catch {
     // any failure = no hint; a hook must never block a read over a hint
+  }
+}
+
+// --- Debt + mem context (PLAN-convention-debt chunk 4) ---
+//
+// จังหวะเดียวที่การแก้หนี้คุ้ม token คือตอนที่เปิดไฟล์นั้นอยู่แล้ว — hook-read-hint
+// จึงแนบสองอย่างต่อท้าย size hint: convention ที่ไฟล์ยังค้าง (debt detector, คำนวณสด)
+// และแถว mem ที่เอ่ยถึงไฟล์นั้น (ข้าม session) · **annotate เท่านั้น** เหมือนเดิม —
+// ไม่ block, ไม่ dedupe, ทุก unknown → เงียบ · cap รวม 5 บรรทัด (หนี้ 3 · mem 2)
+
+const DEBT_HINT_MAX = 3;
+const MEM_HINT_MAX = 2;
+const MEM_TEXT_MAX = 120;
+
+export function readContextLines(filePath: unknown, cwd: string): string[] {
+  try {
+    if (typeof filePath !== "string" || filePath === "") return [];
+    const git = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (git.exitCode !== 0) return [];
+    // macOS /var → /private/var: git reports the resolved root while callers
+    // pass unresolved tmp paths — normalize both sides before comparing.
+    const worktree = realpathSync(git.stdout.toString().trim());
+    const abs = realpathSync(
+      filePath.startsWith("/") ? filePath : join(worktree, filePath),
+    );
+    const rel = relative(worktree, abs).split("\\").join("/");
+    if (rel.startsWith("..") || rel === "") return [];
+
+    const lines: string[] = [];
+
+    // convention debt — source files only, fresh from the repo
+    const dot = rel.lastIndexOf(".");
+    if (dot >= 0 && SCAN_EXTS.has(rel.slice(dot))) {
+      for (const c of debtForFile(
+        worktree,
+        abs,
+        loadConventions(worktree),
+      ).slice(0, DEBT_HINT_MAX)) {
+        lines.push(`fapony debt: [${c.id}] ${c.rule}`);
+      }
+    }
+
+    // mem rows that are about this file
+    const mem = readMemLog(worktree);
+    if (mem.rows.length > 0) {
+      const base = basename(rel);
+      const direct: typeof mem.rows = [];
+      const baseOnly: typeof mem.rows = [];
+      for (const r of mem.rows) {
+        if (r.kind === "claim" || r.kind === "release") continue;
+        const hay = `${r.text}\n${r.spec ?? ""}\n${(r.files ?? []).join(",")}`;
+        if ((r.files ?? []).includes(rel) || hay.includes(rel)) {
+          direct.push(r);
+          continue;
+        }
+        if (base && hay.includes(base)) baseOnly.push(r);
+      }
+      // A bare-basename hit is only usable when that name is unique in the
+      // repo (24% of files share a basename — guessing would attach a row
+      // about a DIFFERENT index.ts). The walk is paid only when a hit exists.
+      let usableBase = baseOnly;
+      if (baseOnly.length > 0) {
+        const sameName = collectSourceFiles(worktree).filter(
+          (f) => basename(f) === base,
+        ).length;
+        if (sameName !== 1) usableBase = [];
+      }
+      // direct hits (files[] / full path) outrank bare-basename hits
+      const memLines = [...direct, ...usableBase].slice(0, MEM_HINT_MAX);
+      for (const r of memLines) {
+        lines.push(
+          `fapony mem: ${r.ts.slice(0, 10)} ${r.kind} — ${r.text.slice(0, MEM_TEXT_MAX)}`,
+        );
+      }
+    }
+    return lines.slice(0, DEBT_HINT_MAX + MEM_HINT_MAX);
+  } catch {
+    return [];
   }
 }

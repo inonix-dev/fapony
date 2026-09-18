@@ -20,6 +20,7 @@ type WorkRow = {
   kind: WorkKind;
   text: string;
   spec?: string;
+  files?: string[];
 };
 
 type CloseRow = {

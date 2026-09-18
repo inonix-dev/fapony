@@ -5,8 +5,8 @@ import type { WorkKind } from "../store.js";
 import { KINDS, memCmd, nextId, put, root, rows } from "../store.js";
 
 export const cmdAdd = async (a: string[]) => {
-  // mem add <next|bug|decision|note|hold> "<text>" [path/to/SPEC.md]
-  // mem add <kind> --stdin [spec.md]   ← read text from stdin (avoids shell metachar issues)
+  // mem add <next|bug|decision|note|hold> "<text>" --files f1,f2 [path/to/SPEC.md]
+  // mem add <kind> --stdin --files f1,f2 [spec.md]  ← read text from stdin (avoids shell metachar issues)
   // ponytail: kind ผิด = แถวนั้นหายจาก view เงียบๆ — ตายตั้งแต่ตรงนี้ดีกว่า
   if (!KINDS.includes(a[0] as WorkKind)) {
     console.error(
@@ -14,17 +14,40 @@ export const cmdAdd = async (a: string[]) => {
     );
     process.exit(1);
   }
-  // hold บังคับ spec
-  if (a[0] === "hold" && !a.at(-1)?.endsWith(".md")) {
+  // hold บังคับ spec — ตรวจหลัง parse (spec อยู่ก่อน --files ได้)
+  // PLAN-convention-debt chunk 3: files[] เป็น required — optional field ที่วัดแล้ว
+  // fill rate = 0 (required+enum = 50/50) และ recall ของ log เก่าที่ไม่มี files[] จับได้แค่
+  // 48.1% — แก้ที่ขาเขียน ไม่ใช่ขาอ่าน: แถวไหนไม่บอกไฟล์ = ค้นไม่เจอตอนแตะไฟล์นั้น
+  const filesFlagIdx = a.indexOf("--files");
+  const filesVal = filesFlagIdx >= 0 ? a[filesFlagIdx + 1] : undefined;
+  if (!filesVal || filesVal.startsWith("--")) {
     console.error(
-      `hold requires a spec — usage: ${memCmd} add hold "..." <spec.md>`,
+      `--files is required — usage: ${memCmd} add ${a[0]} "<text>" --files path/to/file.ts[,more] [spec.md]`,
+    );
+    process.exit(1);
+  }
+  const files = filesVal
+    .split(",")
+    .map((s) => s.trim().replace(/^\.\//, ""))
+    .filter(Boolean);
+  if (files.length === 0) {
+    console.error(
+      `--files needs at least one path — usage: ${memCmd} add ${a[0]} "<text>" --files path/to/file.ts[,more]`,
     );
     process.exit(1);
   }
   const arg = a.slice(1);
   const useStdin = arg.includes("--stdin");
-  const filtered = arg.filter((x) => x !== "--stdin");
+  const filtered = arg.filter(
+    (x) => x !== "--stdin" && x !== "--files" && x !== filesVal,
+  );
   const spec = filtered.at(-1)?.endsWith(".md") ? filtered.pop() : undefined;
+  if (a[0] === "hold" && !spec) {
+    console.error(
+      `hold requires a spec — usage: ${memCmd} add hold "..." --files f1,f2 <spec.md>`,
+    );
+    process.exit(1);
+  }
   let text: string;
   if (useStdin) {
     text = (await Bun.stdin.text()).trim();
@@ -36,7 +59,7 @@ export const cmdAdd = async (a: string[]) => {
     // ต้องมีข้อความ
     if (!filtered.length || (filtered.length === 0 && !spec)) {
       console.error(
-        `text is required — usage: ${memCmd} add <kind> "<text>" [spec.md]`,
+        `text is required — usage: ${memCmd} add <kind> "<text>" --files f1,f2 [spec.md]`,
       );
       process.exit(1);
     }
@@ -67,7 +90,7 @@ export const cmdAdd = async (a: string[]) => {
   }
   // ponytail: กัน id ชน — logic รวมไว้ที่ nextId (store.ts)
   const id = nextId(all);
-  put({ id, kind: a[0] as WorkKind, text, spec });
+  put({ id, kind: a[0] as WorkKind, text, spec, files });
   console.log(id);
 };
 

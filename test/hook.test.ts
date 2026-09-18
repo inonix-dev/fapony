@@ -326,3 +326,140 @@ export function testReadHintPluginSource(): void {
     "  ✓ read hint opencode plugin imports shared logic, annotate-only",
   );
 }
+
+// --- Debt + mem context lines (PLAN-convention-debt chunk 4) ---
+
+import { mkdirSync } from "node:fs";
+import { readContextLines } from "../src/hook.js";
+
+export function testReadContextShowsDebtBeforeFix(): void {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony"), { recursive: true });
+    writeFileSync(
+      join(dir, ".fapony", "conventions.json"),
+      JSON.stringify({
+        conventions: [
+          {
+            id: "mutation-hooks",
+            rule: "use useAppForm instead of raw useMutation",
+            where: "src",
+            stale: "\\buseMutation\\(",
+            checker: null,
+          },
+        ],
+      }),
+    );
+    mkdirSync(join(dir, "src"), { recursive: true });
+    const p = join(dir, "src", "dirty.ts");
+    writeFileSync(p, "export const m = () => useMutation(fn);\n");
+    const lines = readContextLines(p, dir);
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /fapony debt: \[mutation-hooks\]/);
+    // a clean file stays completely silent
+    const clean = join(dir, "src", "clean.ts");
+    writeFileSync(clean, "export const ok = 1;\n");
+    assert.deepEqual(readContextLines(clean, dir), []);
+  });
+  console.log(
+    "  ✓ read context → debt line before the fix, silence on clean files",
+  );
+}
+
+export function testReadContextMemRowsByFilesAndPath(): void {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony/.memory"), { recursive: true });
+    mkdirSync(join(dir, "src"), { recursive: true });
+    const row = (ts: string, text: string, files?: string[]) =>
+      JSON.stringify({
+        ts,
+        agent: "t",
+        kind: "bug",
+        text,
+        ...(files ? { files } : []),
+      });
+    writeFileSync(
+      join(dir, ".fapony/.memory/log.t.jsonl"),
+      [
+        row("2026-09-17T00:00:00Z", "money drifted via toLocaleString", [
+          "src/bill.tsx",
+        ]),
+        row("2026-09-16T00:00:00Z", "old row mentions src/form.tsx by path"),
+        row("2026-09-15T00:00:00Z", "unrelated row about nothing"),
+      ].join("\n") + "\n",
+    );
+    writeFileSync(join(dir, "src/bill.tsx"), "x");
+    writeFileSync(join(dir, "src/form.tsx"), "x");
+    const byFiles = readContextLines(join(dir, "src/bill.tsx"), dir);
+    assert.equal(byFiles.length, 1);
+    assert.match(byFiles[0], /fapony mem: 2026-09-17 bug/);
+    const byPath = readContextLines(join(dir, "src/form.tsx"), dir);
+    assert.equal(
+      byPath.length,
+      1,
+      "old rows without files[] still match by full path",
+    );
+    assert.match(byPath[0], /2026-09-16/);
+    const none = readContextLines(join(dir, "src/other.tsx"), dir);
+    assert.deepEqual(none, [], "unmentioned file stays silent");
+  });
+  console.log("  ✓ read context → mem rows surface by files[] or full path");
+}
+
+export function testReadContextBasenameAmbiguityStaysSilent(): void {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, "src/a"), { recursive: true });
+    mkdirSync(join(dir, "src/b"), { recursive: true });
+    mkdirSync(join(dir, ".fapony/.memory"), { recursive: true });
+    writeFileSync(join(dir, "src/a/index.ts"), "x");
+    writeFileSync(join(dir, "src/b/index.ts"), "x");
+    writeFileSync(
+      join(dir, ".fapony/.memory/log.t.jsonl"),
+      JSON.stringify({
+        ts: "2026-09-17T00:00:00Z",
+        agent: "t",
+        kind: "note",
+        text: "watch out for index.ts",
+      }) + "\n",
+    );
+    // two index.ts exist — the row cannot be attributed, so: silence
+    const lines = readContextLines(join(dir, "src/a/index.ts"), dir);
+    assert.equal(lines.length, 0, "ambiguous basename must not guess");
+  });
+  console.log(
+    "  ✓ read context → ambiguous basename stays silent, never guesses",
+  );
+}
+
+export function testReadContextCombinedCapAndOutsideRepo(): void {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony"), { recursive: true });
+    writeFileSync(
+      join(dir, ".fapony", "conventions.json"),
+      JSON.stringify({
+        conventions: [
+          { id: "a", rule: "r1", where: "src", stale: "aaa", checker: null },
+          { id: "b", rule: "r2", where: "src", stale: "bbb", checker: null },
+          { id: "c", rule: "r3", where: "src", stale: "ccc", checker: null },
+          { id: "d", rule: "r4", where: "src", stale: "ddd", checker: null },
+        ],
+      }),
+    );
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src/all.ts"), "aaa bbb ccc ddd\n");
+    const lines = readContextLines(join(dir, "src/all.ts"), dir);
+    assert.ok(
+      lines.length <= 5,
+      `total context lines capped, got ${lines.length}`,
+    );
+    assert.equal(lines.filter((l) => l.startsWith("fapony debt")).length, 3);
+    // outside a git repo → nothing
+    const out = mkdtempSync(join(tmpdir(), "fapony-ctx-norepo-"));
+    try {
+      writeFileSync(join(out, "f.ts"), "aaa bbb ccc ddd\n");
+      assert.deepEqual(readContextLines(join(out, "f.ts"), out), []);
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ read context → ≤5 lines, silent outside a repo");
+}

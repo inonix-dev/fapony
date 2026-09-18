@@ -229,6 +229,16 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
    ship แล้วกลับมาโดน `fix:` ใน 14 วัน = 1% (canalis 66/8,760) / 9% (fapony 21/226) base rate
    ต่ำขนาดนี้แปลว่าเวลาจะแตะไฟล์หนึ่ง history แทบไม่มีอะไรจะเตือน · tool ยังอยู่ เรียกได้ถ้าอยาก
    แต่ **ห้ามบังคับ ห้ามเอากลับเข้า `SERVER_INSTRUCTIONS`** — ข้อความนั้นจ่ายทุก session ของทุกคน
+9. **Execute plan ทีละ chunk ห้ามลากยาวเป็น session เดียว** — context ใน session เดียวมีแต่โต
+   ไม่เคยหด ยิ่งยาวยิ่งแพงและยิ่งหลุดโฟกัส (lost-in-the-middle) ไม่ใช่เพราะ "งานเยอะ" แต่เพราะ
+   history สะสม (วัดจริงจาก usage: session ยาว 300-500 steps ลาก token สูงกว่า session สั้น
+   อย่างไม่เป็นสัดส่วนกับงานที่ทำ 2026-09-18) จบ 1 chunk: ติ๊ก checkbox + stamp TL;DR ใน plan →
+   commit แยกจาก chunk อื่น → `verdict_submit` → `bun .fapony/.memory/mem.ts add note "สิ่งที่
+   chunk ถัดไปต้องรู้" --files f1,f2 <path/to/PLAN-x.md>` (path ต้องพิมพ์เหมือนเดิมทุกครั้ง —
+   `kickoff` เทียบ string ตรงตัว ไม่ fuzzy) → **หยุด ไม่ลาก chunk ถัดไปเองในเซสชันเดียว**
+   session ใหม่ของ chunk ถัดไปเปิดด้วย `mem.ts kickoff <path/to/PLAN-x.md>` (path เดิม) แทนแบก
+   transcript เก่าไปด้วย — snippet นี้อยู่ใน `fapony init` แล้ว (`RULES_SNIPPET`, `src/init.ts`)
+   ให้รีโปใหม่ได้อัตโนมัติ ส่วนรีโปที่ init ไปก่อนหน้านี้ (เช่นตัวนี้เอง) backfill มือครั้งเดียว
 
 ---
 

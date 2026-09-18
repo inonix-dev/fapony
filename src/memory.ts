@@ -109,6 +109,8 @@ export interface MemRow {
   spec?: string;
   id?: string;
   ref?: string;
+  /** Files the row is about — written by `mem add --files` (PLAN-convention-debt chunk 3). */
+  files?: string[];
 }
 
 interface RawMemRow {
@@ -119,6 +121,21 @@ interface RawMemRow {
   spec?: string;
   id?: string;
   ref?: string;
+  files?: unknown;
+}
+
+/**
+ * The app's own .fapony/ dir for a worktree root — the same monorepo guess
+ * resolveMemDir makes (templates/mem/store.ts is the mirror). Conventions
+ * live beside the mem log (SPEC-convention-debt §2.1), so both resolvers must
+ * guess identically; the guess is shared here so they cannot drift.
+ */
+export function resolveAppFaponyDir(worktree: string): string {
+  const app = process.env.MEM_APP ?? basename(worktree).replace(/^wt-/, "");
+  const appBase = ["apps", "packages", "services"]
+    .map((d) => join(worktree, d, app))
+    .find((p) => existsSync(p));
+  return appBase ? join(appBase, ".fapony") : join(worktree, ".fapony");
 }
 
 /**
@@ -128,17 +145,10 @@ interface RawMemRow {
  * at the git root. Single repos fall back to the root-relative layout.
  */
 export function resolveMemDir(worktree: string): string | null {
-  const app = process.env.MEM_APP ?? basename(worktree).replace(/^wt-/, "");
-  const appBase = ["apps", "packages", "services"]
-    .map((d) => join(worktree, d, app))
-    .find((p) => existsSync(p));
+  const base = resolveAppFaponyDir(worktree);
 
-  const legacyDir = appBase
-    ? join(appBase, ".memory")
-    : join(worktree, ".memory");
-  const newDir = appBase
-    ? join(appBase, ".fapony", ".memory")
-    : join(worktree, ".fapony", ".memory");
+  const legacyDir = join(base, "..", ".memory");
+  const newDir = join(base, ".memory");
 
   if (existsSync(join(legacyDir, "log.jsonl"))) return legacyDir;
   if (existsSync(newDir)) return newDir;
@@ -208,6 +218,9 @@ export function readMemLog(
         spec: parsed.spec,
         id: parsed.id,
         ref: parsed.ref,
+        ...(Array.isArray(parsed.files)
+          ? { files: parsed.files.filter((f) => typeof f === "string") }
+          : {}),
       });
     }
   }

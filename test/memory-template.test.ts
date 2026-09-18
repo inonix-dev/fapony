@@ -14,6 +14,8 @@ import {
   cpSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -287,7 +289,7 @@ export function testMemTemplateUnknownAppFails(): void {
   console.log("  ✓ memory template → unknown app exits instead of guessing");
 }
 
-// `fapony init <monorepo root>` วางสำเนาไว้ที่ root เหมือนสำเนากลางเป๊ะ ๆ — ต่างกันแค่เดา app
+// `fapony init` วางสำเนาไว้ที่ root เหมือนสำเนากลางเป๊ะ ๆ — ต่างกันแค่เดา app
 // ไม่ได้ ถ้าเงื่อนไข central ดูแค่ว่ามี apps/ ไหม สำเนานี้จะถูกตัดสินว่าไม่ scaffolded แล้วตายที่
 // guard `unknown app` ตั้งแต่คำสั่งแรก ทั้งที่ plan ของมันอยู่ข้าง ๆ
 export function testMemTemplateInitAtMonorepoRoot(): void {
@@ -364,5 +366,66 @@ export function testMemTemplatePerPersonLogs(): void {
   );
   console.log(
     "  ✓ memory template → per-person logs merge on read, archives stay out",
+  );
+}
+
+// --- PLAN-convention-debt chunk 3: `add` requires --files (write-side recall fix) ---
+
+function memRun(
+  repo: string,
+  memDir: string,
+  args: string,
+): { status: number; stdout: string; stderr: string } {
+  const p = Bun.spawnSync(
+    ["bun", join(memDir, "mem.ts"), ...args.split(" ").filter(Boolean)],
+    {
+      cwd: repo,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  return {
+    status: p.exitCode ?? 0,
+    stdout: p.stdout.toString(),
+    stderr: p.stderr.toString(),
+  };
+}
+
+export function testMemTemplateAddRejectsMissingFiles(): void {
+  withFixture(
+    (repo) => {
+      cpSync(TEMPLATE, join(repo, ".fapony/.memory"), { recursive: true });
+      mkdirSync(join(repo, ".fapony/plan"), { recursive: true });
+    },
+    (repo) => {
+      const d = join(repo, ".fapony/.memory");
+      const miss = memRun(repo, d, `add note "x"`);
+      assert.notEqual(
+        miss.status,
+        0,
+        "add without --files must exit non-zero (required, not optional — fill rate 0)",
+      );
+      assert.match(miss.stderr, /--files is required/);
+      const ok = memRun(repo, d, `add note "x" --files src/a.ts,src/b.ts`);
+      assert.equal(ok.status, 0, `expected success, got: ${ok.stderr}`);
+      const row = JSON.parse(
+        readFileSync(join(d, memFile(repo, d)), "utf-8")
+          .trim()
+          .split("\n")
+          .at(-1) as string,
+      ) as { files?: string[] };
+      assert.deepEqual(row.files, ["src/a.ts", "src/b.ts"]);
+    },
+  );
+  console.log(
+    "  ✓ memory template → add rejects missing --files, rows carry files[]",
+  );
+}
+
+function memFile(repo: string, d: string): string {
+  return (
+    readdirSync(d).find(
+      (f) => /^log\..*\.jsonl$/.test(f) && f !== "log.jsonl",
+    ) ?? "log.jsonl"
   );
 }
