@@ -367,7 +367,7 @@ fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md
 fapony test                         # self-check
 fapony analyze [path]               # structural diagnosis (hub/orphan/cycle/changed-untested) — live graph via Bun.Transpiler.scan(), never persisted (no table: 114 files / 466 imports = 16.6ms, cache would be pure debt)
-fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): §2 = export-name prefixes repeating across 2+ dirs (single-dir = that dir's naming convention, not reported), §5 = scoped analyze findings, hard caps PLAN ≤ ~60 / SPEC ≤ 200 lines — caller: plan-with-pony Phase 1.6
+fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN(+SPEC): frontmatter + 8 empty sections + §8 prior art + Context (fapony) under the TL;DR; SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200 lines — **§2/§5 seed nothing (2026-09-18)**, see src/plan-seed.ts header — caller: plan-with-pony Phase 1.5
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym]  # read-only facts for a review scope: changed files, static importers, untested, signatures, plan cross-check — caller: review-pony "Before"; --body/--callers = the executor's symbol lookup (one call answers both)
 ```
 

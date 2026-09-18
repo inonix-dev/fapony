@@ -374,7 +374,6 @@ import {
   testPlanSeedConfigFallback,
   testPlanSeedNoOverwrite,
   testPlanSeedOverlapScopeDedup,
-  testPlanSeedRepetitionCluster,
   testPlanSeedScopeFilters,
   testPlanSeedSingleFileScope,
   testPlanSeedSpecSignatures,
@@ -607,7 +606,6 @@ export async function cmdTest(): Promise<void> {
   testPlanSeedWritesPlan();
   testPlanSeedNoOverwrite();
   testPlanSeedSpecSignatures();
-  testPlanSeedRepetitionCluster();
   testPlanSeedScopeFilters();
   testPlanSeedCapsHold();
   testPlanSeedSingleFileScope();

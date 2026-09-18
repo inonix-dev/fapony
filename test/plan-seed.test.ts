@@ -49,26 +49,24 @@ export function testPlanSeedWritesPlan(): void {
       const planPath = join(dir, ".fapony", "plan", "PLAN-foo.md");
       assert.ok(existsSync(planPath), "PLAN-foo.md written");
       const body = readFileSync(planPath, "utf-8");
-      // §2 is repetition, not a directory listing: one scanned line + the
-      // explicit "nothing repeats" line for a one-export fixture
-      assert.match(
-        body,
-        /- scanned: \. — 1 file\(s\), 1 export\(s\) `\(source scan\)`/,
-      );
-      assert.match(
-        body,
-        /no export-name prefix repeating across 2\+ directories/,
-      );
-      // §5 exists (analyze output — an unimported calc.ts is an orphan row)
-      assert.match(body, /## 5\. Risks/);
-      assert.match(body, /\*\*orphan\*\*/);
+      // §2/§5 carry no seeded facts (2026-09-18) — measured 3-of-3 empty, so
+      // they are judgment slots like every other section now
+      assert.ok(!body.includes("(source scan)"), "§2 seeds nothing");
+      assert.ok(!body.includes("(fapony analyze)"), "§5 seeds nothing");
+      assert.match(body, /## 2\. Scope \(do \/ don't do\)/);
+      assert.match(body, /## 5\. Risks & Escape hatches/);
       // judgment sections are agent slots, not pre-invented
       assert.match(body, /_\(agent เติม\)_/);
+      // ledger context sits under the TL;DR, above §1 — below §8 nobody read it
+      assert.ok(
+        body.indexOf("## Context (fapony)") < body.indexOf("## 1. Goal"),
+        "Context (fapony) is above the sections, not buried at the end",
+      );
       // frontmatter for plan_list
       assert.match(body, /^---\nkind: unit\nstatus: active\n---/);
     });
   });
-  console.log("  ✓ plan-seed writes PLAN with repetition §2 + agent slots");
+  console.log("  ✓ plan-seed writes PLAN with agent slots + ledger context");
 }
 
 export function testPlanSeedNoOverwrite(): void {
@@ -131,51 +129,6 @@ export function testPlanSeedSpecSignatures(): void {
   );
 }
 
-export function testPlanSeedRepetitionCluster(): void {
-  const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-rep-"));
-  try {
-    // format* spans fmt/ and render/ → a real cross-directory repetition.
-    // parse* lives entirely in fmt/ → that is just fmt/'s naming convention,
-    // and reporting it would spend §2 telling the reader the folder's own rule.
-    const place: [string, string][] = [
-      ["fmt", "User"],
-      ["fmt", "Order"],
-      ["render", "Date"],
-    ];
-    for (const [sub, name] of place) {
-      mkdirSync(join(dir, sub), { recursive: true });
-      writeFileSync(
-        join(dir, sub, `format${name}.ts`),
-        `export function format${name}(x: string): string { return x; }\n`,
-      );
-    }
-    for (const name of ["Json", "Yaml", "Toml"]) {
-      writeFileSync(
-        join(dir, "fmt", `parse${name}.ts`),
-        `export function parse${name}(x: string): string { return x; }\n`,
-      );
-    }
-    withCwd(dir, () => {
-      cmdPlanSeed(["rep"]);
-      const body = readFileSync(
-        join(dir, ".fapony", "plan", "PLAN-rep.md"),
-        "utf-8",
-      );
-      assert.match(
-        body,
-        /- format\* — 3 export\(s\) across fmt, render: formatDate, formatOrder, formatUser `\(source scan\)`/,
-      );
-      assert.ok(
-        !body.includes("parse*"),
-        "a cluster inside one directory is that directory's naming convention",
-      );
-    });
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  console.log("  ✓ plan-seed §2 reports cross-directory repetition only");
-}
-
 export function testPlanSeedScopeFilters(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-scope-"));
   try {
@@ -211,23 +164,6 @@ export function testPlanSeedScopeFilters(): void {
         "utf-8",
       );
       assert.ok(plan.includes("PLAN-scoped"), "--scope value is not the name");
-      // §2 reports only the scoped tree
-      assert.match(
-        plan,
-        /- scanned: apps\/vela\/src\/components — 3 file\(s\), 3 export\(s\)/,
-      );
-      assert.ok(!plan.includes("other/"), "§2 stays inside the scope");
-      // §5 drops findings outside the scope (done criterion 3)
-      assert.ok(
-        !plan.includes("other/lonely"),
-        "§5 carries no finding outside the scope",
-      );
-      assert.match(
-        plan,
-        /\*\*orphan\*\* apps\/vela\/src\/components\/formatUser\.ts/,
-        "in-scope findings stay",
-      );
-
       // §8 points at the shipped plan that already decided something here —
       // and never at the one that didn't (that list would match everything)
       assert.match(
@@ -237,15 +173,13 @@ export function testPlanSeedScopeFilters(): void {
       );
       assert.ok(!plan.includes("PLAN-elsewhere"), "§8 stays inside the scope");
 
-      // Same tree, no --scope → the whole cwd is in scope, lonely shows up
+      // Same tree, no --scope → §8 goes quiet: every shipped plan matches, so a
+      // list of everything would point at nothing
       cmdPlanSeed(["wide"]);
       const wide = readFileSync(
         join(dir, ".fapony", "plan", "PLAN-wide.md"),
         "utf-8",
       );
-      assert.match(wide, /\*\*orphan\*\* other\/lonely\.ts/);
-      // …and §8 goes quiet: with no scope every shipped plan matches, so a
-      // list of everything would point at nothing
       assert.ok(
         !wide.includes("ตัดสินไปแล้ว"),
         "§8 prior art needs a --scope to join on",
@@ -254,7 +188,7 @@ export function testPlanSeedScopeFilters(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-  console.log("  ✓ plan-seed --scope filters §2/§5/§8 and never eats the name");
+  console.log("  ✓ plan-seed --scope filters §8 and never eats the name");
 }
 
 export function testPlanSeedCapsHold(): void {
@@ -303,17 +237,7 @@ export function testPlanSeedCapsHold(): void {
       // Caps always say what was cut, never cut silently.
       assert.match(spec, /… \+\d+ more signatures/);
       assert.match(spec, /… \+\d+ more lines/);
-      assert.match(plan, /… \+\d+ more clusters/);
-      assert.match(
-        plan,
-        /… \+\d+ more \(run `fapony analyze` for the full list\)/,
-      );
-      // §2 cluster cap: 5 shown — members are never dropped, the directory
-      // list is what gets cut, and it says how many it cut.
-      assert.match(
-        plan,
-        /- alpha0\* — 3 export\(s\) across mod0, mod1, mod2 \+3 more: alpha0One, alpha0Three, alpha0Two/,
-      );
+      // The PLAN has no seeded sections left to cap — its ≤ 60 is structural.
     });
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -343,8 +267,6 @@ export function testPlanSeedSingleFileScope(): void {
         join(dir, ".fapony", "plan", "PLAN-file.md"),
         "utf-8",
       );
-      // §2 reports the single-file scope as exports found
-      assert.match(plan, /scanned: src\/util\.ts — 1 file\(s\), 2 export\(s\)/);
       // SPEC chunk index links the file
       assert.match(spec, /\[util\.ts\]\(#util-ts\)/);
       // Signatures are present
@@ -368,14 +290,25 @@ export function testPlanSeedOverlapScopeDedup(): void {
     writeFileSync(join(dir, "src", "index.ts"), "export const a = 1;\n");
     writeFileSync(join(dir, "src", "utils", "b.ts"), "export const b = 2;\n");
     withCwd(dir, () => {
-      cmdPlanSeed(["overlap", "--scope", "src", "--scope", "src/utils"]);
-      const plan = readFileSync(
-        join(dir, ".fapony", "plan", "PLAN-overlap.md"),
+      cmdPlanSeed([
+        "overlap",
+        "--spec",
+        "--scope",
+        "src",
+        "--scope",
+        "src/utils",
+      ]);
+      const spec = readFileSync(
+        join(dir, ".fapony", "spec", "SPEC-overlap.md"),
         "utf-8",
       );
-      // §2 should count each file once, not twice
-      assert.match(plan, /2 file\(s\), 2 export\(s\)/);
-      assert.doesNotMatch(plan, /4 file\(s\)/, "no double-count");
+      // src/utils is nested in src — each file appears once, not twice
+      assert.strictEqual(
+        spec.split("export const b = 2").length - 1,
+        1,
+        "nested --scope root does not duplicate a file",
+      );
+      assert.strictEqual(spec.split("export const a = 1").length - 1, 1);
     });
   } finally {
     rmSync(dir, { recursive: true, force: true });

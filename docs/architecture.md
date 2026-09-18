@@ -45,7 +45,7 @@ fapony/
       index.ts         # barrel re-export
     analyze.ts         # fapony analyze — buildGraph()/blastRadius()/diagnose() (hub/orphan/cycle/changed-untested), live import graph via Bun.Transpiler.scan(), never persisted
     map.ts              # extractExports() — on-demand source index, library only; the `fapony map` command was deleted once plan-seed/review-seed were its only callers (see PLAN-code-map)
-    plan-seed.ts        # fapony plan-seed <name> [--spec] [--scope <path>]... — writes PLAN(+SPEC): §2 = export-name prefixes repeating across 2+ dirs (single-dir clusters are that dir's naming convention), §5 = scope-filtered analyze findings, hard caps PLAN ≤ ~60 / SPEC ≤ 200; caller: plan-with-pony Phase 1.6
+    plan-seed.ts        # fapony plan-seed <name> [--spec] [--scope <path>]... — writes PLAN(+SPEC): frontmatter, 8 empty sections, §8 prior art, Context (fapony); SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200. §2/§5 seed nothing since 2026-09-18 (measured 3-of-3 empty); caller: plan-with-pony Phase 1.5
     review-seed.ts      # fapony review-seed [--staged|--commit|--range|--files|--plan] — read-only scope facts for a review (changed/importers/untested/signatures/cross-check); caller: review-pony "Before"
     hook.ts             # fapony hook-stop — Claude Code Stop hook: blocks a turn with ungraded commits
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
