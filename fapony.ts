@@ -4,11 +4,13 @@
 // CLI dispatch: all logic lives in src/
 
 import { cmdAnalyze } from "./src/analyze.js";
+import { cmdDebt } from "./src/debt.js";
 import { cmdDigest } from "./src/digest/cli.js";
 import { cmdHookReadHint, cmdHookStop } from "./src/hook.js";
 import { cmdInit } from "./src/init.js";
 import { cmdInitMem } from "./src/init-mem.js";
 import { cmdInstall } from "./src/install.js";
+import { cmdLintBaseline } from "./src/lint-baseline.js";
 import { cmdMcp } from "./src/mcp/transport.js";
 import { cmdPlanSeed } from "./src/plan-seed.js";
 import { cmdPriceScan } from "./src/price/index.js";
@@ -25,6 +27,10 @@ const [cmd, ...a] = process.argv.slice(2);
 
 if (cmd === "analyze") {
   cmdAnalyze(a);
+} else if (cmd === "debt") {
+  cmdDebt(a);
+} else if (cmd === "lint-baseline") {
+  cmdLintBaseline(a);
 } else if (cmd === "plan-seed") {
   cmdPlanSeed(a);
 } else if (cmd === "review-seed") {
@@ -66,7 +72,7 @@ if (cmd === "analyze") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|test> [args]",
+    "usage: fapony <setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|test> [args]",
   );
   process.exit(1);
 }

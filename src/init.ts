@@ -6,6 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { createInterface } from "node:readline";
+import { seedConventionsFile } from "./conventions-seed.js";
 import {
   type Config,
   doneDir,
@@ -69,13 +70,15 @@ repo gets every decision, bug and note with it. The filename comes from
 Log as you work — do not wait to be asked. Nothing writes it for you:
 
     bun ${memEntry} kickoff <plan.md>      # start a session with this
-    bun ${memEntry} add decision "what was locked, and why"
-    bun ${memEntry} add bug "what is broken"
-    bun ${memEntry} add note "state the next session needs"
+    bun ${memEntry} add decision "what was locked, and why" --files src/x.ts
+    bun ${memEntry} add bug "what is broken" --files src/x.ts
+    bun ${memEntry} add note "state the next session needs" --files src/x.ts
     bun ${memEntry} close <id> "fixed in <sha>"
     bun ${memEntry} find "<text>"
 
-Write each entry standalone — it is read months later with no chat to refer to.`;
+Write each entry standalone — it is read months later with no chat to refer to.
+--files is required: rows that name no file cannot be recalled when that file is
+touched later (add refuses without it).`;
 
 export function initProject(targetPath: string, config?: Config): void {
   // Create target root
@@ -178,6 +181,24 @@ export async function cmdInit(args: string[]): Promise<void> {
     console.error((e as Error).message);
     process.exit(1);
   }
+
+  // --- conventions.json fill-signal (PLAN-convention-debt chunk 2) ---
+  // eslint no-restricted-* rows carry their checker; the wrapper detector adds
+  // live-migration candidates. Nothing derivable = empty file, never an error.
+  const seed = await seedConventionsFile(targetPath);
+  if (seed.kept) {
+    console.log(
+      `  ${relative(targetPath, seed.file)} — already exists, left untouched`,
+    );
+  } else {
+    console.log(
+      `  ${relative(targetPath, seed.file)} — ${seed.eslintRows} from eslint, ${seed.wrapperRows} from wrappers`,
+    );
+    console.log(
+      `    'fapony debt' reads it; commit it (!**/.fapony/conventions.json in .gitignore)`,
+    );
+  }
+  for (const s of seed.skipped) console.log(`    ⚠ eslint config ${s}`);
 
   const found = AGENT_RULE_FILES.map((f) => join(targetPath, f)).filter(
     existsSync,

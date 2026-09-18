@@ -47,11 +47,29 @@ import {
   testContextToolHubEndToEnd,
 } from "./context.test.js";
 import {
+  testSeedBrokenConfigIsSkippedLoudly,
+  testSeedEslintEntriesCarryChecker,
+  testSeedEslintSupersetBlocksDedupe,
+  testSeedNeverOverwritesExisting,
+  testSeedRepoWithoutAnythingGetsEmptyFile,
+  testSeedWrapperDetectorFindsLiveMigrations,
+} from "./conventions-seed.test.js";
+import {
   testDbLifecycle,
   testLegacyDbStampedWithoutDataLoss,
   testMigrateDbRejectsNewerSchema,
   testSchemaVersionStamped,
 } from "./db.test.js";
+import {
+  testDebtCheckerRowsStaySilent,
+  testDebtConventionsPathResolution,
+  testDebtDerivesListAndDropsWithTheFile,
+  testDebtForFileAndMonorepoResolution,
+  testDebtPromotionAsksAtThresholdOnly,
+  testDebtPromotionCountsLedgerFails,
+  testDebtSilentWithoutConventions,
+  testDebtTooBroadRegexDropped,
+} from "./debt.test.js";
 import {
   testDigestBugOpenClose,
   testDigestEmptyRepo,
@@ -104,6 +122,10 @@ import {
   testDecideStopBlocksUngradedCommits,
   testDecideStopMemNeverBlocks,
   testDecideStopReportsCommitsAndMem,
+  testReadContextBasenameAmbiguityStaysSilent,
+  testReadContextCombinedCapAndOutsideRepo,
+  testReadContextMemRowsByFilesAndPath,
+  testReadContextShowsDebtBeforeFix,
   testReadHintAnnotatesLargeFullRead,
   testReadHintClaudeOutputShape,
   testReadHintNeedsGitRepo,
@@ -192,6 +214,11 @@ import {
   testInstallZcodeNoConfigFails,
   testInstallZcodePrimaryPath,
 } from "./install/zcode.test.js";
+import {
+  testLintBaselineCaptureAndCleanDiff,
+  testLintBaselineDiffReportsOnlyNewFindings,
+  testLintBaselineUnixFormatAndErrors,
+} from "./lint-baseline.test.js";
 import {
   testMapExtractExports,
   testMapExtractExportsParseError,
@@ -350,6 +377,7 @@ import {
   testMemoryReadRecentDecisionsMonorepo,
 } from "./memory.test.js";
 import {
+  testMemTemplateAddRejectsMissingFiles,
   testMemTemplateCentralCopyMovedIntoFapony,
   testMemTemplateConfigStillWins,
   testMemTemplateInitAtMonorepoRoot,
@@ -632,6 +660,10 @@ export async function cmdTest(): Promise<void> {
   testReadHintNeedsGitRepo();
   testReadHintClaudeOutputShape();
   testReadHintPluginSource();
+  testReadContextShowsDebtBeforeFix();
+  testReadContextMemRowsByFilesAndPath();
+  testReadContextBasenameAmbiguityStaysSilent();
+  testReadContextCombinedCapAndOutsideRepo();
   testDecideStopAllowsEveryUnknown();
   testStopPayloadsMapToSameDecision();
   testCursorPayloadEdges();
@@ -641,6 +673,20 @@ export async function cmdTest(): Promise<void> {
   testSchemaVersionStamped();
   testLegacyDbStampedWithoutDataLoss();
   testMigrateDbRejectsNewerSchema();
+  testDebtSilentWithoutConventions();
+  testSeedEslintEntriesCarryChecker();
+  await testSeedEslintSupersetBlocksDedupe();
+  await testSeedWrapperDetectorFindsLiveMigrations();
+  await testSeedRepoWithoutAnythingGetsEmptyFile();
+  await testSeedNeverOverwritesExisting();
+  await testSeedBrokenConfigIsSkippedLoudly();
+  testDebtDerivesListAndDropsWithTheFile();
+  testDebtCheckerRowsStaySilent();
+  testDebtTooBroadRegexDropped();
+  testDebtForFileAndMonorepoResolution();
+  testDebtPromotionAsksAtThresholdOnly();
+  testDebtPromotionCountsLedgerFails();
+  testDebtConventionsPathResolution();
   testParseGateEventData();
   testFixtureGuard();
   testQualityScore();
@@ -689,6 +735,7 @@ export async function cmdTest(): Promise<void> {
   testMemTemplateCentralCopyMovedIntoFapony();
   testMemTemplateScaffolded();
   testMemTemplateInitAtMonorepoRoot();
+  testMemTemplateAddRejectsMissingFiles();
   testMemTemplatePerPersonLogs();
   testMemTemplateScaffoldedIgnoresRootConfig();
   testMemTemplateUnknownAppFails();
@@ -907,6 +954,9 @@ export async function cmdTest(): Promise<void> {
   testRegimeCodesAreLocked();
   testReasonCodesListedInDocs();
   testRegimeCodesListedInDocs();
+  testLintBaselineCaptureAndCleanDiff();
+  testLintBaselineDiffReportsOnlyNewFindings();
+  testLintBaselineUnixFormatAndErrors();
   testAddingFakeEnumValueFailsDocsCheck();
   // Verification primitives tests
   testEvidenceStatusesAreLocked();

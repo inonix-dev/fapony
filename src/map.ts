@@ -275,3 +275,46 @@ export function extractExports(source: string): ExportScan {
 // descriptive file. Prefers `// path — desc` (the repo's convention), then a
 // first-line comment, then any comment; ties break to the lexical-first file.
 // Capped: a guess reads at most MAX_OBJECTIVE_FILES files, never a whole tree.
+
+// --- Declaration slice (indent-out, no parser) ---
+
+// Slice from the declaration line until the first line at the declaration's
+// own indent level that is non-blank (indent-out). Raw indentation as the
+// close signal means no brace counting and no parse — a one-liner returns
+// itself, nested blocks and object literals never return to the base indent
+// until the declaration is over. The closing line is the exception indent-out
+// cannot see: `}` sits AT the declaration indent, so the walk stops one line
+// short of it. Take that line when it is nothing but closers — which is why
+// the slice a caller pastes into an edit is syntactically whole.
+// Callers: review-seed --body, conventions seeder (wrapper detection).
+const MAX_BODY_LINES = 80;
+
+export function extractBody(source: string, line: number): string[] {
+  const lines = source.split("\n");
+  const start = line - 1;
+  if (start < 0 || start >= lines.length) return [];
+  const decl = lines[start];
+  if (decl.trim() === "") return [];
+  const base = decl.match(/^\s*/)?.[0].length ?? 0;
+  const out: string[] = [decl];
+  for (
+    let i = start + 1;
+    i < lines.length && out.length < MAX_BODY_LINES;
+    i++
+  ) {
+    const l = lines[i];
+    if (l.trim() === "") {
+      out.push(l);
+      continue;
+    }
+    if ((l.match(/^\s*/)?.[0].length ?? 0) <= base) {
+      // Closers only (`}`, `};`, `});`) — never the next declaration.
+      if (/^[)\]}]+[;,]?$/.test(l.trim())) out.push(l);
+      break;
+    }
+    out.push(l);
+  }
+  // Trailing blank lines inside the slice are padding, not body.
+  while (out.length > 1 && out[out.length - 1].trim() === "") out.pop();
+  return out;
+}
