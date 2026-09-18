@@ -143,7 +143,12 @@ export const TOOLS = [
         worktree: {
           type: "string",
           description:
-            "Scope a query (verdict mode, group_by, or the default view) to one worktree path (absolute).",
+            "Scope a query (verdict mode, group_by, or the default view) to one worktree path (absolute). Defaults to the repo the server is running in.",
+        },
+        all: {
+          type: "boolean",
+          description:
+            "Ignore the default worktree scope and report every project at once. Off by default: averaging several projects reads as 'in this project' while being no such thing, and it is the largest payload this tool returns.",
         },
       },
       required: [],

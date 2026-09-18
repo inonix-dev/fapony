@@ -295,6 +295,7 @@ import {
 import {
   testStatsTextMatchesCli,
   testStatsToolByGradeSeparation,
+  testStatsToolDefaultsToCurrentWorktree,
   testStatsToolEmptyDb,
   testStatsToolGroupByInvalid,
   testStatsToolGroupByPlan,
@@ -843,6 +844,7 @@ export async function cmdTest(): Promise<void> {
   testStatsToolTextMode();
   testStatsTextMatchesCli();
   testStatsToolByGradeSeparation();
+  testStatsToolDefaultsToCurrentWorktree();
   testStatsToolGroupByReasonCode();
   testStatsToolGroupByPlan();
   testStatsToolGroupByPlanWorktreeScoped();

@@ -3,6 +3,7 @@
 import type { Run } from "../../db/index.js";
 import { openDb } from "../../db/index.js";
 import {
+  currentWorktree,
   formatStatsText,
   formatVerdictText,
   getPlanBreakdown,
@@ -13,10 +14,16 @@ import {
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
 
 export function toolFaponyStats(args: Record<string, unknown>): ToolResult {
+  // Same default as `fapony stats` (src/stats/cli.ts): the project you are
+  // standing in. A bare MCP call used to go global, so an agent asking about
+  // one repo got every repo averaged together — wrong answer AND the biggest
+  // payload the tool can return. `all:true` is the opt-in, mirroring `--all`.
   const worktree =
     typeof args.worktree === "string" && args.worktree
       ? args.worktree
-      : undefined;
+      : args.all === true
+        ? undefined
+        : (currentWorktree() ?? undefined);
   const data = getStatsData(worktree);
 
   // group_by: top-N slice from real events (PLAN-project-health-context §2).

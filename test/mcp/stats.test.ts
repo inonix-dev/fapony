@@ -53,7 +53,7 @@ export function testStatsToolJsonMode(): void {
     addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
     setStatus(db, runId, "passed");
 
-    const result = toolFaponyStats({ json: true });
+    const result = toolFaponyStats({ json: true, all: true });
     assert.equal(result.isError, undefined);
     const text = result.content[0].text;
     const data = JSON.parse(text);
@@ -74,7 +74,7 @@ export function testStatsToolTextMode(): void {
     addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
     setStatus(db, runId, "passed");
 
-    const result = toolFaponyStats({ json: false });
+    const result = toolFaponyStats({ json: false, all: true });
     assert.equal(result.isError, undefined);
     const text = result.content[0].text;
     // raw text, not a JSON envelope
@@ -123,8 +123,8 @@ export function testStatsTextMatchesCli(): void {
         console.log = origLog;
       }
       const cliText = captured.join("\n");
-      // MCP without worktree → all projects, same as CLI --all.
-      const mcpText = toolFaponyStats({}).content[0].text;
+      // MCP all:true → all projects, same as CLI --all.
+      const mcpText = toolFaponyStats({ all: true }).content[0].text;
 
       // SPEC-verdict-stats: "text เดียวกับ fapony stats — ใช้ formatter ตัวเดียวกัน"
       assert.equal(
@@ -142,6 +142,42 @@ export function testStatsTextMatchesCli(): void {
   console.log("  ✓ fapony_stats text mode === fapony stats CLI output");
 }
 
+/**
+ * A bare call scopes to the repo the server runs in, like `fapony stats` does.
+ * Seed a run under a worktree that is NOT this repo: the default view must not
+ * see it, `all: true` must. Guards the fix for a bare MCP call that used to
+ * average every project together and return the tool's largest payload.
+ */
+export function testStatsToolDefaultsToCurrentWorktree(): void {
+  withTempDb(() => {
+    const db = openDb();
+    const runId = newRun(db, "/nonexistent/other-project", null, null, "abc");
+    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
+    setStatus(db, runId, "passed");
+
+    const scoped = JSON.parse(
+      toolFaponyStats({ json: true }).content[0].text,
+    ) as { byWorktree: { worktree: string }[] };
+    assert.ok(
+      !scoped.byWorktree.some(
+        (w) => w.worktree === "/nonexistent/other-project",
+      ),
+      "bare call must not report another project's runs",
+    );
+
+    const all = JSON.parse(
+      toolFaponyStats({ json: true, all: true }).content[0].text,
+    ) as { byWorktree: { worktree: string }[] };
+    assert.ok(
+      all.byWorktree.some((w) => w.worktree === "/nonexistent/other-project"),
+      "all:true must report every project",
+    );
+  });
+  console.log(
+    "  ✓ fapony_stats defaults to the current worktree, all:true opts out",
+  );
+}
+
 export function testStatsToolByGradeSeparation(): void {
   withTempDb(() => {
     const db = openDb();
@@ -152,7 +188,7 @@ export function testStatsToolByGradeSeparation(): void {
     addEvent(db, r2, "gate", { verdict: "fail", note: "", round: 0 });
     setStatus(db, r2, "fixing");
 
-    const result = toolFaponyStats({ json: true });
+    const result = toolFaponyStats({ json: true, all: true });
     const data = JSON.parse(result.content[0].text);
     const grades = data.byGrade.map((g: { grade: string }) => g.grade);
     assert.ok(grades.includes("pass-good"), "should have pass-good");
@@ -190,7 +226,7 @@ export function testStatsToolGroupByReasonCode(): void {
       round: 1,
     });
 
-    const result = toolFaponyStats({ group_by: "reason_code" });
+    const result = toolFaponyStats({ all: true, group_by: "reason_code" });
     assert.equal(result.isError, undefined);
     const data = JSON.parse(result.content[0].text);
     assert.equal(data.group_by, "reason_code");
@@ -200,7 +236,8 @@ export function testStatsToolGroupByReasonCode(): void {
 
     // top-N cap
     const capped = JSON.parse(
-      toolFaponyStats({ group_by: "reason_code", top: 1 }).content[0].text,
+      toolFaponyStats({ all: true, group_by: "reason_code", top: 1 }).content[0]
+        .text,
     );
     assert.equal(capped.rows.length, 1);
 
@@ -221,7 +258,7 @@ export function testStatsToolGroupByPlan(): void {
     newRun(db, "wt1", "plan-a", null, "abc");
     setStatus(db, r1, "passed");
 
-    const result = toolFaponyStats({ group_by: "plan" });
+    const result = toolFaponyStats({ all: true, group_by: "plan" });
     assert.equal(result.isError, undefined);
     const data = JSON.parse(result.content[0].text);
     assert.equal(data.group_by, "plan");
@@ -244,7 +281,7 @@ export function testStatsToolGroupByPlanWorktreeScoped(): void {
 
     // Global: plan-a has 2 runs
     const global = JSON.parse(
-      toolFaponyStats({ group_by: "plan" }).content[0].text,
+      toolFaponyStats({ all: true, group_by: "plan" }).content[0].text,
     );
     const gRow = global.rows.find((r: { plan: string }) => r.plan === "plan-a");
     assert.equal(gRow.runs, 2, "global count is 2");
@@ -279,7 +316,7 @@ export function testStatsToolGroupByInvalid(): void {
 export function testStatsToolModeVerdict(): void {
   withTempDb(() => {
     // Empty db: same "no runs yet" text as the default view.
-    const empty = toolFaponyStats({ mode: "verdict" });
+    const empty = toolFaponyStats({ all: true, mode: "verdict" });
     assert.equal(empty.isError, undefined);
     assert.equal(empty.content[0].text, "no runs yet");
 
@@ -299,8 +336,11 @@ export function testStatsToolModeVerdict(): void {
     });
     setStatus(db, runId, "passed");
 
-    const viaTool = toolFaponyStats({ mode: "verdict", regime: "code" })
-      .content[0].text;
+    const viaTool = toolFaponyStats({
+      all: true,
+      mode: "verdict",
+      regime: "code",
+    }).content[0].text;
     assert.ok(
       viaTool.includes("regime=code"),
       "should render the code regime frontier",

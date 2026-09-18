@@ -1,6 +1,6 @@
 // src/stats/index.ts — barrel re-export
 
-export { cmdStats } from "./cli.js";
+export { cmdStats, currentWorktree } from "./cli.js";
 export {
   countPendingPlans,
   getLastVerdictByPlan,
