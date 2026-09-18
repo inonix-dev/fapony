@@ -79,22 +79,35 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
         : "mcp-external";
     const resolvedPlan =
       typeof plan === "string" && plan ? plan.trim().toLowerCase() : null;
-    let open = resolvedPlan
-      ? findOpenRun(db, resolvedWorktree, resolvedPlan)
-      : null;
-    // Fallback: if no exact match and plan is non-null, try any open run with
-    // plan=null.  This lets a verdict with free-text intent bind to a run that
-    // was created without a plan (the common "no PLAN file" flow).
-    if (!open && resolvedPlan) {
-      open = findOpenRunWithNullPlan(db, resolvedWorktree);
-    }
-    if (open) {
-      resolvedRunId = open.id;
-    } else {
-      // worktree/plan let callers (e.g. move-to-done) attribute the verdict
-      // so byReasonCode/bestPassing aggregate correctly instead of collapsing
-      // into "mcp-external".
-      resolvedRunId = newRun(db, resolvedWorktree, resolvedPlan, null, "mcp");
+    // BEGIN IMMEDIATE makes the find-then-create below atomic across
+    // concurrent MCP processes: without it, two agents closing the same
+    // worktree+plan at once can both see "no open run" and each insert a
+    // row. The write lock taken here blocks (busy_timeout, not throws) the
+    // second caller until the first commits, so it re-reads and finds the
+    // row already there instead of duplicating it.
+    db.run("BEGIN IMMEDIATE");
+    try {
+      let open = resolvedPlan
+        ? findOpenRun(db, resolvedWorktree, resolvedPlan)
+        : null;
+      // Fallback: if no exact match and plan is non-null, try any open run with
+      // plan=null.  This lets a verdict with free-text intent bind to a run that
+      // was created without a plan (the common "no PLAN file" flow).
+      if (!open && resolvedPlan) {
+        open = findOpenRunWithNullPlan(db, resolvedWorktree);
+      }
+      if (open) {
+        resolvedRunId = open.id;
+      } else {
+        // worktree/plan let callers (e.g. move-to-done) attribute the verdict
+        // so byReasonCode/bestPassing aggregate correctly instead of collapsing
+        // into "mcp-external".
+        resolvedRunId = newRun(db, resolvedWorktree, resolvedPlan, null, "mcp");
+      }
+      db.run("COMMIT");
+    } catch (e) {
+      db.run("ROLLBACK");
+      throw e;
     }
   }
 
