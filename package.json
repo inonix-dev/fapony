@@ -1,6 +1,6 @@
 {
   "name": "fapony",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Measurement layer for coding agents — measure what agents do, verify what they claim. 6 MCP tools, any agent, no loop required",
   "license": "MIT",
   "author": "delamind (https://github.com/kire21b)",

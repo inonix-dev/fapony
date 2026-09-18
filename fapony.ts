@@ -19,7 +19,6 @@ import { cmdReviewSeed } from "./src/review-seed.js";
 import { cmdSetup } from "./src/setup.js";
 import { cmdStats } from "./src/stats/index.js";
 import { cmdTelemetry } from "./src/telemetry.js";
-import { cmdTest } from "./src/test.js";
 import { cmdUpdate } from "./src/update.js";
 import { cmdUsageScan, cmdUsageWeb } from "./src/usage/index.js";
 
@@ -68,6 +67,10 @@ if (cmd === "analyze") {
 } else if (cmd === "usage-web") {
   cmdUsageWeb(a);
 } else if (cmd === "test") {
+  // dynamic: src/test.js re-exports test/index.js, which the npm package
+  // doesn't ship (repo self-check only, not a published command) — a static
+  // import here would fail module load for every command, not just this one
+  const { cmdTest } = await import("./src/test.js");
   await cmdTest();
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
