@@ -419,6 +419,7 @@ import {
   testPlanSeedScopeFilters,
   testPlanSeedSingleFileScope,
   testPlanSeedSpecSignatures,
+  testPlanSeedStepCloseCarriesLiteralPlanPath,
   testPlanSeedWritesPlan,
 } from "./plan-seed.test.js";
 import {
@@ -649,6 +650,7 @@ export async function cmdTest(): Promise<void> {
   testMapExtractVarDeclaratorLists();
   testPlanSeedWritesPlan();
   testPlanSeedNoOverwrite();
+  testPlanSeedStepCloseCarriesLiteralPlanPath();
   testPlanSeedSpecSignatures();
   testPlanSeedScopeFilters();
   testPlanSeedCapsHold();
