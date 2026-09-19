@@ -66,6 +66,7 @@ import {
   testDebtPromotionCountsLedgerFails,
   testDebtSilentWithoutConventions,
   testDebtTooBroadRegexDropped,
+  testDebtWorktreeFollowsThePathNotGitRoot,
 } from "./debt.test.js";
 import {
   testDigestBugOpenClose,
@@ -693,6 +694,7 @@ export async function cmdTest(): Promise<void> {
   testDebtCheckerRowsStaySilent();
   testDebtTooBroadRegexDropped();
   testDebtForFileAndMonorepoResolution();
+  testDebtWorktreeFollowsThePathNotGitRoot();
   testDebtPromotionAsksAtThresholdOnly();
   testDebtPromotionCountsLedgerFails();
   testDebtConventionsPathResolution();
