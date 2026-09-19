@@ -15,7 +15,7 @@ import {
 } from "node:fs";
 import { hostname, networkInterfaces } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
-import { resolveMemDir } from "../memory.js";
+import { whereMemDir } from "../memory.js";
 
 // --- types ---
 
@@ -136,6 +136,9 @@ let LOG = "";
 let memCmd = "";
 let planBase = "";
 let app = "";
+// Non-empty when the resolver found two or more app-scoped mem dirs and no
+// single one at/above cwd — a write must die rather than start a third log.
+let blockWrite = "";
 
 // --- init ---
 
@@ -144,7 +147,7 @@ let app = "";
  * export. The CLI dispatch layer calls this with the resolved worktree path.
  *
  * `overrideMemDir` (from --mem-dir flag) skips resolution entirely.
- * Otherwise resolveMemDir() walks up from cwd — the same dir the reader
+ * Otherwise whereMemDir() walks up from cwd — the same dir the reader
  * (src/memory.ts) uses, so writer and reader cannot drift apart.
  */
 export function initStore(worktree: string, overrideMemDir?: string): void {
@@ -161,8 +164,17 @@ export function initStore(worktree: string, overrideMemDir?: string): void {
     throw new Error(`--mem-dir path does not exist: ${overrideMemDir}`);
   }
 
-  dir =
-    resolveMemDir(worktree, overrideMemDir) ?? join(root, ".fapony", ".memory");
+  // Resolution and the CLI's `mem where` share one function, so the path a row
+  // is written to is the path `mem where` reports.
+  blockWrite = "";
+  const resolved = whereMemDir(worktree, overrideMemDir);
+  if (resolved.step === "ambiguous") {
+    const list = (resolved.candidates ?? []).map((c) => `  ${c}`).join("\n");
+    blockWrite =
+      `two or more .fapony/.memory dirs under ${root} — refusing to guess:\n` +
+      `${list}\ncd into one, set paths.memDir, or pass --mem-dir`;
+  }
+  dir = resolved.dir ?? join(root, ".fapony", ".memory");
 
   // planBase: the .fapony dir — plan/done/conventions live here.
   // Derive from dir by going up from .fapony/.memory → .fapony
@@ -280,6 +292,7 @@ function put(
     | Omit<ReleaseRow, "ts" | "agent">
     | Omit<SyncedRow, "ts" | "agent">,
 ) {
+  if (blockWrite) throw new Error(blockWrite);
   mkdirSync(dir, { recursive: true });
   appendFileSync(
     LOG,

@@ -373,6 +373,7 @@ import {
 import {
   testClaimMemoryFailGracefully,
   testClaimMemoryTimeout,
+  testMemDirAmbiguousRefusesWrite,
   testMemDirConfigIsRepoRootRelative,
   testMemDirOverrideWinsAndRefusesMissing,
   testMemDirSkipsEmptyCandidate,
@@ -742,6 +743,7 @@ export async function cmdTest(): Promise<void> {
   testMemDirSkipsEmptyCandidate();
   testMemDirConfigIsRepoRootRelative();
   testMemDirOverrideWinsAndRefusesMissing();
+  testMemDirAmbiguousRefusesWrite();
   // Digest tests
   await testDigestEmptyRepo();
   await testDigestSinceFilter();
