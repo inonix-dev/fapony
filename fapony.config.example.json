@@ -11,7 +11,7 @@
     "planDir": ".fapony/plan",
     "doneDir": ".fapony/done",
     "specDir": ".fapony/spec",
-    "memoryEntry": ".fapony/.memory/mem.ts",
+    "memDir": ".fapony/.memory",
     "evidenceFile": ".fapony/evidence.json"
   },
   "safety": {

@@ -17,9 +17,9 @@ fapony/
     git-commit-conventional/    # commit แยก concern + conventional message
     git-ship/                   # push branch, open PR, merge, reset branch onto base
   templates/
-    PLAN.md / SPEC.md / mem/     # plan+spec templates, memory scaffold for `fapony init`
-                                 # (ชื่อโฟลเดอร์ = ชื่อ CLI ที่มันเป็น (`mem`) ไม่ใช่ปลายทางที่ไปวาง (.memory/))
+    PLAN.md / SPEC.md              # plan+spec templates for `fapony init`
   src/
+    mem/                # fapony mem <add|close|find|kickoff|now|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
     db/               # SQLite + config
       store.ts        # openDb + schema/migration (PRAGMA user_version) + CRUD
       load.ts         # loadConfig()
@@ -83,7 +83,7 @@ fapony/
       utils.ts          # shared JSON(C) helpers
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative
-    mcp/                   # MCP server — stdio JSON-RPC, 5 tools
+    mcp/                   # MCP server — stdio JSON-RPC, 4 tools
       index.ts             # MCP entry point + tool registration
       transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn the grading habit without editing their own rules file
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
