@@ -181,6 +181,7 @@ function planTemplate(
   priorArt: string,
   contextFapony: string,
   specLink: string | null,
+  planRel: string,
 ): string {
   return `---
 kind: unit
@@ -216,7 +217,19 @@ _(agent fills in)_
 _(agent fills in)_
 
 ## 6. Steps (what in which order)
+One step = one chunk = one session: finish it, close it, **stop** — starting the
+next step in the same session is what rule 9 forbids.
+
 1. _(agent fills in — each step must be verifiable)_
+
+**Closing a step:** tick its TL;DR box with the sha · \`git commit\` this step's
+files only · \`verdict_submit\` (MCP) with this step's \`regime\` · then hand off:
+
+\`\`\`bash
+bun .fapony/.memory/mem.ts add note "<what chunk N+1 must know>" --files <f1,f2> ${planRel}
+\`\`\`
+
+Next session opens with \`kickoff ${planRel}\` (or \`kickoff ${basename(planRel)}\` — kickoff resolves by filename too, so no need to retype the path).
 
 ## 7. Examples
 ${
@@ -595,7 +608,13 @@ export function cmdPlanSeed(args: string[]): void {
   mkdirSync(planDirAbs, { recursive: true });
   writeFileSync(
     planPath,
-    planTemplate(name, priorArt, contextFapony, specLink),
+    planTemplate(
+      name,
+      priorArt,
+      contextFapony,
+      specLink,
+      `${planDir(config)}/PLAN-${name}.md`,
+    ),
   );
   console.log(`wrote ${planPath}${specLink ? ` + SPEC-${name}.md` : ""}`);
 }

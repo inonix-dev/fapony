@@ -270,6 +270,10 @@ function expandFilesScope(
   const notFound: string[] = [];
   const emptyDirs: string[] = [];
   const dirs: string[] = [];
+  // Per-dir top-level subdir counts, gathered while walking — cheap because
+  // it reuses `rels` already collected below; only printed if the cap cuts
+  // something, so a scope that fits never pays for it in the output.
+  const breakdowns: string[] = [];
   let dirExpanded = false;
   let cutNamed = 0;
   let cutExpanded = 0;
@@ -310,6 +314,20 @@ function expandFilesScope(
     dirExpanded = true;
     const rels = collectSourceFiles(join(worktree, p));
     if (rels.length === 0) emptyDirs.push(p);
+    if (rels.length > MAX_CHANGED_FILES) {
+      const counts = new Map<string, number>();
+      for (const r of rels) {
+        const top = r.includes("/") ? r.slice(0, r.indexOf("/")) : "(root)";
+        counts.set(top, (counts.get(top) ?? 0) + 1);
+      }
+      const list = [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(
+          ([name, count]) => `${p === "." ? name : `${p}/${name}`} (${count})`,
+        )
+        .join(" · ");
+      breakdowns.push(`${p} (${rels.length} files) → ${list}`);
+    }
     for (const r of rels) add(p === "." ? r : `${p}/${r}`, true);
   }
   if (notFound.length > 0) {
@@ -329,6 +347,7 @@ function expandFilesScope(
     notes.push(
       `… +${cutExpanded} more file(s) under the expanded dirs — capped at ${MAX_CHANGED_FILES}, narrow the scope`,
     );
+    for (const b of breakdowns) notes.push(`  ${b}`);
   }
   return { files, notes, dirExpanded };
 }

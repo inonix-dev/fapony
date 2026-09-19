@@ -1,5 +1,6 @@
 // commands/read.ts — read-only commands: now (default), done, stale, find, kickoff
 
+import { basename } from "node:path";
 import { doneLines, fmtClose, fmtRow, printOpenRows } from "../render.js";
 import { claimsOf, openRows, staleReport } from "../selectors.js";
 import type { CloseRow, WorkRow } from "../store.js";
@@ -80,8 +81,30 @@ export const cmdFind = (a: string[]) => {
   if (!hits.length) console.log("(no matches)");
 };
 
+const normSpec = (s: string) => s.replace(/\\/g, "/").replace(/^\.\//, "");
+
+// kickoff's spec arg used to be compared to r.spec as a literal string, so
+// `.fapony/plan/PLAN-x.md` had to be retyped byte-for-byte — and a typo printed
+// "(no entries)" with nothing to notice. Resolve against the spec paths the log
+// actually holds: exact path first, then by filename (with or without .md), then by
+// any path suffix. Returns all candidates so the caller can tell unique from ambiguous.
+const resolveSpec = (target: string, specs: string[]): string[] => {
+  const t = normSpec(target);
+  const all = [...new Set(specs)];
+  const exact = all.filter((s) => normSpec(s) === t);
+  if (exact.length) return exact;
+  const base = basename(t);
+  const withMd = base.endsWith(".md") ? base : `${base}.md`;
+  const byName = all.filter((s) => {
+    const b = basename(normSpec(s));
+    return b === base || b === withMd;
+  });
+  if (byName.length) return byName;
+  return all.filter((s) => normSpec(s).endsWith(`/${t}`));
+};
+
 export const cmdKickoff = (a: string[]) => {
-  // mem kickoff [id|spec.md]
+  // mem kickoff [id|spec.md] — the spec may be the full path or just its filename
   const all = rows();
   const arg = a[0] ?? "";
 
@@ -100,21 +123,56 @@ export const cmdKickoff = (a: string[]) => {
     if (sweep) console.log(sweep);
     const rotate = rotateLine(all.length);
     if (rotate) console.log(rotate);
-  } else if (arg.endsWith(".md")) {
+    return;
+  }
+
+  const workAll = all.filter((r): r is WorkRow => "id" in r);
+  const byId = new Map(workAll.map((r) => [r.id, r] as const));
+  const specNames = [
+    ...new Set(
+      all.flatMap((r) => ("spec" in r && r.spec ? [r.spec as string] : [])),
+    ),
+  ].sort();
+  const target = byId.get(arg);
+  const matches = resolveSpec(arg, specNames);
+  // an exact spec path wins over an id; otherwise a unique filename/suffix match;
+  // a repeated filename is ambiguous and a real miss lists what the log has
+  let resolvedSpec = matches.find((s) => normSpec(s) === normSpec(arg));
+  if (!resolvedSpec && !target) {
+    if (matches.length === 1) {
+      resolvedSpec = matches[0];
+    } else if (matches.length > 1) {
+      console.error(
+        `"${arg}" could mean ${matches.length} specs — retype one in full:`,
+      );
+      for (const m of matches) console.error(`  ${m}`);
+      process.exit(1);
+    } else if (arg.endsWith(".md")) {
+      // used to print "(no entries)" and exit 0 — a typo nobody could catch
+      console.error(`no entries for spec "${arg}"`);
+      if (specNames.length) {
+        console.error(`specs in the log:`);
+        for (const s of specNames) console.error(`  ${s}`);
+      }
+      process.exit(1);
+    }
+  }
+
+  if (resolvedSpec) {
     // spec.md = a brief for that spec
-    const workAll = all.filter((r): r is WorkRow => "id" in r);
-    const byId = new Map(workAll.map((r) => [r.id, r] as const));
     const open = openRows(all);
-    const specRows = open.filter((r) => r.spec === arg);
+    const specRows = open.filter((r) => r.spec === resolvedSpec);
     const specDecisions = all
-      .filter((r): r is WorkRow => r.kind === "decision" && r.spec === arg)
+      .filter(
+        (r): r is WorkRow => r.kind === "decision" && r.spec === resolvedSpec,
+      )
       .slice(-5);
     const specCloses = all
       .filter((r): r is CloseRow => r.kind === "close")
-      .filter((r) => byId.get(r.ref)?.spec === arg)
+      .filter((r) => byId.get(r.ref)?.spec === resolvedSpec)
       .slice(-3);
 
-    console.log(`# ${arg} — ${specRows.length} open rows`);
+    console.log(`# ${resolvedSpec} — ${specRows.length} open rows`);
     if (specRows.length) {
       console.log(`\n## open\n${specRows.map((r) => fmtRow(r)).join("\n")}`);
     }
@@ -134,15 +192,8 @@ export const cmdKickoff = (a: string[]) => {
     if (!specRows.length && !specDecisions.length && !specCloses.length) {
       console.log("(no entries for this spec)");
     }
-  } else {
+  } else if (target) {
     // id = a brief for that task
-    const workAll = all.filter((r): r is WorkRow => "id" in r);
-    const byId = new Map(workAll.map((r) => [r.id, r] as const));
-    const target = byId.get(arg);
-    if (!target) {
-      console.error(`no id "${arg}" in the log`);
-      process.exit(1);
-    }
     const claims = claimsOf(all);
     const claimInfo = claims.has(arg)
       ? `\nClaimed by: ${claims.get(arg)?.agent} (${claims.get(arg)?.ts.slice(0, 10)})`
@@ -190,5 +241,8 @@ export const cmdKickoff = (a: string[]) => {
           specCloses.map((c) => fmtClose(c, byId)).join("\n"),
       );
     }
+  } else {
+    console.error(`no id "${arg}" in the log`);
+    process.exit(1);
   }
 };

@@ -339,3 +339,33 @@ export function testPlanSeedConfigFallback(): void {
     "  ✓ plan-seed honours config planDir; broken config falls back to defaults",
   );
 }
+
+export function testPlanSeedStepCloseCarriesLiteralPlanPath(): void {
+  withFixture((dir) => {
+    withCwd(dir, () => {
+      cmdPlanSeed(["bar"]);
+      const body = readFileSync(
+        join(dir, ".fapony", "plan", "PLAN-bar.md"),
+        "utf-8",
+      );
+      const s6 = body.slice(body.indexOf("## 6."), body.indexOf("## 7."));
+      // The handoff path is interpolated, not left as a placeholder: it is the
+      // canonical key kickoff files rows under, and a model that has to
+      // reconstruct ".fapony/plan/PLAN-<name>.md" is a model that can get it wrong.
+      // (kickoff now resolves by filename too, but the right path costs nothing here.)
+      assert.ok(
+        s6.includes(".fapony/plan/PLAN-bar.md"),
+        "§6 must carry this plan's real path, not a placeholder",
+      );
+      assert.ok(!s6.includes("<path"), "no path placeholder left in §6");
+      // The close sequence is spelled out as commands, not implied.
+      assert.ok(s6.includes("git commit"), "§6 names the commit step");
+      assert.ok(s6.includes("verdict_submit"), "§6 names the verdict step");
+      assert.ok(
+        s6.includes("mem.ts add note"),
+        "§6 names the handoff-note step",
+      );
+    });
+  });
+  console.log("  ✓ plan-seed: §6 close block carries the literal plan path");
+}

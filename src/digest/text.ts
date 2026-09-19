@@ -34,6 +34,23 @@ function fmtTokens(n: number): string {
   return String(Math.round(n));
 }
 
+function impactLines(i: NonNullable<DigestData["impact"]>): string[] {
+  const b = i.by_surface;
+  const out = [
+    `hints fired: ${i.fired} (read ${b.read} · debt ${b.debt} · mem ${b.mem} · commit ${b.commit})`,
+  ];
+  if (i.debt.shown > 0) {
+    const pct = Math.round((i.debt.resolved / i.debt.shown) * 100);
+    out.push(
+      `debt lines shown: ${i.debt.shown} · no longer present at HEAD: ${i.debt.resolved} (${pct}%) · unverifiable: ${i.debt.unknown}`,
+    );
+  }
+  out.push(
+    "note: counts what fapony showed and what the repo looks like now, not proof the agent acted because of the hint",
+  );
+  return out;
+}
+
 function costLine(c: CostRow): string {
   const name = c.provider ? `${c.provider}/${c.model}` : c.model;
   const costStr =
@@ -67,6 +84,14 @@ export function renderDigestText(d: DigestData): string {
 
   lines.push(
     `  ${units} unit${units === 1 ? "" : "s"} graded · ${d.verdicts.round1_pct}% passed round 1 · ${costLabel}`,
+  );
+  lines.push("");
+
+  // 2b. fapony impact — what the annotate surfaces showed, not proof of use
+  lines.push(
+    section("FAPONY IMPACT", [
+      ...(d.impact ? impactLines(d.impact) : ["(no hints recorded)"]),
+    ]),
   );
   lines.push("");
 

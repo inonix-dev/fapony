@@ -13,6 +13,7 @@ import {
   planDir,
   type Run,
 } from "../db/index.js";
+import { computeHintImpact, type HintImpact, hintLogPath } from "../hook.js";
 import { type MemRow, readMemLog } from "../memory.js";
 import { isPassFamily, VERDICT_GRADES } from "../parse.js";
 import { imputeResult, loadPrices } from "../price/index.js";
@@ -83,6 +84,8 @@ export interface DigestData {
     /** % of those whose earliest in-period gate passed at round ≤ 1. */
     round1_pct: number;
   };
+  /** Hint-fire log counts for this worktree — null when no log exists. */
+  impact: HintImpact | null;
   skipped_malformed: number;
 }
 
@@ -586,6 +589,18 @@ export async function collectDigest(
     detail: verdictResult.detail,
   });
 
+  // 6. hint-fire log — annotate surface, this worktree only. A log that
+  // exists but fired 0 in the window is "0", not "no data" (done criteria 6).
+  const hasHintLog = existsSync(hintLogPath(worktree));
+  const impact = hasHintLog ? computeHintImpact(sinceIso, worktree) : null;
+  sources.push({
+    name: "hint-log",
+    ok: hasHintLog,
+    detail: impact
+      ? `${impact.fired} fired this window (${impact.debt.shown} debt shown)`
+      : "no hints recorded",
+  });
+
   // classify mem rows
   const decisions = mem.rows.filter((r) => r.kind === "decision");
   const notes = mem.rows.filter((r) => r.kind === "note");
@@ -620,6 +635,7 @@ export async function collectDigest(
       units_graded: verdictResult.units_graded,
       round1_pct: verdictResult.round1_pct,
     },
+    impact,
     skipped_malformed: skippedMalformed,
   };
 }

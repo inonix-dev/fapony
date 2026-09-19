@@ -16,13 +16,191 @@
 //   cursor  {workspace_roots, conversation_id, loop_count, status} → {"followup_message"}
 //   (cursor: loop_count ≥ 1 = the hook already fired, status ≠ completed = allow)
 
-import { readFileSync, realpathSync, statSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, relative } from "node:path";
 import { collectSourceFiles, SCAN_EXTS } from "./analyze.js";
 import { openDb } from "./db/index.js";
 import { debtForFile, loadConventions } from "./debt.js";
 import { readMemLog } from "./memory.js";
+
+// --- Hint-fire log (PLAN-feedback-surface chunk 1) ---
+//
+// Append-only JSONL under state dir (<faponyDir>/hint-log/<key>.jsonl),
+// one file per worktree. Best-effort: every error swallowed — a hook that
+// cannot log must still annotate. Called at caller only (cmdHookReadHint +
+// opencode plugins), never inside readHintFor/readContextLines/commitHintFor
+// (test pollution: those functions are called ~20x in test/hook.test.ts
+// without setting FAPONY_STATE_DIR).
+
+const HINT_LOG_DIR = "hint-log";
+
+/** Stable filename key from an absolute worktree path. */
+export function worktreeKey(worktree: string): string {
+  return worktree.replace(/^\/+/, "").replace(/\//g, "--");
+}
+
+/** Directory holding one hint-fire log file per worktree. */
+function hintLogDir(): string {
+  const base =
+    process.env.FAPONY_STATE_DIR || join(homedir(), ".config", "fapony");
+  return join(base, HINT_LOG_DIR);
+}
+
+/** Absolute path of a worktree's hint-fire log — may not exist. */
+export function hintLogPath(worktree: string): string {
+  return join(hintLogDir(), `${worktreeKey(worktree)}.jsonl`);
+}
+
+export interface HintFireRow {
+  ts: string;
+  worktree: string;
+  surface: "read" | "debt" | "mem" | "commit";
+  file: string | null;
+  count: number;
+  ids?: string[];
+}
+
+/**
+ * Append a hint-fire log row. Best-effort: never throws, never blocks.
+ * Uses $FAPONY_STATE_DIR when set (tests, CI), otherwise ~/.config/fapony.
+ */
+export function recordHintFire(row: HintFireRow): void {
+  try {
+    const dir = hintLogDir();
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    appendFileSync(
+      hintLogPath(row.worktree),
+      `${JSON.stringify(row)}\n`,
+      "utf-8",
+    );
+  } catch {
+    // best-effort — swallow
+  }
+}
+
+// --- Debt precision (PLAN-feedback-surface chunk 2) ---
+//
+// Reads the hint-fire log, re-runs debtForFile at HEAD for each file that
+// received debt hints, and counts which ids are no longer flagged. This is
+// deterministic (no proxy, no join with events) and answers: of the debt
+// lines fapony showed, how many is the repo now clean of?
+
+export interface HintImpact {
+  fired: number;
+  by_surface: { read: number; debt: number; mem: number; commit: number };
+  debt: { shown: number; resolved: number; unknown: number };
+  window: string | null;
+}
+
+/**
+ * Compute hint-fire impact from the log. `since` is an ISO date string;
+ * omit to scan all rows. `worktree` scopes to one project's log file (the
+ * `<key>.jsonl` naming makes this a filename comparison) — omit to merge
+ * every worktree. Returns zeroed counts (not null) when there are no rows —
+ * the caller decides how to present "no data" vs "zero".
+ */
+export function computeHintImpact(
+  since?: string,
+  worktree?: string,
+): HintImpact {
+  const dir = hintLogDir();
+  const impact: HintImpact = {
+    fired: 0,
+    by_surface: { read: 0, debt: 0, mem: 0, commit: 0 },
+    debt: { shown: 0, resolved: 0, unknown: 0 },
+    window: since ?? null,
+  };
+
+  if (!existsSync(dir)) return impact;
+
+  // Read the worktree's .jsonl when scoped, else every file in the dir.
+  let files: string[];
+  try {
+    const all = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
+    files = worktree
+      ? all.filter((f) => f === `${worktreeKey(worktree)}.jsonl`)
+      : all;
+  } catch {
+    return impact;
+  }
+
+  // debtShown: Map<"worktree\tfile\tid", true> — unique debt ids per file.
+  const debtShown = new Map<string, true>();
+  // debtByFile: Map<"worktree\tfile", string[]> — all ids shown per file.
+  const debtByFile = new Map<string, string[]>();
+
+  for (const file of files) {
+    let content: string;
+    try {
+      content = readFileSync(join(dir, file), "utf-8");
+    } catch {
+      continue;
+    }
+    for (const line of content.split("\n")) {
+      if (!line) continue;
+      let row: HintFireRow;
+      try {
+        row = JSON.parse(line) as HintFireRow;
+      } catch {
+        continue;
+      }
+      if (since && row.ts < since) continue;
+      impact.fired++;
+      impact.by_surface[row.surface]++;
+
+      if (row.surface === "debt" && row.ids && row.file) {
+        const key = `${row.worktree}\t${row.file}`;
+        const existing = debtByFile.get(key) ?? [];
+        for (const id of row.ids) {
+          const dk = `${row.worktree}\t${row.file}\t${id}`;
+          if (!debtShown.has(dk)) {
+            debtShown.set(dk, true);
+            existing.push(id);
+          }
+        }
+        debtByFile.set(key, existing);
+      }
+    }
+  }
+
+  // Re-run debtForFile at HEAD for each file that had debt hints.
+  for (const [key, ids] of debtByFile) {
+    const [worktree, file] = key.split("\t");
+    const absFile = join(worktree, file);
+    let currentIds: Set<string>;
+    try {
+      if (!statSync(absFile).isFile()) {
+        // File deleted — all its debt ids are unknown.
+        impact.debt.unknown += ids.length;
+        continue;
+      }
+      const convs = debtForFile(worktree, absFile, loadConventions(worktree));
+      currentIds = new Set(convs.map((c) => c.id));
+    } catch {
+      impact.debt.unknown += ids.length;
+      continue;
+    }
+    for (const id of ids) {
+      impact.debt.shown++;
+      if (currentIds.has(id)) {
+        // still present — not resolved
+      } else {
+        impact.debt.resolved++;
+      }
+    }
+  }
+
+  return impact;
+}
 
 export interface RawStopPayload {
   // Claude Code
@@ -424,16 +602,20 @@ export async function cmdHookReadHint(): Promise<void> {
       };
     };
     const cwd = raw.cwd ?? process.cwd();
+    const filePath = raw.tool_input?.file_path;
     const parts: string[] = [];
     const hint = readHintFor({
-      filePath: raw.tool_input?.file_path,
+      filePath,
       offset: raw.tool_input?.offset,
       limit: raw.tool_input?.limit,
       cwd,
     });
     if (hint) parts.push(hint);
-    for (const line of readContextLines(raw.tool_input?.file_path, cwd)) {
-      parts.push(line);
+    const ctx = readContextData(filePath, cwd);
+    if (ctx) {
+      for (const line of [...ctx.debtLines, ...ctx.memLines]) {
+        parts.push(line);
+      }
     }
     if (parts.length > 0) {
       console.log(
@@ -444,6 +626,60 @@ export async function cmdHookReadHint(): Promise<void> {
           },
         }),
       );
+    }
+
+    // --- hint-fire log (PLAN-feedback-surface chunk 1) ---
+    // After output — best-effort, never block the hint.
+    const rel =
+      typeof filePath === "string"
+        ? (() => {
+            try {
+              const git = Bun.spawnSync(
+                ["git", "rev-parse", "--show-toplevel"],
+                { cwd, stdout: "pipe", stderr: "pipe" },
+              );
+              if (git.exitCode !== 0) return null;
+              const wt = realpathSync(git.stdout.toString().trim());
+              const abs = realpathSync(
+                filePath.startsWith("/") ? filePath : join(wt, filePath),
+              );
+              const r = relative(wt, abs).split("\\").join("/");
+              return r.startsWith("..") ? null : r;
+            } catch {
+              return null;
+            }
+          })()
+        : null;
+    const worktree = ctx?.worktree ?? null;
+    if (worktree) {
+      if (hint) {
+        recordHintFire({
+          ts: new Date().toISOString(),
+          worktree,
+          surface: "read",
+          file: rel,
+          count: 1,
+        });
+      }
+      if (ctx && ctx.debtIds.length > 0) {
+        recordHintFire({
+          ts: new Date().toISOString(),
+          worktree,
+          surface: "debt",
+          file: rel,
+          count: ctx.debtIds.length,
+          ids: ctx.debtIds,
+        });
+      }
+      if (ctx && ctx.memLines.length > 0) {
+        recordHintFire({
+          ts: new Date().toISOString(),
+          worktree,
+          surface: "mem",
+          file: rel,
+          count: ctx.memLines.length,
+        });
+      }
     }
   } catch {
     // any failure = no hint; a hook must never block a read over a hint
@@ -462,15 +698,26 @@ const DEBT_HINT_MAX = 3;
 const MEM_HINT_MAX = 2;
 const MEM_TEXT_MAX = 120;
 
-export function readContextLines(filePath: unknown, cwd: string): string[] {
+export interface ContextLineData {
+  worktree: string;
+  debtIds: string[];
+  debtLines: string[];
+  memLines: string[];
+}
+
+/** Structured data behind readContextLines — used by cmdHookReadHint for logging. */
+export function readContextData(
+  filePath: unknown,
+  cwd: string,
+): ContextLineData | null {
   try {
-    if (typeof filePath !== "string" || filePath === "") return [];
+    if (typeof filePath !== "string" || filePath === "") return null;
     const git = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
       cwd,
       stdout: "pipe",
       stderr: "pipe",
     });
-    if (git.exitCode !== 0) return [];
+    if (git.exitCode !== 0) return null;
     // macOS /var → /private/var: git reports the resolved root while callers
     // pass unresolved tmp paths — normalize both sides before comparing.
     const worktree = realpathSync(git.stdout.toString().trim());
@@ -478,9 +725,11 @@ export function readContextLines(filePath: unknown, cwd: string): string[] {
       filePath.startsWith("/") ? filePath : join(worktree, filePath),
     );
     const rel = relative(worktree, abs).split("\\").join("/");
-    if (rel.startsWith("..") || rel === "") return [];
+    if (rel.startsWith("..") || rel === "") return null;
 
-    const lines: string[] = [];
+    const debtIds: string[] = [];
+    const debtLines: string[] = [];
+    const memLines: string[] = [];
 
     // convention debt — source files only, fresh from the repo
     const dot = rel.lastIndexOf(".");
@@ -490,7 +739,8 @@ export function readContextLines(filePath: unknown, cwd: string): string[] {
         abs,
         loadConventions(worktree),
       ).slice(0, DEBT_HINT_MAX)) {
-        lines.push(`fapony debt: [${c.id}] ${c.rule}`);
+        debtIds.push(c.id);
+        debtLines.push(`fapony debt: [${c.id}] ${c.rule}`);
       }
     }
 
@@ -520,15 +770,24 @@ export function readContextLines(filePath: unknown, cwd: string): string[] {
         if (sameName !== 1) usableBase = [];
       }
       // direct hits (files[] / full path) outrank bare-basename hits
-      const memLines = [...direct, ...usableBase].slice(0, MEM_HINT_MAX);
-      for (const r of memLines) {
-        lines.push(
+      const memHits = [...direct, ...usableBase].slice(0, MEM_HINT_MAX);
+      for (const r of memHits) {
+        memLines.push(
           `fapony mem: ${r.ts.slice(0, 10)} ${r.kind} — ${r.text.slice(0, MEM_TEXT_MAX)}`,
         );
       }
     }
-    return lines.slice(0, DEBT_HINT_MAX + MEM_HINT_MAX);
+    return { worktree, debtIds, debtLines, memLines };
   } catch {
-    return [];
+    return null;
   }
+}
+
+export function readContextLines(filePath: unknown, cwd: string): string[] {
+  const data = readContextData(filePath, cwd);
+  if (!data) return [];
+  return [...data.debtLines, ...data.memLines].slice(
+    0,
+    DEBT_HINT_MAX + MEM_HINT_MAX,
+  );
 }

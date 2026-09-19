@@ -1466,3 +1466,59 @@ export function testVerdictNoRegimeShowsOneLinerPerRegime(): void {
     "test regime shown as empty",
   );
 }
+
+export function testStatsRegimeTokensSplitNotDuplicated(): void {
+  withTmpDb((db) => {
+    // One session, two gates, two regimes. Until 2026-09-19 each regime bucket
+    // was charged the session's whole total, so a model used across N regimes
+    // looked N times more expensive than one used in a single regime — and
+    // `--mode verdict` ranks on exactly that number.
+    const r1 = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, r1, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 0,
+      regime: "code",
+      session_id: "sess-split",
+      reason_code: "none",
+      source: "mcp",
+    });
+    setStatus(db, r1, "passed");
+
+    const r2 = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, r2, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 0,
+      regime: "review",
+      session_id: "sess-split",
+      reason_code: "none",
+      source: "mcp",
+    });
+    setStatus(db, r2, "passed");
+
+    withOpenCodeSession(
+      "sess-split",
+      { input: 60000, output: 10000, cacheRead: 0, cacheWrite: 0 },
+      () => {
+        const data = getStatsData();
+        const code = data.byRegime.find((r) => r.regime === "code");
+        const review = data.byRegime.find((r) => r.regime === "review");
+        assert.ok(code && review, "both regime rows must exist");
+        assert.equal(code.tokensInput, 30000, "code gets its half");
+        assert.equal(review.tokensInput, 30000, "review gets its half");
+        assert.equal(
+          (code.tokensInput ?? 0) + (review.tokensInput ?? 0),
+          60000,
+          "shares must sum back to the session total, not double it",
+        );
+        // by-model is one bucket for this session, so it keeps the full total.
+        assert.equal(data.byModel.length, 1);
+        assert.equal(data.byModel[0].tokensInput, 60000);
+      },
+    );
+  });
+  console.log(
+    "  ✓ getStatsData: session tokens split across regimes, not duplicated",
+  );
+}

@@ -132,7 +132,19 @@ export function isTestedThroughBarrels(
 export const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
 // Always skipped, hardcoded — no config (per plan: no .faponyignore in v1).
-const SKIP_DIRS = new Set(["node_modules", "dist", "build", ".git"]);
+// "templates" for the same reason knip.json ignores templates/**: those files
+// ship as a template copied into other repos by `fapony init-mem` and never
+// have real importers here — scanning them produces false wrapper/orphan
+// signals (measured: conventions-seed flagged 8 "wrappers" that were all
+// templates/mem/commands/*.ts helpers matched against unrelated identically-
+// named calls elsewhere in the repo, e.g. "cmdNow() instead of now(").
+const SKIP_DIRS = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  ".git",
+  "templates",
+]);
 
 // A nested checkout (clone or `git worktree add`) is a different project that
 // happens to live inside this one — walking it doubles the graph and makes every

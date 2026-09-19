@@ -74,6 +74,8 @@ import {
   testDigestBugOpenClose,
   testDigestEmptyRepo,
   testDigestEscInjection,
+  testDigestImpactNoLog,
+  testDigestImpactSection,
   testDigestInvalidSince,
   testDigestJsonSubsetOfText,
   testDigestMalformedLine,
@@ -123,6 +125,8 @@ import {
   testCommitHintPluginSource,
   testCommitHintWhenGradedVerdictsExist,
   testCommitHintWhenNoGradedVerdicts,
+  testComputeHintImpact,
+  testComputeHintImpactNoLog,
   testCursorPayloadEdges,
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
@@ -392,6 +396,8 @@ import {
   testMemTemplateCentralCopyMovedIntoFapony,
   testMemTemplateConfigStillWins,
   testMemTemplateInitAtMonorepoRoot,
+  testMemTemplateKickoffAmbiguousAndMissAreLoud,
+  testMemTemplateKickoffResolvesSpecByFilename,
   testMemTemplateMonorepoLegacyLog,
   testMemTemplateMonorepoMigratedApp,
   testMemTemplateMonorepoUnmigratedApp,
@@ -417,6 +423,7 @@ import {
   testPlanSeedScopeFilters,
   testPlanSeedSingleFileScope,
   testPlanSeedSpecSignatures,
+  testPlanSeedStepCloseCarriesLiteralPlanPath,
   testPlanSeedWritesPlan,
 } from "./plan-seed.test.js";
 import {
@@ -514,6 +521,7 @@ import {
   testStatsPassRateFromVerdicts,
   testStatsPlanBreakdown,
   testStatsReasonCodeBreakdown,
+  testStatsRegimeTokensSplitNotDuplicated,
   testStatsSpawnModelWinsOverSessionId,
   testStatsTokensCountSessionOnce,
   testStatsTokensInByModel,
@@ -646,6 +654,7 @@ export async function cmdTest(): Promise<void> {
   testMapExtractVarDeclaratorLists();
   testPlanSeedWritesPlan();
   testPlanSeedNoOverwrite();
+  testPlanSeedStepCloseCarriesLiteralPlanPath();
   testPlanSeedSpecSignatures();
   testPlanSeedScopeFilters();
   testPlanSeedCapsHold();
@@ -686,6 +695,8 @@ export async function cmdTest(): Promise<void> {
   testCursorPayloadEdges();
   testStopOutputShapesPerClient();
   testUtcStampMatchesSqliteFormat();
+  testComputeHintImpact();
+  testComputeHintImpactNoLog();
   testDbLifecycle();
   testSchemaVersionStamped();
   testLegacyDbStampedWithoutDataLoss();
@@ -753,6 +764,8 @@ export async function cmdTest(): Promise<void> {
   testMemTemplateScaffolded();
   testMemTemplateInitAtMonorepoRoot();
   testMemTemplateAddRejectsMissingFiles();
+  testMemTemplateKickoffResolvesSpecByFilename();
+  testMemTemplateKickoffAmbiguousAndMissAreLoud();
   testMemTemplatePerPersonLogs();
   testMemTemplateScaffoldedIgnoresRootConfig();
   testMemTemplateUnknownAppFails();
@@ -771,6 +784,8 @@ export async function cmdTest(): Promise<void> {
   await testDigestJsonSubsetOfText();
   await testDigestInvalidSince();
   await testDigestPlanProgress();
+  await testDigestImpactSection();
+  await testDigestImpactNoLog();
   await testDigestBugOpenClose();
   // ponytail: real ~15s execSync timeout regression test — skip in the fast
   // dev loop, keep it for CI/pre-commit (bun fapony.ts test, no SKIP_SLOW).
@@ -1041,6 +1056,7 @@ export async function cmdTest(): Promise<void> {
   testStatsByPlanModeSplit();
   testStatsUsageCountsCacheAsInput();
   testStatsByRegimeSplit();
+  testStatsRegimeTokensSplitNotDuplicated();
   testStatsTokensInByModel();
   testStatsTokensCountSessionOnce();
   testStatsTokensPerPassChargesReworkOnce();
