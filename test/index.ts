@@ -74,6 +74,8 @@ import {
   testDigestBugOpenClose,
   testDigestEmptyRepo,
   testDigestEscInjection,
+  testDigestImpactNoLog,
+  testDigestImpactSection,
   testDigestInvalidSince,
   testDigestJsonSubsetOfText,
   testDigestMalformedLine,
@@ -782,6 +784,8 @@ export async function cmdTest(): Promise<void> {
   await testDigestJsonSubsetOfText();
   await testDigestInvalidSince();
   await testDigestPlanProgress();
+  await testDigestImpactSection();
+  await testDigestImpactNoLog();
   await testDigestBugOpenClose();
   // ponytail: real ~15s execSync timeout regression test — skip in the fast
   // dev loop, keep it for CI/pre-commit (bun fapony.ts test, no SKIP_SLOW).

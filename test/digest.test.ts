@@ -13,6 +13,7 @@ import { addEvent, newRun, openDb } from "../src/db/index.js";
 import { collectDigest } from "../src/digest/collect.js";
 import { renderDigestHtml } from "../src/digest/html.js";
 import { renderDigestText } from "../src/digest/text.js";
+import { recordHintFire } from "../src/hook.js";
 
 // --- env isolation ---
 
@@ -327,6 +328,71 @@ status: active
     }
   });
   console.log("  ✓ plan with progress — checkbox counting works");
+}
+
+export async function testDigestImpactSection(): Promise<void> {
+  await withIsolatedEnv(async () => {
+    const dir = makeWorktree();
+    try {
+      const ts = new Date().toISOString();
+      recordHintFire({
+        ts,
+        worktree: dir,
+        surface: "read",
+        file: "src/big.ts",
+        count: 1,
+      });
+      recordHintFire({
+        ts,
+        worktree: dir,
+        surface: "mem",
+        file: "src/big.ts",
+        count: 2,
+      });
+
+      const data = await collectDigest({ worktree: dir });
+      assert.ok(data.impact, "impact present when a log exists");
+      assert.equal(data.impact!.fired, 2, "counts both rows");
+      assert.equal(data.impact!.by_surface.read, 1);
+      assert.equal(data.impact!.by_surface.mem, 1);
+
+      const text = renderDigestText(data);
+      assert.ok(text.includes("FAPONY IMPACT"), "text section");
+      assert.ok(
+        text.includes("hints fired: 2 (read 1 · debt 0 · mem 1 · commit 0)"),
+        "per-surface counts",
+      );
+      assert.ok(
+        text.includes("not proof the agent acted"),
+        "limitation note is always present",
+      );
+      const src = data.sources.find((s) => s.name === "hint-log");
+      assert.ok(src?.ok, "hint-log source ok when log exists");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ impact section — log counters render + hint-log source ok");
+}
+
+export async function testDigestImpactNoLog(): Promise<void> {
+  await withIsolatedEnv(async () => {
+    const dir = makeWorktree();
+    try {
+      const data = await collectDigest({ worktree: dir });
+      assert.equal(data.impact, null, "no log → null, not zeroed object");
+      const text = renderDigestText(data);
+      assert.ok(
+        text.includes("(no hints recorded)"),
+        "explicit no-data line, not a silent 0",
+      );
+      const src = data.sources.find((s) => s.name === "hint-log");
+      assert.ok(src && !src.ok, "hint-log source !ok without a log");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ impact section — no log reads as no-data, not zero");
 }
 
 export async function testDigestBugOpenClose(): Promise<void> {

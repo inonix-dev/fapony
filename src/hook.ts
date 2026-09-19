@@ -48,6 +48,18 @@ export function worktreeKey(worktree: string): string {
   return worktree.replace(/^\/+/, "").replace(/\//g, "--");
 }
 
+/** Directory holding one hint-fire log file per worktree. */
+function hintLogDir(): string {
+  const base =
+    process.env.FAPONY_STATE_DIR || join(homedir(), ".config", "fapony");
+  return join(base, HINT_LOG_DIR);
+}
+
+/** Absolute path of a worktree's hint-fire log — may not exist. */
+export function hintLogPath(worktree: string): string {
+  return join(hintLogDir(), `${worktreeKey(worktree)}.jsonl`);
+}
+
 export interface HintFireRow {
   ts: string;
   worktree: string;
@@ -63,13 +75,13 @@ export interface HintFireRow {
  */
 export function recordHintFire(row: HintFireRow): void {
   try {
-    const base =
-      process.env.FAPONY_STATE_DIR || join(homedir(), ".config", "fapony");
-    const dir = join(base, HINT_LOG_DIR);
+    const dir = hintLogDir();
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    const key = worktreeKey(row.worktree);
-    const p = join(dir, `${key}.jsonl`);
-    appendFileSync(p, `${JSON.stringify(row)}\n`, "utf-8");
+    appendFileSync(
+      hintLogPath(row.worktree),
+      `${JSON.stringify(row)}\n`,
+      "utf-8",
+    );
   } catch {
     // best-effort — swallow
   }
@@ -91,13 +103,16 @@ export interface HintImpact {
 
 /**
  * Compute hint-fire impact from the log. `since` is an ISO date string;
- * omit to scan all rows. Returns zeroed counts (not null) when there are
- * no rows — the caller decides how to present "no data" vs "zero".
+ * omit to scan all rows. `worktree` scopes to one project's log file (the
+ * `<key>.jsonl` naming makes this a filename comparison) — omit to merge
+ * every worktree. Returns zeroed counts (not null) when there are no rows —
+ * the caller decides how to present "no data" vs "zero".
  */
-export function computeHintImpact(since?: string): HintImpact {
-  const base =
-    process.env.FAPONY_STATE_DIR || join(homedir(), ".config", "fapony");
-  const dir = join(base, HINT_LOG_DIR);
+export function computeHintImpact(
+  since?: string,
+  worktree?: string,
+): HintImpact {
+  const dir = hintLogDir();
   const impact: HintImpact = {
     fired: 0,
     by_surface: { read: 0, debt: 0, mem: 0, commit: 0 },
@@ -107,10 +122,13 @@ export function computeHintImpact(since?: string): HintImpact {
 
   if (!existsSync(dir)) return impact;
 
-  // Read all .jsonl files in the hint-log dir (one per worktree).
+  // Read the worktree's .jsonl when scoped, else every file in the dir.
   let files: string[];
   try {
-    files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
+    const all = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
+    files = worktree
+      ? all.filter((f) => f === `${worktreeKey(worktree)}.jsonl`)
+      : all;
   } catch {
     return impact;
   }
