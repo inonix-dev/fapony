@@ -83,7 +83,7 @@ fapony/
       utils.ts          # shared JSON(C) helpers
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative
-    mcp/                   # MCP server — stdio JSON-RPC, 6 tools
+    mcp/                   # MCP server — stdio JSON-RPC, 4 tools
       index.ts             # MCP entry point + tool registration
       transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn the grading habit without editing their own rules file
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
@@ -92,11 +92,9 @@ fapony/
         collect.ts         # handoff_collect — git facts
         check.ts           # handoff_check — conformance
         verdict.ts         # verdict_submit — 6-grade verdict storage
-        stats.ts           # fapony_stats — KPI query
         usage.ts           # fapony_usage — passive OpenCode session usage
         report.ts          # verification_report — facts + checks + evidence + verdict, one call
         plans.ts           # plan_list — pending plan files joined with run history
-        context.ts         # project_health_context — known patterns by files[]
     test.ts               # self-check ตัวเอง (thin wrapper → test/index.ts)
   test/
     *.test.ts              # one file per src module

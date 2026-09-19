@@ -37,7 +37,7 @@ quietly counted as free.
 </details>
 
 That is day one. Past that, fapony measures what coding agents actually do — rounds, pass/fail,
-cost per grade — through 6 MCP tools any agent can call. If you juggle more than one agent, this is
+cost per grade — through 4 MCP tools any agent can call. If you juggle more than one agent, this is
 the point: the numbers come from the same yardstick everywhere, so "which model earns its keep on
 which kind of task" becomes a data question instead of a vibe. On top of measurement it checks
 claims against git facts: handoff conformance, allowlisted evidence, a 6-grade verdict — with
@@ -121,7 +121,7 @@ fapony usage-scan                         # scan the session logs already on dis
 fapony price-scan                         # fetch the OpenRouter price table → ~/.config/fapony/prices.json
 fapony usage-web                          # dashboard; re-run the scans to refresh
 #    both scans are manual by design — nothing fetches or re-reads session logs behind your back
-#    ask your agent: "Run fapony_stats and fapony_usage — what has it cost me, per model?"
+#    ask your agent: "Run fapony_usage — what has it cost me, per model?"
 
 # 4. Verify (optional, per project) — scaffold the evidence allowlist
 fapony init /path/to/your-worktree
@@ -130,7 +130,7 @@ fapony init /path/to/your-worktree
 
 With `.fapony/evidence.json` in place, any graded run can be replayed as a report. This one is
 a CLI command, not an MCP tool — the schemas cost every session of every client and no skill
-called them (see [The 6 tools](#the-6-tools) below). Grade something first;
+called them (see [The 4 tools](#the-4-tools) below). Grade something first;
 `verdict_submit` is what creates the run:
 
 ```bash
@@ -159,7 +159,7 @@ flowchart LR
     F --> G[git facts + session logs]
     G --> S[stats / usage]
     G --> V[verification report]
-    G --> P[project_health - optional]
+    G --> M[mem log - what was decided here]
 ```
 
 fapony never drives the agent. It sits on two sides of your work that never touch each
@@ -169,7 +169,7 @@ losing a single number.
 
 | | The ledger | The work side |
 |---|---|---|
-| What it is | 6 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
+| What it is | 4 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
 | Needs | an MCP client | nothing — or your own tooling instead |
 | Writes | one graded row per unit of work | nothing |
 | Skip it and | there is no fapony | fapony still answers every question |
@@ -197,26 +197,28 @@ sequenceDiagram
         A->>F: fapony report <run-id>
         F-->>A: git facts + evidence from .fapony/evidence.json, stamped with server_sha
     end
-    A->>F: fapony_stats
-    F->>L: read across every run, client and project
-    L-->>A: model x regime x quality — which model to pay for this shape
+    Note over A,L: `fapony stats` reads it back — CLI, because you ask it, not the agent
 ```
 
 The Stop hook is the only thing fapony does *to* you — once per turn, when a commit ends
 ungraded. It never picks the grade; it cannot see whether the work held up.
 
-### The 6 tools
+### The 4 tools
 
 | Tool | Tier | Purpose |
 |------|------|---------|
 | `plan_list` | discover | Plan files grouped by state — active / blocked / untouched / superseded / trackers — with a progress tally and each one's run history. Not a raw `ls`; see [Plans your agent can answer questions about](#plans-your-agent-can-answer-questions-about) |
-| `fapony_stats` | measure | KPIs across runs: by-model (gates, fail rate, quality, tokens), by-grade, planned vs dove-in, regime x model, per-file risk; `group_by: reason_code\|plan\|file` for top-N slices; `mode: verdict` ranks models by quality vs tokens/pass instead of listing raw counts |
 | `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) with a required `regime` — the task shape the grade applies to |
-| `project_health_context` | recall | Known-patterns block for the files you are about to touch. Useful when a file does have history; measured across real repos, most do not (1-9% of shipped files come back under a `fix:` within two weeks), so it is optional — never a precondition for editing |
-| `mem_find` | recall | Search the project's mem log read-only — decisions/bugs/notes keyed by `files[]`, `text`, `kind` (no default filter), `since`. "What was ever decided about this file?" in one call before editing |
+| `mem_find` | recall | Search the project's mem log read-only — decisions/bugs/notes matched on the row's `files[]` (text substring for rows written without it), `text`, `kind` (no default filter), `since`. "What was ever decided about this file?" in one call before editing |
 
-The handoff/report family is CLI-only — the schemas cost every session of every client and no skill called them. `fapony report <run-id>` prints the full report for a run (facts + handoff conformance + evidence + verdict); `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
+**A tool earns its schema by being called mid-task without being asked.** Everything you invoke
+deliberately is a CLI command instead: the schema is paid as input tokens in every session of
+every client whether or not it is used, while a CLI command costs nothing until it runs. That is
+why the handoff/report family is CLI-only, and why `fapony_stats` and `project_health_context`
+left the MCP surface in 2026-09 (`fapony stats` answers the first; the second had no caller).
+Cutting is not the goal — spending where it pays back is: `mem_find` and `verdict_submit` keep
+their schemas because nobody is going to type them at the right moment. `fapony report <run-id>` prints the full report for a run (facts + handoff conformance + evidence + verdict); `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
 
 Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](https://github.com/kire21b/fapony/blob/main/docs/mcp-handcheck.md).
 
@@ -408,7 +410,7 @@ archived one: [examples/](https://github.com/kire21b/fapony/tree/main/examples).
 
 ```bash
 # Verification & reporting
-fapony mcp                               # MCP server (stdio JSON-RPC — 6 tools)
+fapony mcp                               # MCP server (stdio JSON-RPC — 4 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
@@ -447,7 +449,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 ## Scope
 
 **Supported:**
-- MCP server — 6 tools via stdio JSON-RPC, works with any MCP client
+- MCP server — 4 tools via stdio JSON-RPC, works with any MCP client
 - Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
 - Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
 - Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file

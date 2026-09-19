@@ -42,9 +42,6 @@ import {
   testContextBlockRecentNotes,
   testContextBlockSnapshot,
   testContextBlockWorktreeScope,
-  testContextToolEmptyDb,
-  testContextToolEndToEnd,
-  testContextToolHubEndToEnd,
 } from "./context.test.js";
 import {
   testSeedBrokenConfigIsSkippedLoudly,
@@ -300,6 +297,7 @@ import {
 } from "./mcp/helpers.test.js";
 import {
   testMemFindFiltersAndMatchesFiles,
+  testMemFindMatchesStoredFiles,
   testMemFindReturnsAllKindsNoDefaultFilter,
   testMemFindToolValidation,
   testMemFindTotalVsLimitAndFailShapes,
@@ -335,19 +333,6 @@ import {
   testVerificationReportVerdictFromGateEvent,
   testVerificationReportWorktreeOnlyCreatesNoRun,
 } from "./mcp/report.test.js";
-import {
-  testStatsTextMatchesCli,
-  testStatsToolByGradeSeparation,
-  testStatsToolDefaultsToCurrentWorktree,
-  testStatsToolEmptyDb,
-  testStatsToolGroupByInvalid,
-  testStatsToolGroupByPlan,
-  testStatsToolGroupByPlanWorktreeScoped,
-  testStatsToolGroupByReasonCode,
-  testStatsToolJsonMode,
-  testStatsToolModeVerdict,
-  testStatsToolTextMode,
-} from "./mcp/stats.test.js";
 import {
   testMcpInitialize,
   testMcpNotificationsIgnored,
@@ -608,7 +593,7 @@ export async function cmdTest(): Promise<void> {
   // Isolation: point every passive-usage reader at a path that does not exist,
   // so no test scans the developer's live session logs. Without this, anything
   // that calls getStatsData() pays ~2s per call and can read logs a running
-  // agent is writing mid-test (nondeterministic — see testStatsTextMatchesCli).
+  // agent is writing mid-test (nondeterministic — a live agent writes to them).
   // A test that needs real usage data sets its own fixture path and restores to
   // this pinned value. Same isolation as test/digest.test.ts.
   process.env.FAPONY_OPENCODE_DB = "/nonexistent/fapony-test/opencode.db";
@@ -735,6 +720,7 @@ export async function cmdTest(): Promise<void> {
   testMemoryExplicitConfigWins();
   testMemFindReturnsAllKindsNoDefaultFilter();
   testMemFindFiltersAndMatchesFiles();
+  testMemFindMatchesStoredFiles();
   testMemFindTotalVsLimitAndFailShapes();
   testMemFindToolValidation();
   testClaimMemoryFailGracefully();
@@ -793,8 +779,6 @@ export async function cmdTest(): Promise<void> {
   testContextBlockRecentNotes();
   testContextBlockFilesFilterBeyondTop3();
   testContextBlockLowHistoryStillShowsNotes();
-  testContextToolEndToEnd();
-  testContextToolEmptyDb();
   testComputeModelFit();
   testContextBlockMemDecisions();
   testContextBlockModelFitLine();
@@ -804,7 +788,6 @@ export async function cmdTest(): Promise<void> {
   testContextBlockHubLowHistory();
   testContextBlockHubSilentBelowThreshold();
   testContextBlockHubCapHolds();
-  testContextToolHubEndToEnd();
   testParseDirtyLines();
   testFormatDirtyBlock();
   testShouldProceedAfterDirty();
@@ -887,17 +870,6 @@ export async function cmdTest(): Promise<void> {
   testMcpNotificationsIgnored();
   testMcpUnknownMethod();
   testMcpToolsCallUnknownTool();
-  testStatsToolEmptyDb();
-  testStatsToolJsonMode();
-  testStatsToolTextMode();
-  testStatsTextMatchesCli();
-  testStatsToolByGradeSeparation();
-  testStatsToolDefaultsToCurrentWorktree();
-  testStatsToolGroupByReasonCode();
-  testStatsToolGroupByPlan();
-  testStatsToolGroupByPlanWorktreeScoped();
-  testStatsToolGroupByInvalid();
-  testStatsToolModeVerdict();
   testUsageDefaultRegression();
   testUsageDetailJson();
   testUsageDetailText();

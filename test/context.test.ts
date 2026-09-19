@@ -1,22 +1,12 @@
 // test/context.test.ts — project-health context block (PLAN-project-health-context step 4)
 
 import assert from "node:assert";
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   buildProjectHealthContext,
   computeModelFit,
 } from "../src/context/index.js";
-import {
-  addEvent,
-  incrementRound,
-  newRun,
-  setStatus,
-} from "../src/db/index.js";
-import { toolProjectHealthContext } from "../src/mcp/tools/context.js";
 import { EMPTY_RESULT } from "../src/session/index.js";
-import { getStatsData, type StatsData } from "../src/stats/index.js";
-import { withTempRepo, withTmpDb } from "./helpers.js";
+import type { StatsData } from "../src/stats/index.js";
 
 function statsFixture(): StatsData {
   return {
@@ -118,34 +108,6 @@ export function testContextBlockLineCap(): void {
   console.log("  ✓ context block caps reasons and total lines");
 }
 
-export function testContextToolEndToEnd(): void {
-  withTmpDb((db) => {
-    for (let i = 0; i < 5; i++) {
-      const r = newRun(db, "wt1", `plan-${i}`, null, "abc");
-      addEvent(db, r, "gate", {
-        verdict: "fail",
-        reason_code: "scope_mismatch",
-        note: "",
-        round: 0,
-      });
-      setStatus(db, r, "fixing");
-    }
-    const esc = newRun(db, "wt1", "big-plan", null, "abc");
-    incrementRound(db, esc);
-    incrementRound(db, esc);
-    incrementRound(db, esc);
-
-    const data = getStatsData();
-    const expected = buildProjectHealthContext(data, { worktree: "wt1" });
-    const result = toolProjectHealthContext({ worktree: "wt1" });
-    assert.equal(result.isError, undefined);
-    assert.equal(result.content[0].text, expected);
-    assert.ok(expected.includes("scope_mismatch (5×)"));
-    assert.ok(expected.includes("1 run escalated past the round cap"));
-  });
-  console.log("  ✓ project_health_context tool returns block from real events");
-}
-
 export function testContextBlockRecentNotes(): void {
   const data = statsFixture();
   data.recentVerdictNotes = [
@@ -184,14 +146,6 @@ export function testContextBlockLowHistoryStillShowsNotes(): void {
     "note text surfaces even below minRuns — signal from N=1",
   );
   console.log("  ✓ context block shows notes even below minRuns threshold");
-}
-
-export function testContextToolEmptyDb(): void {
-  withTmpDb(() => {
-    const result = toolProjectHealthContext({});
-    assert.ok(result.content[0].text.includes("Not enough history yet"));
-  });
-  console.log("  ✓ project_health_context on empty db → low-history line");
 }
 
 export function testContextBlockMergesReasonsAcrossWorktrees(): void {
@@ -528,35 +482,4 @@ export function testContextBlockHubCapHolds(): void {
     "beyond top-3 entries truncated (PLAN §5 escape hatch)",
   );
   console.log("  ✓ context block hub line respects the 15-line cap");
-}
-
-export function testContextToolHubEndToEnd(): void {
-  withTempRepo((dir) => {
-    // hub.ts imported by exactly HUB_DEPENDENTS_MIN files (4 imps + leaf);
-    // leaf.ts itself by 0.
-    writeFileSync(join(dir, "hub.ts"), "export const hub = 1;\n");
-    writeFileSync(join(dir, "leaf.ts"), "import { hub } from './hub.js';\n");
-    for (let i = 0; i < 4; i++) {
-      writeFileSync(
-        join(dir, `imp${i}.ts`),
-        "import { hub } from './hub.js';\n",
-      );
-    }
-    const withHub = toolProjectHealthContext({
-      worktree: dir,
-      files: ["hub.ts", "leaf.ts"],
-    });
-    assert.ok(withHub.content[0].text.includes("hub.ts (imported by 5 files"));
-    assert.ok(
-      !withHub.content[0].text.includes("leaf.ts (imported by"),
-      "1-dependent file stays silent — below threshold",
-    );
-
-    // files[] without worktree → no graph → no hub line, no throw.
-    const noWorktree = toolProjectHealthContext({ files: ["hub.ts"] });
-    assert.ok(!noWorktree.content[0].text.includes("Hubs you are touching"));
-  });
-  console.log(
-    "  ✓ project_health_context hub detection end-to-end on a real repo",
-  );
 }

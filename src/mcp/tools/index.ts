@@ -1,12 +1,16 @@
 // src/mcp/tools/index.ts — barrel + TOOLS array
+//
+// Every schema here is paid as input tokens in *every* session of *every*
+// client that connects, whether or not the tool is called. Adding one is
+// buying attention with a standing charge; earning it back means the tool
+// saves more than it costs (see CLAUDE.md "จ่าย token อย่างฉลาด"). Keep
+// descriptions imperative — say what to send, not why it matters.
 
 import { VERDICT_GRADES } from "../../parse.js";
 import { REASON_CODES, REGIME_CODES } from "../types.js";
 
-export { toolProjectHealthContext } from "./context.js";
 export { toolMemFind } from "./mem.js";
 export { toolPlanList } from "./plans.js";
-export { toolFaponyStats } from "./stats.js";
 export { toolPassiveUsage } from "./usage.js";
 export { toolVerdictSubmit } from "./verdict.js";
 
@@ -16,24 +20,18 @@ export const TOOLS = [
   {
     name: "verdict_submit",
     description:
-      "Grade a finished unit of work. " +
-      "WHEN: every unit that ends, including work that went right the first " +
-      "time — this is a grade on the work, not a confession, and a model's " +
-      "record is only worth the number of graded units behind it. " +
-      "If a first attempt was wrong, submit 'fail' the moment you realize it, " +
-      "then a pass-family verdict once the fix is verified. " +
-      "Never leave a run open — one stuck at running/fixing " +
-      "absorbs later unrelated verdicts for that worktree. " +
-      "Without run_id, binds to the latest still-open run for the same " +
-      "worktree+plan (round keeps counting toward review.maxRounds); " +
-      "creates a new run entry only when none is open.",
+      "Grade a finished unit of work — every unit that ends, including work " +
+      "that went right the first time. Submit 'fail' the moment a first " +
+      "attempt turns out wrong, then a pass-family verdict once the fix is " +
+      "verified. Never leave a run open: one stuck at running/fixing absorbs " +
+      "later unrelated verdicts for that worktree. Without run_id, binds to " +
+      "the latest open run for the same worktree+plan, else creates one.",
     inputSchema: {
       type: "object" as const,
       properties: {
         run_id: {
           type: "number",
-          description:
-            "Optional run ID from fapony. If omitted, a new run is created automatically.",
+          description: "Existing run to attach to. Omitted = bind or create.",
         },
         verdict: {
           type: "string",
@@ -44,114 +42,100 @@ export const TOOLS = [
           type: "string",
           enum: [...REASON_CODES],
           description:
-            "Standardized failure reason code. Use 'none' for clean passes (not 'other').",
+            "Failure reason. Clean passes take 'none', never 'other'.",
         },
         regime: {
           type: "string",
           enum: [...REGIME_CODES],
           description:
-            "Task shape: code=new feature/refactor, fix=debugging an existing defect, " +
-            "review=reviewing someone else's work/diff, plan=producing a plan or spec, " +
-            "inquiry=asking questions without editing files, test=writing or editing tests as primary work",
+            "Task shape: code=feature/refactor, fix=debugging a defect, " +
+            "review=reviewing a diff, plan=producing a plan or spec, " +
+            "inquiry=questions without editing files, test=writing tests",
         },
         note: {
           type: "string",
-          description: "Optional note (required when reason_code = 'other')",
+          description:
+            "Standalone note — read months later with no access to this " +
+            "conversation. Required when reason_code = 'other'.",
         },
         worktree: {
           type: "string",
           description:
-            "Absolute path of the repo/worktree (git rev-parse --show-toplevel), used when run_id is omitted. " +
-            "Send it: every fapony query scopes by absolute path, so a bare repo name lands in a bucket no " +
-            'query reads, and omitting it files the verdict under "mcp-external" instead of the project. ' +
-            "Neither case errors.",
+            "Absolute repo path (git rev-parse --show-toplevel). Every query " +
+            "scopes by it, so a bare name or an omission files the verdict " +
+            "where nothing reads it. Neither case errors.",
         },
         plan: {
           type: "string",
-          description:
-            "Optional plan file path for a new run (used only when run_id is omitted)",
+          description: "Plan file path, for a new run",
         },
         session_id: {
           type: "string",
           description:
-            "The client session id — Claude Code/Codex: the transcript .jsonl path; " +
-            "OpenCode/ZCode: the session id. It is what attributes this verdict to a model; " +
-            "without it fapony infers the model from whichever session is running, which is a " +
-            "guess. Send it whenever the client exposes it. Cannot find it → omit, never invent one.",
+            "Client session id (Claude Code/Codex: the transcript .jsonl " +
+            "path; OpenCode/ZCode: the session id) — this is what attributes " +
+            "the verdict to a model. Cannot find it → omit, never invent one.",
         },
         files: {
           type: "array",
           items: { type: "string" },
           description:
-            "Repo-relative paths of the files this work unit touched. Technically " +
-            "optional, but always send them: this is the only input to per-file " +
-            "risk history — a verdict with no files[] teaches the next session " +
-            "nothing about where the risk was.",
+            "Repo-relative paths this unit touched. Optional, but always " +
+            "send them: nothing else records where the work landed.",
         },
       },
       required: ["verdict", "reason_code", "regime"],
     },
   },
   {
-    name: "fapony_stats",
+    name: "mem_find",
     description:
-      "Query accumulated run statistics: pass/stall rates, quality scores, " +
-      "breakdown by model/grade/worktree. Returns StatsData shape. " +
-      "With mode='verdict', returns the model to pay for each regime — the " +
-      "Pareto frontier of quality vs tokens/pass, one line per regime (or the " +
-      "full frontier/dominated/candidates breakdown for one regime). This is " +
-      "the answer the ledger exists to give; call it before assuming which " +
-      "model fits a task. With group_by='reason_code'|'plan'|'file', returns " +
-      "top-N rows for that grouping (recurring failure signatures / per-plan " +
-      "totals / per-file gate-vs-fail counts) instead of the full shape.",
+      "Search the project's mem log (.fapony/.memory/log*.jsonl — decisions, " +
+      "bugs, notes, and bookkeeping kinds alike; NO default kind filter). " +
+      "Read-only. Answer 'what was ever decided about this file?' in one call " +
+      "BEFORE editing: pass files[] (repo-relative). Matches the row's stored " +
+      "files[], falling back to a substring of text/spec/ref for rows written " +
+      "without it — a row that names the file nowhere cannot be found. In a " +
+      "monorepo only the log of the app guessed from the worktree name is " +
+      "read; memDir shows which one. Returns {rows, total, filesFound, " +
+      "skipped, memDir}: memDir:null = no mem at all, not 'nothing matched'.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        mode: {
-          type: "string",
-          enum: ["verdict"],
-          description:
-            "'verdict' ranks models by quality vs tokens/pass instead of listing " +
-            "raw counts — the leaderboard, not the ledger dump. Models below " +
-            "n=5 are shown separately and never picked as the answer; a model " +
-            "tried once at top quality does not get to define the frontier.",
-        },
-        regime: {
-          type: "string",
-          enum: ["code", "fix", "review", "plan", "inquiry", "test"],
-          description:
-            "With mode='verdict', narrows to one regime's full frontier " +
-            "(dominated models + candidates too). Omitted = one summary line " +
-            "per regime.",
-        },
-        json: {
-          type: "boolean",
-          description:
-            "If true, return raw JSON StatsData. If false (default), return human-readable text. Ignored when mode='verdict' (always text).",
-        },
-        group_by: {
-          type: "string",
-          enum: ["reason_code", "plan", "file"],
-          description:
-            "Optional grouping: top-N reason_code counts, per-plan totals, or " +
-            "per-file risk (graded touches vs fails) from real gate events.",
-        },
-        top: {
-          type: "number",
-          description: "Max rows returned with group_by (default 10).",
-        },
         worktree: {
           type: "string",
           description:
-            "Scope a query (verdict mode, group_by, or the default view) to one worktree path (absolute). Defaults to the repo the server is running in.",
+            "Absolute path (git rev-parse --show-toplevel) — required; " +
+            "scope of the mem log to read",
         },
-        all: {
-          type: "boolean",
+        files: {
+          type: "array",
+          items: { type: "string" },
           description:
-            "Ignore the default worktree scope and report every project at once. Off by default: averaging several projects reads as 'in this project' while being no such thing, and it is the largest payload this tool returns.",
+            "Repo-relative paths — matched against the row's files[], else its text",
+        },
+        text: {
+          type: "string",
+          description: "Substring, case-insensitive",
+        },
+        kind: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Filter by kind (decision/note/bug/close/…). Omit = every kind — " +
+            "no default filter",
+        },
+        since: {
+          type: "string",
+          description: "ISO date — only rows at or after this time",
+        },
+        limit: {
+          type: "number",
+          description:
+            "Max rows returned (default 20) — total still counts all matches",
         },
       },
-      required: [],
+      required: ["worktree"],
     },
   },
   {
@@ -192,87 +176,6 @@ export const TOOLS = [
         },
       },
       required: [],
-    },
-  },
-  {
-    name: "project_health_context",
-    description:
-      "Known-patterns block for files[]: recurring fail reasons, escalated runs, " +
-      "and round-1-pass shapes from real run history. Worth a call when you are " +
-      "about to touch a file that has history — a long-lived file, one you have " +
-      "not seen before, or one a previous attempt already failed on. The unit is " +
-      "touched files, not a plan; a bug fix with no plan file still qualifies. " +
-      "Returns nothing when there is no history (most files); short plain-text " +
-      "block, framed as watch-fors, not constraints.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        worktree: {
-          type: "string",
-          description:
-            "Scope to one worktree path (absolute). Global across worktrees when omitted.",
-        },
-        files: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "Filter findings to only those related to these files. " +
-            "Matches against stored gate event files and note text.",
-        },
-      },
-      required: [],
-    },
-  },
-  {
-    name: "mem_find",
-    description:
-      "Search the project's mem log (.fapony/.memory/log*.jsonl — decisions, " +
-      "bugs, notes, and bookkeeping kinds alike; NO default kind filter). " +
-      "Read-only. Answer 'what was ever decided about this file?' in one call " +
-      "BEFORE editing: pass files[] (repo-relative) to match rows mentioning " +
-      "them. mem never stored files[], so match is substring over text/spec/ref " +
-      "— a row that never names the file cannot be found (limit of the data, " +
-      "not the query). In a monorepo only the log of the app guessed from the " +
-      "worktree name is read; memDir in the result shows which one. Returns " +
-      "{rows, total, filesFound, skipped, memDir}: total is the match count " +
-      "before limit, memDir:null means no mem at all (not 'nothing matched').",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        worktree: {
-          type: "string",
-          description:
-            "Absolute path (git rev-parse --show-toplevel) — required; " +
-            "scope of the mem log to read",
-        },
-        files: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "Repo-relative paths — match rows whose text/spec/ref mentions them (substring)",
-        },
-        text: {
-          type: "string",
-          description: "Substring, case-insensitive",
-        },
-        kind: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "Filter by kind (decision/note/bug/close/…). Omit = every kind — " +
-            "no default filter",
-        },
-        since: {
-          type: "string",
-          description: "ISO date — only rows at or after this time",
-        },
-        limit: {
-          type: "number",
-          description:
-            "Max rows returned (default 20) — total still counts all matches",
-        },
-      },
-      required: ["worktree"],
     },
   },
   {

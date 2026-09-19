@@ -39,11 +39,15 @@ export function memFind(args: {
     rows = rows.filter((r) => r.text.toLowerCase().includes(needle));
   }
   if (args.files && args.files.length > 0) {
-    // mem never stored files[] — match is substring over text/spec/ref.
-    // Low recall by nature (spec §5.4): a row that never names the file
-    // cannot be found — a limit of the data, not of the query.
+    // Rows written by `mem add --files` carry files[] — match that first.
+    // Older rows (and any row whose author skipped --files) have none, so the
+    // text/spec/ref substring stays as the fallback: low recall by nature,
+    // a limit of the data rather than of the query (spec §5.4).
     const paths = args.files.map((f) => f.toLowerCase());
     rows = rows.filter((r) => {
+      const stored = (r.files ?? []).map((f) => f.toLowerCase());
+      if (stored.some((f) => paths.some((p) => f === p || f.endsWith(`/${p}`))))
+        return true;
       const hay = `${r.text}\n${r.spec ?? ""}\n${r.ref ?? ""}`.toLowerCase();
       return paths.some((p) => hay.includes(p));
     });

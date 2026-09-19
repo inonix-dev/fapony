@@ -290,6 +290,22 @@ plan/spec templates, และ skill ทั้งหมด
 12. **ฟีเจอร์ที่ไม่มี caller = ลบ** — ทำจริงแล้ว: `fapony map` ไม่มี caller, `plan-seed` §2/§5
     วัดได้ 3/3 ว่าง → −257 บรรทัด · ของฝั่งอำนวยความสะดวกพิสูจน์ตัวเองด้วยการถูกใช้
     ไม่ใช่ด้วยการมีอยู่
+13. **จ่าย token อย่างฉลาด — ไม่ใช่ "ตัดให้น้อยที่สุด" แต่ "จ่ายตรงที่ได้คืน"**
+    ถ้าไม่จ่ายเลย agent ก็ไม่รู้อะไรเลย และ **ข้อมูลที่ agent ไม่รู้ = ข้อมูลที่ไม่มี** ·
+    สิ่งที่ agent รู้ทุกครั้งคือ **input token** ซึ่งถูกกว่า **output token** ที่มันจะเผาไป
+    เดา/อ่านทั้งไฟล์/แก้ผิดแล้วแก้ใหม่ · ฉะนั้นเกณฑ์ไม่ใช่ "ใหญ่ไหม" แต่คือ **"จ่าย input เท่านี้
+    แล้วประหยัด output ได้มากกว่าไหม"** (ของจริง: `review-seed --files` จ่าย ~940 → เลี่ยง ~35k)
+    - **MCP vs CLI ตัดกันตรงนี้:** schema ใน `tools/list` เป็น **ค่าเช่าคงที่** จ่ายทุก session
+      ของทุก client แม้ไม่เรียกสักครั้ง ส่วน CLI เป็น **0 จนกว่าจะรัน** · ฉะนั้น
+      **สิ่งที่คนสั่งให้ทำ = CLI · สิ่งที่ agent ต้องนึกได้เองกลางเทิร์นโดยไม่มีใครสั่ง = MCP** ·
+      `mem_find` กับ `verdict_submit` ผ่านข้อนี้ ส่วน `fapony_stats` ไม่ผ่านเพราะคนเป็นคนถามเสมอ
+    - **เก็บให้พอ ไม่ใช่อธิบายให้เยอะ** — field ที่ต้องเขียนคำอธิบายสามย่อหน้าแปลว่ายังไม่รู้ว่า
+      จะเก็บอะไร · **ถ้าสรุปด้วยประโยคเดียวไม่ได้ แปลว่ายังไม่เข้าใจปัญหาพอ** (รูปเดียวกับกฎ 3)
+    - description เขียนแบบ **สั่ง ไม่ใช่โน้มน้าว** — "ส่งอันนี้มาด้วย" สั้นกว่าและได้ผลเท่ากับ
+      ย่อหน้าที่อธิบายว่าทำไมมันสำคัญ (กฎ 9: การขอไม่ได้ผล สิ่งที่ได้ผลคือ required + enum + reject)
+    - **เกณฑ์ตัดสินตอนจะเพิ่ม tool ใหม่:** agent จะเรียกมันเองกลางงานไหม ถ้าคำตอบคือ
+      "เรียกเมื่อเจ้าของสั่ง" = CLI · ถ้าตอบไม่ได้ = ยังไม่ต้องเพิ่ม
+
 
 ---
 
@@ -407,7 +423,7 @@ fapony analyze [path]                # hub/orphan/cycle/changed-untested — liv
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym]
 fapony plan-seed <name> [--spec] [--scope <path>]...
 # ── ledger (แช่แข็ง — แก้เฉพาะบั๊ก) ──
-fapony mcp                           # MCP server — stdio JSON-RPC, 6 tools
+fapony mcp                           # MCP server — stdio JSON-RPC, 4 tools
 fapony hook-stop                     # Stop hook — block เทิร์นที่มี commit แต่ไม่มี verdict
 fapony hook-read-hint                # annotate การอ่านไฟล์ใหญ่ทั้งไฟล์ ให้ไปใช้ review-seed แทน
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]
@@ -441,45 +457,33 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 
 ## MCP Tools: fapony
 
-`fapony mcp` — stdio JSON-RPC, 6 tools:
+`fapony mcp` — stdio JSON-RPC, **4 tools** (เหลือ 4 เมื่อ 2026-09-19 — ดูกฎ 13):
 
 | Tool | Purpose |
 |------|---------|
-| `mem_find` | **แกน** — ค้น mem log ของโปรเจกต์ read-only: `files[]`/`text`/`kind`/`since`/`limit` — ทุก kind ไม่มี default filter · `memDir:null` = ไม่มี mem (ไม่ใช่ "ไม่เจอ") |
+| `mem_find` | **แกน** — ค้น mem log read-only: match `files[]` ที่เก็บจริงในแถวก่อน แล้ว fallback เป็น substring ของ text/spec/ref สำหรับแถวเก่าที่เขียนตอนยังไม่มี `--files` · ทุก kind ไม่มี default filter · `memDir:null` = ไม่มี mem (ไม่ใช่ "ไม่เจอ") |
 | `fapony_usage` | usage แบบ passive จาก OpenCode / ZCode / Claude Code / Codex (tokens, cost, by-model; `detail:true` เพิ่ม per-step timing) — **ตัวที่ทำงานนาทีแรก** |
-| `plan_list` | plan ที่ยังไม่ ship จัดกลุ่มตาม state (`active`/`blocked`/`untouched`/`superseded`/`trackers`) + progress tally · `format:"markdown"` render master checklist |
 | `verdict_submit` | เก็บ verdict 6 เกรด + `regime` บังคับ — **อ่านเป็นเซนเซอร์ ไม่ใช่คะแนน** (กฎ 8) |
-| `fapony_stats` | KPI: by-model, by-grade, planned vs dove-in, regime × model · `mode: verdict` = Pareto quality vs tokens (`n≥5` gated) — **ตัวเลข quality ข้ามโมเดลมี bias ต่อโมเดล อ่านเฉพาะแกน token** |
-| `project_health_context` | known-patterns keyed by `files[]` — optional, ว่างเป็นส่วนใหญ่ (กฎ 10) |
+| `plan_list` | plan ที่ยังไม่ ship จัดกลุ่มตาม state + progress tally · `format:"markdown"` render master checklist — **มีอายุจำกัด**: chunk 3 ของ PLAN-agent-one-call ทำ `fapony mem kickoff` ที่ตอบคำถามเดียวกัน วันนั้นตัวนี้ออกจาก MCP |
+
+**ที่ถอดออกไปแล้วและห้ามเอากลับ:** `fapony_stats` (CLI `fapony stats` ตอบเหมือนกันทุกอย่าง และ
+description ของมันขายว่า "บอกได้ว่าควรจ่ายให้ model ไหน" ซึ่งขัด Positioning ข้อ 2) ·
+`project_health_context` (caller ศูนย์ — engine `src/context/projectHealth.ts` ยังอยู่ ใช้จาก CLI ได้) ·
+`verification_report` / `handoff_check` / `handoff_collect` (ถอดไปก่อนหน้านี้ด้วยเหตุผลเดียวกัน) ·
+**วัดแล้ว: schema ทั้งชุด 12,019 → 7,249 ตัวอักษร (−40%)**
 
 ดู [docs/mcp-handcheck.md](docs/mcp-handcheck.md) สำหรับ protocol, adapter examples, safety rules
 
 ---
 
-## MCP Tools: code-review-graph
+## code-review-graph — CLI เท่านั้น (MCP ถอดแล้ว 2026-09-19)
 
-**โปรเจกต์นี้มี knowledge graph — ถ้า tool ของ code-review-graph มีใน client ให้เริ่มจากมัน
-เพื่อ narrow scope แล้วค่อยอ่าน source** graph ถูกกว่าการ scan ไฟล์ และให้ structural context
-(callers, dependents, test coverage) ที่ file search ให้ไม่ได้
+เจ้าของถอด MCP server ของ code-review-graph ออกเพราะ **แทบไม่ถูกเรียก** — ค่าเช่า schema
+จ่ายทุก session แต่ค่าที่ได้คืนเกือบศูนย์ (กฎ 13 รูปเดียวกับที่ `fapony_stats` โดน) ·
+**CLI `code-review-graph` ยังอยู่บน PATH และ graph ยังอัปเดตทุก commit ผ่าน pre-commit hook**
 
-**เช็คก่อน — tool ไม่ได้ต่ออยู่เสมอ** graph เองอัปเดตทุก commit ผ่าน pre-commit hook แต่
-*MCP server* เป็น per-client registration · ถ้าไม่มี tool ให้ใช้ CLI `code-review-graph`
-หรืออ่าน source ตรง ๆ — **tool ที่ไม่มีไม่ใช่เหตุผลให้หยุด มันคือเหตุผลให้ข้ามขั้น graph**
-
-| Tool | ใช้เมื่อ |
-| --- | --- |
-| `detect_changes_tool` | review โค้ดที่เปลี่ยน — ได้ risk score |
-| `get_review_context_tool` | ต้องการ source snippet แบบประหยัด token |
-| `get_impact_radius_tool` / `get_affected_flows_tool` | blast radius / execution path ที่กระทบ |
-| `query_graph_tool` | ไล่ callers/callees/imports/tests |
-| `semantic_search_nodes_tool` | หา function/class ด้วยชื่อหรือ keyword |
-| `refactor_tool` | วางแผน rename / หา dead code |
-
-**ยืนยันใน source เสมอ:** narrow ด้วย graph แล้วอ่าน source — ห้ามแก้โค้ดจาก graph output
-อย่างเดียว · graph อ่าน commit ล่าสุด ไม่ใช่ไฟล์ที่กำลังแก้ · **เมื่อ graph กับ source ขัดกัน
-source ชนะ** · ผลลัพธ์ว่างแปลได้ทั้ง "ไม่ได้ index" และ "ไม่เห็นแบบ static" ไม่ใช่ "ไม่มี"
-
-**โหมดประหยัด token (กฎจากเจ้าของ):** เริ่มด้วย `detect_changes` `detail_level="minimal"`,
-`include_source=false`, `max_depth=1` เสมอ → ค่อย `get_review_context` เฉพาะไฟล์ที่ risk สูงจริง
-โดยตั้ง `max_lines_per_file` ต่ำ (~60) → ใช้ `detail_level="standard"` หรือ `include_source=true`
-เฉพาะเมื่อ narrow เหลือไม่กี่ node แล้วเท่านั้น
+ใช้เมื่อ narrow scope ก่อนอ่าน source — ถูกกว่าการ scan ไฟล์ และให้ callers/dependents/tests
+ที่ file search ให้ไม่ได้ · **แต่ยืนยันใน source เสมอ**: graph อ่าน commit ล่าสุด ไม่ใช่ไฟล์ที่
+กำลังแก้ · เมื่อ graph กับ source ขัดกัน **source ชนะ** · ผลว่างแปลได้ทั้ง "ไม่ได้ index" และ
+"ไม่เห็นแบบ static" ไม่ใช่ "ไม่มี" · **ไม่มี graph ไม่ใช่เหตุผลให้หยุด — `fapony review-seed
+--files` ตอบคำถามเดียวกันได้ส่วนใหญ่และเป็นของในบ้าน**

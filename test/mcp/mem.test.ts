@@ -147,3 +147,34 @@ export function testMemFindToolValidation(): void {
   assert.equal(ok.memDir, null);
   console.log("  ✓ mem_find rejects bare worktree names with a clear error");
 }
+
+// Rows written by `mem add --files` carry structured files[]; the query must
+// hit them without the path appearing in the prose (regression 2026-09-19 —
+// the field CLAUDE.md rule 7 calls mandatory was not searchable at all).
+export function testMemFindMatchesStoredFiles(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memfind-files-"));
+  try {
+    writeLog(dir, [
+      {
+        ts: "2026-09-19T00:00:00.000Z",
+        agent: "a",
+        kind: "decision",
+        text: "wrapper lives in the service layer now",
+        files: ["src/deep/zone/handler.ts"],
+      },
+    ]);
+    assert.equal(
+      memFind({ worktree: dir, files: ["src/deep/zone/handler.ts"] }).total,
+      1,
+    );
+    assert.equal(
+      memFind({ worktree: dir, files: ["handler.ts"] }).total,
+      1,
+      "repo-relative suffix still matches",
+    );
+    assert.equal(memFind({ worktree: dir, files: ["src/other.ts"] }).total, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_find matches rows by stored files[]");
+}

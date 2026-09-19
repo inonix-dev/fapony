@@ -99,12 +99,15 @@ export function testVerificationReportToolCount(): void {
     "verification_report",
     "handoff_check",
     "handoff_collect",
+    // dropped 2026-09-19: `fapony stats` covers one from the CLI, the other
+    // had no caller — a schema on tools/list is paid every session by everyone.
+    "fapony_stats",
+    "project_health_context",
   ]) {
     assert.ok(!names.includes(gone), `${gone} is back on the MCP surface`);
   }
-  assert.ok(names.includes("project_health_context"));
-  assert.equal(TOOLS.length, 6);
-  console.log("  ✓ handoff trio stays off the MCP surface (5 tools total)");
+  assert.equal(TOOLS.length, 4);
+  console.log("  ✓ retired tools stay off the MCP surface (4 tools total)");
 }
 
 export function testVerificationReportVerdictFromGateEvent(): void {
