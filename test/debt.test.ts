@@ -150,14 +150,15 @@ export function testDebtTooBroadRegexDropped(): void {
 
 export function testDebtForFileAndMonorepoResolution(): void {
   withTempRepo((repo) => {
-    // monorepo shape: the app's conventions live in apps/<app>/.fapony/ —
-    // the app guess comes from the worktree name (MEM_APP here, wt-<app> in real trees)
-    const prevApp = process.env.MEM_APP;
-    process.env.MEM_APP = "shop";
+    // monorepo shape: conventions live at <app>/.fapony/conventions.json —
+    // the walk-up resolver finds <app>/.fapony/.memory/ from within the app
     try {
-      mkdirSync(join(repo, "apps/shop/.fapony"), { recursive: true });
-      mkdirSync(join(repo, "apps/other/.fapony"), { recursive: true });
+      // Create .fapony/.memory/ with a dummy log at each app level
+      mkdirSync(join(repo, "apps/shop/.fapony/.memory"), { recursive: true });
+      mkdirSync(join(repo, "apps/other/.fapony/.memory"), { recursive: true });
       mkdirSync(join(repo, "apps/shop/src"), { recursive: true });
+      writeFileSync(join(repo, "apps/shop/.fapony/.memory/log.jsonl"), "");
+      writeFileSync(join(repo, "apps/other/.fapony/.memory/log.jsonl"), "");
       writeFileSync(
         join(repo, "apps/shop/.fapony/conventions.json"),
         JSON.stringify({
@@ -181,10 +182,13 @@ export function testDebtForFileAndMonorepoResolution(): void {
         join(repo, "apps/shop/src/money.ts"),
         "export const x = n.toLocaleString();\n",
       );
+      // loadConventions from within the app → walk-up finds apps/shop/.fapony/.memory/
+      const loaded = loadConventions(join(repo, "apps/shop/src"));
+      // debtForFile needs repo root as worktree for relative path calculation
       const hit = debtForFile(
         repo,
         join(repo, "apps/shop/src/money.ts"),
-        loadConventions(repo),
+        loaded,
       );
       assert.deepEqual(
         hit.map((c) => c.id),
@@ -193,16 +197,15 @@ export function testDebtForFileAndMonorepoResolution(): void {
       const miss = debtForFile(
         repo,
         join(repo, "apps/shop/src/other.ts"),
-        loadConventions(repo),
+        loaded,
       );
       assert.equal(miss.length, 0);
     } finally {
-      if (prevApp === undefined) delete process.env.MEM_APP;
-      else process.env.MEM_APP = prevApp;
+      // cleanup not needed — withTempRepo handles it
     }
   });
   console.log(
-    "  ✓ debt → app-level conventions.json wins via the mem-dir resolver",
+    "  ✓ debt → app-level conventions.json wins via walk-up resolver",
   );
 }
 

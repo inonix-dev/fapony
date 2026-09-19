@@ -8,11 +8,10 @@ import { mergeBytesByTool, type UsageDetail } from "../session/index.js";
 import { getServerSha } from "./primitives.js";
 import {
   TOOLS,
-  toolFaponyStats,
+  toolMemAdd,
   toolMemFind,
   toolPassiveUsage,
   toolPlanList,
-  toolProjectHealthContext,
   toolVerdictSubmit,
 } from "./tools/index.js";
 import { errorResult, type ToolResult } from "./types.js";
@@ -154,20 +153,17 @@ function dispatchToolCall(params: {
     case "verdict_submit":
       result = toolVerdictSubmit(args);
       break;
-    case "fapony_stats":
-      result = toolFaponyStats(args);
-      break;
     case "fapony_usage":
       result = toolPassiveUsage(args);
-      break;
-    case "project_health_context":
-      result = toolProjectHealthContext(args);
       break;
     case "plan_list":
       result = toolPlanList(args);
       break;
     case "mem_find":
       result = toolMemFind(args);
+      break;
+    case "mem_add":
+      result = toolMemAdd(args);
       break;
     default:
       return errorResult(`unknown tool: ${params.name}`);

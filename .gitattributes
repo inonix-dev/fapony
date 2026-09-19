@@ -1,0 +1,5 @@
+# Memory logs are append-only: a "conflict" is always both sides' rows, and
+# keeping both is always the right answer. Without this, two people whose
+# `git config user.name` collides (admin / user / owner on a fresh install)
+# hand-resolve a conflict on every pull.
+*.jsonl merge=union

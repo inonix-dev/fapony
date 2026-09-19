@@ -136,7 +136,7 @@ export const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 // ship as a template copied into other repos by `fapony init-mem` and never
 // have real importers here — scanning them produces false wrapper/orphan
 // signals (measured: conventions-seed flagged 8 "wrappers" that were all
-// templates/mem/commands/*.ts helpers matched against unrelated identically-
+// src/mem/commands/*.ts helpers matched against unrelated identically-
 // named calls elsewhere in the repo, e.g. "cmdNow() instead of now(").
 const SKIP_DIRS = new Set([
   "node_modules",

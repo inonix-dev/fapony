@@ -3,6 +3,7 @@
 // fapony — measure/verify MCP server for coding agents
 // CLI dispatch: all logic lives in src/
 
+import { existsSync } from "node:fs";
 import { cmdAnalyze } from "./src/analyze.js";
 import { cmdDebt } from "./src/debt.js";
 import { cmdDigest } from "./src/digest/cli.js";
@@ -12,6 +13,8 @@ import { cmdInitMem } from "./src/init-mem.js";
 import { cmdInstall } from "./src/install.js";
 import { cmdLintBaseline } from "./src/lint-baseline.js";
 import { cmdMcp } from "./src/mcp/transport.js";
+import { cmdMem } from "./src/mem/index.js";
+import { initStore } from "./src/mem/store.js";
 import { cmdPlanSeed } from "./src/plan-seed.js";
 import { cmdPriceScan } from "./src/price/index.js";
 import { cmdReport, cmdReportWeb } from "./src/report/index.js";
@@ -42,6 +45,29 @@ if (cmd === "analyze") {
   await cmdTelemetry(a);
 } else if (cmd === "init-mem") {
   cmdInitMem(a);
+} else if (cmd === "mem") {
+  // `--mem-dir <path>` is global to `mem` and must reach both the writer
+  // (initStore) and the resolver behind `mem where` — parse it once and thread
+  // it through, never strip it and forget.
+  const memDirIdx = a.indexOf("--mem-dir");
+  let overrideMemDir: string | undefined;
+  let rest = a;
+  if (memDirIdx !== -1) {
+    overrideMemDir = a[memDirIdx + 1];
+    if (!overrideMemDir || overrideMemDir.startsWith("--")) {
+      console.error("fapony mem: --mem-dir needs a value");
+      process.exit(1);
+    }
+    if (!existsSync(overrideMemDir)) {
+      console.error(
+        `fapony mem: --mem-dir path does not exist: ${overrideMemDir}`,
+      );
+      process.exit(1);
+    }
+    rest = a.filter((_, i) => i !== memDirIdx && i !== memDirIdx + 1);
+  }
+  initStore(process.cwd(), overrideMemDir);
+  await cmdMem(rest, overrideMemDir);
 } else if (cmd === "init") {
   await cmdInit(a);
 } else if (cmd === "install") {
@@ -75,7 +101,7 @@ if (cmd === "analyze") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|test> [args]",
+    "usage: fapony <setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|test> [args]",
   );
   process.exit(1);
 }

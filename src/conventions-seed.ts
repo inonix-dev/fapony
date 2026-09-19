@@ -190,7 +190,6 @@ async function eslintRows(
   const rows: SeedRow[] = [];
   const configs: string[] = [];
   const skipped: string[] = [];
-  const seen = new Set<string>();
   for (const abs of findConfigFiles(root)) {
     let raw: string;
     try {

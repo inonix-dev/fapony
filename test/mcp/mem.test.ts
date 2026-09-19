@@ -4,12 +4,13 @@ import {
   appendFileSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { memFind, toolMemFind } from "../../src/mcp/tools/mem.js";
+import { memAdd, memFind, toolMemFind } from "../../src/mcp/tools/mem.js";
 import { parseToolResult } from "../../src/mcp/types.js";
 
 function writeLog(dir: string, rows: object[]): string {
@@ -146,4 +147,148 @@ export function testMemFindToolValidation(): void {
   };
   assert.equal(ok.memDir, null);
   console.log("  ✓ mem_find rejects bare worktree names with a clear error");
+}
+
+// Rows written by `mem add --files` carry structured files[]; the query must
+// hit them without the path appearing in the prose (regression 2026-09-19 —
+// the field CLAUDE.md rule 7 calls mandatory was not searchable at all).
+export function testMemFindMatchesStoredFiles(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memfind-files-"));
+  try {
+    writeLog(dir, [
+      {
+        ts: "2026-09-19T00:00:00.000Z",
+        agent: "a",
+        kind: "decision",
+        text: "wrapper lives in the service layer now",
+        files: ["src/deep/zone/handler.ts"],
+      },
+    ]);
+    assert.equal(
+      memFind({ worktree: dir, files: ["src/deep/zone/handler.ts"] }).total,
+      1,
+    );
+    assert.equal(
+      memFind({ worktree: dir, files: ["handler.ts"] }).total,
+      1,
+      "repo-relative suffix still matches",
+    );
+    assert.equal(memFind({ worktree: dir, files: ["src/other.ts"] }).total, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_find matches rows by stored files[]");
+}
+
+// Regression 2026-09-19 (review-pony): mem_add resolved its mem dir by walking
+// up from the worktree while mem_find guesses the app dir — in a monorepo the
+// row landed at the git root, where nothing reads it. Writer and reader must
+// use the same resolver. The walk-up finds apps/<app>/.fapony/.memory/ when
+// called from within that app.
+export function testMemAddWritesWhereMemFindReads(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memadd-"));
+  try {
+    writeLog(join(dir, "apps", "vela"), [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "old",
+        kind: "decision",
+        text: "pre-existing app-scoped row",
+      },
+    ]);
+    const appDir = join(dir, "apps", "vela");
+    const added = memAdd({
+      worktree: appDir,
+      kind: "note",
+      text: "written through the MCP writer",
+      files: ["apps/vela/src/x.ts"],
+    });
+    const found = memFind({ worktree: appDir, files: ["apps/vela/src/x.ts"] });
+    assert.equal(found.total, 1, "mem_add row must be visible to mem_find");
+    assert.equal(found.rows[0].id, added.id);
+    assert.ok(
+      found.memDir?.includes(join("apps", "vela", ".fapony", ".memory")),
+      `row must land in the app-scoped log, got ${found.memDir}`,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_add writes where mem_find reads (app-scoped layout)");
+}
+
+// files is the field the whole feature exists to populate, so the write path
+// must reject a row that omits it — the same required+reject gate as the schema.
+export function testMemAddRejectsMissingFilesAndBadKind(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memadd-"));
+  try {
+    assert.throws(
+      () => memAdd({ worktree: dir, kind: "note", text: "x", files: [] }),
+      /files/,
+    );
+    assert.throws(
+      () => memAdd({ worktree: dir, kind: "nope", text: "x", files: ["a.ts"] }),
+      /kind/,
+    );
+    assert.throws(
+      () => memAdd({ worktree: dir, kind: "hold", text: "x", files: ["a.ts"] }),
+      /spec/,
+      "hold without a spec must be rejected like the CLI",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_add rejects no files / bad kind / hold without spec");
+}
+
+// Regression 2026-09-19: agent/person both fell back to the literal "unknown",
+// and a generic OS account (admin/user/owner — what a fresh install offers) was
+// taken at face value, so two different people wrote one indistinguishable
+// file. With no git identity available at all, the last resort must still be
+// unique per machine.
+export function testMemIdentityNeverCollapsesToUnknown(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memid-"));
+  const saved = {
+    USER: process.env.USER,
+    MEM_AGENT: process.env.MEM_AGENT,
+    g: process.env.GIT_CONFIG_GLOBAL,
+    sys: process.env.GIT_CONFIG_NOSYSTEM,
+  };
+  process.env.USER = "admin";
+  delete process.env.MEM_AGENT;
+  // no git identity anywhere — the machine tag is all that is left
+  const emptyCfg = join(dir, "empty.gitconfig");
+  writeFileSync(emptyCfg, "");
+  process.env.GIT_CONFIG_GLOBAL = emptyCfg;
+  process.env.GIT_CONFIG_NOSYSTEM = "1";
+  try {
+    memAdd({
+      worktree: dir,
+      kind: "note",
+      text: "row written with no usable identity",
+      files: ["src/x.ts"],
+    });
+    const found = memFind({ worktree: dir, files: ["src/x.ts"] });
+    assert.equal(found.total, 1);
+    assert.match(
+      found.rows[0].agent ?? "",
+      /^m-[0-9a-f]{8}$/,
+      "generic $USER must fall through to the machine tag, not be used as-is",
+    );
+    const names = readdirSync(found.memDir as string);
+    assert.ok(
+      names.some((f) => /^log\.m-[0-9a-f]{8}\.jsonl$/.test(f)),
+      `filename must be machine-unique, got ${names.join(", ")}`,
+    );
+  } finally {
+    for (const [k, v] of Object.entries({
+      USER: saved.USER,
+      MEM_AGENT: saved.MEM_AGENT,
+      GIT_CONFIG_GLOBAL: saved.g,
+      GIT_CONFIG_NOSYSTEM: saved.sys,
+    }))
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem identity falls back to a machine tag, never 'unknown'");
 }

@@ -36,8 +36,8 @@ see [README](../README.md#the-5-tools) for what each one answers:
 |------|-------------|
 | `verdict_submit` | Grade a finished unit of work — the one habit the ledger needs |
 | `plan_list` | Pending plan files joined with their run history |
-| `project_health_context` | Recurring fail reasons and past verdict notes, as a text block |
-| `fapony_stats` | Cross-run KPIs (by model, grade, reason code, plan, file) |
+| `mem_find` | The project's mem log, read-only — what was decided about these files |
+| `mem_add` | Append a mem row with files[] required — decision/bug/note/next/hold |
 | `fapony_usage` | Token/cost totals read from client session logs |
 
 ### Two things that bite

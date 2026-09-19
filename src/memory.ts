@@ -3,37 +3,41 @@
 // ponytail: dedupe close-command logic that was copy-pasted in run.ts + stop.ts
 
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
-import {
-  type Config,
-  DEFAULT_MEMORY_ENTRY,
-  memoryEntry,
-  safetyDeny,
-} from "./db/index.js";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { type Config, loadConfig, safetyDeny } from "./db/index.js";
 import { assertSafe } from "./safety.js";
 import { templateArgs } from "./util.js";
 
-/** Default memory commands — matches templates/mem/mem.ts CLI. */
+/** Default memory commands — built into fapony via `fapony mem <sub>`. */
 export const DEFAULT_MEMORY: Config["memory"] = {
-  claim: ["bun", DEFAULT_MEMORY_ENTRY, "claim", "{id}"],
-  close: ["bun", DEFAULT_MEMORY_ENTRY, "close", "{id}", "{msg}"],
-  add: ["bun", DEFAULT_MEMORY_ENTRY, "add", "{kind}", "{text}"],
-  kickoff: ["bun", DEFAULT_MEMORY_ENTRY, "kickoff"],
+  claim: ["fapony", "mem", "claim", "{id}"],
+  close: ["fapony", "mem", "close", "{id}", "{msg}"],
+  add: ["fapony", "mem", "add", "{kind}", "{text}"],
+  kickoff: ["fapony", "mem", "kickoff"],
 };
 
 /**
  * Returns the effective memory config:
  * - explicit config.memory wins if set
- * - fallback: config.memory === null + <memoryEntry> exists → DEFAULT_MEMORY
+ * - fallback: a mem log dir exists (any `.fapony/.memory/`) → DEFAULT_MEMORY
  * - otherwise null (no memory)
+ *
+ * Since PLAN-agent-one-call the code is built into fapony (`fapony mem`), so the
+ * old gate on `.fapony/.memory/mem.ts` no longer means anything — that file is
+ * not scaffolded and `init-mem` deletes it. Gate on the dir the writer needs.
  */
 export function resolveMemoryConfig(
   config: Config,
   worktree: string,
 ): Config["memory"] {
   if (config.memory) return config.memory;
-  if (existsSync(join(worktree, memoryEntry(config)))) return DEFAULT_MEMORY;
+  // A real log is not required for wiring: `fapony init` scaffolds an empty
+  // `.fapony/.memory/` and the writer creates the first log there. Resolution
+  // proper (above) still skips empty dirs, so it cannot pick the wrong one.
+  if (resolveMemDir(worktree) || walkUpForMemDir(worktree, true)) {
+    return DEFAULT_MEMORY;
+  }
   return null;
 }
 
@@ -125,34 +129,167 @@ interface RawMemRow {
 }
 
 /**
- * The app's own .fapony/ dir for a worktree root — the same monorepo guess
- * resolveMemDir makes (templates/mem/store.ts is the mirror). Conventions
- * live beside the mem log (SPEC-convention-debt §2.1), so both resolvers must
- * guess identically; the guess is shared here so they cannot drift.
+ * A directory is a mem dir only when it holds a `log.jsonl` or a named
+ * `log.<person>.jsonl` (rotated `log.YYYY-MM-DD.jsonl` archives count too).
+ * A `.fapony/.memory/` scaffolded empty by `fapony init` is not a candidate —
+ * otherwise it would shadow an ancestor that holds the real log (SPEC §1).
  */
-export function resolveAppFaponyDir(worktree: string): string {
-  const app = process.env.MEM_APP ?? basename(worktree).replace(/^wt-/, "");
-  const appBase = ["apps", "packages", "services"]
-    .map((d) => join(worktree, d, app))
-    .find((p) => existsSync(p));
-  return appBase ? join(appBase, ".fapony") : join(worktree, ".fapony");
+function hasMemLogs(dir: string): boolean {
+  try {
+    return readdirSync(dir).some(
+      (f) => f === "log.jsonl" || /^log\.[A-Za-z0-9._-]+\.jsonl$/.test(f),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Physical path (symlinks resolved) so start and repo root compare like with
+ *  like; falls back to a lexical resolve when the path does not exist yet. */
+function physical(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return resolve(p);
+  }
+}
+
+/** `git rev-parse --show-toplevel` from a directory, or null outside a repo. */
+function gitRootOf(fromDir: string): string | null {
+  try {
+    const root = execSync("git rev-parse --show-toplevel", {
+      cwd: fromDir,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    return root || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Locate the memory dir for a worktree root, mirroring templates/mem/store.ts:
- * in a monorepo the log lives under `<apps|packages|services>/<app>/.fapony/.memory`
- * (app guessed from the dir name, `wt-` prefix stripped; MEM_APP overrides), not
- * at the git root. Single repos fall back to the root-relative layout.
+ * The lexical ancestor of `fromDir` that is the git repo root, or null outside
+ * a repo. `git rev-parse` returns a physical path (it resolves /var → /private/
+ * var on macOS), so the walk compares `physical(dir)` against it and returns the
+ * path in the caller's own lexical form — the returned dir must match what the
+ * caller passed in, not a canonicalized stranger.
  */
-export function resolveMemDir(worktree: string): string | null {
-  const base = resolveAppFaponyDir(worktree);
+function repoRootOf(fromDir: string): string | null {
+  const start = resolve(fromDir);
+  const gitRoot = gitRootOf(start);
+  if (!gitRoot) return null;
+  const physicalRoot = physical(gitRoot);
+  let dir = start;
+  while (true) {
+    if (physical(dir) === physicalRoot) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
 
-  const legacyDir = join(base, "..", ".memory");
-  const newDir = join(base, ".memory");
-
-  if (existsSync(join(legacyDir, "log.jsonl"))) return legacyDir;
-  if (existsSync(newDir)) return newDir;
+/**
+ * Locate the nearest `.fapony/.memory/` by walking up from `fromDir`.
+ *
+ * The walk stops at the git repo root (SPEC §1) — a mem dir in a parent
+ * checkout is never ours. Outside a repo it stops at the filesystem root.
+ * `acceptEmpty` is for the default-wiring check, which only needs the dir the
+ * writer will use (log or not); the resolver itself requires a real log.
+ */
+function walkUpForMemDir(fromDir: string, acceptEmpty: boolean): string | null {
+  const start = resolve(fromDir);
+  const boundary = repoRootOf(start) ?? "/";
+  let dir = start;
+  while (true) {
+    const candidate = join(dir, ".fapony", ".memory");
+    if (existsSync(candidate) && (acceptEmpty || hasMemLogs(candidate))) {
+      return candidate;
+    }
+    if (dir === boundary) break;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
   return null;
+}
+
+export interface MemDirResult {
+  dir: string | null;
+  step: "flag" | "config" | "walk-up" | "repo-root" | "none";
+}
+
+/**
+ * The single resolver: returns the mem dir and which step won.
+ *
+ * Resolution order (SPEC §1):
+ *   1. `--mem-dir <path>` (wins over everything)
+ *   2. `paths.memDir` in the **repo-root** `fapony.config.json` (relative to root)
+ *   3. walk up from cwd for the first `.fapony/.memory/` that holds a real log
+ *   4. `<repo root>/.fapony/.memory/`
+ *
+ * `.memory/` (outside `.fapony/`) and the monorepo app-guess (`wt-<app>`,
+ * `MEM_APP`) are both dead — they are not in the order and never return.
+ */
+function resolveMemDirFrom(
+  fromDir: string,
+  explicitOverride?: string,
+): MemDirResult {
+  // Step 1: --mem-dir flag
+  if (explicitOverride) {
+    return {
+      dir: existsSync(explicitOverride) ? resolve(explicitOverride) : null,
+      step: "flag",
+    };
+  }
+
+  const cwd = resolve(fromDir);
+  const root = repoRootOf(cwd);
+
+  // Step 2: paths.memDir in the repo-root config (FAPONY_CONFIG is not a
+  // path source here — spec §1 pins this to fapony.config.json)
+  const configDir = root ?? cwd;
+  try {
+    const configPath = join(configDir, "fapony.config.json");
+    if (existsSync(configPath)) {
+      const config = loadConfig(configPath);
+      if (config?.paths?.memDir) {
+        const absCfg = isAbsolute(config.paths.memDir)
+          ? config.paths.memDir
+          : join(configDir, config.paths.memDir);
+        if (existsSync(absCfg)) return { dir: absCfg, step: "config" };
+      }
+    }
+  } catch {
+    // no config or unreadable — continue
+  }
+
+  // Step 3: walk up from cwd, only a dir with a real log counts
+  const walked = walkUpForMemDir(cwd, false);
+  if (walked) return { dir: walked, step: "walk-up" };
+
+  // Step 4: <repo root>/.fapony/.memory/ — where a new log is created
+  if (root) {
+    const rootDir = join(root, ".fapony", ".memory");
+    if (existsSync(rootDir)) return { dir: rootDir, step: "repo-root" };
+  }
+
+  return { dir: null, step: "none" };
+}
+
+export function resolveMemDir(
+  worktree?: string,
+  explicitOverride?: string,
+): string | null {
+  return resolveMemDirFrom(worktree ?? process.cwd(), explicitOverride).dir;
+}
+
+/** Resolve and report which step won — for `fapony mem where`. */
+export function whereMemDir(
+  fromDir?: string,
+  explicitOverride?: string,
+): MemDirResult {
+  return resolveMemDirFrom(fromDir ?? process.cwd(), explicitOverride);
 }
 
 /**
@@ -168,11 +305,13 @@ export function readMemLog(
   const dir = resolveMemDir(worktree);
   if (!dir) return { rows: [], skipped: 0, filesFound: 0 };
 
-  // read every log*.jsonl (excluding rotated files log.YYYY-MM-DD.jsonl)
+  // Every log*.jsonl, rotated archives (log.YYYY-MM-DD.jsonl) included. They
+  // used to be excluded, which meant the day a repo crossed the rotate
+  // threshold mem_find silently forgot everything already closed — the rows
+  // most worth recalling. Rotate exists to keep the live file small, not to
+  // decide what is still remembered.
   const isLogFile = (f: string): boolean =>
-    f === "log.jsonl" ||
-    (/^log\.[A-Za-z0-9._-]+\.jsonl$/.test(f) &&
-      !/^log\.\d{4}-\d{2}-\d{2}\.jsonl$/.test(f));
+    f === "log.jsonl" || /^log\.[A-Za-z0-9._-]+\.jsonl$/.test(f);
 
   let files: string[];
   try {

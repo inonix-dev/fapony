@@ -1,13 +1,20 @@
-// src/mcp/tools/mem.ts — mem_find: read-only search over the project's mem log
+// src/mcp/tools/mem.ts — mem_find (read) + mem_add (write)
 //
-// "writable ≠ readable back" — the write side works from the CLI with no MCP
-// (vela: 2,920 rows / 49 days); what was missing is "which rows are about the
-// files I am about to touch". Read-only over readMemLog (PLAN-mem-mcp chunk 2).
-//
-// No default kind filter — chunk 0 chose A: every kind is still live, so
-// filtering `synced`/`next`/`claim` by default would be enforcing prose that
-// was already retracted.
+// "writable ≠ readable back" — the write side was CLI-only until now; what was
+// missing is letting an agent append a mem row mid-session without spawning a
+// shell.  files[] is required on the write side: a row that does not name the
+// file is unfindable when you touch that file (fill rate 26% CLI-flag vs 88%
+// MCP-required — schema wins over prose every time, see CLAUDE.md rule 9).
 
+import { openRows } from "../../mem/selectors.js";
+import {
+  initStore,
+  KINDS,
+  nextId,
+  put,
+  rows,
+  type WorkKind,
+} from "../../mem/store.js";
 import { type MemRow, readMemLog, resolveMemDir } from "../../memory.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
 
@@ -39,11 +46,15 @@ export function memFind(args: {
     rows = rows.filter((r) => r.text.toLowerCase().includes(needle));
   }
   if (args.files && args.files.length > 0) {
-    // mem never stored files[] — match is substring over text/spec/ref.
-    // Low recall by nature (spec §5.4): a row that never names the file
-    // cannot be found — a limit of the data, not of the query.
+    // Rows written by `mem add --files` carry files[] — match that first.
+    // Older rows (and any row whose author skipped --files) have none, so the
+    // text/spec/ref substring stays as the fallback: low recall by nature,
+    // a limit of the data rather than of the query (spec §5.4).
     const paths = args.files.map((f) => f.toLowerCase());
     rows = rows.filter((r) => {
+      const stored = (r.files ?? []).map((f) => f.toLowerCase());
+      if (stored.some((f) => paths.some((p) => f === p || f.endsWith(`/${p}`))))
+        return true;
       const hay = `${r.text}\n${r.spec ?? ""}\n${r.ref ?? ""}`.toLowerCase();
       return paths.some((p) => hay.includes(p));
     });
@@ -92,4 +103,135 @@ export function toolMemFind(args: Record<string, unknown>): ToolResult {
   const limit = typeof args.limit === "number" ? args.limit : undefined;
 
   return jsonResult(memFind({ worktree, files, text, kind, since, limit }));
+}
+
+// --- mem_add ---
+
+export interface MemAddResult {
+  id: string;
+  kind: string;
+  text: string;
+  files: string[];
+  spec?: string;
+  ts: string;
+}
+
+const CAP_NEXT = 15;
+const CAP_HOLD = 10;
+
+export function memAdd(args: {
+  worktree: string;
+  kind: string;
+  text: string;
+  files: string[];
+  spec?: string;
+}): MemAddResult {
+  if (!KINDS.includes(args.kind as WorkKind)) {
+    throw new Error(
+      `kind must be one of ${KINDS.join("|")} — got "${args.kind}"`,
+    );
+  }
+  if (args.files.length === 0) {
+    throw new Error("files must contain at least one path");
+  }
+  if (!args.text.trim()) {
+    throw new Error("text is required and must not be empty");
+  }
+  // CLI cmdAdd rejects hold without a spec (write.ts) — keep the two writers
+  // in lockstep: without a spec a hold can never be resolved by rotate.
+  if (args.kind === "hold" && !args.spec) {
+    throw new Error("hold requires a spec — pass spec: <path/to/SPEC.md>");
+  }
+
+  initStore(args.worktree);
+  const all = rows();
+
+  // Cap check — matches CLI cmdAdd behaviour
+  if (args.kind === "next" && !process.env.MEM_FORCE) {
+    const openNext = openRows(all).filter((r) => r.kind === "next").length;
+    if (openNext >= CAP_NEXT) {
+      throw new Error(
+        `open next ${openNext}/${CAP_NEXT} is full — close an old one first`,
+      );
+    }
+  }
+  if (args.kind === "hold" && !process.env.MEM_FORCE) {
+    const openHold = openRows(all).filter((r) => r.kind === "hold").length;
+    if (openHold >= CAP_HOLD) {
+      throw new Error(
+        `open hold ${openHold}/${CAP_HOLD} is full — close/release an old one first`,
+      );
+    }
+  }
+
+  const id = nextId(all);
+  const ts = new Date().toISOString();
+  put({
+    id,
+    kind: args.kind as WorkKind,
+    text: args.text,
+    spec: args.spec,
+    files: args.files,
+  });
+
+  return {
+    id,
+    kind: args.kind,
+    text: args.text,
+    files: args.files,
+    spec: args.spec,
+    ts,
+  };
+}
+
+export function toolMemAdd(args: Record<string, unknown>): ToolResult {
+  const worktree =
+    typeof args.worktree === "string" ? args.worktree.trim() : "";
+  if (!worktree) {
+    return errorResult(
+      "worktree is required and must be an absolute path " +
+        "(git rev-parse --show-toplevel)",
+    );
+  }
+  if (!worktree.startsWith("/")) {
+    return errorResult(`worktree must be an absolute path, got: ${worktree}`);
+  }
+
+  const kind = typeof args.kind === "string" ? args.kind.trim() : "";
+  if (!kind) {
+    return errorResult(`kind is required — one of ${KINDS.join("|")}`);
+  }
+  if (!KINDS.includes(kind as WorkKind)) {
+    return errorResult(
+      `kind must be one of ${KINDS.join("|")} — got "${kind}"`,
+    );
+  }
+
+  const text = typeof args.text === "string" ? args.text.trim() : "";
+  if (!text) {
+    return errorResult("text is required and must not be empty");
+  }
+
+  const files = Array.isArray(args.files)
+    ? args.files
+        .filter((f): f is string => typeof f === "string" && f.length > 0)
+        .map((f) => f.trim().replace(/^\.\//, ""))
+    : [];
+  if (files.length === 0) {
+    return errorResult(
+      "files is required and must contain at least one repo-relative path",
+    );
+  }
+
+  const spec =
+    typeof args.spec === "string" && args.spec.trim().endsWith(".md")
+      ? args.spec.trim()
+      : undefined;
+
+  try {
+    const result = memAdd({ worktree, kind, text, files, spec });
+    return jsonResult(result);
+  } catch (e) {
+    return errorResult(e instanceof Error ? e.message : String(e));
+  }
 }

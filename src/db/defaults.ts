@@ -11,7 +11,7 @@ export const DEFAULT_SPEC_DIR = ".fapony/spec";
 // Archive sits beside plan/, not inside it, so archiving never changes a file's
 // depth and its relative links survive the move untouched.
 export const DEFAULT_DONE_DIR = ".fapony/done";
-export const DEFAULT_MEMORY_ENTRY = ".fapony/.memory/mem.ts";
+export const DEFAULT_MEM_DIR = ".fapony/.memory";
 export const DEFAULT_EVIDENCE_FILE = ".fapony/evidence.json";
 
 export const DEFAULT_CONFIG: Config = {

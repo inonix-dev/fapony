@@ -3,7 +3,13 @@
 // state.db stays in ~/.config/fapony/ by design (security boundary — see db.ts),
 // never inside the worktree where agents have full write access.
 
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { createInterface } from "node:readline";
 import { seedConventionsFile } from "./conventions-seed.js";
@@ -11,11 +17,10 @@ import {
   type Config,
   doneDir,
   evidenceFile,
-  memoryEntry,
+  memoryDir,
   planDir,
   specDir,
 } from "./db/index.js";
-import { copyDir } from "./init-mem.js";
 import { isAffirmative } from "./util.js";
 
 const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
@@ -59,22 +64,22 @@ const EVIDENCE_JSON = `{
 // Not in SERVER_INSTRUCTIONS either: that reaches every MCP session of every user,
 // and most of them never ran `fapony init` — it would tell them to run a command
 // that does not exist.
-const RULES_SNIPPET = (
-  memEntry: string,
-) => `## Memory: ${dirname(memEntry)}/log.<you>.jsonl (append-only)
+const RULES_SNIPPET =
+  () => `## Memory: .fapony/.memory/log.<you>.jsonl (append-only)
 
 The log is this project's shared brain — it lives in git, so anyone who clones the
 repo gets every decision, bug and note with it. The filename comes from
-\`git config user.name\`, one file per person, so there is nothing to merge.
+\`git config user.name\` — one file per person, and \`*.jsonl merge=union\` in
+.gitattributes keeps both sides when two people end up sharing a name anyway.
 
 Log as you work — do not wait to be asked. Nothing writes it for you:
 
-    bun ${memEntry} kickoff <plan.md>      # start a session with this
-    bun ${memEntry} add decision "what was locked, and why" --files src/x.ts
-    bun ${memEntry} add bug "what is broken" --files src/x.ts
-    bun ${memEntry} add note "state the next session needs" --files src/x.ts
-    bun ${memEntry} close <id> "fixed in <sha>"
-    bun ${memEntry} find "<text>"
+    fapony mem kickoff <plan.md>      # start a session with this
+    fapony mem add decision "what was locked, and why" --files src/x.ts
+    fapony mem add bug "what is broken" --files src/x.ts
+    fapony mem add note "state the next session needs" --files src/x.ts
+    fapony mem close <id> "fixed in <sha>"
+    fapony mem find "<text>"
 
 Write each entry standalone — it is read months later with no chat to refer to.
 --files is required: rows that name no file cannot be recalled when that file is
@@ -90,11 +95,11 @@ Finish a chunk, before starting the next:
 1. Tick its checkbox + stamp the TL;DR in the plan file
 2. Commit — separate from other chunks
 3. \`verdict_submit\` (fapony MCP), grading what actually happened
-4. \`bun ${memEntry} add note "what the next chunk needs" --files f1,f2 <path/to/PLAN-x.md>\`
+4. \`fapony mem add note "what the next chunk needs" --files f1,f2 <path/to/PLAN-x.md>\`
    — use the same plan path every time
 5. Stop. Do not continue to the next chunk in the same session unless told to.
 
-Next chunk, new session — open with \`bun ${memEntry} kickoff <path/to/PLAN-x.md>\` instead
+Next chunk, new session — open with \`fapony mem kickoff <path/to/PLAN-x.md>\` instead
 of carrying the old transcript forward. kickoff already filters to the rows for that plan,
 and takes just the filename (\`kickoff PLAN-x.md\`) when you do not want to type the path.`;
 
@@ -111,6 +116,22 @@ export function initProject(targetPath: string, config?: Config): void {
   }
   mkdirSync(faponyDir, { recursive: true });
   writeFileSync(join(faponyDir, "README"), FAPONY_README);
+
+  // --- .gitattributes: union-merge the append-only logs ---
+  //
+  // Every row is one person's append, so both sides of a "conflict" are always
+  // right. Without the line, two people whose git user.name collides (admin /
+  // user / owner — what a fresh OS install offers) resolve a conflict by hand
+  // on every pull. Appended, never rewritten: the file is the repo's, not ours.
+  const attrs = join(targetPath, ".gitattributes");
+  const attrsBody = existsSync(attrs) ? readFileSync(attrs, "utf-8") : "";
+  if (!/^\s*\*\.jsonl\s+merge=union\s*$/m.test(attrsBody)) {
+    appendFileSync(
+      attrs,
+      `${attrsBody && !attrsBody.endsWith("\n") ? "\n" : ""}# append-only memory logs: keep both sides, never hand-resolve\n*.jsonl merge=union\n`,
+    );
+    console.log(`  + ${attrs} — *.jsonl merge=union`);
+  }
 
   // --- evidence.json (verification_report allowlist — see src/mcp/evidence.ts) ---
   const evidencePath = join(targetPath, evidenceFile(config));
@@ -141,19 +162,16 @@ export function initProject(targetPath: string, config?: Config): void {
   }
   mkdirSync(specDirAbs, { recursive: true });
 
-  // --- .memory/ (from template) ---
-  const memEntry = memoryEntry(config); // e.g. .fapony/.memory/mem.ts
-  const memoryDir = join(
-    targetPath,
-    memEntry.split("/").slice(0, -1).join("/"),
-  );
-  if (existsSync(join(targetPath, memEntry))) {
-    throw new Error(
-      `${join(targetPath, memEntry)} already exists — delete it first if you want a fresh copy.`,
+  // --- .fapony/.memory/ (empty dir — mem commands are built into fapony now) ---
+  const memoryDirPath = join(targetPath, memoryDir(config));
+  if (existsSync(memoryDirPath)) {
+    console.log(`  ${relative(targetPath, memoryDirPath)}/ — already exists`);
+  } else {
+    mkdirSync(memoryDirPath, { recursive: true });
+    console.log(
+      `  ${relative(targetPath, memoryDirPath)}/ — mem commands are built into fapony (fapony mem ...)`,
     );
   }
-  const templateDir = join(import.meta.dir, "..", "templates", "mem");
-  const files = copyDir(templateDir, memoryDir);
 
   console.log(`scaffolded ${targetPath}/`);
   console.log(
@@ -166,13 +184,13 @@ export function initProject(targetPath: string, config?: Config): void {
     `  ${evidenceFile(config)}    — allowlist for 'fapony report' (edit the cmds!)`,
   );
   console.log(
-    `  ${relative(targetPath, memoryDir)}/ — ${files.length} files from template`,
+    `  ${relative(targetPath, memoryDirPath)}/ — mem commands are built into fapony (fapony mem ...)`,
   );
   console.log(`\nNext: add "${targetPath}" to fapony.config.json worktrees`);
   console.log(
     `\nThen paste this into your agent-rules file (CLAUDE.md / AGENTS.md / opencode.json\ninstructions) — the memory log only fills up if the rules your agent already reads\ntell it to write:\n`,
   );
-  console.log(RULES_SNIPPET(memEntry));
+  console.log(RULES_SNIPPET());
 }
 
 const AGENT_RULE_FILES = ["CLAUDE.md", "AGENTS.md"];
@@ -228,8 +246,7 @@ export async function cmdInit(args: string[]): Promise<void> {
   );
   if (!isAffirmative(answer)) return;
 
-  const memEntry = memoryEntry();
-  const snippet = `\n\n${RULES_SNIPPET(memEntry)}\n`;
+  const snippet = `\n\n${RULES_SNIPPET()}\n`;
   for (const f of found) {
     appendFileSync(f, snippet);
     console.log(`  appended to ${relative(targetPath, f)}`);

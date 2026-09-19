@@ -205,10 +205,17 @@ export const cmdHook = async () => {
       ? ((j as { tool_input?: { file_path?: string } }).tool_input?.file_path ??
         "")
       : "";
-  const { app } = await import("../store.js");
-  const rel = f.startsWith(root) ? f.slice(root.length + 1) : f;
-  if (new RegExp(`^apps/${app}/(plan/(done/)?)?PLAN.*\\.md$`).test(rel)) {
-    put({ kind: "synced", spec: rel });
-    console.log(`synced ${rel}`);
+  const { planDir, doneDir } = await import("../store.js");
+  const relF = f.startsWith(root) ? f.slice(root.length + 1) : f;
+  // match PLAN*.md under this project's plan/ or done/
+  const planRe = new RegExp(
+    `^${planDir.replace(`${root}/`, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/.*PLAN.*\\.md$`,
+  );
+  const doneRe = new RegExp(
+    `^${doneDir.replace(`${root}/`, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/.*PLAN.*\\.md$`,
+  );
+  if (planRe.test(relF) || doneRe.test(relF)) {
+    put({ kind: "synced", spec: relF });
+    console.log(`synced ${relF}`);
   }
 };

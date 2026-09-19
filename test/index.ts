@@ -42,9 +42,6 @@ import {
   testContextBlockRecentNotes,
   testContextBlockSnapshot,
   testContextBlockWorktreeScope,
-  testContextToolEmptyDb,
-  testContextToolEndToEnd,
-  testContextToolHubEndToEnd,
 } from "./context.test.js";
 import {
   testSeedBrokenConfigIsSkippedLoudly,
@@ -299,10 +296,14 @@ import {
   testRegimeCodesAreLocked,
 } from "./mcp/helpers.test.js";
 import {
+  testMemAddRejectsMissingFilesAndBadKind,
+  testMemAddWritesWhereMemFindReads,
   testMemFindFiltersAndMatchesFiles,
+  testMemFindMatchesStoredFiles,
   testMemFindReturnsAllKindsNoDefaultFilter,
   testMemFindToolValidation,
   testMemFindTotalVsLimitAndFailShapes,
+  testMemIdentityNeverCollapsesToUnknown,
 } from "./mcp/mem.test.js";
 import {
   testPlanListGroupsByFrontmatter,
@@ -335,19 +336,6 @@ import {
   testVerificationReportVerdictFromGateEvent,
   testVerificationReportWorktreeOnlyCreatesNoRun,
 } from "./mcp/report.test.js";
-import {
-  testStatsTextMatchesCli,
-  testStatsToolByGradeSeparation,
-  testStatsToolDefaultsToCurrentWorktree,
-  testStatsToolEmptyDb,
-  testStatsToolGroupByInvalid,
-  testStatsToolGroupByPlan,
-  testStatsToolGroupByPlanWorktreeScoped,
-  testStatsToolGroupByReasonCode,
-  testStatsToolJsonMode,
-  testStatsToolModeVerdict,
-  testStatsToolTextMode,
-} from "./mcp/stats.test.js";
 import {
   testMcpInitialize,
   testMcpNotificationsIgnored,
@@ -385,31 +373,17 @@ import {
 import {
   testClaimMemoryFailGracefully,
   testClaimMemoryTimeout,
-  testMemoryDefaultWiringNoFile,
-  testMemoryDefaultWiringWithFile,
+  testMemDirConfigIsRepoRootRelative,
+  testMemDirOverrideWinsAndRefusesMissing,
+  testMemDirSkipsEmptyCandidate,
+  testMemDirWalkStopsAtRepoRoot,
+  testMemoryDefaultWiringNoDir,
+  testMemoryDefaultWiringWithDir,
   testMemoryExplicitConfigWins,
   testMemoryReadRecentDecisions,
   testMemoryReadRecentDecisionsMonorepo,
+  testReadMemLogIncludesRotatedArchives,
 } from "./memory.test.js";
-import {
-  testMemTemplateAddRejectsMissingFiles,
-  testMemTemplateCentralCopyMovedIntoFapony,
-  testMemTemplateConfigStillWins,
-  testMemTemplateInitAtMonorepoRoot,
-  testMemTemplateKickoffAmbiguousAndMissAreLoud,
-  testMemTemplateKickoffResolvesSpecByFilename,
-  testMemTemplateMonorepoLegacyLog,
-  testMemTemplateMonorepoMigratedApp,
-  testMemTemplateMonorepoUnmigratedApp,
-  testMemTemplatePackagesApp,
-  testMemTemplatePerPersonLogs,
-  testMemTemplateScaffolded,
-  testMemTemplateScaffoldedIgnoresRootConfig,
-  testMemTemplateSingleRepoCentralDefaultsToFapony,
-  testMemTemplateSingleRepoLegacyLog,
-  testMemTemplateSingleRepoWithPackagesDir,
-  testMemTemplateUnknownAppFails,
-} from "./memory-template.test.js";
 import {
   testFixtureGuard,
   testParseGateEventData,
@@ -627,7 +601,7 @@ export async function cmdTest(): Promise<void> {
   // Isolation: point every passive-usage reader at a path that does not exist,
   // so no test scans the developer's live session logs. Without this, anything
   // that calls getStatsData() pays ~2s per call and can read logs a running
-  // agent is writing mid-test (nondeterministic — see testStatsTextMatchesCli).
+  // agent is writing mid-test (nondeterministic — a live agent writes to them).
   // A test that needs real usage data sets its own fixture path and restores to
   // this pinned value. Same isolation as test/digest.test.ts.
   process.env.FAPONY_OPENCODE_DB = "/nonexistent/fapony-test/opencode.db";
@@ -749,33 +723,25 @@ export async function cmdTest(): Promise<void> {
   testInitIdempotent();
   testInitNoArgs();
   testInitSnippetPathMatchesScaffold();
-  testMemoryDefaultWiringWithFile();
-  testMemoryDefaultWiringNoFile();
+  testMemoryDefaultWiringWithDir();
+  testMemoryDefaultWiringNoDir();
   testMemoryExplicitConfigWins();
-  testMemTemplateMonorepoMigratedApp();
-  testMemTemplateMonorepoLegacyLog();
-  testMemTemplateSingleRepoCentralDefaultsToFapony();
-  testMemTemplateSingleRepoLegacyLog();
-  testMemTemplatePackagesApp();
-  testMemTemplateSingleRepoWithPackagesDir();
-  testMemTemplateMonorepoUnmigratedApp();
-  testMemTemplateConfigStillWins();
-  testMemTemplateCentralCopyMovedIntoFapony();
-  testMemTemplateScaffolded();
-  testMemTemplateInitAtMonorepoRoot();
-  testMemTemplateAddRejectsMissingFiles();
-  testMemTemplateKickoffResolvesSpecByFilename();
-  testMemTemplateKickoffAmbiguousAndMissAreLoud();
-  testMemTemplatePerPersonLogs();
-  testMemTemplateScaffoldedIgnoresRootConfig();
-  testMemTemplateUnknownAppFails();
+  testMemAddWritesWhereMemFindReads();
+  testMemAddRejectsMissingFilesAndBadKind();
+  testMemIdentityNeverCollapsesToUnknown();
   testMemFindReturnsAllKindsNoDefaultFilter();
   testMemFindFiltersAndMatchesFiles();
+  testMemFindMatchesStoredFiles();
   testMemFindTotalVsLimitAndFailShapes();
   testMemFindToolValidation();
   testClaimMemoryFailGracefully();
   testMemoryReadRecentDecisions();
   testMemoryReadRecentDecisionsMonorepo();
+  testReadMemLogIncludesRotatedArchives();
+  testMemDirWalkStopsAtRepoRoot();
+  testMemDirSkipsEmptyCandidate();
+  testMemDirConfigIsRepoRootRelative();
+  testMemDirOverrideWinsAndRefusesMissing();
   // Digest tests
   await testDigestEmptyRepo();
   await testDigestSinceFilter();
@@ -829,8 +795,6 @@ export async function cmdTest(): Promise<void> {
   testContextBlockRecentNotes();
   testContextBlockFilesFilterBeyondTop3();
   testContextBlockLowHistoryStillShowsNotes();
-  testContextToolEndToEnd();
-  testContextToolEmptyDb();
   testComputeModelFit();
   testContextBlockMemDecisions();
   testContextBlockModelFitLine();
@@ -840,7 +804,6 @@ export async function cmdTest(): Promise<void> {
   testContextBlockHubLowHistory();
   testContextBlockHubSilentBelowThreshold();
   testContextBlockHubCapHolds();
-  testContextToolHubEndToEnd();
   testParseDirtyLines();
   testFormatDirtyBlock();
   testShouldProceedAfterDirty();
@@ -923,17 +886,6 @@ export async function cmdTest(): Promise<void> {
   testMcpNotificationsIgnored();
   testMcpUnknownMethod();
   testMcpToolsCallUnknownTool();
-  testStatsToolEmptyDb();
-  testStatsToolJsonMode();
-  testStatsToolTextMode();
-  testStatsTextMatchesCli();
-  testStatsToolByGradeSeparation();
-  testStatsToolDefaultsToCurrentWorktree();
-  testStatsToolGroupByReasonCode();
-  testStatsToolGroupByPlan();
-  testStatsToolGroupByPlanWorktreeScoped();
-  testStatsToolGroupByInvalid();
-  testStatsToolModeVerdict();
   testUsageDefaultRegression();
   testUsageDetailJson();
   testUsageDetailText();

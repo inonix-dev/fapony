@@ -30,6 +30,7 @@ type Front = {
   blocks: string[];
   superseded_by?: string;
   spec?: string;
+  priority?: string;
 };
 
 type Entry = {
@@ -43,6 +44,7 @@ type Entry = {
   blocks?: string[];
   superseded_by?: string;
   spec?: string;
+  priority?: string;
 };
 
 const EMPTY: Front = { blocks: [] };
@@ -68,6 +70,7 @@ export function parseFront(text: string): Front {
     else if (kv[1] === "status") front.status = value;
     else if (kv[1] === "blocked_by") front.blocked_by = value;
     else if (kv[1] === "superseded_by") front.superseded_by = value;
+    else if (kv[1] === "priority") front.priority = value;
   }
   return front;
 }
@@ -222,6 +225,7 @@ export function toolPlanList(args: Record<string, unknown>): ToolResult {
     if (front.blocked_by) entry.blocked_by = front.blocked_by;
     if (front.blocks.length) entry.blocks = front.blocks;
     if (front.superseded_by) entry.superseded_by = front.superseded_by;
+    if (front.priority) entry.priority = front.priority;
 
     // A tracker is never a unit of work, so it never "finishes" and must not
     // sit in the backlog shaming everyone — that's why done/ never moved.
@@ -233,10 +237,10 @@ export function toolPlanList(args: Record<string, unknown>): ToolResult {
     else untouched.push(entry);
   }
 
-  // Ordering falls out of the blocks edges: what unblocks the most goes first.
-  // No priority number to argue with later.
+  // Ordering: priority: high first → unblocks the most → alphabetical
   active.sort(
     (a, b) =>
+      (b.priority === "high" ? 1 : 0) - (a.priority === "high" ? 1 : 0) ||
       (b.blocks?.length ?? 0) - (a.blocks?.length ?? 0) ||
       a.file.localeCompare(b.file),
   );

@@ -80,15 +80,14 @@ You are about to move a PLAN that has been shipped to the archive.
      `missing_test` / `scope_mismatch` / `unsafe_command` / `spec_gap` / `incomplete`, and
      `other` (with a `note`, which it requires) only when a real finding fits none of them
    - `note`: **omit it on a clean ship.** A verdict with no note still counts toward the plan
-     history future drafts read ("passed round 1 before"), but only notes reach the three
-     free-text slots `project_health_context` shows — so "clean ship" evicts a note that would
-     have taught the next session something. Write one only when this plan hit something a
+     history future drafts read ("passed round 1 before"), but only notes carry prose forward — so
+     "clean ship" evicts a note that would have taught the next session something. Write one only when this plan hit something a
      reader could not get from the diff: what the symptom looked like, where the cause actually
      was, and the rule that follows. Standalone prose — it is read months later with no access
      to this conversation.
    - `worktree`: **absolute path** to this repo/worktree (`git rev-parse --show-toplevel`) —
-     every other fapony tool (`fapony_usage`, `fapony_stats`, `project_health_context`)
-     scopes by absolute path too; a bare repo name won't match those queries
+     every other fapony tool and query scopes by
+     absolute path too; a bare repo name won't match them
    - `plan`: the archived plan's path (post-move, e.g. `.fapony/done/PLAN-foo.md`)
    - `files`: repo-relative paths this plan touched (`git diff --name-only <base>..HEAD`) —
      the only input to per-file risk history; without it the verdict says something happened
