@@ -391,6 +391,44 @@ function memRun(
   };
 }
 
+// vela shape: one code copy at <root>/.memory/, the log under apps/<x>/.fapony/.memory/.
+// The usage line printed on error must name the mem.ts that is actually running — it used to
+// print the *log* dir, telling the reader to run a path that does not exist in this layout.
+export function testMemTemplateUsageNamesTheRunningScript(): void {
+  withFixture(
+    (repo) => {
+      mkdirSync(join(repo, "apps/vela/.fapony/plan"), { recursive: true });
+      centralCopy(repo, {});
+    },
+    (repo) => {
+      const memDir = join(repo, ".memory");
+      const miss = Bun.spawnSync(
+        ["bun", join(memDir, "mem.ts"), "add", "note", "x"],
+        {
+          cwd: repo,
+          stdout: "pipe",
+          stderr: "pipe",
+          env: { ...process.env, MEM_APP: "vela" },
+        },
+      );
+      const err = miss.stderr.toString();
+      assert.match(err, /--files is required/);
+      assert.match(
+        err,
+        /bun \.memory\/mem\.ts/,
+        `usage must name the running script, got: ${err}`,
+      );
+      assert.ok(
+        !err.includes("apps/vela/.fapony/.memory/mem.ts"),
+        `usage must not name the log dir (no mem.ts there), got: ${err}`,
+      );
+    },
+  );
+  console.log(
+    "  \u2713 memory template \u2192 usage line names the running mem.ts, not the log dir",
+  );
+}
+
 export function testMemTemplateAddRejectsMissingFiles(): void {
   withFixture(
     (repo) => {

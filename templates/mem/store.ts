@@ -188,8 +188,11 @@ const doneDir =
 const rel = (p: string) => relative(root, p) || ".";
 
 // the command we tell the user to type must be the path of the mem.ts actually running, not a constant —
-// the copy `fapony init` places lives in .fapony/.memory/, not the .memory/ the old help text hardcoded
-const memCmd = `bun ${rel(dir)}/mem.ts`;
+// the copy `fapony init` places lives in .fapony/.memory/, not the .memory/ the old help text hardcoded ·
+// keyed off import.meta.dir (where this code is) and NOT `dir` (where the log is): a monorepo can split the
+// two — vela keeps one code copy at <root>/.memory/ and a log per app under apps/<x>/.fapony/.memory/, and
+// printing the log dir there told the reader to run a mem.ts that does not exist
+const memCmd = `bun ${rel(import.meta.dir)}/mem.ts`;
 
 const KINDS: WorkKind[] = ["next", "bug", "decision", "note", "hold"];
 

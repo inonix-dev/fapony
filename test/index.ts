@@ -409,6 +409,7 @@ import {
   testMemTemplateSingleRepoLegacyLog,
   testMemTemplateSingleRepoWithPackagesDir,
   testMemTemplateUnknownAppFails,
+  testMemTemplateUsageNamesTheRunningScript,
 } from "./memory-template.test.js";
 import {
   testFixtureGuard,
@@ -753,6 +754,7 @@ export async function cmdTest(): Promise<void> {
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
   testMemTemplateMonorepoMigratedApp();
+  testMemTemplateUsageNamesTheRunningScript();
   testMemTemplateMonorepoLegacyLog();
   testMemTemplateSingleRepoCentralDefaultsToFapony();
   testMemTemplateSingleRepoLegacyLog();
