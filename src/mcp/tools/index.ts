@@ -10,7 +10,6 @@ import { VERDICT_GRADES } from "../../parse.js";
 import { REASON_CODES, REGIME_CODES } from "../types.js";
 
 export { toolMemAdd, toolMemFind } from "./mem.js";
-export { toolPlanList } from "./plans.js";
 export { toolPassiveUsage } from "./usage.js";
 export { toolVerdictSubmit } from "./verdict.js";
 
@@ -217,37 +216,6 @@ export const TOOLS = [
         },
       },
       required: [],
-    },
-  },
-  {
-    name: "plan_list",
-    description:
-      "List pending plan files grouped by state — active / blocked / " +
-      "untouched / superseded / trackers — each with title and last-run " +
-      "status joined from fapony run history, plus a count of archived " +
-      "ones. Not a raw directory listing: answers 'what is left, what is " +
-      "waiting on what, what should come next'. State comes from optional " +
-      "plan frontmatter (kind: tracker | status: active|blocked|superseded " +
-      "| blocked_by: | blocks: | superseded_by:); a plan without " +
-      "frontmatter is grouped by run history alone (attempted = active, " +
-      "never attempted = untouched). Within active, whatever unblocks the " +
-      "most other plans is listed first.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        worktree: {
-          type: "string",
-          description: "Absolute path to the project's git worktree",
-        },
-        format: {
-          type: "string",
-          enum: ["json", "markdown"],
-          description:
-            "'markdown' renders the groups as a checklist to paste or read; " +
-            "default 'json'.",
-        },
-      },
-      required: ["worktree"],
     },
   },
 ];

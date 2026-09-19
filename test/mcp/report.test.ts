@@ -103,11 +103,14 @@ export function testVerificationReportToolCount(): void {
     // had no caller — a schema on tools/list is paid every session by everyone.
     "fapony_stats",
     "project_health_context",
+    // dropped 2026-09-20: `fapony mem kickoff` answers "what is left" from the
+    // same plan files, so the schema was rent with no tenant.
+    "plan_list",
   ]) {
     assert.ok(!names.includes(gone), `${gone} is back on the MCP surface`);
   }
-  assert.equal(TOOLS.length, 5);
-  console.log("  ✓ retired tools stay off the MCP surface (5 tools total)");
+  assert.equal(TOOLS.length, 4);
+  console.log("  ✓ retired tools stay off the MCP surface (4 tools total)");
 }
 
 export function testVerificationReportVerdictFromGateEvent(): void {

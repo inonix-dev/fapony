@@ -393,9 +393,9 @@ plan section 7 ตรง ๆ ให้ link ไปที่ spec
 
 **Frontmatter + TL;DR:** หัวไฟล์มี `kind`/`status`/`blocked_by`/`blocks`/`superseded_by`/`spec`/`priority`
 (ค่าเป็น EN เสมอ — เป็น enum ที่ tool อ่าน) แล้วตามด้วย `## TL;DR` ≤15 บรรทัดที่เป็น**ส่วนเดียว
-ที่เปลี่ยนได้ระหว่างทำงาน** · `plan_list` นับ checkbox ของ section `##` แรกเท่านั้น และ render
-เป็น master checklist ได้ — **ห้ามสร้างไฟล์ MASTER.md** ทุกบรรทัดของมัน derive ได้อยู่แล้ว
-ไฟล์ที่ maintain เองจะตกรุ่นเสมอ
+ที่เปลี่ยนได้ระหว่างทำงาน** · `fapony mem kickoff` นับ checkbox ของ section `##` แรกเท่านั้น —
+**ห้ามสร้างไฟล์ MASTER.md** ทุกบรรทัดของมัน derive ได้อยู่แล้ว ไฟล์ที่ maintain เองจะตกรุ่นเสมอ ·
+`status`/`blocked_by`/`blocks`/`superseded_by` ยังเขียนไว้ได้แต่ตอนนี้ไม่มี tool อ่าน
 
 **Layout `.fapony/{plan,done,spec}`:** `done/` อยู่**ข้าง ๆ** `plan/` ไม่ใช่ข้างใน — ลิงก์
 relative รอดทั้งหมด archive เหลือ `git mv` + sed ลิงก์ plan→plan · **ไม่เติมวันที่หน้าชื่อไฟล์**
@@ -426,7 +426,7 @@ fapony analyze [path]                # hub/orphan/cycle/changed-untested — liv
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym]
 fapony plan-seed <name> [--spec] [--scope <path>]...
 # ── ledger (แช่แข็ง — แก้เฉพาะบั๊ก) ──
-fapony mcp                           # MCP server — stdio JSON-RPC, 5 tools
+fapony mcp                           # MCP server — stdio JSON-RPC, 4 tools
 fapony hook-stop                     # Stop hook — block เทิร์นที่มี commit แต่ไม่มี verdict
 fapony hook-read-hint                # annotate 2 แบบ: อ่านไฟล์ใหญ่ทั้งไฟล์ → review-seed ·
                                      # re-read ไฟล์เดิมใน session เดียวกันที่ mtime ไม่ขยับ → grep
@@ -461,8 +461,8 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 
 ## MCP Tools: fapony
 
-`fapony mcp` — stdio JSON-RPC, **5 tools** (เหลือ 4 เมื่อ 2026-09-19 ตามกฎ 13 · `mem_add`
-เข้ามาเป็นตัวที่ 5 พร้อม PLAN-agent-one-call):
+`fapony mcp` — stdio JSON-RPC, **4 tools** (`mem_add` เข้ามาพร้อม PLAN-agent-one-call ·
+`plan_list` ออกไป 2026-09-20 — ดูกฎ 12/13):
 
 | Tool | Purpose |
 |------|---------|
@@ -470,9 +470,12 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 | `mem_add` | **แกน — ครึ่งเขียนของ `mem_find`** · append mem row (`decision`/`bug`/`note`/`next`/`hold`) โดย `files[]` **required + reject เมื่อว่าง** (กฎ 9: required ได้ผล การขอไม่ได้ผล) — แถวที่ไม่บอกไฟล์ หาไม่เจอตอนแตะไฟล์นั้น |
 | `fapony_usage` | usage แบบ passive จาก OpenCode / ZCode / Claude Code / Codex (tokens, cost, by-model; `detail:true` เพิ่ม per-step timing) — **ตัวที่ทำงานนาทีแรก** |
 | `verdict_submit` | เก็บ verdict 6 เกรด + `regime` บังคับ — **อ่านเป็นเซนเซอร์ ไม่ใช่คะแนน** (กฎ 8) |
-| `plan_list` | plan ที่ยังไม่ ship จัดกลุ่มตาม state + progress tally · `format:"markdown"` render master checklist — **หมดอายุแล้ว รอเจ้าของตัดสิน**: `fapony mem kickoff` ship พร้อม PLAN-agent-one-call (อยู่ `.fapony/done/` แล้ว) และตอบคำถามเดียวกัน · ค่าเช่า schema จ่ายทุก session (กฎ 13) — วัด caller ก่อนถอด |
 
-**ที่ถอดออกไปแล้วและห้ามเอากลับ:** `fapony_stats` (CLI `fapony stats` ตอบเหมือนกันทุกอย่าง และ
+**ที่ถอดออกไปแล้วและห้ามเอากลับ:** `plan_list` (2026-09-20 — `fapony mem kickoff` ตอบ
+"เหลืออะไร" จาก plan file ชุดเดียวกัน · ลบ `src/mcp/tools/plans.ts` + `getLastVerdictByPlan`
+ทิ้งด้วยเพราะไม่มี caller เหลือ ตามกฎ 12 · frontmatter `status`/`blocked_by`/`blocks`/
+`superseded_by` **ไม่มีเครื่องอ่านแล้ว** เหลือเป็นบันทึกให้คนอ่าน — ถ้าจะให้กลับมาถูกอ่าน
+ต้องเป็น CLI ไม่ใช่ MCP) · `fapony_stats` (CLI `fapony stats` ตอบเหมือนกันทุกอย่าง และ
 description ของมันขายว่า "บอกได้ว่าควรจ่ายให้ model ไหน" ซึ่งขัด Positioning ข้อ 2) ·
 `project_health_context` (caller ศูนย์ — engine `src/context/projectHealth.ts` ยังอยู่ ใช้จาก CLI ได้) ·
 `verification_report` / `handoff_check` / `handoff_collect` (ถอดไปก่อนหน้านี้ด้วยเหตุผลเดียวกัน) ·

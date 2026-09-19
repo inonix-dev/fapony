@@ -42,7 +42,7 @@ const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
 # running in this worktree cannot rewrite run state / audit trail.
 #
 # Ask your agent for the plan picture instead of listing these by hand:
-#   "run plan_list" — what is active, blocked, untouched, archived
+#   run "fapony mem kickoff" — priority plans, the first unchecked chunk, open bugs
 `;
 
 // Static template — deliberately NOT derived from the repo (reading package.json

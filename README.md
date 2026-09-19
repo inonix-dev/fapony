@@ -37,7 +37,7 @@ quietly counted as free.
 </details>
 
 That is day one. Past that, fapony measures what coding agents actually do — rounds, pass/fail,
-cost per grade — through 5 MCP tools any agent can call. If you juggle more than one agent, this is
+cost per grade — through 4 MCP tools any agent can call. If you juggle more than one agent, this is
 the point: the numbers come from the same yardstick everywhere, so "which model earns its keep on
 which kind of task" becomes a data question instead of a vibe. On top of measurement it checks
 claims against git facts: handoff conformance, allowlisted evidence, a 6-grade verdict — with
@@ -131,7 +131,7 @@ fapony init /path/to/your-worktree
 
 With `.fapony/evidence.json` in place, any graded run can be replayed as a report. This one is
 a CLI command, not an MCP tool — the schemas cost every session of every client and no skill
-called them (see [The 5 tools](#the-5-tools) below). Grade something first;
+called them (see [The 4 tools](#the-4-tools) below). Grade something first;
 `verdict_submit` is what creates the run:
 
 ```bash
@@ -170,7 +170,7 @@ losing a single number.
 
 | | The ledger | The work side |
 |---|---|---|
-| What it is | 5 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
+| What it is | 4 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
 | Needs | an MCP client | nothing — or your own tooling instead |
 | Writes | one graded row per unit of work | nothing |
 | Skip it and | there is no fapony | fapony still answers every question |
@@ -207,11 +207,10 @@ one factual line when a read is large enough to be cheaper as `review-seed`, or 
 file is read again in a session and its mtime has not moved. The read always proceeds, and
 `FAPONY_NO_REREAD_HINT=1` turns the re-read line off.
 
-### The 5 tools
+### The 4 tools
 
 | Tool | Tier | Purpose |
 |------|------|---------|
-| `plan_list` | discover | Plan files grouped by state — active / blocked / untouched / superseded / trackers — with a progress tally and each one's run history. Not a raw `ls`; see [Plans your agent can answer questions about](#plans-your-agent-can-answer-questions-about) |
 | `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) with a required `regime` — the task shape the grade applies to |
 | `mem_find` | recall | Search the project's mem log read-only — decisions/bugs/notes matched on the row's `files[]` (text substring for rows written without it), `text`, `kind` (no default filter), `since`. "What was ever decided about this file?" in one call before editing |
@@ -220,8 +219,9 @@ file is read again in a session and its mtime has not moved. The read always pro
 **A tool earns its schema by being called mid-task without being asked.** Everything you invoke
 deliberately is a CLI command instead: the schema is paid as input tokens in every session of
 every client whether or not it is used, while a CLI command costs nothing until it runs. That is
-why the handoff/report family is CLI-only, and why `fapony_stats` and `project_health_context`
-left the MCP surface in 2026-09 (`fapony stats` answers the first; the second had no caller).
+why the handoff/report family is CLI-only, and why `fapony_stats`, `project_health_context` and
+`plan_list` left the MCP surface in 2026-09 (`fapony stats` answers the first, `fapony mem
+kickoff` the third; the second had no caller).
 Cutting is not the goal — spending where it pays back is: `mem_find` and `verdict_submit` keep
 their schemas because nobody is going to type them at the right moment. `fapony report <run-id>` prints the full report for a run (facts + handoff conformance + evidence + verdict); `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
 
@@ -373,29 +373,31 @@ blocks: PLAN-export.md         # ordering, stated once instead of buried in pros
 - [ ] chunk 2 — move overdue out
 ```
 
-Then ask your agent *"what's left, and what's blocked?"* — `plan_list` answers from the
-frontmatter and from fapony's own run history, without reading a single 100KB plan body into
-context (`format: "markdown"`):
+Then open the next session with `fapony mem kickoff` — it reads the folder and the mem log and
+prints what is next (priority plans, the first unchecked chunk of each, open bugs) without
+reading a single 100KB plan body into context:
 
 ```
-## active — in order (2)
-- [ ] PLAN-calendar — 1/3 · unblocks PLAN-export
-- [ ] PLAN-export — never attempted
-## blocked (1)
-- [ ] PLAN-attendance — waiting: PLAN-documents.md
-## untouched (14) · trackers (3)
-done: 63 archived
+## next up
+  [1] chunk 2 — move overdue out (PLAN-calendar.md)
+  [2] bug #mu8t5qve — money drifts in the month grid…
+      → fapony mem close mu8t5qve "<msg>"
+  [3] last touched: src/quick/month.tsx, src/lib/money.ts
 ```
 
-**Plans with no frontmatter still work** — they are grouped by run history alone (attempted =
-active, never attempted = untouched), so an existing folder of plans is queryable before anyone
-annotates anything. Two details that keep it honest over years:
+**Plans with no frontmatter still work** — the unchecked checkboxes are enough, so an existing
+folder of plans is usable before anyone annotates anything. Two details that keep it honest over
+years:
 
 - The progress tally counts checkboxes in the **first `##` section only**, anchored by position
   rather than by the word "TL;DR" — so it works in any language, and a step list deeper in the
   file stays detail instead of becoming status.
-- **There is no `MASTER.md`.** Every line of the list above is derived from frontmatter and
-  checkboxes, so it cannot drift; a hand-kept master file always does.
+- **There is no `MASTER.md`.** Every line above is derived from the plan files themselves, so it
+  cannot drift; a hand-kept master file always does.
+
+`status` / `blocked_by` / `blocks` / `superseded_by` are read by people, not by a tool — the one
+that read them, `plan_list`, was removed in 2026-09 once `mem kickoff` answered the same
+question from the CLI, where a schema costs nothing until it runs.
 
 The layout, and why archiving is a plain `git mv`:
 
@@ -415,7 +417,7 @@ archived one: [examples/](https://github.com/kire21b/fapony/tree/main/examples).
 
 ```bash
 # Verification & reporting
-fapony mcp                               # MCP server (stdio JSON-RPC — 5 tools)
+fapony mcp                               # MCP server (stdio JSON-RPC — 4 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
@@ -464,7 +466,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 ## Scope
 
 **Supported:**
-- MCP server — 5 tools via stdio JSON-RPC, works with any MCP client
+- MCP server — 4 tools via stdio JSON-RPC, works with any MCP client
 - Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
 - Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
 - Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file

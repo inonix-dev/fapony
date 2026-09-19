@@ -62,7 +62,7 @@ export function testPlanSeedWritesPlan(): void {
         body.indexOf("## Context (fapony)") < body.indexOf("## 1. Goal"),
         "Context (fapony) is above the sections, not buried at the end",
       );
-      // frontmatter for plan_list
+      // frontmatter (read by people since plan_list was removed)
       assert.match(body, /^---\nkind: unit\nstatus: active\n---/);
     });
   });

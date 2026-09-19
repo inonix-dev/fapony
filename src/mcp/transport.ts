@@ -11,7 +11,6 @@ import {
   toolMemAdd,
   toolMemFind,
   toolPassiveUsage,
-  toolPlanList,
   toolVerdictSubmit,
 } from "./tools/index.js";
 import { errorResult, type ToolResult } from "./types.js";
@@ -111,7 +110,7 @@ function writeStatuslineCache(toolResult: ToolResult): void {
 
 const MCP_PROTOCOL_VERSION = "2025-03-26";
 const SERVER_NAME = "fapony-handcheck";
-const SERVER_VERSION = "0.1.3";
+const SERVER_VERSION = "0.2.0";
 
 // --- JSON-RPC dispatch ---
 
@@ -155,9 +154,6 @@ function dispatchToolCall(params: {
       break;
     case "fapony_usage":
       result = toolPassiveUsage(args);
-      break;
-    case "plan_list":
-      result = toolPlanList(args);
       break;
     case "mem_find":
       result = toolMemFind(args);

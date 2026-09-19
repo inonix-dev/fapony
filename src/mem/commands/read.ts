@@ -368,7 +368,7 @@ export const cmdKickoff = (a: string[]) => {
       }
     }
   }
-  // Only the first unchecked chunk (SPEC §3) — the rest are plan_list's job.
+  // Only the first unchecked chunk (SPEC §3) — the body of the plan is the plan's job.
   // There is no per-chunk command, so this line is context, not a runnable item.
   if (planLines.length < GROUP_CAP && planCheckboxes.length) {
     const planName = planFile ? basename(planFile) : "plan";

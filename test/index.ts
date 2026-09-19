@@ -310,16 +310,6 @@ import {
   testMemIdentityNeverCollapsesToUnknown,
 } from "./mcp/mem.test.js";
 import {
-  testPlanListGroupsByFrontmatter,
-  testPlanListJoinsRunHistory,
-  testPlanListLegacyArchiveLocation,
-  testPlanListMissingDir,
-  testPlanListNeverAttempted,
-  testPlanListProgressAndMarkdown,
-  testPlanListRequiresWorktree,
-  testPlanListUsesWorktreeConfigPaths,
-} from "./mcp/plans.test.js";
-import {
   testComputeEvidenceSummaryEmpty,
   testComputeEvidenceSummaryMixed,
   testEvidenceStatusesAreLocked,
@@ -932,14 +922,6 @@ export async function cmdTest(): Promise<void> {
   testVerdictSubmitMissingRegimeRejects();
   testVerdictSubmitInvalidRegimeRejects();
   testVerdictSubmitRegimeStoredInGateEvent();
-  testPlanListRequiresWorktree();
-  testPlanListMissingDir();
-  testPlanListNeverAttempted();
-  testPlanListJoinsRunHistory();
-  testPlanListUsesWorktreeConfigPaths();
-  testPlanListGroupsByFrontmatter();
-  testPlanListProgressAndMarkdown();
-  testPlanListLegacyArchiveLocation();
   testEndToEndPipeline();
   testExtractMultiFieldNone();
   testExtractMultiFieldSingle();

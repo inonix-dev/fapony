@@ -36,7 +36,8 @@ You are about to move a PLAN that has been shipped to the archive.
 
    A plan that is merely *waiting* (on a person, a customer, a decision) is **not** dead and does
    not move — mark it `status: blocked` + `blocked_by: <what you are waiting for>` and leave it in
-   `plan/`, where `plan_list` will report it as blocked instead of as backlog.
+   `plan/` — the frontmatter is for the next person reading the folder, and the plan stays out
+   of `done/`, which is what `plan-sweep` and `kickoff` go by.
 
 2. **Run `plan-sweep --apply`** — this does the `git mv`, rewrites markdown links inside the
    file and inbound links from other plan files, warns about plain-text mentions, and logs
