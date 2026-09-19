@@ -37,7 +37,7 @@ quietly counted as free.
 </details>
 
 That is day one. Past that, fapony measures what coding agents actually do — rounds, pass/fail,
-cost per grade — through 4 MCP tools any agent can call. If you juggle more than one agent, this is
+cost per grade — through 5 MCP tools any agent can call. If you juggle more than one agent, this is
 the point: the numbers come from the same yardstick everywhere, so "which model earns its keep on
 which kind of task" becomes a data question instead of a vibe. On top of measurement it checks
 claims against git facts: handoff conformance, allowlisted evidence, a 6-grade verdict — with
@@ -130,7 +130,7 @@ fapony init /path/to/your-worktree
 
 With `.fapony/evidence.json` in place, any graded run can be replayed as a report. This one is
 a CLI command, not an MCP tool — the schemas cost every session of every client and no skill
-called them (see [The 4 tools](#the-4-tools) below). Grade something first;
+called them (see [The 5 tools](#the-5-tools) below). Grade something first;
 `verdict_submit` is what creates the run:
 
 ```bash
@@ -169,7 +169,7 @@ losing a single number.
 
 | | The ledger | The work side |
 |---|---|---|
-| What it is | 4 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
+| What it is | 5 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
 | Needs | an MCP client | nothing — or your own tooling instead |
 | Writes | one graded row per unit of work | nothing |
 | Skip it and | there is no fapony | fapony still answers every question |
@@ -203,7 +203,7 @@ sequenceDiagram
 The Stop hook is the only thing fapony does *to* you — once per turn, when a commit ends
 ungraded. It never picks the grade; it cannot see whether the work held up.
 
-### The 4 tools
+### The 5 tools
 
 | Tool | Tier | Purpose |
 |------|------|---------|
@@ -211,6 +211,7 @@ ungraded. It never picks the grade; it cannot see whether the work held up.
 | `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) with a required `regime` — the task shape the grade applies to |
 | `mem_find` | recall | Search the project's mem log read-only — decisions/bugs/notes matched on the row's `files[]` (text substring for rows written without it), `text`, `kind` (no default filter), `since`. "What was ever decided about this file?" in one call before editing |
+| `mem_add` | recall | Append a mem row (decision/bug/note/next/hold) with `files[]` required and rejected when empty — the write half of `mem_find`, so the row is findable when you next touch that file |
 
 **A tool earns its schema by being called mid-task without being asked.** Everything you invoke
 deliberately is a CLI command instead: the schema is paid as input tokens in every session of
@@ -410,7 +411,7 @@ archived one: [examples/](https://github.com/kire21b/fapony/tree/main/examples).
 
 ```bash
 # Verification & reporting
-fapony mcp                               # MCP server (stdio JSON-RPC — 4 tools)
+fapony mcp                               # MCP server (stdio JSON-RPC — 5 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
@@ -449,7 +450,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 ## Scope
 
 **Supported:**
-- MCP server — 4 tools via stdio JSON-RPC, works with any MCP client
+- MCP server — 5 tools via stdio JSON-RPC, works with any MCP client
 - Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
 - Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
 - Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file

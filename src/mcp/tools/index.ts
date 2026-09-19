@@ -9,7 +9,7 @@
 import { VERDICT_GRADES } from "../../parse.js";
 import { REASON_CODES, REGIME_CODES } from "../types.js";
 
-export { toolMemFind } from "./mem.js";
+export { toolMemAdd, toolMemFind } from "./mem.js";
 export { toolPlanList } from "./plans.js";
 export { toolPassiveUsage } from "./usage.js";
 export { toolVerdictSubmit } from "./verdict.js";
@@ -136,6 +136,46 @@ export const TOOLS = [
         },
       },
       required: ["worktree"],
+    },
+  },
+  {
+    name: "mem_add",
+    description:
+      "Append a mem row (decision/bug/note/next/hold) with files[]. files is " +
+      "required — a row that does not name the file is unfindable when you " +
+      "touch that file. Returns the row's id, kind, files, and timestamp.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        worktree: {
+          type: "string",
+          description:
+            "Absolute path (git rev-parse --show-toplevel) — required",
+        },
+        kind: {
+          type: "string",
+          enum: ["next", "bug", "decision", "note", "hold"],
+          description:
+            "Row kind: decision=locked choice, bug=broken thing, note=state " +
+            "next session needs, next=pending work, hold=blocked on spec",
+        },
+        text: {
+          type: "string",
+          description:
+            "Standalone text — read months later, no conversation context",
+        },
+        files: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Repo-relative paths this row is about — required, non-empty",
+        },
+        spec: {
+          type: "string",
+          description: "Optional spec/plan .md path",
+        },
+      },
+      required: ["worktree", "kind", "text", "files"],
     },
   },
   {

@@ -106,8 +106,8 @@ export function testVerificationReportToolCount(): void {
   ]) {
     assert.ok(!names.includes(gone), `${gone} is back on the MCP surface`);
   }
-  assert.equal(TOOLS.length, 4);
-  console.log("  ✓ retired tools stay off the MCP surface (4 tools total)");
+  assert.equal(TOOLS.length, 5);
+  console.log("  ✓ retired tools stay off the MCP surface (5 tools total)");
 }
 
 export function testVerificationReportVerdictFromGateEvent(): void {

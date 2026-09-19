@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { memFind, toolMemFind } from "../../src/mcp/tools/mem.js";
+import { memAdd, memFind, toolMemFind } from "../../src/mcp/tools/mem.js";
 import { parseToolResult } from "../../src/mcp/types.js";
 
 function writeLog(dir: string, rows: object[]): string {
@@ -177,4 +177,66 @@ export function testMemFindMatchesStoredFiles(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_find matches rows by stored files[]");
+}
+
+// Regression 2026-09-19 (review-pony): mem_add resolved its mem dir by walking
+// up from the worktree while mem_find guesses the app dir — in a monorepo the
+// row landed at the git root, where nothing reads it. Writer and reader must
+// use the same guess (MEM_APP stands in for the app name here).
+export function testMemAddWritesWhereMemFindReads(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memadd-"));
+  const prevApp = process.env.MEM_APP;
+  process.env.MEM_APP = "vela";
+  try {
+    writeLog(join(dir, "apps", "vela"), [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "old",
+        kind: "decision",
+        text: "pre-existing app-scoped row",
+      },
+    ]);
+    const added = memAdd({
+      worktree: dir,
+      kind: "note",
+      text: "written through the MCP writer",
+      files: ["apps/vela/src/x.ts"],
+    });
+    const found = memFind({ worktree: dir, files: ["apps/vela/src/x.ts"] });
+    assert.equal(found.total, 1, "mem_add row must be visible to mem_find");
+    assert.equal(found.rows[0].id, added.id);
+    assert.ok(
+      found.memDir?.includes(join("apps", "vela", ".fapony", ".memory")),
+      `row must land in the app-scoped log, got ${found.memDir}`,
+    );
+  } finally {
+    if (prevApp === undefined) delete process.env.MEM_APP;
+    else process.env.MEM_APP = prevApp;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_add writes where mem_find reads (app-scoped layout)");
+}
+
+// files is the field the whole feature exists to populate, so the write path
+// must reject a row that omits it — the same required+reject gate as the schema.
+export function testMemAddRejectsMissingFilesAndBadKind(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memadd-"));
+  try {
+    assert.throws(
+      () => memAdd({ worktree: dir, kind: "note", text: "x", files: [] }),
+      /files/,
+    );
+    assert.throws(
+      () => memAdd({ worktree: dir, kind: "nope", text: "x", files: ["a.ts"] }),
+      /kind/,
+    );
+    assert.throws(
+      () => memAdd({ worktree: dir, kind: "hold", text: "x", files: ["a.ts"] }),
+      /spec/,
+      "hold without a spec must be rejected like the CLI",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_add rejects no files / bad kind / hold without spec");
 }

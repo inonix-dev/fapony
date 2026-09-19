@@ -296,6 +296,8 @@ import {
   testRegimeCodesAreLocked,
 } from "./mcp/helpers.test.js";
 import {
+  testMemAddRejectsMissingFilesAndBadKind,
+  testMemAddWritesWhereMemFindReads,
   testMemFindFiltersAndMatchesFiles,
   testMemFindMatchesStoredFiles,
   testMemFindReturnsAllKindsNoDefaultFilter,
@@ -718,6 +720,8 @@ export async function cmdTest(): Promise<void> {
   testMemoryDefaultWiringWithDir();
   testMemoryDefaultWiringNoDir();
   testMemoryExplicitConfigWins();
+  testMemAddWritesWhereMemFindReads();
+  testMemAddRejectsMissingFilesAndBadKind();
   testMemFindReturnsAllKindsNoDefaultFilter();
   testMemFindFiltersAndMatchesFiles();
   testMemFindMatchesStoredFiles();

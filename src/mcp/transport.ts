@@ -8,6 +8,7 @@ import { mergeBytesByTool, type UsageDetail } from "../session/index.js";
 import { getServerSha } from "./primitives.js";
 import {
   TOOLS,
+  toolMemAdd,
   toolMemFind,
   toolPassiveUsage,
   toolPlanList,
@@ -160,6 +161,9 @@ function dispatchToolCall(params: {
       break;
     case "mem_find":
       result = toolMemFind(args);
+      break;
+    case "mem_add":
+      result = toolMemAdd(args);
       break;
     default:
       return errorResult(`unknown tool: ${params.name}`);
