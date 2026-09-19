@@ -138,6 +138,9 @@ import {
   testReadHintNeedsGitRepo,
   testReadHintPluginSource,
   testReadHintSkipsCheapReads,
+  testRereadHintFiresOnUnchangedRepeat,
+  testRereadHintKillSwitch,
+  testRereadHintSilentAfterEdit,
   testStopOutputShapesPerClient,
   testStopPayloadsMapToSameDecision,
   testUtcStampMatchesSqliteFormat,
@@ -655,6 +658,9 @@ export async function cmdTest(): Promise<void> {
   testReadHintNeedsGitRepo();
   testReadHintClaudeOutputShape();
   testReadHintPluginSource();
+  testRereadHintFiresOnUnchangedRepeat();
+  testRereadHintSilentAfterEdit();
+  testRereadHintKillSwitch();
   testCommitHintMinCommitsConstant();
   testCommitHintNullForNonCommit();
   testCommitHintNullOutsideGitRepo();
