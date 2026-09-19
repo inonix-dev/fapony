@@ -28,8 +28,6 @@ import { readMemLog, resolveMemDir } from "./memory.js";
 // a broken/wide regex (stale="e" would flag the repo). SPEC §6: drop the entry
 // and say so, never report 600 files.
 const DEBT_FILE_CAP = 250;
-// Same cap for the file list printed per convention — a wall is not an answer.
-const LIST_SHOWN = 40;
 
 export interface Convention {
   id: string;
@@ -512,41 +510,88 @@ export function formatPromotions(promotions: Promotion[]): string[] {
 
 // --- Formatting ---
 
-const WRAP_WIDTH = 88;
+// Zone grouping: how many leading path segments define a "zone" for chunking debt.
+const ZONE_DEPTH = 3;
+// Default cap on zones shown per convention — more than this is a wall, not an answer.
+const ZONE_CAP = 6;
 
-function wrapFiles(files: string[]): string[] {
-  const lines: string[] = [];
-  let cur = "";
+/** Group files by their first N path segments (the "zone"). */
+function groupFilesByZone(
+  files: string[],
+  depth: number,
+): Map<string, string[]> {
+  const zones = new Map<string, string[]>();
   for (const f of files) {
-    const piece = cur ? `${cur} · ${f}` : f;
-    if (piece.length > WRAP_WIDTH && cur) {
-      lines.push(`  ${cur}`);
-      cur = f;
-    } else {
-      cur = piece;
-    }
+    const parts = f.split("/");
+    const zone = parts.slice(0, depth).join("/");
+    const cur = zones.get(zone) ?? [];
+    cur.push(f);
+    zones.set(zone, cur);
   }
-  if (cur) lines.push(`  ${cur}`);
-  return lines;
+  // Sort zones by file count descending, then alphabetically
+  return new Map(
+    [...zones.entries()].sort((a, b) => {
+      const d = b[1].length - a[1].length;
+      return d !== 0 ? d : a[0].localeCompare(b[0]);
+    }),
+  );
 }
 
-export function formatDebt(report: DebtReport): string {
+/** Escape a regex source for use in a shell grep command. */
+function shellEscapeRe(src: string): string {
+  return src.replace(/'/g, "'\\''");
+}
+
+export function formatDebt(report: DebtReport, showAll = false): string {
   const lines: string[] = [];
   lines.push(
     `fapony debt — ${report.entries.length + report.declared.length + report.checkedCount} convention(s), ` +
       `${report.scannedFiles} files scanned, ${report.ms}ms — derived fresh, not stored`,
   );
   for (const e of report.entries) {
-    const moved = e.movedCount !== null ? ` · moved ${e.movedCount}` : "";
-    lines.push(`\n${e.conv.id} — ${e.conv.rule} (where ${e.conv.where})`);
+    const moved =
+      e.movedCount !== null && e.files.length > 0
+        ? ` · moved ${e.movedCount} (${Math.round((e.movedCount / (e.files.length + e.movedCount)) * 100)}%)`
+        : e.movedCount !== null
+          ? ` · moved ${e.movedCount}`
+          : "";
+    lines.push(`\n${e.conv.id} — ${e.conv.rule}`);
+    // Show the patterns actually used
+    const patterns: string[] = [];
+    if (e.conv.stale) patterns.push(`stale: ${e.conv.stale}`);
+    if (e.conv.ok) patterns.push(`ok: ${e.conv.ok}`);
+    if (e.conv.guard) patterns.push(`guard: ${e.conv.guard}`);
+    patterns.push(`where ${e.conv.where}`);
+    lines.push(`  ${patterns.join("  ·  ")}`);
     if (e.files.length === 0) {
       lines.push(`  debt 0${moved} — clean`);
       continue;
     }
-    lines.push(`  debt ${e.files.length}${moved}:`);
-    lines.push(...wrapFiles(e.files.slice(0, LIST_SHOWN)));
-    if (e.files.length > LIST_SHOWN) {
-      lines.push(`  … +${e.files.length - LIST_SHOWN} more files`);
+    lines.push(`  debt ${e.files.length}${moved}`);
+    // Verify command derived from stale
+    if (e.conv.stale) {
+      lines.push(`  verify: grep -rn '${shellEscapeRe(e.conv.stale)}' <zone>`);
+    }
+    // Zone grouping
+    const zones = groupFilesByZone(e.files, ZONE_DEPTH);
+    const zoneEntries = [...zones.entries()];
+    const cap = showAll
+      ? zoneEntries.length
+      : Math.min(zoneEntries.length, ZONE_CAP);
+    let totalCapped = 0;
+    for (let i = 0; i < cap; i++) {
+      const [zone, zoneFiles] = zoneEntries[i];
+      const pad = " ".repeat(Math.max(0, 42 - zone.length));
+      lines.push(`\n  ${zone}${pad}${zoneFiles.length} ไฟล์`);
+      lines.push(`    ${zoneFiles.map((f) => f.split("/").pop()).join(" · ")}`);
+      totalCapped += zoneFiles.length;
+    }
+    if (zoneEntries.length > cap) {
+      const remaining = e.files.length - totalCapped;
+      const remainingZones = zoneEntries.length - cap;
+      lines.push(
+        `\n  … อีก ${remainingZones} โซน (${remaining} ไฟล์) — fapony debt --id ${e.conv.id} --all`,
+      );
     }
   }
   for (const c of report.declared) {
@@ -568,7 +613,13 @@ export function formatDebt(report: DebtReport): string {
 
 // --- CLI ---
 
-const USAGE = "usage: fapony debt [path] [--files f1,f2] [--json]";
+const USAGE = `usage: fapony debt [path] [options]
+  --files f1,f2     check specific files instead of scanning
+  --id <conv>       show only this convention
+  --where <path>    narrow scope to files under this path
+  --all             show all zones (default: cap at ${ZONE_CAP})
+  --json            output raw JSON
+  -h, --help        this help`;
 
 function worktreeOf(arg: string | undefined): string {
   const base = resolve(arg ?? ".");
@@ -589,6 +640,9 @@ export function cmdDebt(args: string[]): void {
   let path: string | undefined;
   let filesMode: string[] | null = null;
   let json = false;
+  let filterId: string | undefined;
+  let wherePath: string | undefined;
+  let showAll = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--files") {
@@ -606,6 +660,24 @@ export function cmdDebt(args: string[]): void {
         console.error(`fapony debt: --files needs at least one path\n${USAGE}`);
         process.exit(1);
       }
+    } else if (a === "--id") {
+      const v = args[i + 1];
+      if (!v || v.startsWith("--")) {
+        console.error(`fapony debt: --id needs a convention id\n${USAGE}`);
+        process.exit(1);
+      }
+      i++;
+      filterId = v;
+    } else if (a === "--where") {
+      const v = args[i + 1];
+      if (!v || v.startsWith("--")) {
+        console.error(`fapony debt: --where needs a path\n${USAGE}`);
+        process.exit(1);
+      }
+      i++;
+      wherePath = v;
+    } else if (a === "--all") {
+      showAll = true;
     } else if (a === "--json") {
       json = true;
     } else if (a === "-h" || a === "--help") {
@@ -656,6 +728,25 @@ export function cmdDebt(args: string[]): void {
     return;
   }
   const report = debtScan(worktree, loaded);
+
+  // --id filter: keep only the named convention
+  if (filterId) {
+    report.entries = report.entries.filter((e) => e.conv.id === filterId);
+    report.declared = report.declared.filter((c) => c.id === filterId);
+    report.checkedCount = 0; // not relevant when filtering
+    report.dropped = report.dropped.filter((d) => d.id === filterId);
+  }
+
+  // --where filter: narrow file lists to paths under the given prefix
+  if (wherePath) {
+    const prefix = wherePath.replace(/\/+$/, "");
+    for (const e of report.entries) {
+      e.files = e.files.filter(
+        (f) => f === prefix || f.startsWith(`${prefix}/`),
+      );
+    }
+  }
+
   if (json) {
     console.log(
       JSON.stringify(
@@ -666,7 +757,7 @@ export function cmdDebt(args: string[]): void {
     );
     return;
   }
-  console.log(formatDebt(report));
+  console.log(formatDebt(report, showAll));
   for (const w of loaded.warnings) console.log(`⚠ ${w}`);
   for (const l of formatPromotions(findPromotions(worktree, report))) {
     console.log(l);
