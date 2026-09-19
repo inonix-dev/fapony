@@ -226,7 +226,7 @@ next step in the same session is what rule 9 forbids.
 files only · \`verdict_submit\` (MCP) with this step's \`regime\` · then hand off:
 
 \`\`\`bash
-bun .fapony/.memory/mem.ts add note "<what chunk N+1 must know>" --files <f1,f2> ${planRel}
+fapony mem add note "<what chunk N+1 must know>" --files <f1,f2> ${planRel}
 \`\`\`
 
 Next session opens with \`kickoff ${planRel}\` (or \`kickoff ${basename(planRel)}\` — kickoff resolves by filename too, so no need to retype the path).

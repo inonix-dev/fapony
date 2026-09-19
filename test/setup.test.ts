@@ -34,31 +34,16 @@ export function testBuildSetupConfigWithMemory(): void {
     enableMemory: true,
   });
   const mem = config.memory as Record<string, string[]>;
-  assert.deepStrictEqual(mem.claim, [
-    "bun",
-    ".fapony/.memory/mem.ts",
-    "claim",
-    "{id}",
-  ]);
+  assert.deepStrictEqual(mem.claim, ["fapony", "mem", "claim", "{id}"]);
   assert.deepStrictEqual(mem.close, [
-    "bun",
-    ".fapony/.memory/mem.ts",
+    "fapony",
+    "mem",
     "close",
     "{id}",
     "{msg}",
   ]);
-  assert.deepStrictEqual(mem.add, [
-    "bun",
-    ".fapony/.memory/mem.ts",
-    "add",
-    "{kind}",
-    "{text}",
-  ]);
-  assert.deepStrictEqual(mem.kickoff, [
-    "bun",
-    ".fapony/.memory/mem.ts",
-    "kickoff",
-  ]);
+  assert.deepStrictEqual(mem.add, ["fapony", "mem", "add", "{kind}", "{text}"]);
+  assert.deepStrictEqual(mem.kickoff, ["fapony", "mem", "kickoff"]);
   console.log("  ✓ buildSetupConfig with memory");
 }
 

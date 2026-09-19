@@ -41,7 +41,7 @@ const AGENT_PROVENANCE = { verified: false, source: "agent_report" } as const;
 
 // --- App-scoped resolution ---
 
-// Monorepo group dirs — same order as templates/mem/store.ts (first hit wins there;
+// Monorepo group dirs — same order as src/mem/store.ts (first hit wins there;
 // here every file must already agree on one group+app, so order never matters).
 const APP_GROUPS = ["apps", "packages", "services"];
 

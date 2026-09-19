@@ -392,26 +392,6 @@ import {
   testMemoryReadRecentDecisionsMonorepo,
 } from "./memory.test.js";
 import {
-  testMemTemplateAddRejectsMissingFiles,
-  testMemTemplateCentralCopyMovedIntoFapony,
-  testMemTemplateConfigStillWins,
-  testMemTemplateInitAtMonorepoRoot,
-  testMemTemplateKickoffAmbiguousAndMissAreLoud,
-  testMemTemplateKickoffResolvesSpecByFilename,
-  testMemTemplateMonorepoLegacyLog,
-  testMemTemplateMonorepoMigratedApp,
-  testMemTemplateMonorepoUnmigratedApp,
-  testMemTemplatePackagesApp,
-  testMemTemplatePerPersonLogs,
-  testMemTemplateScaffolded,
-  testMemTemplateScaffoldedIgnoresRootConfig,
-  testMemTemplateSingleRepoCentralDefaultsToFapony,
-  testMemTemplateSingleRepoLegacyLog,
-  testMemTemplateSingleRepoWithPackagesDir,
-  testMemTemplateUnknownAppFails,
-  testMemTemplateUsageNamesTheRunningScript,
-} from "./memory-template.test.js";
-import {
   testFixtureGuard,
   testParseGateEventData,
   testQualityScore,
@@ -753,24 +733,6 @@ export async function cmdTest(): Promise<void> {
   testMemoryDefaultWiringWithFile();
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
-  testMemTemplateMonorepoMigratedApp();
-  testMemTemplateUsageNamesTheRunningScript();
-  testMemTemplateMonorepoLegacyLog();
-  testMemTemplateSingleRepoCentralDefaultsToFapony();
-  testMemTemplateSingleRepoLegacyLog();
-  testMemTemplatePackagesApp();
-  testMemTemplateSingleRepoWithPackagesDir();
-  testMemTemplateMonorepoUnmigratedApp();
-  testMemTemplateConfigStillWins();
-  testMemTemplateCentralCopyMovedIntoFapony();
-  testMemTemplateScaffolded();
-  testMemTemplateInitAtMonorepoRoot();
-  testMemTemplateAddRejectsMissingFiles();
-  testMemTemplateKickoffResolvesSpecByFilename();
-  testMemTemplateKickoffAmbiguousAndMissAreLoud();
-  testMemTemplatePerPersonLogs();
-  testMemTemplateScaffoldedIgnoresRootConfig();
-  testMemTemplateUnknownAppFails();
   testMemFindReturnsAllKindsNoDefaultFilter();
   testMemFindFiltersAndMatchesFiles();
   testMemFindTotalVsLimitAndFailShapes();

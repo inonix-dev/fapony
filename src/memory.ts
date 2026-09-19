@@ -5,21 +5,16 @@
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import {
-  type Config,
-  DEFAULT_MEMORY_ENTRY,
-  memoryEntry,
-  safetyDeny,
-} from "./db/index.js";
+import { type Config, memoryEntry, safetyDeny } from "./db/index.js";
 import { assertSafe } from "./safety.js";
 import { templateArgs } from "./util.js";
 
-/** Default memory commands — matches templates/mem/mem.ts CLI. */
+/** Default memory commands — built into fapony via `fapony mem <sub>`. */
 export const DEFAULT_MEMORY: Config["memory"] = {
-  claim: ["bun", DEFAULT_MEMORY_ENTRY, "claim", "{id}"],
-  close: ["bun", DEFAULT_MEMORY_ENTRY, "close", "{id}", "{msg}"],
-  add: ["bun", DEFAULT_MEMORY_ENTRY, "add", "{kind}", "{text}"],
-  kickoff: ["bun", DEFAULT_MEMORY_ENTRY, "kickoff"],
+  claim: ["fapony", "mem", "claim", "{id}"],
+  close: ["fapony", "mem", "close", "{id}", "{msg}"],
+  add: ["fapony", "mem", "add", "{kind}", "{text}"],
+  kickoff: ["fapony", "mem", "kickoff"],
 };
 
 /**
@@ -126,7 +121,7 @@ interface RawMemRow {
 
 /**
  * The app's own .fapony/ dir for a worktree root — the same monorepo guess
- * resolveMemDir makes (templates/mem/store.ts is the mirror). Conventions
+ * resolveMemDir makes (src/mem/store.ts is the mirror). Conventions
  * live beside the mem log (SPEC-convention-debt §2.1), so both resolvers must
  * guess identically; the guess is shared here so they cannot drift.
  */
@@ -139,7 +134,7 @@ export function resolveAppFaponyDir(worktree: string): string {
 }
 
 /**
- * Locate the memory dir for a worktree root, mirroring templates/mem/store.ts:
+ * Locate the memory dir for a worktree root, mirroring src/mem/store.ts:
  * in a monorepo the log lives under `<apps|packages|services>/<app>/.fapony/.memory`
  * (app guessed from the dir name, `wt-` prefix stripped; MEM_APP overrides), not
  * at the git root. Single repos fall back to the root-relative layout.

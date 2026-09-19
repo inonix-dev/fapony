@@ -12,6 +12,8 @@ import { cmdInitMem } from "./src/init-mem.js";
 import { cmdInstall } from "./src/install.js";
 import { cmdLintBaseline } from "./src/lint-baseline.js";
 import { cmdMcp } from "./src/mcp/transport.js";
+import { cmdMem } from "./src/mem/index.js";
+import { initStore } from "./src/mem/store.js";
 import { cmdPlanSeed } from "./src/plan-seed.js";
 import { cmdPriceScan } from "./src/price/index.js";
 import { cmdReport, cmdReportWeb } from "./src/report/index.js";
@@ -42,6 +44,9 @@ if (cmd === "analyze") {
   await cmdTelemetry(a);
 } else if (cmd === "init-mem") {
   cmdInitMem(a);
+} else if (cmd === "mem") {
+  initStore(process.cwd());
+  await cmdMem(a);
 } else if (cmd === "init") {
   await cmdInit(a);
 } else if (cmd === "install") {
@@ -75,7 +80,7 @@ if (cmd === "analyze") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|test> [args]",
+    "usage: fapony <setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|test> [args]",
   );
   process.exit(1);
 }
