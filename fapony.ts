@@ -45,8 +45,17 @@ if (cmd === "analyze") {
 } else if (cmd === "init-mem") {
   cmdInitMem(a);
 } else if (cmd === "mem") {
-  initStore(process.cwd());
-  await cmdMem(a);
+  // Parse --mem-dir flag before passing to cmdMem
+  let overrideMemDir: string | undefined;
+  const memDirIdx = a.indexOf("--mem-dir");
+  if (memDirIdx !== -1) {
+    overrideMemDir = a[memDirIdx + 1];
+  }
+  const filteredA = overrideMemDir
+    ? a.filter((_, i) => i !== memDirIdx && i !== memDirIdx + 1)
+    : a;
+  initStore(process.cwd(), overrideMemDir);
+  await cmdMem(filteredA);
 } else if (cmd === "init") {
   await cmdInit(a);
 } else if (cmd === "install") {

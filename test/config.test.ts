@@ -6,7 +6,7 @@ import {
   type Config,
   evidenceFile,
   loadConfig,
-  memoryEntry,
+  memoryDir,
   planDir,
   safetyDeny,
   specDir,
@@ -22,7 +22,7 @@ export function testConfigDefaults(): void {
   const config = baseConfig();
   assert.equal(planDir(config), ".fapony/plan");
   assert.equal(specDir(config), ".fapony/spec");
-  assert.equal(memoryEntry(config), ".fapony/.memory/mem.ts");
+  assert.equal(memoryDir(config), ".fapony/.memory");
   assert.equal(evidenceFile(config), ".fapony/evidence.json");
   assert.equal(safetyDeny(config).length, 4);
 
@@ -47,7 +47,7 @@ export function testConfigFileOverrides(): void {
     assert.equal(evidenceFile(config), "config/evidence.json");
     assert.deepEqual(safetyDeny(config), ["custom-bad-cmd"]);
     // unspecified sections keep defaults
-    assert.equal(memoryEntry(config), ".fapony/.memory/mem.ts");
+    assert.equal(memoryDir(config), ".fapony/.memory");
     assert.equal(specDir(config), ".fapony/spec");
   } finally {
     rmSync(dir, { recursive: true, force: true });

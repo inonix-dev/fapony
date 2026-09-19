@@ -15,7 +15,7 @@ import {
 } from "node:fs";
 import { hostname, networkInterfaces } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
-import { resolveAppFaponyDir } from "../memory.js";
+import { resolveMemDir } from "../memory.js";
 
 // --- types ---
 
@@ -143,12 +143,11 @@ let app = "";
  * Initialize the store for a given worktree. Must be called before using any
  * export. The CLI dispatch layer calls this with the resolved worktree path.
  *
- * memDir comes from resolveMemDir below — the same app-scoped guess the reader
- * (src/memory.ts resolveMemDir) makes, so a row the writer appends is a row the
- * reader finds. It used to walk up from the worktree instead, which dropped the
- * row at the git root in a monorepo while mem_find read `<apps|packages|services>/<app>`.
+ * `overrideMemDir` (from --mem-dir flag) skips resolution entirely.
+ * Otherwise resolveMemDir() walks up from cwd — the same dir the reader
+ * (src/memory.ts) uses, so writer and reader cannot drift apart.
  */
-export function initStore(worktree: string): void {
+export function initStore(worktree: string, overrideMemDir?: string): void {
   root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
     cwd: worktree,
   })
@@ -156,16 +155,16 @@ export function initStore(worktree: string): void {
     .trim();
   if (!root) root = worktree;
 
-  const faponyDir = resolveAppFaponyDir(worktree); // <app|repo>/.fapony
-  dir = resolveMemDir(worktree, faponyDir);
+  dir =
+    resolveMemDir(worktree, overrideMemDir) ??
+    join(worktree, ".fapony", ".memory");
 
-  // planBase: the folder this project's plan/done live under. Taking it from
-  // faponyDir (not dirname(dir)) keeps it correct under the legacy `.memory`
-  // layout, where dir sits beside .fapony rather than inside it.
-  planBase = faponyDir;
+  // planBase: the .fapony dir — plan/done/conventions live here.
+  // Derive from dir by going up from .fapony/.memory → .fapony
+  planBase = dirname(dir);
 
   // app name for display — the directory containing .fapony
-  app = basename(dirname(faponyDir));
+  app = dirname(planBase);
 
   // Read fapony.config.json
   const configDir = planBase === `${root}/.fapony` ? root : dirname(planBase);
@@ -213,19 +212,6 @@ export function initStore(worktree: string): void {
 
   LOG = `${dir}/log.${person}.jsonl`;
   memCmd = `fapony mem`;
-}
-
-function resolveMemDir(
-  worktree: string,
-  base = resolveAppFaponyDir(worktree),
-): string {
-  const legacyDir = join(base, "..", ".memory");
-  const newDir = join(base, ".memory");
-  // Mirror memory.ts resolveMemDir exactly (legacy log.jsonl first, then the
-  // new layout) so the writer and the reader cannot drift apart.
-  if (existsSync(join(legacyDir, "log.jsonl"))) return legacyDir;
-  if (existsSync(newDir)) return newDir;
-  return newDir;
 }
 
 // --- log file helpers ---

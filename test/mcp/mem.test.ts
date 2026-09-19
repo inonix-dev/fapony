@@ -183,11 +183,10 @@ export function testMemFindMatchesStoredFiles(): void {
 // Regression 2026-09-19 (review-pony): mem_add resolved its mem dir by walking
 // up from the worktree while mem_find guesses the app dir — in a monorepo the
 // row landed at the git root, where nothing reads it. Writer and reader must
-// use the same guess (MEM_APP stands in for the app name here).
+// use the same resolver. The walk-up finds apps/<app>/.fapony/.memory/ when
+// called from within that app.
 export function testMemAddWritesWhereMemFindReads(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-memadd-"));
-  const prevApp = process.env.MEM_APP;
-  process.env.MEM_APP = "vela";
   try {
     writeLog(join(dir, "apps", "vela"), [
       {
@@ -197,13 +196,14 @@ export function testMemAddWritesWhereMemFindReads(): void {
         text: "pre-existing app-scoped row",
       },
     ]);
+    const appDir = join(dir, "apps", "vela");
     const added = memAdd({
-      worktree: dir,
+      worktree: appDir,
       kind: "note",
       text: "written through the MCP writer",
       files: ["apps/vela/src/x.ts"],
     });
-    const found = memFind({ worktree: dir, files: ["apps/vela/src/x.ts"] });
+    const found = memFind({ worktree: appDir, files: ["apps/vela/src/x.ts"] });
     assert.equal(found.total, 1, "mem_add row must be visible to mem_find");
     assert.equal(found.rows[0].id, added.id);
     assert.ok(
@@ -211,8 +211,6 @@ export function testMemAddWritesWhereMemFindReads(): void {
       `row must land in the app-scoped log, got ${found.memDir}`,
     );
   } finally {
-    if (prevApp === undefined) delete process.env.MEM_APP;
-    else process.env.MEM_APP = prevApp;
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_add writes where mem_find reads (app-scoped layout)");

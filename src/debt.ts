@@ -22,7 +22,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { collectSourceFiles } from "./analyze.js";
 import { openDb } from "./db/index.js";
-import { readMemLog, resolveAppFaponyDir } from "./memory.js";
+import { readMemLog, resolveMemDir } from "./memory.js";
 
 // A stale regex matching more than this many files is not a convention — it is
 // a broken/wide regex (stale="e" would flag the repo). SPEC §6: drop the entry
@@ -51,7 +51,10 @@ export interface Convention {
 // --- conventions.json resolution (same guess as the mem log, SPEC §2.1) ---
 
 export function resolveConventionsPath(worktree: string): string | null {
-  const base = resolveAppFaponyDir(worktree);
+  // Conventions live in the same .fapony/ dir as the mem log — derive from
+  // the resolved mem dir so both resolvers cannot drift apart.
+  const memDir = resolveMemDir(worktree);
+  const base = memDir ? join(memDir, "..") : join(worktree, ".fapony");
   const app = join(base, "conventions.json");
   if (existsSync(app)) return app;
   // Monorepo where the app has not scaffolded .fapony/ yet, and single repos

@@ -12,6 +12,7 @@ import {
   cmdStale,
 } from "./commands/read.js";
 import { cmdRotate } from "./commands/rotate.js";
+import { cmdWhere } from "./commands/where.js";
 import {
   cmdAdd,
   cmdClaim,
@@ -44,6 +45,8 @@ export async function cmdMem(a: string[]): Promise<void> {
     cmdFind(rest);
   } else if (cmd === "kickoff") {
     cmdKickoff(rest);
+  } else if (cmd === "where") {
+    cmdWhere(rest);
   } else if (cmd === "plan-sweep") {
     cmdPlanSweep(rest);
   } else if (cmd === "plan-check") {

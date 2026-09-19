@@ -172,7 +172,6 @@ export function testMemoryReadRecentDecisions(): void {
 
 export function testMemoryReadRecentDecisionsMonorepo(): void {
   const root = mkdtempSync(join(tmpdir(), "fapony-mono-"));
-  const prevApp = process.env.MEM_APP;
   try {
     const memDir = join(root, "apps", "vela", ".fapony", ".memory");
     mkdirSync(memDir, { recursive: true });
@@ -186,19 +185,17 @@ export function testMemoryReadRecentDecisionsMonorepo(): void {
       })}\n`,
     );
     // The run history is keyed to the monorepo root, but the log lives in the
-    // app dir — the reader must find it from the root, like mem.ts does.
-    process.env.MEM_APP = "vela";
-
-    const got = readRecentMemDecisions(root, 3);
+    // app dir — the reader must find it via walk-up from the app path.
+    // readMemLog walks up from root → finds apps/vela/.fapony/.memory/ only if
+    // we call it from within the app. From root itself, repo-root fallback applies.
+    const got = readRecentMemDecisions(join(root, "apps", "vela"), 3);
     assert.equal(got.length, 1);
     assert.equal(
       got[0].text,
       "app-scoped decision",
-      "mem dir resolved under <root>/apps/<app>/.fapony/.memory",
+      "mem dir resolved via walk-up to <root>/apps/<app>/.fapony/.memory",
     );
   } finally {
-    if (prevApp === undefined) delete process.env.MEM_APP;
-    else process.env.MEM_APP = prevApp;
     rmSync(root, { recursive: true, force: true });
   }
   console.log(

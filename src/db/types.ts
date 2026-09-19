@@ -59,7 +59,7 @@ export interface Config {
     planDir?: string;
     specDir?: string;
     doneDir?: string;
-    memoryEntry?: string;
+    memDir?: string;
     evidenceFile?: string;
   } | null;
   safety?: {

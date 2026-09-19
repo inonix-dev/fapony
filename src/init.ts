@@ -17,7 +17,7 @@ import {
   type Config,
   doneDir,
   evidenceFile,
-  memoryEntry,
+  memoryDir,
   planDir,
   specDir,
 } from "./db/index.js";
@@ -163,17 +163,13 @@ export function initProject(targetPath: string, config?: Config): void {
   mkdirSync(specDirAbs, { recursive: true });
 
   // --- .fapony/.memory/ (empty dir — mem commands are built into fapony now) ---
-  const memEntry = memoryEntry(config); // e.g. .fapony/.memory/mem.ts
-  const memoryDir = join(
-    targetPath,
-    memEntry.split("/").slice(0, -1).join("/"),
-  );
-  if (existsSync(memoryDir)) {
-    console.log(`  ${relative(targetPath, memoryDir)}/ — already exists`);
+  const memoryDirPath = join(targetPath, memoryDir(config));
+  if (existsSync(memoryDirPath)) {
+    console.log(`  ${relative(targetPath, memoryDirPath)}/ — already exists`);
   } else {
-    mkdirSync(memoryDir, { recursive: true });
+    mkdirSync(memoryDirPath, { recursive: true });
     console.log(
-      `  ${relative(targetPath, memoryDir)}/ — mem commands are built into fapony (fapony mem ...)`,
+      `  ${relative(targetPath, memoryDirPath)}/ — mem commands are built into fapony (fapony mem ...)`,
     );
   }
 
@@ -188,7 +184,7 @@ export function initProject(targetPath: string, config?: Config): void {
     `  ${evidenceFile(config)}    — allowlist for 'fapony report' (edit the cmds!)`,
   );
   console.log(
-    `  ${relative(targetPath, memoryDir)}/ — mem commands are built into fapony (fapony mem ...)`,
+    `  ${relative(targetPath, memoryDirPath)}/ — mem commands are built into fapony (fapony mem ...)`,
   );
   console.log(`\nNext: add "${targetPath}" to fapony.config.json worktrees`);
   console.log(
