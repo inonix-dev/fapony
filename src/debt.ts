@@ -18,7 +18,7 @@
 //
 // Read-only stdout: no file writes, no state.db, no cache (rule 5b).
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { collectSourceFiles } from "./analyze.js";
 import { openDb } from "./db/index.js";
@@ -632,19 +632,49 @@ const USAGE = `usage: fapony debt [path] [options]
   --json            output raw JSON
   -h, --help        this help`;
 
-function worktreeOf(arg: string | undefined): string {
+/**
+ * The dir `debt` measures: the nearest ancestor of `arg` (or cwd) that holds
+ * `.fapony/conventions.json`, bounded by the git root.
+ *
+ * Jumping straight to the git root was the bug: in a monorepo the root has no
+ * conventions.json and two apps have one each, so the mem resolver went
+ * ambiguous and `debt` said "nothing tracked yet" while
+ * apps/<x>/.fapony/conventions.json sat right there — and the positional path
+ * argument was silently ignored. Falling back to the git root keeps single
+ * repos run from a subdir scanning the whole repo.
+ */
+export function worktreeOf(arg: string | undefined): string {
   const base = resolve(arg ?? ".");
+  let gitRoot: string | null = null;
   try {
     const p = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
       cwd: base,
       stdout: "pipe",
       stderr: "pipe",
     });
-    if (p.exitCode === 0) return p.stdout.toString().trim();
+    if (p.exitCode === 0) gitRoot = p.stdout.toString().trim() || null;
   } catch {
-    // fall through
+    // not a repo — base is all we have
   }
-  return base;
+  // `git rev-parse` returns a physical path (/var → /private/var on macOS),
+  // so the boundary check compares realpaths, same as the mem resolver.
+  const real = (d: string): string => {
+    try {
+      return realpathSync(d);
+    } catch {
+      return d;
+    }
+  };
+  const boundary = gitRoot ? real(gitRoot) : null;
+  let dir = base;
+  while (true) {
+    if (existsSync(join(dir, ".fapony", "conventions.json"))) return dir;
+    if (boundary && real(dir) === boundary) break;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return gitRoot ?? base;
 }
 
 export function cmdDebt(args: string[]): void {

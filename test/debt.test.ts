@@ -16,6 +16,7 @@ import {
   loadConventions,
   PROMOTION_THRESHOLD,
   resolveConventionsPath,
+  worktreeOf,
 } from "../src/debt.js";
 import { withTempRepo, withTmpDb } from "./helpers.js";
 
@@ -341,4 +342,37 @@ export function testDebtConventionsPathResolution(): void {
     );
   });
   console.log("  ✓ debt → conventions.json resolves at the repo root fallback");
+}
+
+/**
+ * The monorepo root has no conventions.json and two apps have one each. Before
+ * this, `debt` resolved the worktree with `git rev-parse --show-toplevel` and
+ * ignored the path it was given, so `fapony debt apps/shop` measured the root,
+ * the mem resolver went ambiguous, and it reported "nothing tracked yet".
+ */
+export function testDebtWorktreeFollowsThePathNotGitRoot(): void {
+  withTempRepo((repo) => {
+    mkdirSync(join(repo, "apps/shop/.fapony"), { recursive: true });
+    mkdirSync(join(repo, "apps/shop/src"), { recursive: true });
+    mkdirSync(join(repo, "apps/other/.fapony"), { recursive: true });
+    const conv = JSON.stringify({
+      conventions: [{ id: "c", rule: "r", where: ".", stale: "zzz" }],
+    });
+    writeFileSync(join(repo, "apps/shop/.fapony/conventions.json"), conv);
+    writeFileSync(join(repo, "apps/other/.fapony/conventions.json"), conv);
+
+    assert.equal(worktreeOf(join(repo, "apps/shop")), join(repo, "apps/shop"));
+    // from a subdir of the app too — the walk stops at the app, not the root
+    assert.equal(
+      worktreeOf(join(repo, "apps/shop/src")),
+      join(repo, "apps/shop"),
+    );
+    // nothing to find above the root → git root, same as before
+    assert.equal(
+      loadConventions(worktreeOf(join(repo, "apps/shop"))).convs.length,
+      1,
+    );
+    assert.equal(loadConventions(worktreeOf(repo)).path, null);
+  });
+  console.log("  ✓ debt → worktree follows the given path, not the git root");
 }
