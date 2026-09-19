@@ -1,16 +1,20 @@
 import assert from "node:assert";
+import { execSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../src/db/index.js";
+import { initStore } from "../src/mem/store.js";
 import {
   claimMemory,
   DEFAULT_MEMORY,
   readMemLog,
   readRecentMemDecisions,
+  resolveMemDir,
   resolveMemoryConfig,
+  whereMemDir,
 } from "../src/memory.js";
-import { baseConfig } from "./helpers.js";
+import { baseConfig, withTempRepo } from "./helpers.js";
 
 export function testMemoryDefaultWiringWithDir(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
@@ -230,4 +234,94 @@ export function testReadMemLogIncludesRotatedArchives(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ readMemLog reads rotated archives, not just the live log");
+}
+
+// Regression 2026-09-19 (review-pony): walk-up climbed past the git root, so a
+// repo nested under another checkout resolved to the parent's log and wrote the
+// row outside the repo. SPEC §1: step 3/4 stop at the repo root.
+export function testMemDirWalkStopsAtRepoRoot(): void {
+  const outer = mkdtempSync(join(tmpdir(), "fapony-outer-"));
+  try {
+    mkdirSync(join(outer, ".fapony", ".memory"), { recursive: true });
+    writeFileSync(join(outer, ".fapony", ".memory", "log.jsonl"), "");
+    const inner = join(outer, "inner");
+    mkdirSync(join(inner, "sub"), { recursive: true });
+    execSync("git init", { cwd: inner, stdio: "ignore" });
+
+    assert.equal(
+      resolveMemDir(join(inner, "sub")),
+      null,
+      "walk-up must stop at the repo root, never resolve to a parent checkout",
+    );
+    assert.equal(whereMemDir(join(inner, "sub")).step, "none");
+  } finally {
+    rmSync(outer, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem dir walk stops at the repo root");
+}
+
+// Regression 2026-09-19 (review-pony): an empty .fapony/.memory/ (what
+// `fapony init` scaffolds) counted as a candidate and shadowed the ancestor
+// that held the real log. SPEC §1: a dir without a log*.jsonl is not a hit.
+export function testMemDirSkipsEmptyCandidate(): void {
+  withTempRepo((repo) => {
+    mkdirSync(join(repo, ".fapony", ".memory"), { recursive: true });
+    writeFileSync(join(repo, ".fapony", ".memory", "log.jsonl"), "");
+    mkdirSync(join(repo, "apps", "x", ".fapony", ".memory"), {
+      recursive: true,
+    });
+    assert.equal(
+      resolveMemDir(join(repo, "apps", "x")),
+      join(repo, ".fapony", ".memory"),
+      "an empty .fapony/.memory/ must not shadow the ancestor holding the log",
+    );
+  });
+  console.log("  ✓ mem dir skips an empty .fapony/.memory/ candidate");
+}
+
+// Regression 2026-09-19 (review-pony): paths.memDir was read from
+// cwd/fapony.config.json and joined to cwd. SPEC §1: it lives at the repo root
+// and is relative to the repo root, so it must work from a subdirectory.
+export function testMemDirConfigIsRepoRootRelative(): void {
+  withTempRepo((repo) => {
+    mkdirSync(join(repo, "apps", "y"), { recursive: true });
+    mkdirSync(join(repo, "shared", "mem"), { recursive: true });
+    writeFileSync(join(repo, "shared", "mem", "log.jsonl"), "");
+    writeFileSync(
+      join(repo, "fapony.config.json"),
+      `${JSON.stringify({ paths: { memDir: "shared/mem" } })}\n`,
+    );
+    assert.equal(
+      resolveMemDir(join(repo, "apps", "y")),
+      join(repo, "shared", "mem"),
+      "paths.memDir is read from the repo root and relative to it, not to cwd",
+    );
+  });
+  console.log("  ✓ paths.memDir resolves relative to the repo root");
+}
+
+// Regression 2026-09-19 (review-pony): `mem where` never saw --mem-dir (stripped
+// before dispatch) and the writer silently fell back to the default on a bad
+// path. Both must treat the flag as a promise, not a hint.
+export function testMemDirOverrideWinsAndRefusesMissing(): void {
+  withTempRepo((repo) => {
+    mkdirSync(join(repo, ".fapony", ".memory"), { recursive: true });
+    writeFileSync(join(repo, ".fapony", ".memory", "log.jsonl"), "");
+    const custom = join(repo, "custom-mem");
+    mkdirSync(custom, { recursive: true });
+    writeFileSync(join(custom, "log.jsonl"), "");
+
+    const won = whereMemDir(repo, custom);
+    assert.equal(won.dir, custom, "--mem-dir must win over the walked-up dir");
+    assert.equal(won.step, "flag");
+
+    const missing = join(repo, "nope");
+    assert.equal(whereMemDir(repo, missing).dir, null);
+    assert.throws(
+      () => initStore(repo, missing),
+      /--mem-dir/,
+      "the writer must refuse a missing --mem-dir, not fall back to the default",
+    );
+  });
+  console.log("  ✓ --mem-dir wins and a missing path is refused, not ignored");
 }

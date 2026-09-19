@@ -95,9 +95,10 @@ export const TOOLS = [
       "Read-only. Answer 'what was ever decided about this file?' in one call " +
       "BEFORE editing: pass files[] (repo-relative). Matches the row's stored " +
       "files[], falling back to a substring of text/spec/ref for rows written " +
-      "without it — a row that names the file nowhere cannot be found. In a " +
-      "monorepo only the log of the app guessed from the worktree name is " +
-      "read; memDir shows which one. Returns {rows, total, filesFound, " +
+      "without it — a row that names the file nowhere cannot be found. " +
+      "memDir shows which log dir was resolved (walked up from the given " +
+      "worktree — in a monorepo pass the app directory to read its log). " +
+      "Returns {rows, total, filesFound, " +
       "skipped, memDir}: memDir:null = no mem at all, not 'nothing matched'.",
     inputSchema: {
       type: "object" as const,

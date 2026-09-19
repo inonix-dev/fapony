@@ -22,7 +22,7 @@ import {
   cmdSynced,
 } from "./commands/write.js";
 
-export async function cmdMem(a: string[]): Promise<void> {
+export async function cmdMem(a: string[], memDir?: string): Promise<void> {
   const [cmd, ...rest] = a;
 
   if (cmd === "add") {
@@ -46,7 +46,7 @@ export async function cmdMem(a: string[]): Promise<void> {
   } else if (cmd === "kickoff") {
     cmdKickoff(rest);
   } else if (cmd === "where") {
-    cmdWhere(rest);
+    cmdWhere(rest, memDir);
   } else if (cmd === "plan-sweep") {
     cmdPlanSweep(rest);
   } else if (cmd === "plan-check") {

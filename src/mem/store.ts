@@ -155,9 +155,14 @@ export function initStore(worktree: string, overrideMemDir?: string): void {
     .trim();
   if (!root) root = worktree;
 
+  // An explicit --mem-dir is a promise: never silently fall back to the
+  // default when the path is wrong, or the row lands in a log nobody reads.
+  if (overrideMemDir && !existsSync(overrideMemDir)) {
+    throw new Error(`--mem-dir path does not exist: ${overrideMemDir}`);
+  }
+
   dir =
-    resolveMemDir(worktree, overrideMemDir) ??
-    join(worktree, ".fapony", ".memory");
+    resolveMemDir(worktree, overrideMemDir) ?? join(root, ".fapony", ".memory");
 
   // planBase: the .fapony dir — plan/done/conventions live here.
   // Derive from dir by going up from .fapony/.memory → .fapony

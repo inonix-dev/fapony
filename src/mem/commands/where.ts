@@ -2,9 +2,9 @@
 
 import { whereMemDir } from "../../memory.js";
 
-const USAGE = "usage: fapony mem where [--from <dir>]";
+const USAGE = "usage: fapony mem [--mem-dir <path>] where [--from <dir>]";
 
-export function cmdWhere(args: string[]): void {
+export function cmdWhere(args: string[], memDir?: string): void {
   let fromDir: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
@@ -22,7 +22,7 @@ export function cmdWhere(args: string[]): void {
     }
   }
 
-  const result = whereMemDir(fromDir);
+  const result = whereMemDir(fromDir, memDir);
 
   if (!result.dir) {
     console.log(

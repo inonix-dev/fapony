@@ -3,6 +3,7 @@
 // fapony — measure/verify MCP server for coding agents
 // CLI dispatch: all logic lives in src/
 
+import { existsSync } from "node:fs";
 import { cmdAnalyze } from "./src/analyze.js";
 import { cmdDebt } from "./src/debt.js";
 import { cmdDigest } from "./src/digest/cli.js";
@@ -45,17 +46,28 @@ if (cmd === "analyze") {
 } else if (cmd === "init-mem") {
   cmdInitMem(a);
 } else if (cmd === "mem") {
-  // Parse --mem-dir flag before passing to cmdMem
-  let overrideMemDir: string | undefined;
+  // `--mem-dir <path>` is global to `mem` and must reach both the writer
+  // (initStore) and the resolver behind `mem where` — parse it once and thread
+  // it through, never strip it and forget.
   const memDirIdx = a.indexOf("--mem-dir");
+  let overrideMemDir: string | undefined;
+  let rest = a;
   if (memDirIdx !== -1) {
     overrideMemDir = a[memDirIdx + 1];
+    if (!overrideMemDir || overrideMemDir.startsWith("--")) {
+      console.error("fapony mem: --mem-dir needs a value");
+      process.exit(1);
+    }
+    if (!existsSync(overrideMemDir)) {
+      console.error(
+        `fapony mem: --mem-dir path does not exist: ${overrideMemDir}`,
+      );
+      process.exit(1);
+    }
+    rest = a.filter((_, i) => i !== memDirIdx && i !== memDirIdx + 1);
   }
-  const filteredA = overrideMemDir
-    ? a.filter((_, i) => i !== memDirIdx && i !== memDirIdx + 1)
-    : a;
   initStore(process.cwd(), overrideMemDir);
-  await cmdMem(filteredA);
+  await cmdMem(rest, overrideMemDir);
 } else if (cmd === "init") {
   await cmdInit(a);
 } else if (cmd === "install") {

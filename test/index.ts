@@ -373,6 +373,10 @@ import {
 import {
   testClaimMemoryFailGracefully,
   testClaimMemoryTimeout,
+  testMemDirConfigIsRepoRootRelative,
+  testMemDirOverrideWinsAndRefusesMissing,
+  testMemDirSkipsEmptyCandidate,
+  testMemDirWalkStopsAtRepoRoot,
   testMemoryDefaultWiringNoDir,
   testMemoryDefaultWiringWithDir,
   testMemoryExplicitConfigWins,
@@ -734,6 +738,10 @@ export async function cmdTest(): Promise<void> {
   testMemoryReadRecentDecisions();
   testMemoryReadRecentDecisionsMonorepo();
   testReadMemLogIncludesRotatedArchives();
+  testMemDirWalkStopsAtRepoRoot();
+  testMemDirSkipsEmptyCandidate();
+  testMemDirConfigIsRepoRootRelative();
+  testMemDirOverrideWinsAndRefusesMissing();
   // Digest tests
   await testDigestEmptyRepo();
   await testDigestSinceFilter();
