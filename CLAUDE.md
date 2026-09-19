@@ -28,8 +28,12 @@ fail/`scope_mismatch`/`spec_gap` + `files[]` คือ input ของ `gatherEv
 ศูนย์แถว** เพราะ `.memory/mem.ts` ที่ root ของ vela เป็นสำเนาเก่าที่ยังไม่รู้จัก `--files` เลย
 (446 แถว `bug`/`decision` จึงตกพื้นทั้งหมดตอน cluster — แก้ด้วย `fapony init-mem --update` ครั้งเดียว
 **ก่อน**จะเขียน detector อะไรก็ตาม) · cluster จาก 17 แถวที่มี files: ราย**ไฟล์** ≥3 hits = 3 ไฟล์
-(บางเกินไป) แต่ราย**โฟลเดอร์**ติดแล้ว — `layouts/quick` 10×/9 ไฟล์, `layouts/statements` 9×/7,
-`server/routes/v1` 8×/5 · **สรุป: สัญญาณมีจริงแต่อดอาหาร ไม่ใช่ไม่มี** และ unit ของมันคือโซน ไม่ใช่ไฟล์
+(บางเกินไป) แต่ราย**โฟลเดอร์**พอมีรูป — `layouts/quick` 10×/9 ไฟล์, `layouts/statements` 9×/7,
+`server/routes/v1` 8×/5 · **แต่สามเลขนั้นเป็น *file-hit* รวม ไม่ใช่จำนวนเหตุการณ์** (verdict เดียว
+ที่แตะ 9 ไฟล์ในโฟลเดอร์เดียวถูกนับ 9) — นับแบบ 1 แถว = 1 เหตุการณ์แล้วเหลือ `server/services` 6× ·
+`server/routes/v1` 6× · `routes/_auth` 4× · `layouts/quick` 4× และมีโซนที่ ≥5 hits แค่ **2 โซน**
+`(แก้ 2026-09-19 หลังวัดซ้ำด้วย .fapony/plan/pain-cluster.ts)` · **สรุป: สัญญาณมีจริงแต่อดอาหาร
+ไม่ใช่ไม่มี** และ unit ของมันคือโซน ไม่ใช่ไฟล์ — แต่บางกว่าที่บรรทัดแรกของย่อหน้านี้เคยอ่านได้
 
 **แกนเซนเซอร์ (คำอธิบายเดิม):** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **`model × project × regime × quality` ข้าม run/client/project** — "งานแบบนี้ในโปรเจกต์นี้ ควรจ่ายให้ model ไหน" · session log ของทุกเจ้ามี token แต่ไม่มีเกรด, benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ — ต้องมี verdict + model + regime + token ครบสี่ในที่เดียวถึงจะถามได้ · **เคยเล็ง "project health / ไฟล์นี้เคยพัง" แล้วพลาด** — base rate ของ rework จริงคือ 1-9% ต่ำเกินจะเตือนอะไรได้ (ดูกฎ 8) `project_health_context` ยังอยู่แต่ไม่ใช่แกนอีกแล้ว fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
 
