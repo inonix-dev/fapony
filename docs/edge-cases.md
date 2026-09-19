@@ -11,7 +11,7 @@
 | `fapony update` รันจาก src/ | ROOT = `join(import.meta.dir, "..")` — ถ้าพลาดเป็น `import.meta.dir` ตรงๆ git pathspec (`-- bun.lock`) จะ relative กับ src/ → lockfile change ตรวจจับไม่เจอ และ version อ่านจาก package.json ไม่เจอบอก "unknown" (มี tripwire test ใน update.test.ts) |
 | ~/.config/fapony/ ไม่มี | mkdirSync(recursive) ก่อนเปิด db |
 | `fapony init` ซ้ำ | เช็คทุก dir (plan/spec/memory/evidence.json) → error ถ้าเจอของเก่า ห้ามทับ |
-| memory: null + fapony อยู่บน PATH | default-wiring ใช้ claim/close/add อัตโนมัติ ผ่าน `fapony mem` |
+| memory: null + มี `.fapony/.memory/` | default-wiring ใช้ claim/close/add อัตโนมัติ ผ่าน `fapony mem` |
 | Evidence cmd ที่ agent เสนอเองนอก allowlist | ไม่รันเด็ดขาด — รายงานเป็น *proposed — not executed* ([src/mcp/evidence.ts](src/mcp/evidence.ts)) |
 | AI สร้าง plan filename ซ้ำทับของเก่า | `skill/plan-with-pony/SKILL.md` กฎเหล็ก #7 — `ls .fapony/plan/` เช็คชื่อชนก่อนเขียนเสมอ |
 | `usage-web` ช้าครั้งแรกเมื่อ OpenCode/ZCode part table ใหญ่ (แสนกว่าแถว) | แก้แล้ว — `usage-web` อ่าน cache (`~/.config/fapony/usage-cache.jsonl`) ไม่แตะ session log · scan เกิดตอนคนสั่ง `fapony usage-scan` เท่านั้น · `--full` ย้ายไปเป็น flag ของ `usage-scan` |

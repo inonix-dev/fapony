@@ -413,7 +413,7 @@ relative รอดทั้งหมด archive เหลือ `git mv` + sed �
 fapony mem <add|close|find|kickoff|now|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
 fapony debt [--id <convention>] [--where <path>]   # ไฟล์ไหนยังไม่ย้ายไป convention ที่ประกาศไว้ (live, read-only)
 fapony lint-baseline [--cmd ...] [--diff]   # แยก "แดงอยู่ก่อนแล้ว" ออกจาก "ฉันทำให้แดง"
-fapony init-mem [--update]           # ลบ .memory/ เก่า + เตือน call site ที่ยังอ้างถึง (data files ไม่ถูกแตะ)
+fapony init-mem                     # ลบ .memory/ เก่า + เตือน call site ที่ยังอ้างถึง (data files ไม่ถูกแตะ)
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]
 # ── day-1: usage ──
 fapony usage-scan                    # scan session logs → usage-cache.jsonl (incremental)

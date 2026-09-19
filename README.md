@@ -451,7 +451,7 @@ fapony test                              # self-check
 
 - `worktrees` — name → absolute path mapping
 - `review.maxRounds` — round cap enforced by the gate
-- `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when fapony is on PATH
+- `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when a `.fapony/.memory/` dir exists
 - `paths` (`planDir`/`doneDir`/`specDir`/`memDir`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
 - `usageWeb` — optional `{ port, hostname }` for `fapony usage-web` server defaults. Run `fapony usage-scan` first to populate the cache.
 

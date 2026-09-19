@@ -38,26 +38,16 @@ You are about to move a PLAN that has been shipped to the archive.
    not move — mark it `status: blocked` + `blocked_by: <what you are waiting for>` and leave it in
    `plan/`, where `plan_list` will report it as blocked instead of as backlog.
 
-2. **Check inbound links, then `git mv`** — `.fapony/done/` sits *beside* `.fapony/plan/`, at the
-   same depth, so every relative link *inside* the plan (`../spec/SPEC-x.md`, `../../src/...`)
-   keeps working untouched. Nothing to normalize. What does change is how *other plans* reach
-   this one — a sibling reference becomes a `done/` one:
+2. **Run `plan-sweep --apply`** — this does the `git mv`, rewrites markdown links inside the
+   file and inbound links from other plan files, warns about plain-text mentions, and logs
+   a decision row — all in one call:
    ```bash
-   grep -rln 'PLAN-foo.md' .fapony/plan/ .fapony/spec/ docs/   # who points at it
-   git mv .fapony/plan/PLAN-foo.md .fapony/done/PLAN-foo.md    # same name, same depth
-   #  in .fapony/plan/*.md:  (PLAN-foo.md)  ->  (../done/PLAN-foo.md)
+   fapony mem plan-sweep <PLAN-foo.md> --apply
    ```
-   Fewer than 5 inbound files → fix them yourself · more → report the list.
-
-   **The filename gets no date prefix.** The ship date is already in the header (step 1), and
-   duplicating it into the name buys a sortable `ls` at the price of rewriting every inbound link
-   on every ship, forever. "What shipped on which day" is a question to derive, not to store:
-   ```bash
-   grep -h 'shipped' .fapony/done/*.md | sort
-   ```
-   If git refuses ("not under version control" — `.fapony/` is gitignored in
-   this repo), plain `mv` instead; there's nothing to commit for an untracked path, so skip
-   step 4 in that case.
+   It refuses if the file lacks a shipped header or has open mem rows (next/bug/hold/decision/note).
+   If git refuses ("not under version control" — `.fapony/` is gitignored in this repo), plain
+   `mv` instead; there's nothing to commit for an untracked path, so skip step 4 in that case.
+   The filename gets no date prefix — the ship date is already in the header (step 1).
 
 3. **Leave the spec where it is** — `.fapony/spec/` is a reference library, not a queue. A spec
    answers "how does this work", which is asked long after the plan that ordered it shipped, and
@@ -100,8 +90,8 @@ You are about to move a PLAN that has been shipped to the archive.
 Input: .fapony/plan/PLAN-kickoff.md, no shipped header yet
 Steps:
 1. stamp header: > ✅ **shipped 2026-09-13** (a1b2c3)
-2. inbound: README.md, .fapony/plan/PLAN-loop.md → (PLAN-kickoff.md) becomes (../done/PLAN-kickoff.md)
-   git mv .fapony/plan/PLAN-kickoff.md .fapony/done/PLAN-kickoff.md
+2. fapony mem plan-sweep .fapony/plan/PLAN-kickoff.md --apply
+   → moved, links rewritten, decision logged
 3. spec: untouched, stays in .fapony/spec/
 4. commit
 5. verdict_submit(verdict="pass", reason_code="none", regime="code", worktree="/Users/you/Project/fapony/wt-fapony", plan=".fapony/done/PLAN-kickoff.md", files=["src/kickoff.ts"])
@@ -121,5 +111,5 @@ A ship worth a note looks like this instead:
 
 - No git repo / no commits (can't derive a shipped hash) → tell user: "Add header > ✅ **shipped** (<hash>) first"
 - Stamped the header yourself → always say which hash you used
-- Link normalize fails → report which paths normalized wrong
-- Too many inbound links → report full list, don't fix yourself
+- plan-sweep refuses (open mem rows) → close them or use `MEM_FORCE=1`
+- Too many inbound links → plan-sweep reports them; too many to fix → report the list

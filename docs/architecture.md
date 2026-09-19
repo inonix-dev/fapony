@@ -6,7 +6,7 @@
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|plan-seed|review-seed|digest|mcp|hook-stop|test
+  fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|plan-seed|review-seed|digest|mcp|hook-stop|test
   fapony.config.json  # runtime config (worktrees, review.maxRounds, memory, paths, safety) — optional, gitignored
   skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
                                 # each SKILL.md is self-contained — the symlink ships only
@@ -50,7 +50,7 @@ fapony/
     hook.ts             # fapony hook-stop — Claude Code Stop hook: blocks a turn with ungraded commits
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
     init.ts            # fapony init — scaffold .fapony/{plan,done,spec,.memory,evidence.json}
-    init-mem.ts        # init-mem — scaffold/refresh (`--update`) the memory copy; `init` reuses its copyDir
+    init-mem.ts        # init-mem — delete legacy .memory/ dirs + warn about stale package.json call sites
     digest/               # fapony digest — merges mem log + plans + usage cache + verdicts into one page
     stats/                # fapony stats — KPI across runs
       data.ts             # getStatsData() + StatsData type + computeEfficiency() + reason_code/plan/escalation/best-passing queries
