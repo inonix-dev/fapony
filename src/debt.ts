@@ -19,7 +19,7 @@
 // Read-only stdout: no file writes, no state.db, no cache (rule 5b).
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { collectSourceFiles } from "./analyze.js";
 import { openDb } from "./db/index.js";
 import { readMemLog, resolveMemDir } from "./memory.js";
@@ -510,20 +510,31 @@ export function formatPromotions(promotions: Promotion[]): string[] {
 
 // --- Formatting ---
 
-// Zone grouping: how many leading path segments define a "zone" for chunking debt.
-const ZONE_DEPTH = 3;
+// Zone grouping: a zone is a file's *directory*, capped at this many leading
+// segments — never a fixed-depth prefix of the path (which would cut into the
+// filename) and never the filename itself. SPEC §4 shows zones at depth 5
+// (`apps/mdl/src/server/services`) and depth 3 (`packages/cache/src`) in the
+// same report, so the cap must follow the directory, not a constant.
+const ZONE_DEPTH = 5;
 // Default cap on zones shown per convention — more than this is a wall, not an answer.
 const ZONE_CAP = 6;
 
-/** Group files by their first N path segments (the "zone"). */
+/** The zone of a file: its directory path, capped at `depth` segments. */
+function zoneOf(file: string, depth: number): string {
+  const parts = dirname(file)
+    .split("/")
+    .filter((p) => p && p !== ".");
+  return parts.slice(0, depth).join("/") || ".";
+}
+
+/** Group files by their directory zone (see `zoneOf`). */
 function groupFilesByZone(
   files: string[],
   depth: number,
 ): Map<string, string[]> {
   const zones = new Map<string, string[]>();
   for (const f of files) {
-    const parts = f.split("/");
-    const zone = parts.slice(0, depth).join("/");
+    const zone = zoneOf(f, depth);
     const cur = zones.get(zone) ?? [];
     cur.push(f);
     zones.set(zone, cur);
