@@ -67,7 +67,12 @@ if (cmd === "analyze") {
     rest = a.filter((_, i) => i !== memDirIdx && i !== memDirIdx + 1);
   }
   initStore(process.cwd(), overrideMemDir);
-  await cmdMem(rest, overrideMemDir);
+  try {
+    await cmdMem(rest, overrideMemDir);
+  } catch (e) {
+    console.error(`fapony mem: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
 } else if (cmd === "init") {
   await cmdInit(a);
 } else if (cmd === "install") {

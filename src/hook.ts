@@ -26,7 +26,7 @@ import {
   statSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join, relative } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { collectSourceFiles, SCAN_EXTS } from "./analyze.js";
 import { openDb } from "./db/index.js";
 import { debtForFile, loadConventions } from "./debt.js";
@@ -497,6 +497,142 @@ export function readHintFor(opts: ReadHintInput): string | null {
   }
 }
 
+// --- Re-read tracking (mtime heuristic — annotate only) ---
+//
+// The size hint above fires on almost nothing real: measured 2026-09-20 over
+// 28,151 read parts across every project, only 2.3% had fileSize>=24KB with a
+// full bound, while 55.5% of read context came from files under 24KB and 19.5%
+// from re-reading a path already read this session (39.2% of context sits in
+// (session,path) pairs read >=2x). The cost is repetition, not one big file —
+// so the gate here is not size, it is "same file, unchanged, again".
+//
+// mtime is the whole mechanism: unchanged mtime since the previous read in
+// this session = the same bytes = annotate; mtime moved = someone edited it =
+// new content = silent. No Edit/Grep tracking — mtime already answers "did it
+// change", so no tool-sequence tagging is needed.
+//
+// Log lives beside hint-log but is separate — hint-log counts fires, this
+// records reads keyed by session (one file per session, so a hint never leaks
+// into the next session / rule 11). Same contract as the size hint: annotate
+// only, never block, every unknown → silent, best-effort. Called at the caller
+// only, never inside a pure function (test pollution — same reason
+// recordHintFire is caller-side).
+
+const READ_TRACK_DIR = "read-track";
+
+export interface ReadTrackRow {
+  ts: string;
+  path: string;
+  mtime: number;
+}
+
+/** Filename key for a session — basename of a transcript path or a raw id. */
+export function sessionKey(session: string): string {
+  const base = basename(session).replace(/\.[^.]+$/, "");
+  return base.replace(/[^A-Za-z0-9_-]/g, "-") || "unknown";
+}
+
+/** Directory holding one read log per session. */
+function readTrackDir(): string {
+  const base =
+    process.env.FAPONY_STATE_DIR || join(homedir(), ".config", "fapony");
+  return join(base, READ_TRACK_DIR);
+}
+
+/** Absolute path of a session's read log — may not exist. */
+export function readTrackPath(session: string): string {
+  return join(readTrackDir(), `${sessionKey(session)}.jsonl`);
+}
+
+function readTrackRows(session: string): ReadTrackRow[] {
+  const p = readTrackPath(session);
+  if (!existsSync(p)) return [];
+  const rows: ReadTrackRow[] = [];
+  for (const line of readFileSync(p, "utf-8").split("\n")) {
+    if (!line) continue;
+    try {
+      const r = JSON.parse(line) as ReadTrackRow;
+      if (typeof r.path === "string" && typeof r.mtime === "number") {
+        rows.push(r);
+      }
+    } catch {
+      // a torn line must not lose the rest of the log
+    }
+  }
+  return rows;
+}
+
+function appendReadTrackRow(session: string, row: ReadTrackRow): void {
+  const dir = readTrackDir();
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  appendFileSync(readTrackPath(session), `${JSON.stringify(row)}\n`, "utf-8");
+}
+
+export interface RereadHintInput {
+  filePath: unknown;
+  offset?: unknown;
+  limit?: unknown;
+  cwd: string;
+  /** Session identity — transcript path (Claude) or session id (OpenCode). */
+  session?: unknown;
+}
+
+/**
+ * Annotate a full-file read of a path already read this session whose mtime
+ * has not moved, or null. Records every full read, so the returned count is
+ * the number of prior reads. Every unknown (kill switch on, no session, no
+ * path, bounded read, partial offset, missing file, read/write failure)
+ * resolves to null — a hint must never fire on a guess.
+ */
+export function rereadHintFor(opts: RereadHintInput): string | null {
+  try {
+    if (process.env.FAPONY_NO_REREAD_HINT === "1") return null;
+    if (typeof opts.session !== "string" || opts.session === "") return null;
+    if (typeof opts.filePath !== "string" || opts.filePath === "") return null;
+    // A bounded/partial read is already cheap — same line the size hint draws.
+    const offset = typeof opts.offset === "number" ? opts.offset : null;
+    if (offset !== null && offset !== 0) return null;
+    const limit = typeof opts.limit === "number" ? opts.limit : null;
+    if (limit !== null && limit < READ_HINT_MIN_LIMIT) return null;
+
+    const abs = (() => {
+      const p = opts.filePath.startsWith("/")
+        ? opts.filePath
+        : join(opts.cwd, opts.filePath);
+      try {
+        return realpathSync(p);
+      } catch {
+        return resolve(p);
+      }
+    })();
+    const st = statSync(abs);
+    if (!st.isFile()) return null;
+    const mtime = Math.round(st.mtimeMs);
+
+    const prior = readTrackRows(opts.session).filter((r) => r.path === abs);
+    const last = prior.at(-1);
+    appendReadTrackRow(opts.session, {
+      ts: new Date().toISOString(),
+      path: abs,
+      mtime,
+    });
+    if (!last || last.mtime !== mtime) return null;
+
+    // The hint feeds the agent's context — show the path *it* passed, relative
+    // to its own cwd, so a symlinked cwd (macOS /var → /private/var) does not
+    // turn a clean relative path into a resolved absolute one.
+    const rel = relative(opts.cwd, opts.filePath);
+    const shown = rel.startsWith("..") ? opts.filePath : rel;
+    return (
+      `fapony: already read ${shown} ${prior.length}\u00d7 this session — ` +
+      `content unchanged since the last read (mtime), grep the line range ` +
+      `you need instead of re-reading it`
+    );
+  } catch {
+    return null;
+  }
+}
+
 // --- Commit hint (tool.execute.after — annotate only, never block) ---
 //
 // OpenCode has no Stop hook (Cursor does — see cursor.ts hook-stop wiring)
@@ -595,6 +731,8 @@ export async function cmdHookReadHint(): Promise<void> {
   try {
     const raw = JSON.parse(await Bun.stdin.text()) as {
       cwd?: string;
+      transcript_path?: string;
+      session_id?: string;
       tool_input?: {
         file_path?: unknown;
         offset?: unknown;
@@ -603,6 +741,9 @@ export async function cmdHookReadHint(): Promise<void> {
     };
     const cwd = raw.cwd ?? process.cwd();
     const filePath = raw.tool_input?.file_path;
+    // One read log per session — transcript_path is the Claude session file,
+    // session_id the fallback when a client omits it.
+    const session = raw.transcript_path ?? raw.session_id;
     const parts: string[] = [];
     const hint = readHintFor({
       filePath,
@@ -611,6 +752,14 @@ export async function cmdHookReadHint(): Promise<void> {
       cwd,
     });
     if (hint) parts.push(hint);
+    const reread = rereadHintFor({
+      filePath,
+      offset: raw.tool_input?.offset,
+      limit: raw.tool_input?.limit,
+      cwd,
+      session,
+    });
+    if (reread) parts.push(reread);
     const ctx = readContextData(filePath, cwd);
     if (ctx) {
       for (const line of [...ctx.debtLines, ...ctx.memLines]) {

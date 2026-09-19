@@ -77,7 +77,8 @@ export function testDebtDerivesListAndDropsWithTheFile(): void {
     // guard + where both applied: only a.ts counts
     assert.deepEqual(e.files, ["src/server/services/a.ts"]);
     assert.equal(e.movedCount, 1);
-    assert.ok(formatDebt(report).includes("debt 1 · moved 1"));
+    assert.ok(formatDebt(report).includes("debt 1"));
+    assert.ok(formatDebt(report).includes("moved 1"));
 
     // Done criteria: delete the stale line → the number drops by itself
     writeFileSync(

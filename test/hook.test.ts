@@ -1,5 +1,11 @@
 import assert from "node:assert";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -12,7 +18,10 @@ import {
   normalizeStopInput,
   READ_HINT_MIN_BYTES,
   readHintFor,
+  readTrackPath,
   recordHintFire,
+  rereadHintFor,
+  sessionKey,
   stopOutput,
   utcStamp,
 } from "../src/hook.js";
@@ -288,6 +297,124 @@ export function testReadHintNeedsGitRepo(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ read hint stays silent outside a git repo");
+}
+
+// --- Re-read hint (mtime heuristic — annotate only) ---
+
+export function testRereadHintFiresOnUnchangedRepeat(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-rr-"));
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = dir;
+  try {
+    const p = join(dir, "small.ts");
+    writeFileSync(p, "export const x = 1;\n");
+    const session = "/tmp/transcripts/sess-a.jsonl";
+    assert.equal(
+      sessionKey(session),
+      "sess-a",
+      "key is the transcript basename",
+    );
+    // first full read: records, stays silent
+    assert.equal(
+      rereadHintFor({ filePath: p, cwd: dir, session }),
+      null,
+      "first read must stay silent",
+    );
+    // second read, unchanged content, same session = the hint
+    const hint = rereadHintFor({ filePath: p, cwd: dir, session });
+    assert.ok(hint, "second unchanged read must hint");
+    assert.match(hint ?? "", /already read small\.ts 1\u00d7/);
+    assert.match(hint ?? "", /grep the line range/);
+    // one log per session — a different session sees nothing
+    assert.equal(
+      rereadHintFor({
+        filePath: p,
+        cwd: dir,
+        session: "/tmp/transcripts/sess-b.jsonl",
+      }),
+      null,
+      "no cross-session leak",
+    );
+    // a bounded read is already cheap — never tracked
+    assert.equal(
+      rereadHintFor({ filePath: p, cwd: dir, session, limit: 5 }),
+      null,
+      "bounded read must stay silent",
+    );
+    // a partial read (offset) is never tracked
+    assert.equal(
+      rereadHintFor({ filePath: p, cwd: dir, session, offset: 2 }),
+      null,
+      "offset read must stay silent",
+    );
+    assert.ok(existsSync(readTrackPath(session)), "read log must be written");
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ re-read hint fires on an unchanged repeat, per session");
+}
+
+export function testRereadHintSilentAfterEdit(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-rr-"));
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = dir;
+  try {
+    const p = join(dir, "edit.ts");
+    writeFileSync(p, "export const x = 1;\n");
+    const session = "sess-edit";
+    assert.equal(rereadHintFor({ filePath: p, cwd: dir, session }), null);
+    // change content and force a distinct mtime (same-ms writes are possible)
+    writeFileSync(p, "export const x = 2;\n");
+    const later = new Date(Date.now() + 5000);
+    utimesSync(p, later, later);
+    assert.equal(
+      rereadHintFor({ filePath: p, cwd: dir, session }),
+      null,
+      "mtime moved = new content = stay silent",
+    );
+    // the read that recorded the new mtime makes the next one a hit
+    assert.ok(
+      rereadHintFor({ filePath: p, cwd: dir, session }),
+      "unchanged since the new mtime must hint",
+    );
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ re-read hint stays silent after the file changes");
+}
+
+export function testRereadHintKillSwitch(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-rr-"));
+  const origState = process.env.FAPONY_STATE_DIR;
+  const origKill = process.env.FAPONY_NO_REREAD_HINT;
+  process.env.FAPONY_STATE_DIR = dir;
+  process.env.FAPONY_NO_REREAD_HINT = "1";
+  try {
+    const p = join(dir, "k.ts");
+    writeFileSync(p, "export const x = 1;\n");
+    const session = "sess-kill";
+    assert.equal(rereadHintFor({ filePath: p, cwd: dir, session }), null);
+    assert.equal(
+      rereadHintFor({ filePath: p, cwd: dir, session }),
+      null,
+      "kill switch = always silent",
+    );
+    assert.ok(
+      !existsSync(readTrackPath(session)),
+      "kill switch must not write the log",
+    );
+  } finally {
+    if (origState === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = origState;
+    if (origKill === undefined) delete process.env.FAPONY_NO_REREAD_HINT;
+    else process.env.FAPONY_NO_REREAD_HINT = origKill;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ re-read hint kill switch silences and stops tracking");
 }
 
 export function testReadHintClaudeOutputShape(): void {

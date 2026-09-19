@@ -24,6 +24,15 @@ export function cmdWhere(args: string[], memDir?: string): void {
 
   const result = whereMemDir(fromDir, memDir);
 
+  if (result.step === "ambiguous") {
+    console.error(
+      "fapony mem: two mem dirs at the same level, refusing to guess",
+    );
+    for (const c of result.candidates ?? []) console.error(`  ${c}`);
+    console.error("cd into one of them, set paths.memDir, or pass --mem-dir");
+    process.exit(1);
+  }
+
   if (!result.dir) {
     console.log(
       `fapony mem where — no .fapony/.memory/ found (step: ${result.step})`,
@@ -37,6 +46,7 @@ export function cmdWhere(args: string[], memDir?: string): void {
     config: "paths.memDir in fapony.config.json",
     "walk-up": "walked up from cwd",
     "repo-root": "git repo root fallback",
+    ambiguous: "ambiguous",
     none: "not found",
   };
 

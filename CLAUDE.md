@@ -96,7 +96,8 @@ verified"* · *"Plan is entirely stale"* · ฉะนั้น mem ที่ม�
 
 ```
 fapony.ts       CLI dispatch
-src/memory.ts   mem log reader/resolver (.fapony/.memory → .memory fallback)
+src/mem/        fapony mem <add|close|find|kickoff|now|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
+src/memory.ts   mem log reader/resolver (.fapony/.memory)
 src/debt.ts     fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย" (live, ไม่ persist)
 src/lint-baseline.ts  แยก "แดงอยู่ก่อนแล้ว" ออกจาก "ฉันทำให้แดง"
 src/conventions-seed.ts  fill-signal ตอน init — wrapper detector อ่าน snapshot ไม่แตะ history
@@ -109,7 +110,7 @@ src/db/ src/stats/ src/report/ src/context/   ← ledger (แช่แข็ง)
 src/*.ts        gates · parse · safety · math · init · init-mem · telemetry · setup
                 · update · util · analyze · plan-seed · review-seed · hook
 skill/          <name>/SKILL.md — symlink เข้า client โดย `fapony install`
-templates/      PLAN.md / SPEC.md / mem/ — ของที่ `fapony init` วาง
+templates/      PLAN.md / SPEC.md — ของที่ `fapony init` วาง
 test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · test/install/ · test/telemetry/
 ```
 
@@ -124,17 +125,17 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 **บันทึกระหว่างทำงาน ไม่ต้องรอให้สั่ง** — ไม่มีกลไกไหนเขียนให้ มีแต่ agent ที่รันเอง:
 
 ```bash
-bun .fapony/.memory/mem.ts kickoff .fapony/plan/PLAN-x.md   # เปิด session ด้วยอันนี้
-bun .fapony/.memory/mem.ts add decision "ตัดสินอะไร เพราะอะไร" --files a.ts,b.ts
-bun .fapony/.memory/mem.ts add bug "อะไรพัง" --files a.ts
-bun .fapony/.memory/mem.ts add note "สถานะที่ session หน้าต้องรู้"
-bun .fapony/.memory/mem.ts close <id> "แก้แล้ว <sha>"
-bun .fapony/.memory/mem.ts find "usage-web"
+fapony mem kickoff .fapony/plan/PLAN-x.md   # เปิด session ด้วยอันนี้
+fapony mem add decision "ตัดสินอะไร เพราะอะไร" --files a.ts,b.ts
+fapony mem add bug "อะไรพัง" --files a.ts
+fapony mem add note "สถานะที่ session หน้าต้องรู้"
+fapony mem close <id> "แก้แล้ว <sha>"
+fapony mem find "usage-web"
 ```
 
-- **`--files` สำคัญที่สุด** — ไม่มีมัน แถวนั้นตกพื้นตอน cluster หาโซนที่เจ็บซ้ำ · รีโปที่ `mem.ts`
-  เป็นสำเนาเก่ายังไม่รู้จัก `--files` ให้ `fapony init-mem --update` ครั้งเดียว **ก่อน**จะสรุป
-  อะไรจาก log (วัดแล้ว: vela มี 2,672 แถว แต่ `files[]` ศูนย์แถว เพราะเหตุนี้)
+- **`--files` สำคัญที่สุด** — ไม่มีมัน แถวนั้นตกพื้นตอน cluster หาโซนที่เจ็บซ้ำ · รีโปที่ log
+  เก่าไม่รู้จัก `--files` ให้ `fapony init-mem` ครั้งเดียว **ก่อน**จะสรุปอะไรจาก log
+  (วัดแล้ว: vela มี 2,672 แถว แต่ `files[]` ศูนย์แถว เพราะเหตุนี้)
 - เขียนแต่ละแถวให้ **standalone** — ถูกอ่านอีกทีในอีกหลายเดือนโดยไม่มีบทสนทนานี้
 - `close` เป็นตัวเดียวที่ปิด `bug` ไม่มีมัน list จะโตอย่างเดียว
 - **kind ทั้งหมดยังใช้จริง ไม่มี deprecated** — `decision`/`bug`/`note` agent เลือกเอง ส่วน
@@ -201,20 +202,19 @@ events คือ audit trail ที่เป็นข้อเท็จจริ
   "worktrees": { "<key>": "<absolute-path>" },
   "review": { "maxRounds": 2 },
   "memory": {
-    "claim": ["bun", ".fapony/.memory/mem.ts", "claim", "{id}"],
-    "close": ["bun", ".fapony/.memory/mem.ts", "close", "{id}", "{msg}"],
-    "add":   ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],
-    "kickoff": ["bun", ".fapony/.memory/mem.ts", "kickoff"]
+    "claim": ["fapony", "mem", "claim", "{id}"],
+    "close": ["fapony", "mem", "close", "{id}", "{msg}"],
+    "add":   ["fapony", "mem", "add", "{kind}", "{text}"],
+    "kickoff": ["fapony", "mem", "kickoff"]
   },
   "telemetry": { "enabled": false, "endpoint": "https://your-server/ingest" },
-  "paths": { "stateDir": "~/.config/fapony", "planDir": ".fapony/plan", "doneDir": ".fapony/done", "specDir": ".fapony/spec", "memoryEntry": ".fapony/.memory/mem.ts" },
+  "paths": { "stateDir": "~/.config/fapony", "planDir": ".fapony/plan", "doneDir": ".fapony/done", "specDir": ".fapony/spec", "memDir": ".fapony/.memory" },
   "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] },
   "usageWeb": { "port": 8080, "hostname": "127.0.0.1" }
 }
 ```
 
-- `memory: null` = ปิดทั้งชั้น ไม่ error (แต่ถ้า `.fapony/.memory/mem.ts` มีจริง → default-wiring
-  ใช้ claim/close/add อัตโนมัติ)
+- `memory: null` = ปิดทั้งชั้น ไม่ error
 - `telemetry` — opt-in only (omit หรือ `null` = ปิด) ดู [TELEMETRY.md](TELEMETRY.md)
 - env override: `FAPONY_CONFIG` · `FAPONY_STATE_DIR` (ชนะ `paths.stateDir`)
 - getters รวมศูนย์ใน `src/db/getters.ts` — ห้าม hardcode default ซ้ำที่ call site
@@ -389,7 +389,7 @@ section 1–4 ห้ามขาด · section 6 แต่ละขั้นต�
 **plan = what/why/order, spec = how in detail** — ห้ามแปะ API shape/schema/edge-case ลงใน
 plan section 7 ตรง ๆ ให้ link ไปที่ spec
 
-**Frontmatter + TL;DR:** หัวไฟล์มี `kind`/`status`/`blocked_by`/`blocks`/`superseded_by`/`spec`
+**Frontmatter + TL;DR:** หัวไฟล์มี `kind`/`status`/`blocked_by`/`blocks`/`superseded_by`/`spec`/`priority`
 (ค่าเป็น EN เสมอ — เป็น enum ที่ tool อ่าน) แล้วตามด้วย `## TL;DR` ≤15 บรรทัดที่เป็น**ส่วนเดียว
 ที่เปลี่ยนได้ระหว่างทำงาน** · `plan_list` นับ checkbox ของ section `##` แรกเท่านั้น และ render
 เป็น master checklist ได้ — **ห้ามสร้างไฟล์ MASTER.md** ทุกบรรทัดของมัน derive ได้อยู่แล้ว
@@ -410,9 +410,10 @@ relative รอดทั้งหมด archive เหลือ `git mv` + sed �
 
 ```bash
 # ── core: mem + debt ──
-fapony debt                          # ไฟล์ไหนยังไม่ย้ายไป convention ที่ประกาศไว้ (live, read-only)
+fapony mem <add|close|find|kickoff|now|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
+fapony debt [--id <convention>] [--where <path>]   # ไฟล์ไหนยังไม่ย้ายไป convention ที่ประกาศไว้ (live, read-only)
 fapony lint-baseline [--cmd ...] [--diff]   # แยก "แดงอยู่ก่อนแล้ว" ออกจาก "ฉันทำให้แดง"
-fapony init-mem [--update]           # re-copy templates/mem/ เข้ารีโปนี้ — data files (log.jsonl) ไม่ถูกแตะ
+fapony init-mem                     # ลบ .memory/ เก่า + เตือน call site ที่ยังอ้างถึง (data files ไม่ถูกแตะ)
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]
 # ── day-1: usage ──
 fapony usage-scan                    # scan session logs → usage-cache.jsonl (incremental)

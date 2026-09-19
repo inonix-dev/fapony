@@ -37,7 +37,7 @@ quietly counted as free.
 </details>
 
 That is day one. Past that, fapony measures what coding agents actually do — rounds, pass/fail,
-cost per grade — through 5 MCP tools any agent can call. If you juggle more than one agent, this is
+cost per grade — through 4 MCP tools any agent can call. If you juggle more than one agent, this is
 the point: the numbers come from the same yardstick everywhere, so "which model earns its keep on
 which kind of task" becomes a data question instead of a vibe. On top of measurement it checks
 claims against git facts: handoff conformance, allowlisted evidence, a 6-grade verdict — with
@@ -130,7 +130,7 @@ fapony init /path/to/your-worktree
 
 With `.fapony/evidence.json` in place, any graded run can be replayed as a report. This one is
 a CLI command, not an MCP tool — the schemas cost every session of every client and no skill
-called them (see [The 5 tools](#the-5-tools) below). Grade something first;
+called them (see [The 4 tools](#the-4-tools) below). Grade something first;
 `verdict_submit` is what creates the run:
 
 ```bash
@@ -169,7 +169,7 @@ losing a single number.
 
 | | The ledger | The work side |
 |---|---|---|
-| What it is | 5 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
+| What it is | 4 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
 | Needs | an MCP client | nothing — or your own tooling instead |
 | Writes | one graded row per unit of work | nothing |
 | Skip it and | there is no fapony | fapony still answers every question |
@@ -203,7 +203,7 @@ sequenceDiagram
 The Stop hook is the only thing fapony does *to* you — once per turn, when a commit ends
 ungraded. It never picks the grade; it cannot see whether the work held up.
 
-### The 5 tools
+### The 4 tools
 
 | Tool | Tier | Purpose |
 |------|------|---------|
@@ -411,7 +411,7 @@ archived one: [examples/](https://github.com/kire21b/fapony/tree/main/examples).
 
 ```bash
 # Verification & reporting
-fapony mcp                               # MCP server (stdio JSON-RPC — 5 tools)
+fapony mcp                               # MCP server (stdio JSON-RPC — 4 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
@@ -422,9 +422,19 @@ fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]
 fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN (+SPEC): frontmatter, 8 empty sections, prior-art list, ledger context; SPEC chunks carry signatures, every section capped — the agent fills the judgment
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]  # read-only scope facts for a review (changed files, importers, untested, signatures, plan cross-check)
 
+# Memory & convention debt
+fapony mem add <kind> "<text>" --files f1,f2 [spec.md]   # append a mem row (decision/bug/note/next/hold)
+fapony mem close <id> "<msg>"              # close a bug
+fapony mem find "<text>"                   # substring-search every row
+fapony mem kickoff [<plan.md>]             # open a session + a next-up list
+fapony mem where                           # show the resolved mem dir and which step won
+fapony mem now | done | stale              # views
+fapony debt [--id <convention>] [--where <path>]   # ไฟล์ไหนยังไม่ย้ายไป convention ที่ประกาศไว้ (live, read-only)
+fapony lint-baseline [--cmd ...] [--diff]  # separate "already red" from "I made it red"
+
 # Setup & maintenance
 fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/evidence)
-fapony init-mem [--update]               # refresh the memory scaffold from the template
+fapony init-mem                          # delete .memory/ + warn call sites still referencing it
 fapony install                            # detect installed clients, prompt to wire each
 fapony install --all                      # wire all detected clients without prompting
 fapony install --platform <name>          # force a specific client (bypasses detection)
@@ -441,8 +451,8 @@ fapony test                              # self-check
 
 - `worktrees` — name → absolute path mapping
 - `review.maxRounds` — round cap enforced by the gate
-- `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when `.fapony/.memory/mem.ts` exists
-- `paths` (`planDir`/`doneDir`/`specDir`/`memoryEntry`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
+- `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when a `.fapony/.memory/` dir exists
+- `paths` (`planDir`/`doneDir`/`specDir`/`memDir`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
 - `usageWeb` — optional `{ port, hostname }` for `fapony usage-web` server defaults. Run `fapony usage-scan` first to populate the cache.
 
 Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases live with the code in the repo — this README intentionally doesn't duplicate them.
@@ -450,7 +460,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 ## Scope
 
 **Supported:**
-- MCP server — 5 tools via stdio JSON-RPC, works with any MCP client
+- MCP server — 4 tools via stdio JSON-RPC, works with any MCP client
 - Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
 - Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
 - Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file

@@ -216,7 +216,55 @@ function walkUpForMemDir(fromDir: string, acceptEmpty: boolean): string | null {
 
 export interface MemDirResult {
   dir: string | null;
-  step: "flag" | "config" | "walk-up" | "repo-root" | "none";
+  step: "flag" | "config" | "walk-up" | "repo-root" | "ambiguous" | "none";
+  /** For step "ambiguous" — the sibling `.fapony/.memory/` dirs that hold logs. */
+  candidates?: string[];
+}
+
+// Dirs that never hold a project mem log and are expensive to walk.
+const SCAN_SKIP = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  "coverage",
+  "vendor",
+  "out",
+  "target",
+  ".next",
+  ".turbo",
+  ".cache",
+]);
+
+/**
+ * Every `.fapony/.memory/` under `root` that holds a real log, bounded to a
+ * shallow walk. Used only to detect the ambiguous monorepo layout (SPEC §1
+ * fail example): if two or more app-scoped logs exist and nothing at/above cwd
+ * holds one, the caller must refuse rather than start a third log at the root.
+ */
+function findMemDirsUnder(root: string): string[] {
+  const found: string[] = [];
+  const walk = (dir: string, depth: number): void => {
+    if (depth > 5) return;
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name === ".fapony") {
+        const candidate = join(dir, ".fapony", ".memory");
+        if (hasMemLogs(candidate)) found.push(candidate);
+        continue;
+      }
+      if (e.name.startsWith(".") || SCAN_SKIP.has(e.name)) continue;
+      walk(join(dir, e.name), depth + 1);
+    }
+  };
+  walk(root, 0);
+  return found;
 }
 
 /**
@@ -267,6 +315,16 @@ function resolveMemDirFrom(
   // Step 3: walk up from cwd, only a dir with a real log counts
   const walked = walkUpForMemDir(cwd, false);
   if (walked) return { dir: walked, step: "walk-up" };
+
+  // Guard (SPEC §1 fail example): nothing at/above cwd holds a log, but the repo
+  // has two or more app-scoped ones — refuse instead of silently creating a
+  // third log at the root that no app-scoped reader will ever see.
+  if (root) {
+    const candidates = findMemDirsUnder(root);
+    if (candidates.length >= 2) {
+      return { dir: null, step: "ambiguous", candidates };
+    }
+  }
 
   // Step 4: <repo root>/.fapony/.memory/ — where a new log is created
   if (root) {

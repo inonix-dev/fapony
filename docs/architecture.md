@@ -6,7 +6,7 @@
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|plan-seed|review-seed|digest|mcp|hook-stop|test
+  fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|plan-seed|review-seed|digest|mcp|hook-stop|test
   fapony.config.json  # runtime config (worktrees, review.maxRounds, memory, paths, safety) — optional, gitignored
   skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
                                 # each SKILL.md is self-contained — the symlink ships only
@@ -17,9 +17,9 @@ fapony/
     git-commit-conventional/    # commit แยก concern + conventional message
     git-ship/                   # push branch, open PR, merge, reset branch onto base
   templates/
-    PLAN.md / SPEC.md / mem/     # plan+spec templates, memory scaffold for `fapony init`
-                                 # (ชื่อโฟลเดอร์ = ชื่อ CLI ที่มันเป็น (`mem`) ไม่ใช่ปลายทางที่ไปวาง (.memory/))
+    PLAN.md / SPEC.md              # plan+spec templates for `fapony init`
   src/
+    mem/                # fapony mem <add|close|find|kickoff|now|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
     db/               # SQLite + config
       store.ts        # openDb + schema/migration (PRAGMA user_version) + CRUD
       load.ts         # loadConfig()
@@ -50,7 +50,7 @@ fapony/
     hook.ts             # fapony hook-stop — Claude Code Stop hook: blocks a turn with ungraded commits
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
     init.ts            # fapony init — scaffold .fapony/{plan,done,spec,.memory,evidence.json}
-    init-mem.ts        # init-mem — scaffold/refresh (`--update`) the memory copy; `init` reuses its copyDir
+    init-mem.ts        # init-mem — delete legacy .memory/ dirs + warn about stale package.json call sites
     digest/               # fapony digest — merges mem log + plans + usage cache + verdicts into one page
     stats/                # fapony stats — KPI across runs
       data.ts             # getStatsData() + StatsData type + computeEfficiency() + reason_code/plan/escalation/best-passing queries
@@ -83,7 +83,7 @@ fapony/
       utils.ts          # shared JSON(C) helpers
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative
-    mcp/                   # MCP server — stdio JSON-RPC, 5 tools
+    mcp/                   # MCP server — stdio JSON-RPC, 4 tools
       index.ts             # MCP entry point + tool registration
       transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn the grading habit without editing their own rules file
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)

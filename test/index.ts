@@ -138,6 +138,9 @@ import {
   testReadHintNeedsGitRepo,
   testReadHintPluginSource,
   testReadHintSkipsCheapReads,
+  testRereadHintFiresOnUnchangedRepeat,
+  testRereadHintKillSwitch,
+  testRereadHintSilentAfterEdit,
   testStopOutputShapesPerClient,
   testStopPayloadsMapToSameDecision,
   testUtcStampMatchesSqliteFormat,
@@ -373,6 +376,7 @@ import {
 import {
   testClaimMemoryFailGracefully,
   testClaimMemoryTimeout,
+  testMemDirAmbiguousRefusesWrite,
   testMemDirConfigIsRepoRootRelative,
   testMemDirOverrideWinsAndRefusesMissing,
   testMemDirSkipsEmptyCandidate,
@@ -654,6 +658,9 @@ export async function cmdTest(): Promise<void> {
   testReadHintNeedsGitRepo();
   testReadHintClaudeOutputShape();
   testReadHintPluginSource();
+  testRereadHintFiresOnUnchangedRepeat();
+  testRereadHintSilentAfterEdit();
+  testRereadHintKillSwitch();
   testCommitHintMinCommitsConstant();
   testCommitHintNullForNonCommit();
   testCommitHintNullOutsideGitRepo();
@@ -742,6 +749,7 @@ export async function cmdTest(): Promise<void> {
   testMemDirSkipsEmptyCandidate();
   testMemDirConfigIsRepoRootRelative();
   testMemDirOverrideWinsAndRefusesMissing();
+  testMemDirAmbiguousRefusesWrite();
   // Digest tests
   await testDigestEmptyRepo();
   await testDigestSinceFilter();

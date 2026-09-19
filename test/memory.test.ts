@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../src/db/index.js";
-import { initStore } from "../src/mem/store.js";
+import { initStore, put } from "../src/mem/store.js";
 import {
   claimMemory,
   DEFAULT_MEMORY,
@@ -303,6 +303,32 @@ export function testMemDirConfigIsRepoRootRelative(): void {
 // Regression 2026-09-19 (review-pony): `mem where` never saw --mem-dir (stripped
 // before dispatch) and the writer silently fell back to the default on a bad
 // path. Both must treat the flag as a promise, not a hint.
+// Regression 2026-09-20 (review-pony): with two app-scoped logs and nothing at
+// the repo root, the resolver returned "none" and the writer silently created a
+// third log at <root>/.fapony/.memory/ that no app-scoped reader would see.
+// SPEC §1 fail example: refuse with both paths.
+export function testMemDirAmbiguousRefusesWrite(): void {
+  withTempRepo((repo) => {
+    for (const app of ["vela", "mdl"]) {
+      const dir = join(repo, "apps", app, ".fapony", ".memory");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "log.jsonl"), "");
+    }
+    const got = whereMemDir(repo);
+    assert.equal(got.step, "ambiguous");
+    assert.equal(got.candidates?.length, 2);
+    initStore(repo);
+    assert.throws(
+      () => put({ id: "x", kind: "note", text: "t", files: ["a.ts"] }),
+      /refusing to guess/,
+      "the writer must refuse two app-scoped logs, not start a third at the root",
+    );
+  });
+  console.log(
+    "  ✓ two app-scoped mem dirs at the repo root → refuse, never guess",
+  );
+}
+
 export function testMemDirOverrideWinsAndRefusesMissing(): void {
   withTempRepo((repo) => {
     mkdirSync(join(repo, ".fapony", ".memory"), { recursive: true });
