@@ -5,12 +5,14 @@ import { join } from "node:path";
 import {
   COMMIT_HINT_MIN_COMMITS,
   commitHintFor,
+  computeHintImpact,
   cursorTranscriptPath,
   decideStop,
   isCursorPayload,
   normalizeStopInput,
   READ_HINT_MIN_BYTES,
   readHintFor,
+  recordHintFire,
   stopOutput,
   utcStamp,
 } from "../src/hook.js";
@@ -301,6 +303,7 @@ export function testReadHintClaudeOutputShape(): void {
           JSON.stringify({ cwd: dir, tool_input: { file_path: p } }),
         ),
         stdout: "pipe",
+        env: { ...process.env, FAPONY_STATE_DIR: dir },
       },
     );
     const out = JSON.parse(proc.stdout.toString()) as {
@@ -328,7 +331,7 @@ export function testReadHintPluginSource(): void {
   assert.ok(src.includes("output.output"), "mutates the tool output");
   assert.ok(!src.includes("throw"), "must never throw into the tool call");
   assert.ok(
-    src.includes("readContextLines"),
+    src.includes("readContextData"),
     "must also wire debt/mem context, matching Claude's cmdHookReadHint",
   );
   console.log(
@@ -638,4 +641,70 @@ export function testCommitHintPluginSource(): void {
 export function testCommitHintMinCommitsConstant(): void {
   assert.strictEqual(COMMIT_HINT_MIN_COMMITS, 1);
   console.log("  ✓ commit hint min commits constant is 1");
+}
+
+export function testComputeHintImpact(): void {
+  withTempRepo((dir) => {
+    // Set up conventions + a violating file.
+    mkdirSync(join(dir, ".fapony"), { recursive: true });
+    writeFileSync(
+      join(dir, ".fapony", "conventions.json"),
+      JSON.stringify({
+        conventions: [
+          {
+            id: "no-use-mutation",
+            rule: "use useAppForm instead of raw useMutation",
+            where: "src",
+            stale: "\\buseMutation\\(",
+            checker: null,
+          },
+        ],
+      }),
+    );
+    mkdirSync(join(dir, "src"), { recursive: true });
+    const p = join(dir, "src", "dirty.ts");
+    writeFileSync(p, "export const m = () => useMutation(fn);\n");
+
+    // Write a hint-fire log row manually (simulating what cmdHookReadHint does).
+    process.env.FAPONY_STATE_DIR = dir;
+    try {
+      recordHintFire({
+        ts: new Date().toISOString(),
+        worktree: dir,
+        surface: "debt",
+        file: "src/dirty.ts",
+        count: 1,
+        ids: ["no-use-mutation"],
+      });
+
+      // Before fix: 1 shown, 0 resolved (still violating).
+      const before = computeHintImpact();
+      assert.equal(before.fired, 1);
+      assert.equal(before.debt.shown, 1);
+      assert.equal(before.debt.resolved, 0);
+
+      // Fix the violation.
+      writeFileSync(p, "export const ok = 1;\n");
+
+      // After fix: 1 shown, 1 resolved.
+      const after = computeHintImpact();
+      assert.equal(after.debt.shown, 1);
+      assert.equal(after.debt.resolved, 1);
+    } finally {
+      delete process.env.FAPONY_STATE_DIR;
+    }
+  });
+  console.log("  ✓ computeHintImpact: debt precision counts resolved ids");
+}
+
+export function testComputeHintImpactNoLog(): void {
+  process.env.FAPONY_STATE_DIR = mkdtempSync(join(tmpdir(), "fapony-no-log-"));
+  try {
+    const impact = computeHintImpact();
+    assert.equal(impact.fired, 0);
+    assert.equal(impact.debt.shown, 0);
+  } finally {
+    delete process.env.FAPONY_STATE_DIR;
+  }
+  console.log("  ✓ computeHintImpact: no log → zero counts, no error");
 }

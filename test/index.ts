@@ -123,6 +123,8 @@ import {
   testCommitHintPluginSource,
   testCommitHintWhenGradedVerdictsExist,
   testCommitHintWhenNoGradedVerdicts,
+  testComputeHintImpact,
+  testComputeHintImpactNoLog,
   testCursorPayloadEdges,
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
@@ -504,6 +506,7 @@ import {
   testStatsByModelGroupsByClientProviderAgent,
   testStatsByPlanModeSplit,
   testStatsByRegimeSplit,
+  testStatsRegimeTokensSplitNotDuplicated,
   testStatsByWorktree,
   testStatsEmptyDb,
   testStatsEscalatedRuns,
@@ -686,6 +689,8 @@ export async function cmdTest(): Promise<void> {
   testCursorPayloadEdges();
   testStopOutputShapesPerClient();
   testUtcStampMatchesSqliteFormat();
+  testComputeHintImpact();
+  testComputeHintImpactNoLog();
   testDbLifecycle();
   testSchemaVersionStamped();
   testLegacyDbStampedWithoutDataLoss();
@@ -1041,6 +1046,7 @@ export async function cmdTest(): Promise<void> {
   testStatsByPlanModeSplit();
   testStatsUsageCountsCacheAsInput();
   testStatsByRegimeSplit();
+  testStatsRegimeTokensSplitNotDuplicated();
   testStatsTokensInByModel();
   testStatsTokensCountSessionOnce();
   testStatsTokensPerPassChargesReworkOnce();
