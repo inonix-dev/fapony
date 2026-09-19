@@ -99,6 +99,7 @@ fapony.ts       CLI dispatch
 src/memory.ts   mem log reader/resolver (.fapony/.memory → .memory fallback)
 src/debt.ts     fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย" (live, ไม่ persist)
 src/lint-baseline.ts  แยก "แดงอยู่ก่อนแล้ว" ออกจาก "ฉันทำให้แดง"
+src/conventions-seed.ts  fill-signal ตอน init — wrapper detector อ่าน snapshot ไม่แตะ history
 src/session/    passive usage reader ราย client + activeSession
 src/usage/      fapony usage-web — อ่าน cache ไม่แตะ session log
 src/digest/     fapony digest — รวม mem log, plans, usage cache, verdicts หน้าเดียว
