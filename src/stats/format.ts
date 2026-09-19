@@ -192,28 +192,27 @@ export function formatStatsText(data: StatsData): string {
     }
   }
 
+  // No token columns here: cost per regime is what `--mode verdict` ranks on,
+  // and printing it twice invited reading this table as the cost answer when
+  // it is the coverage one. Quality and fails are what this table adds.
   if (data.byRegime.length > 0) {
     const showWt = !data.scope;
     lines.push("\nby regime:");
     if (showWt) {
       lines.push(
-        "  project | regime | model | gates | fails | failRate | tokens/pass | avgQuality | tokens/session",
+        "  project | regime | model | gates | fails | failRate | avgQuality",
       );
       lines.push(
-        "  ---------|--------|-------|-------|-------|----------|-------------|------------|----------------",
+        "  ---------|--------|-------|-------|-------|----------|------------",
       );
     } else {
-      lines.push(
-        "  regime | model | gates | fails | failRate | tokens/pass | avgQuality | tokens/session",
-      );
-      lines.push(
-        "  --------|-------|-------|-------|-------|----------|-------------|------------|----------------",
-      );
+      lines.push("  regime | model | gates | fails | failRate | avgQuality");
+      lines.push("  --------|-------|-------|-------|----------|------------");
     }
     for (const r of data.byRegime) {
       const wt = showWt ? `${shortWt(r.worktree).padEnd(9)} | ` : "";
       lines.push(
-        `  ${wt}${r.regime.padEnd(7)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${fmtTokens(r.tokensPerPass).padStart(11)} | ${r.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(r.tokensInput).padStart(7)} in / ${fmtTokens(r.tokensOutput).padStart(7)} out`,
+        `  ${wt}${r.regime.padEnd(7)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${r.avgQuality.toFixed(1).padStart(10)}`,
       );
     }
   }
