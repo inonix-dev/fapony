@@ -10,6 +10,7 @@ cl-*/
 fapony.config.json
 scripts/*
 !scripts/smoke-publish.sh
+!scripts/test-one.ts
 
 # Added by code-review-graph
 .code-review-graph/
