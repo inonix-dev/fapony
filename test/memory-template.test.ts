@@ -429,3 +429,86 @@ function memFile(repo: string, d: string): string {
     ) ?? "log.jsonl"
   );
 }
+
+// --- kickoff resolves the plan path instead of comparing it as a literal string ---
+
+// kickoff used to require `.fapony/plan/PLAN-x.md` byte-for-byte: a model that
+// reconstructed the path slightly wrong got "(no entries)" and no way to notice.
+// It now resolves an exact path, else a filename (with or without .md), else a path
+// suffix — so `kickoff PLAN-demo` and `kickoff plan/PLAN-demo.md` both land.
+export function testMemTemplateKickoffResolvesSpecByFilename(): void {
+  withFixture(
+    (repo) => {
+      cpSync(TEMPLATE, join(repo, ".fapony/.memory"), { recursive: true });
+      mkdirSync(join(repo, ".fapony/plan"), { recursive: true });
+    },
+    (repo) => {
+      const d = join(repo, ".fapony/.memory");
+      const add = memRun(
+        repo,
+        d,
+        "add note ctx1 --files src/a.ts .fapony/plan/PLAN-demo.md",
+      );
+      assert.equal(add.status, 0, add.stderr);
+
+      for (const arg of [
+        ".fapony/plan/PLAN-demo.md", // exact
+        "PLAN-demo.md", // basename with extension
+        "PLAN-demo", // basename without
+        "plan/PLAN-demo.md", // path suffix
+      ]) {
+        const out = memRun(repo, d, `kickoff ${arg}`);
+        assert.equal(out.status, 0, `${arg}: ${out.stderr}`);
+        assert.match(out.stdout, /ctx1/, `${arg} should find the row`);
+        assert.match(
+          out.stdout,
+          /\.fapony\/plan\/PLAN-demo\.md/,
+          `${arg} should report the canonical path`,
+        );
+      }
+    },
+  );
+  console.log(
+    "  ✓ memory template → kickoff resolves a spec by filename or suffix, not only exact path",
+  );
+}
+
+// A repeated filename is ambiguous (plan + archived copy); a real miss must name the
+// specs the log holds instead of printing "(no entries)" and exiting 0.
+export function testMemTemplateKickoffAmbiguousAndMissAreLoud(): void {
+  withFixture(
+    (repo) => {
+      cpSync(TEMPLATE, join(repo, ".fapony/.memory"), { recursive: true });
+      mkdirSync(join(repo, ".fapony/plan"), { recursive: true });
+      mkdirSync(join(repo, ".fapony/done"), { recursive: true });
+    },
+    (repo) => {
+      const d = join(repo, ".fapony/.memory");
+      memRun(
+        repo,
+        d,
+        "add note dup1 --files src/a.ts .fapony/plan/PLAN-dup.md",
+      );
+      memRun(
+        repo,
+        d,
+        "add note dup2 --files src/a.ts .fapony/done/PLAN-dup.md",
+      );
+      const amb = memRun(repo, d, "kickoff PLAN-dup.md");
+      assert.notEqual(amb.status, 0, "an ambiguous filename must not pick one");
+      assert.match(amb.stderr, /\.fapony\/plan\/PLAN-dup\.md/);
+      assert.match(amb.stderr, /\.fapony\/done\/PLAN-dup\.md/);
+
+      const miss = memRun(repo, d, "kickoff .fapony/plan/PLAN-typo.md");
+      assert.notEqual(miss.status, 0, "a miss must not exit 0 silently");
+      assert.match(
+        miss.stderr,
+        /\.fapony\/plan\/PLAN-dup\.md/,
+        "a miss should list the specs the log has",
+      );
+    },
+  );
+  console.log(
+    "  ✓ memory template → kickoff ambiguous/miss names candidates instead of going quiet",
+  );
+}

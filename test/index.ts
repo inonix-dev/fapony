@@ -394,6 +394,8 @@ import {
   testMemTemplateCentralCopyMovedIntoFapony,
   testMemTemplateConfigStillWins,
   testMemTemplateInitAtMonorepoRoot,
+  testMemTemplateKickoffAmbiguousAndMissAreLoud,
+  testMemTemplateKickoffResolvesSpecByFilename,
   testMemTemplateMonorepoLegacyLog,
   testMemTemplateMonorepoMigratedApp,
   testMemTemplateMonorepoUnmigratedApp,
@@ -760,6 +762,8 @@ export async function cmdTest(): Promise<void> {
   testMemTemplateScaffolded();
   testMemTemplateInitAtMonorepoRoot();
   testMemTemplateAddRejectsMissingFiles();
+  testMemTemplateKickoffResolvesSpecByFilename();
+  testMemTemplateKickoffAmbiguousAndMissAreLoud();
   testMemTemplatePerPersonLogs();
   testMemTemplateScaffoldedIgnoresRootConfig();
   testMemTemplateUnknownAppFails();

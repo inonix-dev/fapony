@@ -229,7 +229,7 @@ files only · \`verdict_submit\` (MCP) with this step's \`regime\` · then hand 
 bun .fapony/.memory/mem.ts add note "<what chunk N+1 must know>" --files <f1,f2> ${planRel}
 \`\`\`
 
-Next session opens with \`kickoff ${planRel}\` — compared as a string, so retype it exactly.
+Next session opens with \`kickoff ${planRel}\` (or \`kickoff ${basename(planRel)}\` — kickoff resolves by filename too, so no need to retype the path).
 
 ## 7. Examples
 ${

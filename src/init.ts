@@ -91,12 +91,12 @@ Finish a chunk, before starting the next:
 2. Commit — separate from other chunks
 3. \`verdict_submit\` (fapony MCP), grading what actually happened
 4. \`bun ${memEntry} add note "what the next chunk needs" --files f1,f2 <path/to/PLAN-x.md>\`
-   — pass the exact same plan path every time; kickoff matches it as a literal string
+   — use the same plan path every time
 5. Stop. Do not continue to the next chunk in the same session unless told to.
 
-Next chunk, new session — open with \`bun ${memEntry} kickoff <path/to/PLAN-x.md>\` (same
-path) instead of carrying the old transcript forward. kickoff already filters to the
-rows written against that exact path.`;
+Next chunk, new session — open with \`bun ${memEntry} kickoff <path/to/PLAN-x.md>\` instead
+of carrying the old transcript forward. kickoff already filters to the rows for that plan,
+and takes just the filename (\`kickoff PLAN-x.md\`) when you do not want to type the path.`;
 
 export function initProject(targetPath: string, config?: Config): void {
   // Create target root

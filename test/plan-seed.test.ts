@@ -349,9 +349,10 @@ export function testPlanSeedStepCloseCarriesLiteralPlanPath(): void {
         "utf-8",
       );
       const s6 = body.slice(body.indexOf("## 6."), body.indexOf("## 7."));
-      // The handoff path is interpolated, not left as a placeholder: rule 9's
-      // kickoff compares it as a string, and a model that has to reconstruct
-      // ".fapony/plan/PLAN-<name>.md" is a model that can get it wrong.
+      // The handoff path is interpolated, not left as a placeholder: it is the
+      // canonical key kickoff files rows under, and a model that has to
+      // reconstruct ".fapony/plan/PLAN-<name>.md" is a model that can get it wrong.
+      // (kickoff now resolves by filename too, but the right path costs nothing here.)
       assert.ok(
         s6.includes(".fapony/plan/PLAN-bar.md"),
         "§6 must carry this plan's real path, not a placeholder",
