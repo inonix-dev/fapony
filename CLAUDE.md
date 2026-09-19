@@ -380,6 +380,16 @@ OpenCode · และ **แถวแรกที่มี `files[]` มาก่
 4. **cross-client คือจุดต่าง ไม่ใช่ตัว dashboard** — tool อ่าน usage ของ Claude Code มีเยอะแล้ว
    ที่อ่าน 4 client บนไม้บรรทัดเดียวกันแทบไม่มี ย้ำตรงนั้น
 
+5. **ห้ามขายว่า "fapony หา dead code / โค้ดซ้ำให้"** (เพิ่ม 2026-09-19 พร้อม north star ใหม่) —
+   knip / madge / dependency-cruiser / jscpd ฟรีและเก่งกว่า คนอ่านคนแรกจะตอบว่า "ก็ knip ไง"
+   แล้วปิดทิ้ง · ประโยคที่ขายได้คือ **"agent จำความเจ็บไม่ได้ จึงไม่เคยสร้าง abstraction —
+   fapony จำแทน"** ซึ่งไม่มีเครื่องมือไหนอ้างได้เพราะต้องมี verdict + mem + `files[]` ในที่เดียว
+6. **north star ใหม่ขัดกับข้อ 2 โดยธรรมชาติ — ต้องถือทั้งคู่** pain memory คือ **retention**
+   (ต้องสะสมก่อนถึงมีค่า เหมือน project health ที่เคยพลาด) ส่วน **acquisition ยังเป็น
+   `usage-web`/`fapony_usage`** ที่ทำงานนาทีแรก · ฉะนั้น **ห้ามสลับลำดับ README ให้ pain memory
+   ขึ้นก่อน จนกว่าจะมีเลข moved% สองจุดเวลา** — ไม่งั้นคนติดตั้งเจอ "ยังไม่มีประวัติพอ" เป็นอย่างแรก
+   ซึ่งข้อ 2 บอกว่าเท่ากับปิดทิ้ง (แผน: [PLAN-pain-memory.md](.fapony/plan/PLAN-pain-memory.md) chunk 4)
+
 **เกณฑ์ว่าพร้อมโปรโมท:** คนที่ไม่ใช่เจ้าของติดตั้งแล้วเห็นอะไรที่มีประโยชน์ภายใน 60 วินาที
 — ไม่ใช่จำนวน feature · ลำดับช่อง: awesome-mcp-servers PR → r/ClaudeAI + ชุมชนไทย →
 บทความ *"I built the agent loop everyone builds first, then deleted it"* (ดู History ด้านบน) →
