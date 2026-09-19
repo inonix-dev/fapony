@@ -5,7 +5,7 @@
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { type Config, memoryEntry, safetyDeny } from "./db/index.js";
+import { type Config, safetyDeny } from "./db/index.js";
 import { assertSafe } from "./safety.js";
 import { templateArgs } from "./util.js";
 
@@ -20,15 +20,19 @@ export const DEFAULT_MEMORY: Config["memory"] = {
 /**
  * Returns the effective memory config:
  * - explicit config.memory wins if set
- * - fallback: config.memory === null + <memoryEntry> exists → DEFAULT_MEMORY
+ * - fallback: a mem log dir exists (any `.fapony/.memory/`) → DEFAULT_MEMORY
  * - otherwise null (no memory)
+ *
+ * Since PLAN-agent-one-call the code is built into fapony (`fapony mem`), so the
+ * old gate on `.fapony/.memory/mem.ts` no longer means anything — that file is
+ * not scaffolded and `init-mem` deletes it. Gate on the dir the writer needs.
  */
 export function resolveMemoryConfig(
   config: Config,
   worktree: string,
 ): Config["memory"] {
   if (config.memory) return config.memory;
-  if (existsSync(join(worktree, memoryEntry(config)))) return DEFAULT_MEMORY;
+  if (resolveMemDir(worktree)) return DEFAULT_MEMORY;
   return null;
 }
 

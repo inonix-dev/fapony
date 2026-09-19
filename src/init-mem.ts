@@ -32,6 +32,7 @@ export function copyDir(src: string, dest: string): string[] {
 }
 
 export function cmdInitMem(args: string[]): void {
+  const force = args.includes("--force");
   const worktreeKey = args.find((x) => !x.startsWith("-"));
   const config = loadConfig();
 
@@ -76,13 +77,41 @@ export function cmdInitMem(args: string[]): void {
   if (memoryDirs.length === 0) {
     console.log("no legacy .memory/ directories found — already clean");
   } else {
+    let removed = 0;
+    let kept = 0;
     for (const d of memoryDirs) {
-      const hasLog = existsSync(`${d}/log.jsonl`);
-      console.log(`deleting ${d}${hasLog ? " (contains log.jsonl!)" : ""}`);
+      // Any log*.jsonl is history — includes log.<person>.jsonl (the standard
+      // filename) and rotated log.YYYY-MM-DD.jsonl, not just log.jsonl.
+      let logs: string[] = [];
+      try {
+        logs = readdirSync(d).filter(
+          (f) => f === "log.jsonl" || /^log\..*\.jsonl$/.test(f),
+        );
+      } catch {
+        // unreadable dir — fall through and remove
+      }
+      if (logs.length > 0 && !force) {
+        console.log(
+          `keeping ${d} — has ${logs.length} log file(s): ${logs.join(", ")}`,
+        );
+        console.log(
+          `  move them under ${join(d, "..", ".fapony", ".memory")}/, or re-run with --force to delete`,
+        );
+        kept++;
+        continue;
+      }
+      console.log(
+        `deleting ${d}${logs.length > 0 ? ` (--force: ${logs.length} log file(s))` : ""}`,
+      );
       rmSync(d, { recursive: true, force: true });
+      removed++;
     }
     console.log(
-      `\nremoved ${memoryDirs.length} legacy .memory/ director${memoryDirs.length === 1 ? "y" : "ies"}`,
+      `\nremoved ${removed} legacy .memory/ director${removed === 1 ? "y" : "ies"}${
+        kept > 0
+          ? ` · kept ${kept} with logs — move them under .fapony/.memory/, then re-run`
+          : ""
+      }`,
     );
   }
 

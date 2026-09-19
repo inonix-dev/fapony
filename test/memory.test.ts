@@ -11,12 +11,12 @@ import {
 } from "../src/memory.js";
 import { baseConfig } from "./helpers.js";
 
-export function testMemoryDefaultWiringWithFile(): void {
+export function testMemoryDefaultWiringWithDir(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
   try {
-    const memDir = join(dir, ".fapony", ".memory");
-    mkdirSync(memDir, { recursive: true });
-    writeFileSync(join(memDir, "mem.ts"), "// stub");
+    // the mem dir alone is enough now — `fapony init` creates it empty and the
+    // code is built in, so no mem.ts is scaffolded (PLAN-agent-one-call)
+    mkdirSync(join(dir, ".fapony", ".memory"), { recursive: true });
 
     const result = resolveMemoryConfig(baseConfig(), dir);
     assert.deepEqual(result, DEFAULT_MEMORY);
@@ -24,10 +24,10 @@ export function testMemoryDefaultWiringWithFile(): void {
     rmSync(dir, { recursive: true, force: true });
   }
 
-  console.log("  ✓ memory default-wiring with .fapony/.memory/mem.ts");
+  console.log("  ✓ memory default-wiring with empty .fapony/.memory/");
 }
 
-export function testMemoryDefaultWiringNoFile(): void {
+export function testMemoryDefaultWiringNoDir(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
   try {
     const result = resolveMemoryConfig(baseConfig(), dir);
@@ -36,7 +36,7 @@ export function testMemoryDefaultWiringNoFile(): void {
     rmSync(dir, { recursive: true, force: true });
   }
 
-  console.log("  ✓ memory default-wiring without .fapony/.memory/mem.ts");
+  console.log("  ✓ memory default-wiring without any .fapony/.memory/");
 }
 
 export function testMemoryExplicitConfigWins(): void {

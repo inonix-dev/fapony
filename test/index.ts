@@ -385,8 +385,8 @@ import {
 import {
   testClaimMemoryFailGracefully,
   testClaimMemoryTimeout,
-  testMemoryDefaultWiringNoFile,
-  testMemoryDefaultWiringWithFile,
+  testMemoryDefaultWiringNoDir,
+  testMemoryDefaultWiringWithDir,
   testMemoryExplicitConfigWins,
   testMemoryReadRecentDecisions,
   testMemoryReadRecentDecisionsMonorepo,
@@ -730,8 +730,8 @@ export async function cmdTest(): Promise<void> {
   testInitIdempotent();
   testInitNoArgs();
   testInitSnippetPathMatchesScaffold();
-  testMemoryDefaultWiringWithFile();
-  testMemoryDefaultWiringNoFile();
+  testMemoryDefaultWiringWithDir();
+  testMemoryDefaultWiringNoDir();
   testMemoryExplicitConfigWins();
   testMemFindReturnsAllKindsNoDefaultFilter();
   testMemFindFiltersAndMatchesFiles();
