@@ -135,46 +135,8 @@ export function addEvent(
   return Number(result.lastInsertRowid);
 }
 
-/**
- * Merge `patch` into an existing event's JSON data (keeps keys already set).
- * Used to complete a spawn row with bytes_out/usd after the agent finishes —
- * one row per spawn, timing (ts) stays at spawn start. No-op when the row
- * is missing or its data isn't a JSON object.
- */
-export function updateEventData(
-  db: Database,
-  eventId: number,
-  patch: Record<string, unknown>,
-): void {
-  const row = db
-    .prepare("SELECT data FROM events WHERE id = ?")
-    .get(eventId) as { data: string | null } | null;
-  if (!row) return;
-  let base: Record<string, unknown> = {};
-  try {
-    const parsed = JSON.parse(row.data ?? "null") as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      base = parsed as Record<string, unknown>;
-    }
-  } catch {
-    return;
-  }
-  db.prepare("UPDATE events SET data = ? WHERE id = ?").run(
-    JSON.stringify({ ...base, ...patch }),
-    eventId,
-  );
-}
-
 export function getRun(db: Database, runId: number): Run | null {
   return db.prepare("SELECT * FROM runs WHERE id = ?").get(runId) as Run | null;
-}
-
-export function getActiveRuns(db: Database): Run[] {
-  return db
-    .prepare(
-      "SELECT * FROM runs WHERE status NOT IN ('passed', 'stopped') ORDER BY id",
-    )
-    .all() as Run[];
 }
 
 /**
@@ -219,43 +181,6 @@ export function getEvents(db: Database, runId: number): Event[] {
   return db
     .prepare("SELECT * FROM events WHERE run_id = ? ORDER BY id")
     .all(runId) as Event[];
-}
-
-/**
- * Pulls the most recent unresolved "gate fail" note for a worktree+mem_id pair —
- * i.e. the review feedback the next `fapony run` should hand back to the executor.
- * Only looks at the latest run for that pair; if it already passed, returns null
- * (nothing to carry forward).
- */
-export function getPendingFeedback(
-  db: Database,
-  worktree: string,
-  memId: string,
-  excludeRunId?: number,
-): string | null {
-  const run = db
-    .prepare(
-      `SELECT * FROM runs WHERE worktree = ? AND mem_id = ? AND id != ? ORDER BY id DESC LIMIT 1`,
-    )
-    .get(worktree, memId, excludeRunId ?? -1) as Run | null;
-  if (run?.status !== "fixing") return null;
-
-  const event = db
-    .prepare(
-      `SELECT * FROM events WHERE run_id = ? AND kind = 'gate' ORDER BY id DESC LIMIT 1`,
-    )
-    .get(run.id) as Event | null;
-  if (!event?.data) return null;
-
-  try {
-    const parsed = JSON.parse(event.data) as {
-      verdict?: string;
-      note?: string;
-    };
-    return parsed.verdict === "fail" && parsed.note ? parsed.note : null;
-  } catch {
-    return null;
-  }
 }
 
 /**

@@ -89,23 +89,6 @@ export function withTmpDb<T>(fn: (db: ReturnType<typeof openDb>) => T): T {
 }
 
 /**
- * Async version of withTmpDb. FAPONY_STATE_DIR is set for the duration of fn
- * and restored on return. Temp dir is always cleaned up.
- */
-export async function withTmpDbAsync<T>(fn: () => Promise<T>): Promise<T> {
-  const dir = mkdtempSync(join(tmpdir(), "fapony-test-"));
-  const orig = process.env.FAPONY_STATE_DIR;
-  process.env.FAPONY_STATE_DIR = dir;
-  try {
-    return await fn();
-  } finally {
-    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
-    else process.env.FAPONY_STATE_DIR = orig;
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
-/**
  * Minimal config for testing — no memory, no roles, default review.
  * Spread-add fields as needed: `{ ...baseConfig(), roles: { ... } }`.
  */
@@ -151,19 +134,5 @@ export function withTempConfig(configObj: unknown, fn: () => void): void {
     if (prevConfig === undefined) delete process.env.FAPONY_CONFIG;
     else process.env.FAPONY_CONFIG = prevConfig;
     rmSync(cfgPath, { force: true });
-  }
-}
-
-/**
- * Assert two floats are equal within 1e-9. For mean-of-ratio checks
- * where exact decimal equality cannot hold.
- */
-export function assertClose(
-  actual: number,
-  expected: number,
-  label: string,
-): void {
-  if (Math.abs(actual - expected) >= 1e-9) {
-    throw new Error(`${label}: expected ${expected}, got ${actual}`);
   }
 }
