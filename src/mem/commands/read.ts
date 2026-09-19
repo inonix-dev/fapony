@@ -341,50 +341,56 @@ export const cmdKickoff = (a: string[]) => {
 
   // --- next up section (chunk 3) ---
 
-  type Suggestion = { text: string; run: string };
+  // A suggestion may carry a fully-runnable command. `manual` marks a command
+  // that is a template with a placeholder (bug close) — show it, never auto-run it.
+  type Suggestion = { text: string; run?: string; manual?: boolean };
   const suggestions: Suggestion[] = [];
+  const GROUP_CAP = 3; // SPEC §3: at most 3 groups, at most 3 lines each
 
-  // Priority plans from the plan directory
+  const truncate = (s: string, n = 80) =>
+    s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s;
+
+  // group 1 — plans: priority: high first, then the first unchecked chunk
+  const planLines: Suggestion[] = [];
   if (existsSync(planDir)) {
     const files = readdirSync(planDir).filter((f) => f.endsWith(".md"));
     for (const file of files) {
+      if (planLines.length >= GROUP_CAP) break;
       const fullPath = join(planDir, file);
       // Skip the plan we already showed
       if (planFile && fullPath === planFile) continue;
       if (hasHighPriority(fullPath)) {
         const title = readPlanTitle(fullPath);
-        suggestions.push({
+        planLines.push({
           text: `${title || file} (${file})`,
           run: `fapony mem kickoff ${file}`,
         });
       }
     }
   }
-
-  // Plan file unchecked checkboxes (from the plan passed as argument)
-  for (const text of planCheckboxes) {
+  // Only the first unchecked chunk (SPEC §3) — the rest are plan_list's job.
+  // There is no per-chunk command, so this line is context, not a runnable item.
+  if (planLines.length < GROUP_CAP && planCheckboxes.length) {
     const planName = planFile ? basename(planFile) : "plan";
-    suggestions.push({
-      text,
-      run: `fapony mem kickoff ${planName}`,
-    });
+    planLines.push({ text: `${planCheckboxes[0]} (${planName})` });
   }
+  suggestions.push(...planLines);
 
-  // Open bugs (oldest first)
-  const openBugs = all
-    .filter(
-      (r): r is WorkRow =>
-        "id" in r && r.kind === "bug" && !claimsOf(all).has(r.id),
-    )
-    .slice(0, 3);
+  // group 2 — open bugs, oldest first. openRows excludes tombstoned refs; the
+  // old bug filter forgot that and offered already-closed bugs as work.
+  const claims = claimsOf(all);
+  const openBugs = openRows(all)
+    .filter((r) => r.kind === "bug" && !claims.has(r.id))
+    .slice(0, GROUP_CAP);
   for (const b of openBugs) {
     suggestions.push({
-      text: `#${b.id} ${b.text}`,
+      text: `bug #${b.id} — ${truncate(b.text)}`,
       run: `fapony mem close ${b.id} "<msg>"`,
+      manual: true,
     });
   }
 
-  // Recently touched files from the last 3 rows with files[]
+  // group 3 — the files of the last 3 rows that carried files[]
   const recentFiles = all
     .filter(
       (r): r is WorkRow =>
@@ -392,20 +398,21 @@ export const cmdKickoff = (a: string[]) => {
     )
     .slice(-3)
     .flatMap((r) => r.files ?? []);
-  const uniqueRecent = [...new Set(recentFiles)].slice(0, 3);
+  const uniqueRecent = [...new Set(recentFiles)].slice(0, GROUP_CAP);
   if (uniqueRecent.length) {
     suggestions.push({
-      text: uniqueRecent.join(", "),
+      text: `แตะล่าสุด: ${uniqueRecent.join(", ")}`,
       run: `fapony review-seed --files ${uniqueRecent.join(",")}`,
     });
   }
 
-  // Print and optionally execute
+  // Print and optionally execute. Only a suggestion with a complete command is
+  // runnable — a plan item is context, a bug's close is a template needing a message.
   if (suggestions.length) {
     console.log(`\n## next up`);
     for (let i = 0; i < suggestions.length; i++) {
       console.log(`  [${i + 1}] ${suggestions[i].text}`);
-      console.log(`      → ${suggestions[i].run}`);
+      if (suggestions[i].run) console.log(`      → ${suggestions[i].run}`);
     }
 
     if (pickIdx !== null) {
@@ -415,7 +422,20 @@ export const cmdKickoff = (a: string[]) => {
         );
         process.exit(1);
       }
-      const cmd = suggestions[pickIdx - 1].run;
+      const picked = suggestions[pickIdx - 1];
+      if (!picked.run) {
+        console.error(
+          `--pick ${pickIdx}: "${picked.text}" is context, not a command — nothing to run`,
+        );
+        process.exit(1);
+      }
+      if (picked.manual) {
+        console.error(
+          `--pick ${pickIdx}: the command needs your own message — run it yourself:\n  ${picked.run}`,
+        );
+        process.exit(1);
+      }
+      const cmd = picked.run;
       console.log(`\n> running: ${cmd}`);
       const { execSync } = require("node:child_process");
       try {
