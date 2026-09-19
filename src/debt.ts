@@ -22,7 +22,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { collectSourceFiles } from "./analyze.js";
 import { openDb } from "./db/index.js";
-import { type MemRow, readMemLog, resolveAppFaponyDir } from "./memory.js";
+import { readMemLog, resolveAppFaponyDir } from "./memory.js";
 
 // A stale regex matching more than this many files is not a convention — it is
 // a broken/wide regex (stale="e" would flag the repo). SPEC §6: drop the entry
@@ -295,7 +295,7 @@ export function debtScan(
         // Stop counting a runaway regex early — the entry will be dropped.
         if (cur.length > DEBT_FILE_CAP) tooBroad.set(c.conv.id, cur.length);
       }
-      if (c.okRe && c.okRe.test(content)) {
+      if (c.okRe?.test(content)) {
         moved.set(c.conv.id, (moved.get(c.conv.id) ?? 0) + 1);
       }
     }

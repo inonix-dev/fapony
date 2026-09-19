@@ -447,7 +447,7 @@ export function testMemTemplateAddRejectsMissingFiles(): void {
       const ok = memRun(repo, d, `add note "x" --files src/a.ts,src/b.ts`);
       assert.equal(ok.status, 0, `expected success, got: ${ok.stderr}`);
       const row = JSON.parse(
-        readFileSync(join(d, memFile(repo, d)), "utf-8")
+        readFileSync(join(d, memFile(d)), "utf-8")
           .trim()
           .split("\n")
           .at(-1) as string,
@@ -460,7 +460,7 @@ export function testMemTemplateAddRejectsMissingFiles(): void {
   );
 }
 
-function memFile(repo: string, d: string): string {
+function memFile(d: string): string {
   return (
     readdirSync(d).find(
       (f) => /^log\..*\.jsonl$/.test(f) && f !== "log.jsonl",

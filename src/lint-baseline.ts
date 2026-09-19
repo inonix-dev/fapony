@@ -12,13 +12,7 @@
 // never blocks — the agent decides whether to fix the old issues too
 
 import { execSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { faponyDir } from "./db/load.js";
 import { assertSafe } from "./safety.js";
