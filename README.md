@@ -58,7 +58,19 @@ on you to hold: work isn't randomly assigned to models, so a gap this size is a 
 controlled trial — you likely route easy tasks to the cheap model already. `n≥5` is fapony's own
 floor before a model counts toward the frontier at all; below that it's a data point, not a pick.
 
-**The reason to keep it running is the third layer: knowledge accumulation.** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: which model earns its keep on which kind of work **in this project**, at what token cost, graded by whoever reviewed it. Every verdict carries a `regime` (`code` / `fix` / `review` / `plan` / `inquiry` / `test`), and runs split by whether there was a plan at all — so "does planning beat diving in, and for which model" is a table, not an argument.
+**The reason to keep it running is the third layer: knowledge accumulation — and the thing it
+accumulates is pain.** An agent has no memory of pain across sessions: it writes the 37th
+hand-rolled `try/catch` as cheerfully as the first, because every session starts new. Wrappers and
+shared libraries get built by *people* who were hurt by the same thing often enough to remember.
+That is why a codebase written with agents from day one tends not to grow a shared layer — nobody
+in the room remembers. fapony is the part that remembers: graded verdicts and mem rows both carry
+`files[]`, so the zones that keep coming back in failed and re-done work are a query, not a hunch.
+Paired with `fapony debt`, which tracks how far the codebase has actually moved to a convention you
+already decided on, that is the loop: notice the repeated cost, name the shared thing, watch the
+migration finish. Finding dead code and duplication is *not* part of it — knip and friends already
+do that better, and a convention with a `checker` is deliberately left to the checker.
+
+**The measurement layer underneath it:** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: which model earns its keep on which kind of work **in this project**, at what token cost, graded by whoever reviewed it. Every verdict carries a `regime` (`code` / `fix` / `review` / `plan` / `inquiry` / `test`), and runs split by whether there was a plan at all — so "does planning beat diving in, and for which model" is a table, not an argument.
 
 Three tiers, deliberately: **measurement ships today** and needs no per-project setup — raw facts nobody can call unfair. **Verification is the sharper edge** but stays beta until its evidence layer is hardened; fapony doesn't control your agent's flow, so it never promises "verified" as a headline. **Knowledge accumulation is the compounding one** — it's worthless on run 1 and gets more useful every run after, which is exactly why it's the layer competitors can't clone by copying a feature list.
 

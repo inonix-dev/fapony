@@ -4,7 +4,34 @@
 
 Measurement + verification layer for coding agents, shipped as an MCP server (`fapony mcp` — 6 tools, stdio JSON-RPC — the list is `tools/list`, don't count here). No loop, no spawning, no executor role — fapony doesn't drive agents, it measures what already happened (git facts, session cost/tokens) and verifies claims against those facts. Any agent that speaks MCP can call it. อยู่นอก worktree ของ product เพราะ state ของผู้วัดไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้
 
-**North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **`model × project × regime × quality` ข้าม run/client/project** — "งานแบบนี้ในโปรเจกต์นี้ ควรจ่ายให้ model ไหน" · session log ของทุกเจ้ามี token แต่ไม่มีเกรด, benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ — ต้องมี verdict + model + regime + token ครบสี่ในที่เดียวถึงจะถามได้ · **เคยเล็ง "project health / ไฟล์นี้เคยพัง" แล้วพลาด** — base rate ของ rework จริงคือ 1-9% ต่ำเกินจะเตือนอะไรได้ (ดูกฎ 8) `project_health_context` ยังอยู่แต่ไม่ใช่แกนอีกแล้ว fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
+**North star (ปรับ 2026-09-19):** **agent ไม่มีความเจ็บสะสม — มันจึงไม่เคยสร้าง abstraction เอง**
+ทุก session มันเกิดใหม่ เขียน `try/catch` ครั้งที่ 37 ด้วยความสดชื่นเท่าครั้งแรก ส่วน wrapper อย่าง
+`failWith` / `BaseInitClass` เกิดจาก *คน* ที่เจ็บซ้ำจนจำได้ · fapony คือสิ่งเดียวในห้องที่จำแทนได้
+(mem log + graded ledger + `files[]`) ฉะนั้นงานของมันคือ **จำความเจ็บของโปรเจกต์ → บอกว่าเมื่อไหร่
+ควรมีของกลาง → ตามว่าย้ายไปถึงไหนแล้ว** · ทีมที่เริ่มจาก agent ตั้งแต่วันแรกไม่มีวันได้ wrapper layer
+ไม่ใช่เพราะไม่เก่ง แต่เพราะ**ไม่มีใครในห้องนั้นจำความเจ็บได้เลยสักคน** — และในบริษัทจริงยิ่งหนัก เพราะ
+เกณฑ์หน้างานคือ "เสร็จ" แล้วค่อยแก้ที่ prod ส่วนการรื้อของกลางทีหลัง = breaking change ที่โดนด่า
+
+**สิ่งที่ *ไม่ใช่* งานของ fapony ในทางนี้: หา dead code / โค้ดซ้ำ** — พื้นที่นั้นแน่นแล้วและ knip /
+madge / dependency-cruiser / jscpd เก่งกว่า · **knip คือ `checker` ไม่ใช่คู่แข่ง** — `debt.ts` มีกฎเหล็ก
+อยู่แล้วว่า `checker != null` = fapony ไม่รายงานซ้ำ ฉะนั้น dead export / barrel (vela: 266 ไฟล์มี
+`export *` · 1,349 บรรทัด) ให้ผูกเป็น `"checker"` ของ convention นั้น ไม่ใช่เขียน detector ใหม่ ·
+ช่องที่ว่างจริงคือ layer 3 ที่ `src/debt.ts` เขียนไว้ในหัวไฟล์ตัวเองแล้ว: *"ไฟล์ไหนยังไม่ย้าย"* —
+eslint บอกว่าบรรทัดนี้ผิด, CLAUDE.md บอกว่ากฎคืออะไร, **ไม่มีใครบอกว่าตัดสินใจไปเมื่อ 6 เดือนก่อน
+แล้วย้ายไป 11 จาก 47**
+
+**แกนเดิมไม่ถูกทิ้ง — มันเปลี่ยนหน้าที่จาก "ตัวสินค้า" เป็น *เซนเซอร์ความเจ็บ*:** `verdict` ที่เป็น
+fail/`scope_mismatch`/`spec_gap` + `files[]` คือ input ของ `gatherEvidence()` ซึ่งตอบว่าโซนไหนเจ็บซ้ำ ·
+เหตุผลที่ต้องเปลี่ยนหน้าที่: pain ของ "model ไหนคุ้มกว่า" อ่อน เพราะ dev ส่วนใหญ่ใช้เงินบริษัท —
+คนที่เจ็บจริงคือคนที่จ่ายเอง ซึ่งเป็น niche แคบกว่ามาก · **วัดแล้ว 2026-09-19 (wt-vela):** gate events
+108 → มี `files[]` 98 (91%) · fix-family 21 → มี files 17 (81%) · **mem log 2,672 แถว → มี `files[]`
+ศูนย์แถว** เพราะ `.memory/mem.ts` ที่ root ของ vela เป็นสำเนาเก่าที่ยังไม่รู้จัก `--files` เลย
+(446 แถว `bug`/`decision` จึงตกพื้นทั้งหมดตอน cluster — แก้ด้วย `fapony init-mem --update` ครั้งเดียว
+**ก่อน**จะเขียน detector อะไรก็ตาม) · cluster จาก 17 แถวที่มี files: ราย**ไฟล์** ≥3 hits = 3 ไฟล์
+(บางเกินไป) แต่ราย**โฟลเดอร์**ติดแล้ว — `layouts/quick` 10×/9 ไฟล์, `layouts/statements` 9×/7,
+`server/routes/v1` 8×/5 · **สรุป: สัญญาณมีจริงแต่อดอาหาร ไม่ใช่ไม่มี** และ unit ของมันคือโซน ไม่ใช่ไฟล์
+
+**แกนเซนเซอร์ (คำอธิบายเดิม):** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **`model × project × regime × quality` ข้าม run/client/project** — "งานแบบนี้ในโปรเจกต์นี้ ควรจ่ายให้ model ไหน" · session log ของทุกเจ้ามี token แต่ไม่มีเกรด, benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ — ต้องมี verdict + model + regime + token ครบสี่ในที่เดียวถึงจะถามได้ · **เคยเล็ง "project health / ไฟล์นี้เคยพัง" แล้วพลาด** — base rate ของ rework จริงคือ 1-9% ต่ำเกินจะเตือนอะไรได้ (ดูกฎ 8) `project_health_context` ยังอยู่แต่ไม่ใช่แกนอีกแล้ว fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
 
 **สองฝั่งที่ห้ามปนกัน — เส้นนี้ตัดสินข้อขัดแย้งทุกครั้ง:**
 
