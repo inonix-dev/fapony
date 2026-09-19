@@ -303,6 +303,7 @@ import {
   testMemFindReturnsAllKindsNoDefaultFilter,
   testMemFindToolValidation,
   testMemFindTotalVsLimitAndFailShapes,
+  testMemIdentityNeverCollapsesToUnknown,
 } from "./mcp/mem.test.js";
 import {
   testPlanListGroupsByFrontmatter,
@@ -377,6 +378,7 @@ import {
   testMemoryExplicitConfigWins,
   testMemoryReadRecentDecisions,
   testMemoryReadRecentDecisionsMonorepo,
+  testReadMemLogIncludesRotatedArchives,
 } from "./memory.test.js";
 import {
   testFixtureGuard,
@@ -722,6 +724,7 @@ export async function cmdTest(): Promise<void> {
   testMemoryExplicitConfigWins();
   testMemAddWritesWhereMemFindReads();
   testMemAddRejectsMissingFilesAndBadKind();
+  testMemIdentityNeverCollapsesToUnknown();
   testMemFindReturnsAllKindsNoDefaultFilter();
   testMemFindFiltersAndMatchesFiles();
   testMemFindMatchesStoredFiles();
@@ -730,6 +733,7 @@ export async function cmdTest(): Promise<void> {
   testClaimMemoryFailGracefully();
   testMemoryReadRecentDecisions();
   testMemoryReadRecentDecisionsMonorepo();
+  testReadMemLogIncludesRotatedArchives();
   // Digest tests
   await testDigestEmptyRepo();
   await testDigestSinceFilter();

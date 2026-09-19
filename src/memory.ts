@@ -167,11 +167,13 @@ export function readMemLog(
   const dir = resolveMemDir(worktree);
   if (!dir) return { rows: [], skipped: 0, filesFound: 0 };
 
-  // read every log*.jsonl (excluding rotated files log.YYYY-MM-DD.jsonl)
+  // Every log*.jsonl, rotated archives (log.YYYY-MM-DD.jsonl) included. They
+  // used to be excluded, which meant the day a repo crossed the rotate
+  // threshold mem_find silently forgot everything already closed — the rows
+  // most worth recalling. Rotate exists to keep the live file small, not to
+  // decide what is still remembered.
   const isLogFile = (f: string): boolean =>
-    f === "log.jsonl" ||
-    (/^log\.[A-Za-z0-9._-]+\.jsonl$/.test(f) &&
-      !/^log\.\d{4}-\d{2}-\d{2}\.jsonl$/.test(f));
+    f === "log.jsonl" || /^log\.[A-Za-z0-9._-]+\.jsonl$/.test(f);
 
   let files: string[];
   try {

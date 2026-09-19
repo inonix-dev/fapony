@@ -3,7 +3,13 @@
 // state.db stays in ~/.config/fapony/ by design (security boundary — see db.ts),
 // never inside the worktree where agents have full write access.
 
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { createInterface } from "node:readline";
 import { seedConventionsFile } from "./conventions-seed.js";
@@ -63,7 +69,8 @@ const RULES_SNIPPET =
 
 The log is this project's shared brain — it lives in git, so anyone who clones the
 repo gets every decision, bug and note with it. The filename comes from
-\`git config user.name\`, one file per person, so there is nothing to merge.
+\`git config user.name\` — one file per person, and \`*.jsonl merge=union\` in
+.gitattributes keeps both sides when two people end up sharing a name anyway.
 
 Log as you work — do not wait to be asked. Nothing writes it for you:
 
@@ -109,6 +116,22 @@ export function initProject(targetPath: string, config?: Config): void {
   }
   mkdirSync(faponyDir, { recursive: true });
   writeFileSync(join(faponyDir, "README"), FAPONY_README);
+
+  // --- .gitattributes: union-merge the append-only logs ---
+  //
+  // Every row is one person's append, so both sides of a "conflict" are always
+  // right. Without the line, two people whose git user.name collides (admin /
+  // user / owner — what a fresh OS install offers) resolve a conflict by hand
+  // on every pull. Appended, never rewritten: the file is the repo's, not ours.
+  const attrs = join(targetPath, ".gitattributes");
+  const attrsBody = existsSync(attrs) ? readFileSync(attrs, "utf-8") : "";
+  if (!/^\s*\*\.jsonl\s+merge=union\s*$/m.test(attrsBody)) {
+    appendFileSync(
+      attrs,
+      `${attrsBody && !attrsBody.endsWith("\n") ? "\n" : ""}# append-only memory logs: keep both sides, never hand-resolve\n*.jsonl merge=union\n`,
+    );
+    console.log(`  + ${attrs} — *.jsonl merge=union`);
+  }
 
   // --- evidence.json (verification_report allowlist — see src/mcp/evidence.ts) ---
   const evidencePath = join(targetPath, evidenceFile(config));

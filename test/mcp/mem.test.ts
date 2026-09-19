@@ -4,6 +4,7 @@ import {
   appendFileSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -239,4 +240,57 @@ export function testMemAddRejectsMissingFilesAndBadKind(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_add rejects no files / bad kind / hold without spec");
+}
+
+// Regression 2026-09-19: agent/person both fell back to the literal "unknown",
+// and a generic OS account (admin/user/owner — what a fresh install offers) was
+// taken at face value, so two different people wrote one indistinguishable
+// file. With no git identity available at all, the last resort must still be
+// unique per machine.
+export function testMemIdentityNeverCollapsesToUnknown(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memid-"));
+  const saved = {
+    USER: process.env.USER,
+    MEM_AGENT: process.env.MEM_AGENT,
+    g: process.env.GIT_CONFIG_GLOBAL,
+    sys: process.env.GIT_CONFIG_NOSYSTEM,
+  };
+  process.env.USER = "admin";
+  delete process.env.MEM_AGENT;
+  // no git identity anywhere — the machine tag is all that is left
+  const emptyCfg = join(dir, "empty.gitconfig");
+  writeFileSync(emptyCfg, "");
+  process.env.GIT_CONFIG_GLOBAL = emptyCfg;
+  process.env.GIT_CONFIG_NOSYSTEM = "1";
+  try {
+    memAdd({
+      worktree: dir,
+      kind: "note",
+      text: "row written with no usable identity",
+      files: ["src/x.ts"],
+    });
+    const found = memFind({ worktree: dir, files: ["src/x.ts"] });
+    assert.equal(found.total, 1);
+    assert.match(
+      found.rows[0].agent ?? "",
+      /^m-[0-9a-f]{8}$/,
+      "generic $USER must fall through to the machine tag, not be used as-is",
+    );
+    const names = readdirSync(found.memDir as string);
+    assert.ok(
+      names.some((f) => /^log\.m-[0-9a-f]{8}\.jsonl$/.test(f)),
+      `filename must be machine-unique, got ${names.join(", ")}`,
+    );
+  } finally {
+    for (const [k, v] of Object.entries({
+      USER: saved.USER,
+      MEM_AGENT: saved.MEM_AGENT,
+      GIT_CONFIG_GLOBAL: saved.g,
+      GIT_CONFIG_NOSYSTEM: saved.sys,
+    }))
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem identity falls back to a machine tag, never 'unknown'");
 }

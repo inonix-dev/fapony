@@ -6,6 +6,7 @@ import type { Config } from "../src/db/index.js";
 import {
   claimMemory,
   DEFAULT_MEMORY,
+  readMemLog,
   readRecentMemDecisions,
   resolveMemoryConfig,
 } from "../src/memory.js";
@@ -203,4 +204,33 @@ export function testMemoryReadRecentDecisionsMonorepo(): void {
   console.log(
     "  ✓ readRecentMemDecisions finds the app-scoped log in a monorepo",
   );
+}
+
+// Regression 2026-09-19: readMemLog skipped log.YYYY-MM-DD.jsonl, so the day a
+// repo crossed the rotate threshold mem_find forgot every archived row — the
+// closed ones, which is most of what recall is for.
+export function testReadMemLogIncludesRotatedArchives(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memrotate-"));
+  try {
+    const memDir = join(dir, ".fapony", ".memory");
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(
+      join(memDir, "log.jsonl"),
+      `${JSON.stringify({ ts: "2026-09-19T00:00:00.000Z", agent: "a", kind: "note", text: "live row" })}\n`,
+    );
+    writeFileSync(
+      join(memDir, "log.2026-03-01.jsonl"),
+      `${JSON.stringify({ ts: "2026-03-01T00:00:00.000Z", agent: "a", kind: "bug", text: "archived row" })}\n`,
+    );
+
+    const r = readMemLog(dir);
+    assert.equal(r.filesFound, 2, "rotated archive must be read");
+    assert.deepEqual(r.rows.map((x) => x.text).sort(), [
+      "archived row",
+      "live row",
+    ]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ readMemLog reads rotated archives, not just the live log");
 }

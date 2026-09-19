@@ -4,7 +4,7 @@ import { basename } from "node:path";
 import { doneLines, fmtClose, fmtRow, printOpenRows } from "../render.js";
 import { claimsOf, openRows, staleReport } from "../selectors.js";
 import type { CloseRow, WorkRow } from "../store.js";
-import { app, memCmd, rows } from "../store.js";
+import { allRows, app, memCmd, rows } from "../store.js";
 import { planSweepCmd, shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
 
@@ -60,7 +60,8 @@ export const cmdFind = (a: string[]) => {
     console.error(`usage: ${memCmd} find <word>`);
     process.exit(1);
   }
-  const hits = rows()
+  // allRows, not rows: find is recall — rotated history counts
+  const hits = allRows()
     .filter(
       (r): r is WorkRow =>
         r.kind !== "close" &&
