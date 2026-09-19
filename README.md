@@ -37,7 +37,7 @@ quietly counted as free.
 </details>
 
 That is day one. Past that, fapony measures what coding agents actually do — rounds, pass/fail,
-cost per grade — through 4 MCP tools any agent can call. If you juggle more than one agent, this is
+cost per grade — through 5 MCP tools any agent can call. If you juggle more than one agent, this is
 the point: the numbers come from the same yardstick everywhere, so "which model earns its keep on
 which kind of task" becomes a data question instead of a vibe. On top of measurement it checks
 claims against git facts: handoff conformance, allowlisted evidence, a 6-grade verdict — with
@@ -84,11 +84,12 @@ Stated up front, because the gap between these two things is where most tooling 
   `.fapony/evidence.json`, and never a command an agent proposes. No allowlist, no evidence.
 - **It does not judge your code.** `verdict_submit` *stores* a verdict; a human or a reviewing
   agent supplies it. fapony is the ledger, not the judge.
-- **`handoff_check` checks conformance, not correctness.** It verifies that what the agent claimed
-  lines up with git facts and that it declared its uncertainty — not that the code works. Those are
-  different guarantees and fapony only offers the first.
-- **Nothing blocks.** There is no gate, no hook, no CI failure. Forget to call it and you are back
-  to exactly the workflow you had.
+- **It checks conformance, not correctness.** What it can verify is that a claim lines up with git
+  facts and that uncertainty was declared — not that the code works. Those are different
+  guarantees and fapony only offers the first.
+- **Almost nothing blocks.** No CI failure, no gate on your own commands. The one exception is the
+  Stop hook, once per turn when a commit ends ungraded; the read hint only annotates. Skip the
+  install of both and you are back to exactly the workflow you had.
 - **Model attribution is inferred, not declared.** A gate is attributed to whichever client
   session was live in that worktree at that moment. When one model writes the code and another
   reviews and files the verdict, the grade lands on the reviewer. Reports label it `inferred`;
@@ -130,7 +131,7 @@ fapony init /path/to/your-worktree
 
 With `.fapony/evidence.json` in place, any graded run can be replayed as a report. This one is
 a CLI command, not an MCP tool — the schemas cost every session of every client and no skill
-called them (see [The 4 tools](#the-4-tools) below). Grade something first;
+called them (see [The 5 tools](#the-5-tools) below). Grade something first;
 `verdict_submit` is what creates the run:
 
 ```bash
@@ -169,7 +170,7 @@ losing a single number.
 
 | | The ledger | The work side |
 |---|---|---|
-| What it is | 4 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
+| What it is | 5 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
 | Needs | an MCP client | nothing — or your own tooling instead |
 | Writes | one graded row per unit of work | nothing |
 | Skip it and | there is no fapony | fapony still answers every question |
@@ -200,10 +201,13 @@ sequenceDiagram
     Note over A,L: `fapony stats` reads it back — CLI, because you ask it, not the agent
 ```
 
-The Stop hook is the only thing fapony does *to* you — once per turn, when a commit ends
-ungraded. It never picks the grade; it cannot see whether the work held up.
+The Stop hook is the only thing fapony *blocks* — once per turn, when a commit ends ungraded.
+It never picks the grade; it cannot see whether the work held up. The Read hook only annotates:
+one factual line when a read is large enough to be cheaper as `review-seed`, or when the same
+file is read again in a session and its mtime has not moved. The read always proceeds, and
+`FAPONY_NO_REREAD_HINT=1` turns the re-read line off.
 
-### The 4 tools
+### The 5 tools
 
 | Tool | Tier | Purpose |
 |------|------|---------|
@@ -411,7 +415,7 @@ archived one: [examples/](https://github.com/kire21b/fapony/tree/main/examples).
 
 ```bash
 # Verification & reporting
-fapony mcp                               # MCP server (stdio JSON-RPC — 4 tools)
+fapony mcp                               # MCP server (stdio JSON-RPC — 5 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
@@ -455,12 +459,12 @@ fapony test                              # self-check
 - `paths` (`planDir`/`doneDir`/`specDir`/`memDir`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
 - `usageWeb` — optional `{ port, hostname }` for `fapony usage-web` server defaults. Run `fapony usage-scan` first to populate the cache.
 
-Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases live with the code in the repo — this README intentionally doesn't duplicate them.
+Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`), `FAPONY_NO_REREAD_HINT=1` (turn the re-read hint off). Full schema, design decisions, and edge cases live with the code in the repo — this README intentionally doesn't duplicate them.
 
 ## Scope
 
 **Supported:**
-- MCP server — 4 tools via stdio JSON-RPC, works with any MCP client
+- MCP server — 5 tools via stdio JSON-RPC, works with any MCP client
 - Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
 - Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
 - Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file

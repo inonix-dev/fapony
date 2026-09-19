@@ -6,7 +6,7 @@
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|plan-seed|review-seed|digest|mcp|hook-stop|test
+  fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|test
   fapony.config.json  # runtime config (worktrees, review.maxRounds, memory, paths, safety) — optional, gitignored
   skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
                                 # each SKILL.md is self-contained — the symlink ships only
@@ -47,7 +47,7 @@ fapony/
     map.ts              # extractExports() — on-demand source index, library only; the `fapony map` command was deleted once plan-seed/review-seed were its only callers (see PLAN-code-map)
     plan-seed.ts        # fapony plan-seed <name> [--spec] [--scope <path>]... — writes PLAN(+SPEC): frontmatter, 8 empty sections, §8 prior art, Context (fapony); SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200. §2/§5 seed nothing since 2026-09-18 (measured 3-of-3 empty); caller: plan-with-pony Phase 1.5
     review-seed.ts      # fapony review-seed [--staged|--commit|--range|--files|--plan] — read-only scope facts for a review (changed/importers/untested/signatures/cross-check); caller: review-pony "Before"
-    hook.ts             # fapony hook-stop — Claude Code Stop hook: blocks a turn with ungraded commits
+    hook.ts             # fapony hook-stop — Claude Code Stop hook: blocks a turn with ungraded commits · fapony hook-read-hint — PreToolUse(Read) annotate only: large full-file read → review-seed, and a re-read of the same path whose mtime has not moved this session → grep (read-track/<session>.jsonl in stateDir; FAPONY_NO_REREAD_HINT=1 disables)
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
     init.ts            # fapony init — scaffold .fapony/{plan,done,spec,.memory,evidence.json}
     init-mem.ts        # init-mem — delete legacy .memory/ dirs + warn about stale package.json call sites
@@ -83,18 +83,19 @@ fapony/
       utils.ts          # shared JSON(C) helpers
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative
-    mcp/                   # MCP server — stdio JSON-RPC, 4 tools
+    mcp/                   # MCP server — stdio JSON-RPC, 5 registered tools (collect/check/report are engines only — their tools were removed from the registry, see CLAUDE.md)
       index.ts             # MCP entry point + tool registration
       transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn the grading habit without editing their own rules file
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
       types.ts             # MCP type definitions
       tools/
-        collect.ts         # handoff_collect — git facts
-        check.ts           # handoff_check — conformance
+        mem.ts             # mem_find / mem_add — the core pair: read the mem log, append a row with files[] required
         verdict.ts         # verdict_submit — 6-grade verdict storage
         usage.ts           # fapony_usage — passive OpenCode session usage
-        report.ts          # verification_report — facts + checks + evidence + verdict, one call
         plans.ts           # plan_list — pending plan files joined with run history
+        collect.ts         # git facts — engine only, handoff_collect was removed from the registry
+        check.ts           # conformance — engine only, handoff_check was removed
+        report.ts          # facts + checks + evidence + verdict — engine only, verification_report was removed
     test.ts               # self-check ตัวเอง (thin wrapper → test/index.ts)
   test/
     *.test.ts              # one file per src module
