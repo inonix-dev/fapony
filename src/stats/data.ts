@@ -600,25 +600,35 @@ export interface StatsData {
 }
 
 /**
- * Charge a session's token totals to a bucket exactly once.
+ * Charge a gate its share of its session's token total: 1/N, N = that
+ * session's gate count.
  *
- * Tokens are a per-session total, and one session routinely produces several
- * gates (measured here: 35 sessions behind 58 gates, up to 5 gates in one).
- * Summing per gate would multiply that session's tokens by its gate count —
- * unevenly across models, so the ranking itself would be wrong.
+ * Tokens are a per-session total and one session routinely produces several
+ * gates (measured here: 35 sessions behind 58 gates, up to 5 in one), so
+ * summing the full total per gate would multiply it by the gate count.
+ * Charging it once per bucket instead — what this did until 2026-09-19 — is
+ * right within one table and wrong across tables: a session spanning several
+ * regimes charged its whole total to every regime it touched. Measured then,
+ * claude-opus-5 totalled 218.5M input in by-model while its five by-regime
+ * rows summed to 847M (3.9x), and the inflation scaled with how many regimes
+ * a model was used in — so `--mode verdict` ranked the broadly-used models as
+ * the expensive ones. Shares sum back to the session total in every table,
+ * which is why by-model is unchanged by this: one session is one model, so
+ * its N shares land in a single bucket.
  */
-function addSessionTokens(
-  bucket: { seen: Set<string>; tokensInput: number; tokensOutput: number },
+function addGateTokenShare(
+  bucket: { tokensInput: number; tokensOutput: number },
   g: {
     sessionId: string | null;
     tokensInput: number | null;
     tokensOutput: number | null;
   },
+  gatesPerSession: Map<string, number>,
 ): void {
-  if (!g.sessionId || bucket.seen.has(g.sessionId)) return;
-  bucket.seen.add(g.sessionId);
-  if (g.tokensInput !== null) bucket.tokensInput += g.tokensInput;
-  if (g.tokensOutput !== null) bucket.tokensOutput += g.tokensOutput;
+  if (!g.sessionId) return;
+  const n = gatesPerSession.get(g.sessionId) ?? 1;
+  bucket.tokensInput += (g.tokensInput ?? 0) / n;
+  bucket.tokensOutput += (g.tokensOutput ?? 0) / n;
 }
 
 /**
@@ -733,6 +743,16 @@ export function getStatsData(worktree?: string): StatsData {
     // --- Gate enrichment ---
     const wtByRun = new Map(runs.map((r) => [r.id, r.worktree]));
     const enriched = enrichGates(events, wtByRun);
+    // Denominator for the per-gate token share — see addGateTokenShare.
+    const gatesPerSession = new Map<string, number>();
+    for (const g of enriched) {
+      if (g.sessionId) {
+        gatesPerSession.set(
+          g.sessionId,
+          (gatesPerSession.get(g.sessionId) ?? 0) + 1,
+        );
+      }
+    }
 
     // Group by worktree+client+provider+model+agent — the same model name on two
     // providers is two different things. Unknown dimension → "—" (never ""
@@ -749,7 +769,6 @@ export function getStatsData(worktree?: string): StatsData {
         fails: number;
         passes: number;
         qualities: number[];
-        seen: Set<string>;
         tokensInput: number;
         tokensOutput: number;
       }
@@ -771,7 +790,6 @@ export function getStatsData(worktree?: string): StatsData {
         fails: 0,
         passes: 0,
         qualities: [],
-        seen: new Set(),
         tokensInput: 0,
         tokensOutput: 0,
       });
@@ -780,7 +798,7 @@ export function getStatsData(worktree?: string): StatsData {
       if (g.verdict && isPassFamily(g.verdict)) bucket.passes++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
-      addSessionTokens(bucket, g);
+      addGateTokenShare(bucket, g, gatesPerSession);
     }
     const byModel = Object.values(modelMap)
       .map((b) => ({
@@ -846,7 +864,6 @@ export function getStatsData(worktree?: string): StatsData {
         fails: number;
         passes: number;
         qualities: number[];
-        seen: Set<string>;
         tokensInput: number;
         tokensOutput: number;
       }
@@ -864,7 +881,6 @@ export function getStatsData(worktree?: string): StatsData {
         fails: 0,
         passes: 0,
         qualities: [],
-        seen: new Set<string>(),
         tokensInput: 0,
         tokensOutput: 0,
       });
@@ -873,7 +889,7 @@ export function getStatsData(worktree?: string): StatsData {
       if (g.verdict && isPassFamily(g.verdict)) bucket.passes++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
-      addSessionTokens(bucket, g);
+      addGateTokenShare(bucket, g, gatesPerSession);
     }
     const byPlanMode = Object.values(planModeMap)
       .map((b) => ({
@@ -919,7 +935,6 @@ export function getStatsData(worktree?: string): StatsData {
         fails: number;
         passes: number;
         qualities: number[];
-        seen: Set<string>;
         tokensInput: number;
         tokensOutput: number;
       }
@@ -937,7 +952,6 @@ export function getStatsData(worktree?: string): StatsData {
         fails: 0,
         passes: 0,
         qualities: [],
-        seen: new Set<string>(),
         tokensInput: 0,
         tokensOutput: 0,
       });
@@ -946,7 +960,7 @@ export function getStatsData(worktree?: string): StatsData {
       if (g.verdict && isPassFamily(g.verdict)) bucket.passes++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
-      addSessionTokens(bucket, g);
+      addGateTokenShare(bucket, g, gatesPerSession);
     }
     const byRegime = Object.values(regimeMap)
       .map((b) => ({
