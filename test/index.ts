@@ -71,6 +71,16 @@ import {
   testDebtWorktreeFollowsThePathNotGitRoot,
 } from "./debt.test.js";
 import {
+  testDetectBunViaPackageManager,
+  testDetectBunViaPackageManagerWithTypecheckScript,
+  testDetectNpmViaLockfile,
+  testDetectNullWhenNoPackageJson,
+  testDetectNullWhenPackageJsonHasNoSignal,
+  testDetectPnpmViaLockfile,
+  testDetectSkipsUnrecognizedPackageManager,
+  testDetectYarnViaLockfile,
+} from "./detect.test.js";
+import {
   testDigestBugOpenClose,
   testDigestEmptyRepo,
   testDigestEscInjection,
@@ -134,6 +144,7 @@ import {
   testCursorPayloadEdges,
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
+  testDecideStopDerivesCommandFromWorktree,
   testDecideStopMemNeverBlocks,
   testDecideStopMessageIsRepoNeutral,
   testDecideStopReportsCommitsAndMem,
@@ -157,6 +168,7 @@ import {
   testRereadHintFiresOnUnchangedRepeat,
   testRereadHintKillSwitch,
   testRereadHintSilentAfterEdit,
+  testStopHookSourceHasNoRepoSpecificCommands,
   testStopOutputShapesPerClient,
   testStopPayloadsMapToSameDecision,
   testUtcStampMatchesSqliteFormat,
@@ -669,9 +681,11 @@ export async function cmdTest(): Promise<void> {
   testReviewSeedNotARepo();
   testReviewSeedStateDbUntouched();
   testDecideStopBlocksUngradedCommits();
+  testDecideStopDerivesCommandFromWorktree();
   testDecideStopReportsCommitsAndMem();
   testDecideStopMemNeverBlocks();
   testDecideStopMessageIsRepoNeutral();
+  testStopHookSourceHasNoRepoSpecificCommands();
   testReadHintAnnotatesLargeFullRead();
   testReadHintSkipsCheapReads();
   testReadHintNeedsGitRepo();
@@ -725,6 +739,14 @@ export async function cmdTest(): Promise<void> {
   testDebtTooBroadRegexDropped();
   testDebtForFileAndMonorepoResolution();
   testDebtWorktreeFollowsThePathNotGitRoot();
+  testDetectBunViaPackageManager();
+  testDetectBunViaPackageManagerWithTypecheckScript();
+  testDetectNpmViaLockfile();
+  testDetectPnpmViaLockfile();
+  testDetectYarnViaLockfile();
+  testDetectNullWhenNoPackageJson();
+  testDetectNullWhenPackageJsonHasNoSignal();
+  testDetectSkipsUnrecognizedPackageManager();
   testDebtPromotionAsksAtThresholdOnly();
   testDebtPromotionCountsLedgerFails();
   testDebtConventionsPathResolution();

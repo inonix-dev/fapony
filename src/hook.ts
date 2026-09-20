@@ -30,6 +30,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import { buildGraphCached, collectSourceFiles, SCAN_EXTS } from "./analyze.js";
 import { openDb } from "./db/index.js";
 import { debtForFile, loadConventions } from "./debt/index.js";
+import { detectTestRunner } from "./detect.js";
 import { readMemLog } from "./memory.js";
 
 // --- Hint-fire log (PLAN-feedback-surface chunk 1) ---
@@ -275,15 +276,20 @@ export function decideStop(opts: {
   } else {
     lines.push("mem: no rows at all — nothing recorded in this project yet");
   }
+  const runner = detectTestRunner(opts.worktree);
+  const verifyLine = runner
+    ? `If you did not run \`${runner.typecheckCmd ? `${runner.typecheckCmd} and ` : ""}${runner.testCmd}\` to a real exit code, ` +
+      `the honest verdict is uncertain, not pass. `
+    : `If you did not run this repo's typecheck and test suite to a real exit code, ` +
+      `the honest verdict is uncertain, not pass. `;
+
   lines.push(
     `Call verdict_submit before ending: worktree must be the absolute path above, ` +
       `regime is one of code|fix|review|plan|inquiry|test, and the note must stand alone ` +
       `(it is read months from now with no access to this conversation). ` +
       `Grade what actually happened — pass-family when it held up, fail if the first ` +
-      `attempt was wrong, uncertain when you could not verify it. ` +
-      `If you did not run this repo's typecheck and test suite to a real exit code, ` +
-      `the honest verdict is uncertain, not pass. What deserves a mem ` +
-      `row (decision/bug/note) is your call — not every unit needs one.`,
+      `attempt was wrong, uncertain when you could not verify it. ${verifyLine}` +
+      `What deserves a mem row (decision/bug/note) is your call — not every unit needs one.`,
   );
   return lines.join("\n");
 }

@@ -126,6 +126,81 @@ export function testDecideStopMessageIsRepoNeutral(): void {
   );
 }
 
+export function testDecideStopDerivesCommandFromWorktree(): void {
+  // When the worktree is real, the message names the repo's actual test
+  // command — not a generic phrase, not a hardcoded fapony one. derive, don't
+  // assume: this is the whole point of detectTestRunner.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-stop-derive-"));
+  try {
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ packageManager: "bun@1.2.0" }),
+    );
+    const reason = decideStop({
+      stopHookActive: false,
+      worktree: dir,
+      commits: 1,
+      verdicts: 0,
+    });
+    assert(reason, "blocks");
+    assert.match(reason, /`bun test`/, "names the derived bun command");
+    assert.doesNotMatch(
+      reason,
+      /bun fapony\.ts|fapony lint-baseline/,
+      "never names fapony commands",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  // A foreign worktree (no packageManager, no lockfile) falls back to the
+  // generic phrase — detectTestRunner returns null, no guessing.
+  const foreign = mkdtempSync(join(tmpdir(), "fapony-stop-foreign-"));
+  try {
+    writeFileSync(join(foreign, "package.json"), JSON.stringify({ name: "x" }));
+    const reason = decideStop({
+      stopHookActive: false,
+      worktree: foreign,
+      commits: 1,
+      verdicts: 0,
+    });
+    assert(reason);
+    assert.match(
+      reason,
+      /this repo's typecheck and test suite/,
+      "foreign worktree → generic fallback",
+    );
+  } finally {
+    rmSync(foreign, { recursive: true, force: true });
+  }
+  console.log(
+    "  ✓ decideStop derives test command from worktree, falls back for foreign",
+  );
+}
+
+const REPO_SPECIFIC_CMDS =
+  /bun fapony\.ts|npm (run test|test|exec)|pnpm test|yarn test/;
+
+export function testStopHookSourceHasNoRepoSpecificCommands(): void {
+  // The Stop hook installs globally but fires in every repo. Its source must
+  // not hardcode a verify command that only works in one repo —
+  // detectTestRunner owns derivation now. Sweep the files that build the block
+  // message so the third occurrence of this bug class is caught at commit time,
+  // not in someone's worktree. (Informational CLI refs like "fapony report" in
+  // a setup banner are global commands, not verify commands — allowed.)
+  for (const file of ["hook.ts", "setup.ts"]) {
+    const src = readFileSync(join(__dirname, "..", "src", file), "utf-8");
+    const bad = src.match(REPO_SPECIFIC_CMDS);
+    assert.ok(
+      !bad,
+      `${file} hardcodes repo-specific verify command: "${bad?.[0]}" — derive via detectTestRunner`,
+    );
+  }
+  console.log(
+    "  ✓ hook.ts / setup.ts source sweeps clean (no hardcoded repo verify commands)",
+  );
+}
+
 export function testDecideStopMemNeverBlocks(): void {
   // กฎ 7 — mem status is data: the block condition stays verdict-only,
   // so a fresh mem row changes the message, not the decision.
@@ -895,16 +970,14 @@ export function testReadContextMemRowsByFilesAndPath(): void {
         text,
         ...(files ? { files } : []),
       });
-    writeFileSync(
-      join(dir, ".fapony/.memory/log.t.jsonl"),
-      [
-        row("2026-09-17T00:00:00Z", "money drifted via toLocaleString", [
-          "src/bill.tsx",
-        ]),
-        row("2026-09-16T00:00:00Z", "old row mentions src/form.tsx by path"),
-        row("2026-09-15T00:00:00Z", "unrelated row about nothing"),
-      ].join("\n") + "\n",
-    );
+    const logRows = [
+      row("2026-09-17T00:00:00Z", "money drifted via toLocaleString", [
+        "src/bill.tsx",
+      ]),
+      row("2026-09-16T00:00:00Z", "old row mentions src/form.tsx by path"),
+      row("2026-09-15T00:00:00Z", "unrelated row about nothing"),
+    ].join("\n");
+    writeFileSync(join(dir, ".fapony/.memory/log.t.jsonl"), `${logRows}\n`);
     writeFileSync(join(dir, "src/bill.tsx"), "x");
     writeFileSync(join(dir, "src/form.tsx"), "x");
     const byFiles = readContextLines(join(dir, "src/bill.tsx"), dir);
@@ -930,15 +1003,13 @@ export function testReadContextBasenameAmbiguityStaysSilent(): void {
     mkdirSync(join(dir, ".fapony/.memory"), { recursive: true });
     writeFileSync(join(dir, "src/a/index.ts"), "x");
     writeFileSync(join(dir, "src/b/index.ts"), "x");
-    writeFileSync(
-      join(dir, ".fapony/.memory/log.t.jsonl"),
-      JSON.stringify({
-        ts: "2026-09-17T00:00:00Z",
-        agent: "t",
-        kind: "note",
-        text: "watch out for index.ts",
-      }) + "\n",
-    );
+    const memRow = JSON.stringify({
+      ts: "2026-09-17T00:00:00Z",
+      agent: "t",
+      kind: "note",
+      text: "watch out for index.ts",
+    });
+    writeFileSync(join(dir, ".fapony/.memory/log.t.jsonl"), `${memRow}\n`);
     // two index.ts exist — the row cannot be attributed, so: silence
     const lines = readContextLines(join(dir, "src/a/index.ts"), dir);
     assert.equal(lines.length, 0, "ambiguous basename must not guess");
