@@ -120,6 +120,11 @@ export function cmdInstallClaude(
   if (dryRun) {
     console.error(`── dry-run: would run ──`);
     console.error(`  ${addArgs.join(" ")}`);
+    // Dry-run shows the hook wiring too — the installers are dry-run-safe
+    // ("would write", no writes), so the preview stays truthful.
+    installStopHook(dryRun, deps);
+    installReadHintHook(dryRun, deps);
+    installEditHintHook(dryRun, deps);
     return;
   }
 
@@ -148,9 +153,11 @@ export function cmdInstallClaude(
   installStatusline(dryRun, deps);
 
   // Wire the Stop hook that refuses to end a turn with ungraded commits,
-  // and the Read hint that annotates large-file reads (annotate-only).
+  // and the Read/Edit hints that annotate reads of large files and edits to
+  // files with importers (both annotate-only).
   installStopHook(dryRun, deps);
   installReadHintHook(dryRun, deps);
+  installEditHintHook(dryRun, deps);
 }
 
 /**
@@ -359,5 +366,20 @@ function installReadHintHook(dryRun: boolean, deps: InstallDeps): void {
     matcher: "Read",
     subcommand: "hook-read-hint",
     label: "read hint",
+  });
+}
+
+/**
+ * PreToolUse hook on Edit: annotates an edit with the file's importer count
+ * plus the review-seed command that lists them, once per (session, file).
+ * Annotate only — no permissionDecision is ever returned, the edit always
+ * proceeds. The matcher "Edit" keeps the spawn off every other tool call.
+ */
+function installEditHintHook(dryRun: boolean, deps: InstallDeps): void {
+  ensureClaudeHook(dryRun, deps, {
+    event: "PreToolUse",
+    matcher: "Edit",
+    subcommand: "hook-edit-hint",
+    label: "edit hint",
   });
 }

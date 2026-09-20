@@ -171,6 +171,7 @@ import {
   testInstallClaudeAlreadyConfiguredNoOp,
   testInstallClaudeDifferentCommandRefusesOverwrite,
   testInstallClaudeDryRunNeverAdds,
+  testInstallClaudeEditHintAppendsOnce,
   testInstallClaudeForeignScriptRefusesOverwrite,
   testInstallClaudeForeignStatuslineRefusesOverwrite,
   testInstallClaudeMissingBinary,
@@ -845,6 +846,7 @@ export async function cmdTest(): Promise<void> {
   testInstallClaudeForeignStatuslineRefusesOverwrite();
   testInstallClaudeStopHookAppendsOnceAndKeepsForeign();
   testInstallClaudeReadHintAppendsOnce();
+  testInstallClaudeEditHintAppendsOnce();
   testInstallClaudeForeignScriptRefusesOverwrite();
   testInstallClaudeStatuslineWiresSettings();
   testInstallClaudeDryRunNeverAdds();

@@ -342,13 +342,70 @@ export function testInstallClaudeReadHintAppendsOnce(): void {
   }
 
   const pre = read().hooks.PreToolUse;
-  assert.equal(pre.length, 1, "installing twice must not duplicate");
-  assert.equal(pre[0].matcher, "Read", "matcher must be Read only");
+  assert.equal(pre.length, 2, "installing twice must not duplicate");
+  const byMatcher = new Map(pre.map((e) => [e.matcher, e]));
+  assert.ok(byMatcher.has("Read"), "Read hint entry must be registered");
   assert.ok(
-    JSON.stringify(pre[0]).includes("hook-read-hint"),
+    JSON.stringify(byMatcher.get("Read")).includes("hook-read-hint"),
     "read hint command must be registered",
   );
+  assert.ok(byMatcher.has("Edit"), "Edit hint entry must be registered");
+  assert.ok(
+    JSON.stringify(byMatcher.get("Edit")).includes("hook-edit-hint"),
+    "edit hint command must be registered",
+  );
   console.log(
-    "  ✓ install claude read hint → PreToolUse matcher Read, appends once",
+    "  ✓ install claude read+edit hints → PreToolUse matchers Read/Edit, append once",
+  );
+}
+
+export function testInstallClaudeEditHintAppendsOnce(): void {
+  const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
+  const claudeDir = join(home, ".claude");
+  mkdirSync(claudeDir, { recursive: true });
+  // A foreign PreToolUse entry (another tool's hook) must survive — Claude
+  // Code runs every entry in the array, so the correct move is append.
+  writeFileSync(
+    join(claudeDir, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "Bash",
+            hooks: [{ type: "command", command: "/tmp/theirs" }],
+          },
+        ],
+      },
+    }),
+  );
+  const ADD = claudeAddArgs().join(" ");
+  const read = () =>
+    JSON.parse(readFileSync(join(claudeDir, "settings.json"), "utf-8")) as {
+      hooks: { PreToolUse: Array<Record<string, unknown>> };
+    };
+
+  for (let i = 0; i < 2; i++) {
+    const { run } = mapRun({ [GET]: ABSENT, [ADD]: ADDED });
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallClaude(false, { run, exit: testExit, homedir: () => home }),
+      ),
+    );
+  }
+
+  const pre = read().hooks.PreToolUse;
+  assert.equal(pre.length, 3, "installing twice must not duplicate");
+  assert.ok(
+    JSON.stringify(pre[0]).includes("/tmp/theirs"),
+    "foreign PreToolUse hook must survive",
+  );
+  const edit = pre.find((e) => e.matcher === "Edit");
+  assert.ok(edit, "Edit matcher entry must be registered");
+  assert.ok(
+    JSON.stringify(edit).includes("hook-edit-hint"),
+    "edit hint command must be registered",
+  );
+  console.log(
+    "  ✓ install claude edit hint → PreToolUse matcher Edit, appends once, keeps foreign",
   );
 }
