@@ -281,7 +281,7 @@ export function decideStop(opts: {
       `(it is read months from now with no access to this conversation). ` +
       `Grade what actually happened — pass-family when it held up, fail if the first ` +
       `attempt was wrong, uncertain when you could not verify it. ` +
-      `If you did not run typecheck + \`bun fapony.ts test\` + \`fapony lint-baseline --diff\`, ` +
+      `If you did not run this repo's typecheck and test suite to a real exit code, ` +
       `the honest verdict is uncertain, not pass. What deserves a mem ` +
       `row (decision/bug/note) is your call — not every unit needs one.`,
   );
