@@ -186,17 +186,20 @@ is `tool.execute.after`. Nothing here is required: skip the hooks and every MCP 
 | | Claude Code | OpenCode | Cursor | ZCode | Codex |
 |---|---|---|---|---|---|
 | MCP tools — `mem_find` `mem_add` `fapony_usage` `verdict_submit` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Stop hook — refuse to end a turn with ungraded commits | ✅ | — | ✅ | — | — |
+| Stop hook — refuse to end a turn with ungraded commits | ✅ | — | ✅ | — | ✅ after trust |
 | Read hint — big-file pointer + debt/mem lines | ✅ before | ✅ after | — | — | — |
 | Re-read hint — unchanged repeat read | ✅ before | ✅ after | — | — | — |
 | Edit hint — importer count before a shape change | ✅ before | ✅ after | — | — | — |
 | Commit hint — `git commit` → ungraded-run nudge | — | ✅ after | — | — | — |
 | Skills symlinked into `~/.claude/skills` | ✅ | ✅ | — | — | — |
+| Skills symlinked into `~/.agents/skills` | — | — | — | ✅ | ✅ |
 | `usage-scan` reads this client's session log | ✅ | ✅ | — | ✅ | ✅ |
 
 `—` means not wired, not impossible: Cursor has no PreToolUse hook, and ZCode/Codex expose no
-in-process hook surface fapony has attached to yet. The hints live on hooks rather than MCP on
-purpose — they must fire mid-turn without the agent deciding to call anything ([why](#when-to-call-what)).
+in-process hook surface for read/edit hints yet (Codex's `apply_patch` sends patch text, not
+resolved file paths). Codex hooks require trust via `/hooks` before they run — `fapony install`
+tells you when. The hints live on hooks rather than MCP on purpose — they must fire mid-turn
+without the agent deciding to call anything ([why](#when-to-call-what)).
 
 ## The ledger — this is the product
 
@@ -365,8 +368,9 @@ the claim on faith.
 
 `fapony install --platform claude` (or `opencode`) symlinks these directories into
 `~/.claude/skills` rather than copying them, so `fapony update` refreshes every client
-at once. A destination that already exists and isn't a fapony link is reported and left
-alone — replace it by hand if you want fapony's version.
+at once. ZCode and Codex get the same skills linked into `~/.agents/skills`. A destination
+that already exists and isn't a fapony link is reported and left alone — replace it by hand
+if you want fapony's version.
 
 `plan-with-pony` is vendor-neutral — the SKILL.md *is* the prompt, so pipe it to any agent:
 
@@ -506,7 +510,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 
 **Not supported (yet):**
 - PreToolUse hints on Cursor, ZCode or Codex — Cursor has no such hook and the other two expose no
-  in-process hook surface fapony has attached to; they get MCP only
+  in-process hook surface for read/edit hints (Codex's `apply_patch` sends patch text, not file paths)
 - A hosted or shared ledger for a team — `runs.worktree` is the only sharing key today, and it's a
   path, not an identity. If you want to try pointing two machines at the same ledger anyway,
   `FAPONY_STATE_DIR` can be set to a synced folder (Syncthing, a shared drive) — but SQLite's WAL

@@ -129,19 +129,21 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 | | claude | opencode | cursor | zcode | codex |
 | --- | --- | --- | --- | --- | --- |
 | MCP 4 tools | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Stop hook (ไม่จบเทิร์นที่มี commit ไม่มี verdict) | ✅ | — | ✅ | — | — |
+| Stop hook (ไม่จบเทิร์นที่มี commit ไม่มี verdict) | ✅ | — | ✅ | — | ✅ after trust |
 | Read hint (ไฟล์ใหญ่ + debt/mem) | ✅ ก่อน | ✅ หลัง | — | — | — |
 | Re-read hint (อ่านซ้ำไฟล์เดิม mtime ไม่ขยับ) | ✅ ก่อน | ✅ หลัง | — | — | — |
 | Edit hint (จำนวน importer ก่อนแก้ shape) | ✅ ก่อน | ✅ หลัง (edit+write) | — | — | — |
 | Commit hint (`git commit` → เตือน verdict) | — | ✅ หลัง | — | — | — |
 | Skill symlink → `~/.claude/skills` | ✅ | ✅ | — | — | — |
+| Skill symlink → `~/.agents/skills` | — | — | — | ✅ | ✅ |
 | `usage-scan` อ่าน session log ของเจ้านั้น | ✅ | ✅ | — | ✅ | ✅ |
 
 `—` = ยังไม่ต่อ ไม่ใช่ทำไม่ได้ (Cursor ไม่มี PreToolUse · ZCode/Codex ไม่มี in-process hook surface
-ที่ fapony ต่อไว้) · **ทำไม hint อยู่บน hook ไม่ใช่ MCP** — มันต้องยิงกลางเทิร์นเองโดย agent ไม่ต้องนึก
-ตรงเกณฑ์ MCP-vs-CLI (กฎ 13) เป๊ะ · **commit hint มีแต่ OpenCode** เพราะ Claude ใช้ Stop hook
-รายงาน commit ที่ยังไม่ grade แทน · ตัวติดตั้ง **ไม่เคยเขียนทับ plugin ของตัวเอง** ฉะนั้นแก้
-`*PluginSource` แล้วต้องลบไฟล์ใน `~/.config/opencode/plugins/` ทิ้งก่อน install ใหม่ ไม่งั้นได้ของเก่าเงียบ ๆ
+สำหรับ read/edit hints — Codex `apply_patch` ส่ง patch text ไม่ใช่ file path) · **ทำไม hint อยู่บน hook ไม่ใช่
+MCP** — มันต้องยิงกลางเทิร์นเองโดย agent ไม่ต้องนึก ตรงเกณฑ์ MCP-vs-CLI (กฎ 13) เป๊ะ · **commit hint
+มีแต่ OpenCode** เพราะ Claude ใช้ Stop hook รายงาน commit ที่ยังไม่ grade แทน · Codex hooks ต้อง
+trust ผ่าน `/hooks` ก่อน run — `fapony install` บอกเมื่อต้องทำ · ตัวติดตั้ง **ไม่เคยเขียนทับ plugin ของตัวเอง**
+ฉะนั้นแก้ `*PluginSource` แล้วต้องลบไฟล์ใน `~/.config/opencode/plugins/` ทิ้งก่อน install ใหม่ ไม่งั้นได้ของเก่าเงียบ ๆ
 
 ## Memory: `.fapony/.memory/log.<คุณ>.jsonl` (append-only)
 
