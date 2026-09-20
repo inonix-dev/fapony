@@ -9,7 +9,7 @@ export function testMcpToolsList(): void {
   const r = result as { tools: { name: string }[] };
   assert.deepEqual(
     r.tools.map((t) => t.name),
-    ["verdict_submit", "mem_find", "mem_add", "fapony_usage", "plan_list"],
+    ["verdict_submit", "mem_find", "mem_add", "fapony_usage"],
   );
   console.log("  ✓ mcp tools/list returns 5 tools");
 }

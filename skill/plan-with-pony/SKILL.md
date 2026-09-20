@@ -145,8 +145,8 @@ normal — writing to the default there scatters plans into a directory nobody r
 by hand, this check is yours.)
 
 **Editing a plan someone is executing right now is a different job from drafting one.** Ask the
-dev, or call `plan_list` — it joins plan files against run history, so a plan with an open run is
-one an agent is working from this minute. When that is the case:
+dev, or run `fapony mem kickoff` — it reads the same plan files and names the first unchecked
+chunk, so a plan already in flight is the one you are about to edit under someone. When that is the case:
 
 - **Anything you add is an instruction, not a note.** A measured fact parked under "don't do"
   still reads as a to-do to an agent mid-execution — the numbers are what make it tempting.
@@ -185,7 +185,7 @@ only place that ordering stays true.
 
 **The TL;DR is 15 lines, hard cap, and is the only part that changes while the work is in flight**
 (tick a box, stamp a short sha). Everything below it is the agreement. A TL;DR allowed to grow
-becomes a second copy of the plan, and then neither copy can be trusted. `plan_list` tallies the
+becomes a second copy of the plan, and then neither copy can be trusted. `fapony mem kickoff` reads the
 checkboxes in the **first `##` section only**, so section 6 stays detail rather than status.
 
 Section 6 — every step must be verifiable. Section 8 — must link back to anything it came from.

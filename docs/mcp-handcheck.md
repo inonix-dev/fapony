@@ -30,12 +30,11 @@ and no skill ever called them, so they moved behind the CLI that already did the
 same job. The logic is unchanged.
 
 The server exposes 5 tools in total, all higher-level and taking plain arguments —
-see [README](../README.md#the-5-tools) for what each one answers:
+see [README](../README.md#the-4-tools) for what each one answers:
 
 | Tool | In one line |
 |------|-------------|
 | `verdict_submit` | Grade a finished unit of work — the one habit the ledger needs |
-| `plan_list` | Pending plan files joined with their run history |
 | `mem_find` | The project's mem log, read-only — what was decided about these files |
 | `mem_add` | Append a mem row with files[] required — decision/bug/note/next/hold |
 | `fapony_usage` | Token/cost totals read from client session logs |

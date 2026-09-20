@@ -345,11 +345,13 @@ function installStopHook(dryRun: boolean, deps: InstallDeps): void {
 }
 
 /**
- * PreToolUse hook on Read: annotates a full-file read of a large source file
- * with one factual line (size + the review-seed command). Annotate only —
- * no permissionDecision is ever returned, the read always proceeds; and no
- * "already read" dedupe (context compaction makes that claim false). The
- * matcher "Read" keeps the spawn off every other tool call.
+ * PreToolUse hook on Read: annotates a full-file read with one factual line —
+ * the size + the review-seed command when the file is large, and the re-read
+ * line when the same path was already read this session and its mtime has not
+ * moved (an unchanged file, so the second read buys nothing; a changed one
+ * stays silent). Annotate only — no permissionDecision is ever returned, the
+ * read always proceeds. The matcher "Read" keeps the spawn off every other
+ * tool call.
  */
 function installReadHintHook(dryRun: boolean, deps: InstallDeps): void {
   ensureClaudeHook(dryRun, deps, {

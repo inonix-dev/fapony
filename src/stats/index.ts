@@ -3,7 +3,6 @@
 export { cmdStats, currentWorktree } from "./cli.js";
 export {
   countPendingPlans,
-  getLastVerdictByPlan,
   getPlanBreakdown,
   getStatsData,
   type PlanBreakdown,
