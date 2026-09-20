@@ -63,7 +63,7 @@ export function hintLogPath(worktree: string): string {
 export interface HintFireRow {
   ts: string;
   worktree: string;
-  surface: "read" | "debt" | "mem" | "commit";
+  surface: "read" | "debt" | "mem" | "commit" | "edit";
   file: string | null;
   count: number;
   ids?: string[];
@@ -96,7 +96,13 @@ export function recordHintFire(row: HintFireRow): void {
 
 export interface HintImpact {
   fired: number;
-  by_surface: { read: number; debt: number; mem: number; commit: number };
+  by_surface: {
+    read: number;
+    debt: number;
+    mem: number;
+    commit: number;
+    edit: number;
+  };
   debt: { shown: number; resolved: number; unknown: number };
   window: string | null;
 }
@@ -115,7 +121,7 @@ export function computeHintImpact(
   const dir = hintLogDir();
   const impact: HintImpact = {
     fired: 0,
-    by_surface: { read: 0, debt: 0, mem: 0, commit: 0 },
+    by_surface: { read: 0, debt: 0, mem: 0, commit: 0, edit: 0 },
     debt: { shown: 0, resolved: 0, unknown: 0 },
     window: since ?? null,
   };
@@ -958,6 +964,80 @@ export async function cmdHookReadHint(): Promise<void> {
     }
   } catch {
     // any failure = no hint; a hook must never block a read over a hint
+  }
+}
+
+/** Claude Code PreToolUse (matcher Edit): stdin JSON in, additionalContext out.
+ *  No permissionDecision ever — the edit always proceeds. Fires once per
+ *  (session, file); the dedupe lives inside editHintFor. */
+export async function cmdHookEditHint(): Promise<void> {
+  try {
+    const raw = JSON.parse(await Bun.stdin.text()) as {
+      cwd?: string;
+      transcript_path?: string;
+      session_id?: string;
+      tool_input?: {
+        file_path?: unknown;
+      };
+    };
+    const cwd = raw.cwd ?? process.cwd();
+    const filePath = raw.tool_input?.file_path;
+    // One edit log per session — same identity as the read hint.
+    const session = raw.transcript_path ?? raw.session_id;
+    const hint = editHintFor({ filePath, cwd, session });
+    if (hint) {
+      console.log(
+        JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            additionalContext: hint,
+          },
+        }),
+      );
+    }
+
+    // --- hint-fire log (PLAN-edit-importer-hint chunk 3) ---
+    // After output — best-effort, never block the hint.
+    if (hint) {
+      try {
+        const g = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+          cwd,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        if (g.exitCode === 0) {
+          const worktree = realpathSync(g.stdout.toString().trim());
+          const abs =
+            typeof filePath === "string"
+              ? (() => {
+                  try {
+                    return realpathSync(
+                      filePath.startsWith("/")
+                        ? filePath
+                        : join(worktree, filePath),
+                    );
+                  } catch {
+                    return null;
+                  }
+                })()
+              : null;
+          const rel = abs
+            ? relative(worktree, abs).split("\\").join("/")
+            : null;
+          recordHintFire({
+            ts: new Date().toISOString(),
+            worktree,
+            surface: "edit",
+            file: rel && !rel.startsWith("..") ? rel : null,
+            count: 1,
+          });
+        }
+      } catch {
+        // best-effort — swallow
+      }
+    }
+  } catch {
+    // any failure = no hint; a hook must never block an edit over a hint
   }
 }
 

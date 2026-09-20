@@ -2,6 +2,8 @@ import assert from "node:assert";
 import {
   existsSync,
   mkdtempSync,
+  readdirSync,
+  readFileSync,
   rmSync,
   utimesSync,
   writeFileSync,
@@ -621,6 +623,98 @@ export function testReadHintClaudeOutputShape(): void {
     );
   });
   console.log("  ✓ read hint claude output = additionalContext, no decision");
+}
+
+export function testEditHintClaudeOutputShape(): void {
+  // cmdHookEditHint is a thin wrapper; assert the pure core feeds the
+  // documented additionalContext shape via the real stdin/stdout path,
+  // and that a fire logs one "edit" surface row.
+  withTempRepo((dir) => {
+    const lib = join(dir, "lib.ts");
+    writeFileSync(lib, "export const value = 1;\n");
+    writeFileSync(
+      join(dir, "mid.ts"),
+      'import { value } from "./lib.js";\nconsole.log(value);\n',
+    );
+    const run = (payload: unknown) =>
+      Bun.spawnSync(
+        ["bun", join(import.meta.dir, "..", "fapony.ts"), "hook-edit-hint"],
+        {
+          cwd: dir,
+          stdin: Buffer.from(JSON.stringify(payload)),
+          stdout: "pipe",
+          env: { ...process.env, FAPONY_STATE_DIR: dir },
+        },
+      );
+    const session = join(dir, "sess-eh.jsonl");
+    const first = run({
+      cwd: dir,
+      transcript_path: session,
+      tool_input: { file_path: lib },
+    });
+    const out = JSON.parse(first.stdout.toString()) as {
+      hookSpecificOutput: Record<string, string>;
+    };
+    assert.equal(out.hookSpecificOutput.hookEventName, "PreToolUse");
+    assert.match(
+      out.hookSpecificOutput.additionalContext ?? "",
+      /lib\.ts has 1 importer/,
+    );
+    assert.match(
+      out.hookSpecificOutput.additionalContext ?? "",
+      /review-seed --files lib\.ts/,
+    );
+    assert.ok(
+      !JSON.stringify(out).includes("permissionDecision"),
+      "annotate-only: no permissionDecision may ever appear",
+    );
+    // one "edit" surface row in the hint log
+    let logFiles: string[] = [];
+    try {
+      logFiles = readdirSync(join(dir, "hint-log")).filter((f) =>
+        f.endsWith(".jsonl"),
+      );
+    } catch {
+      logFiles = [];
+    }
+    assert.equal(logFiles.length, 1, "exactly one worktree log file");
+    const rows = readFileSync(join(dir, "hint-log", logFiles[0]), "utf-8")
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].surface, "edit");
+    assert.equal(rows[0].file, "lib.ts");
+    // repeat edit in the same session: dedupe → no output, no second row
+    const second = run({
+      cwd: dir,
+      transcript_path: session,
+      tool_input: { file_path: lib },
+    });
+    assert.equal(
+      second.stdout.toString().trim(),
+      "",
+      "repeat edit stays silent",
+    );
+    const rowsAfter = readFileSync(join(dir, "hint-log", logFiles[0]), "utf-8")
+      .split("\n")
+      .filter(Boolean);
+    assert.equal(rowsAfter.length, 1, "dedupe must not log a second row");
+    // zero-importer file: silent, no new row
+    const lone = join(dir, "lone.ts");
+    writeFileSync(lone, "export const alone = 1;\n");
+    const third = run({
+      cwd: dir,
+      transcript_path: session,
+      tool_input: { file_path: lone },
+    });
+    assert.equal(
+      third.stdout.toString().trim(),
+      "",
+      "0 importers stays silent",
+    );
+  });
+  console.log("  ✓ edit hint claude output = additionalContext + edit log row");
 }
 
 export function testReadHintPluginSource(): void {

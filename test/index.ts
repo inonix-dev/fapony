@@ -132,6 +132,7 @@ import {
   testDecideStopBlocksUngradedCommits,
   testDecideStopMemNeverBlocks,
   testDecideStopReportsCommitsAndMem,
+  testEditHintClaudeOutputShape,
   testEditHintDedupesPerSessionPerFile,
   testEditHintFiresWithImporters,
   testEditHintFiresWithoutSession,
@@ -668,6 +669,7 @@ export async function cmdTest(): Promise<void> {
   testEditHintNeedsGitRepo();
   testEditHintDedupesPerSessionPerFile();
   testEditHintFiresWithoutSession();
+  testEditHintClaudeOutputShape();
   testCommitHintMinCommitsConstant();
   testCommitHintNullForNonCommit();
   testCommitHintNullOutsideGitRepo();
