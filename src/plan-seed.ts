@@ -38,6 +38,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import { collectSourceFiles, isSkippedDir, SCAN_EXTS } from "./analyze.js";
 import { computeModelFit } from "./context/projectHealth.js";
 import { doneDir, planDir, specDir } from "./db/getters.js";
+import { CONFIG_FILENAME } from "./db/index.js";
 import { loadConfig } from "./db/load.js";
 import type { Config } from "./db/types.js";
 import { extractExports } from "./map.js";
@@ -97,7 +98,7 @@ function renderPriorArt(cwd: string, config: Config, roots: string[]): string {
   if (keys.length === 0) return placeholder;
 
   const hits: { shipped: string; line: string }[] = [];
-  for (const dir of [doneDir(config), specDir(config)]) {
+  for (const dir of [doneDir(config), specDir()]) {
     const abs = join(cwd, dir);
     let names: string[];
     try {
@@ -524,7 +525,7 @@ export function cmdPlanSeed(args: string[]): void {
     process.exit(1);
   }
   const cwd = process.cwd();
-  const config = loadConfig(join(cwd, "fapony.config.json"));
+  const config = loadConfig(join(cwd, CONFIG_FILENAME));
   // Resolve the git worktree root so mem/ledger queries hit the same key
   // state.db uses (git rev-parse --show-toplevel). Running from a subdir
   // would otherwise mismatch: stats return empty, Context (fapony) always
@@ -568,7 +569,7 @@ export function cmdPlanSeed(args: string[]): void {
     );
   }
 
-  const planDirAbs = join(cwd, planDir(config));
+  const planDirAbs = join(cwd, planDir());
   const planPath = join(planDirAbs, `PLAN-${name}.md`);
   if (existsSync(planPath)) {
     console.error(
@@ -582,7 +583,7 @@ export function cmdPlanSeed(args: string[]): void {
 
   let specLink: string | null = null;
   if (withSpec) {
-    const specDirAbs = join(cwd, specDir(config));
+    const specDirAbs = join(cwd, specDir());
     const specPath = join(specDirAbs, `SPEC-${name}.md`);
     if (existsSync(specPath)) {
       console.error(
@@ -602,7 +603,7 @@ export function cmdPlanSeed(args: string[]): void {
           : null,
       ),
     );
-    specLink = `../${specDir(config).split("/").pop()}/SPEC-${name}.md`;
+    specLink = `../${specDir().split("/").pop()}/SPEC-${name}.md`;
   }
 
   mkdirSync(planDirAbs, { recursive: true });
@@ -613,7 +614,7 @@ export function cmdPlanSeed(args: string[]): void {
       priorArt,
       contextFapony,
       specLink,
-      `${planDir(config)}/PLAN-${name}.md`,
+      `${planDir()}/PLAN-${name}.md`,
     ),
   );
   console.log(`wrote ${planPath}${specLink ? ` + SPEC-${name}.md` : ""}`);

@@ -26,8 +26,8 @@ import {
   statSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join, relative, resolve } from "node:path";
-import { collectSourceFiles, SCAN_EXTS } from "./analyze.js";
+import { basename, join, relative, resolve, sep } from "node:path";
+import { buildGraphCached, collectSourceFiles, SCAN_EXTS } from "./analyze.js";
 import { openDb } from "./db/index.js";
 import { debtForFile, loadConventions } from "./debt.js";
 import { readMemLog } from "./memory.js";
@@ -63,7 +63,7 @@ export function hintLogPath(worktree: string): string {
 export interface HintFireRow {
   ts: string;
   worktree: string;
-  surface: "read" | "debt" | "mem" | "commit";
+  surface: "read" | "debt" | "mem" | "commit" | "edit";
   file: string | null;
   count: number;
   ids?: string[];
@@ -96,7 +96,13 @@ export function recordHintFire(row: HintFireRow): void {
 
 export interface HintImpact {
   fired: number;
-  by_surface: { read: number; debt: number; mem: number; commit: number };
+  by_surface: {
+    read: number;
+    debt: number;
+    mem: number;
+    commit: number;
+    edit: number;
+  };
   debt: { shown: number; resolved: number; unknown: number };
   window: string | null;
 }
@@ -115,7 +121,7 @@ export function computeHintImpact(
   const dir = hintLogDir();
   const impact: HintImpact = {
     fired: 0,
-    by_surface: { read: 0, debt: 0, mem: 0, commit: 0 },
+    by_surface: { read: 0, debt: 0, mem: 0, commit: 0, edit: 0 },
     debt: { shown: 0, resolved: 0, unknown: 0 },
     window: since ?? null,
   };
@@ -633,6 +639,132 @@ export function rereadHintFor(opts: RereadHintInput): string | null {
   }
 }
 
+// --- Edit hint (PreToolUse annotate — importer count + once-per-session dedupe) ---
+//
+// Editing a file that has importers can silently break its consumers (measured:
+// 17.9% of changed nodes over 30 commits had a 1-hop blast radius; ~12-16% of
+// all-time fail rows were producer/consumer mismatches). The hint is a fact —
+// the importer count plus the review-seed command that lists them — never a
+// judgment about whether the edit is safe, and never a block.
+//
+// Dedupe is per (session, file): the first edit to a file fires, repeats stay
+// silent. The track log reuses the read-track session mechanism (sessionKey,
+// one jsonl per session) but lives in its own dir — sharing read-track's file
+// would make an Edit look like a Read and falsely trip the re-read hint. Like
+// rereadHintFor the track write happens inside this function (the caller-side
+// rule covers recordHintFire, not dedupe state); unlike it there is no mtime
+// comparison — an edit that moves mtime is still the same file in the same
+// session, and repeating the count buys nothing.
+
+const EDIT_TRACK_DIR = "edit-track";
+
+export interface EditTrackRow {
+  ts: string;
+  path: string;
+}
+
+/** Directory holding one edit log per session. */
+function editTrackDir(): string {
+  const base =
+    process.env.FAPONY_STATE_DIR || join(homedir(), ".config", "fapony");
+  return join(base, EDIT_TRACK_DIR);
+}
+
+/** Absolute path of a session's edit log — may not exist. */
+export function editTrackPath(session: string): string {
+  return join(editTrackDir(), `${sessionKey(session)}.jsonl`);
+}
+
+function editTrackPaths(session: string): Set<string> {
+  const p = editTrackPath(session);
+  if (!existsSync(p)) return new Set();
+  const out = new Set<string>();
+  for (const line of readFileSync(p, "utf-8").split("\n")) {
+    if (!line) continue;
+    try {
+      const r = JSON.parse(line) as EditTrackRow;
+      if (typeof r.path === "string") out.add(r.path);
+    } catch {
+      // a torn line must not lose the rest of the log
+    }
+  }
+  return out;
+}
+
+function appendEditTrackRow(session: string, row: EditTrackRow): void {
+  const dir = editTrackDir();
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  appendFileSync(editTrackPath(session), `${JSON.stringify(row)}\n`, "utf-8");
+}
+
+export interface EditHintInput {
+  filePath: unknown;
+  cwd: string;
+  /**
+   * Session identity — transcript path (Claude) or session id. Without it the
+   * hint still fires (the importer fact holds) but cannot dedupe.
+   */
+  session?: unknown;
+}
+
+/**
+ * Factual one-liner for editing a source file that has importers, or null.
+ * Every unknown (no path, non-source ext, new/unsaved file, outside the
+ * worktree, no git repo, graph failure) resolves to null — a hint must never
+ * fire on a guess. Files with importers are checked before the dedupe log is
+ * touched, so a file nobody imports never writes a track row.
+ */
+export function editHintFor(opts: EditHintInput): string | null {
+  try {
+    if (typeof opts.filePath !== "string" || opts.filePath === "") return null;
+    const dot = opts.filePath.lastIndexOf(".");
+    // SCAN_EXTS keys carry the dot (".ts") — slice from the dot itself.
+    if (dot < 0 || !SCAN_EXTS.has(opts.filePath.slice(dot))) return null;
+    // review-seed is a git command — outside a repo the hint would lie.
+    const git = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+      cwd: opts.cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (git.exitCode !== 0) return null;
+    // macOS /var → /private/var: normalize both sides before comparing.
+    const worktree = realpathSync(git.stdout.toString().trim());
+    const abs = (() => {
+      const p = opts.filePath.startsWith("/")
+        ? opts.filePath
+        : join(opts.cwd, opts.filePath);
+      try {
+        return realpathSync(p);
+      } catch {
+        return null; // new file — nothing imports it yet
+      }
+    })();
+    if (!abs) return null;
+    const rel = relative(worktree, abs).split(sep).join("/");
+    if (rel.startsWith("..") || rel === "") return null;
+
+    const importers = buildGraphCached(worktree).dependents.get(rel);
+    if (!importers || importers.size === 0) return null;
+
+    if (typeof opts.session === "string" && opts.session !== "") {
+      if (editTrackPaths(opts.session).has(abs)) return null;
+      appendEditTrackRow(opts.session, {
+        ts: new Date().toISOString(),
+        path: abs,
+      });
+    }
+
+    const n = importers.size;
+    return (
+      `fapony: ${rel} has ${n} importer${n === 1 ? "" : "s"} — ` +
+      `review-seed --files ${rel} lists them (add --callers <export> for one ` +
+      `export's callers); check before changing its shape`
+    );
+  } catch {
+    return null;
+  }
+}
+
 // --- Commit hint (tool.execute.after — annotate only, never block) ---
 //
 // OpenCode has no Stop hook (Cursor does — see cursor.ts hook-stop wiring)
@@ -832,6 +964,80 @@ export async function cmdHookReadHint(): Promise<void> {
     }
   } catch {
     // any failure = no hint; a hook must never block a read over a hint
+  }
+}
+
+/** Claude Code PreToolUse (matcher Edit): stdin JSON in, additionalContext out.
+ *  No permissionDecision ever — the edit always proceeds. Fires once per
+ *  (session, file); the dedupe lives inside editHintFor. */
+export async function cmdHookEditHint(): Promise<void> {
+  try {
+    const raw = JSON.parse(await Bun.stdin.text()) as {
+      cwd?: string;
+      transcript_path?: string;
+      session_id?: string;
+      tool_input?: {
+        file_path?: unknown;
+      };
+    };
+    const cwd = raw.cwd ?? process.cwd();
+    const filePath = raw.tool_input?.file_path;
+    // One edit log per session — same identity as the read hint.
+    const session = raw.transcript_path ?? raw.session_id;
+    const hint = editHintFor({ filePath, cwd, session });
+    if (hint) {
+      console.log(
+        JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            additionalContext: hint,
+          },
+        }),
+      );
+    }
+
+    // --- hint-fire log (PLAN-edit-importer-hint chunk 3) ---
+    // After output — best-effort, never block the hint.
+    if (hint) {
+      try {
+        const g = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+          cwd,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        if (g.exitCode === 0) {
+          const worktree = realpathSync(g.stdout.toString().trim());
+          const abs =
+            typeof filePath === "string"
+              ? (() => {
+                  try {
+                    return realpathSync(
+                      filePath.startsWith("/")
+                        ? filePath
+                        : join(worktree, filePath),
+                    );
+                  } catch {
+                    return null;
+                  }
+                })()
+              : null;
+          const rel = abs
+            ? relative(worktree, abs).split("\\").join("/")
+            : null;
+          recordHintFire({
+            ts: new Date().toISOString(),
+            worktree,
+            surface: "edit",
+            file: rel && !rel.startsWith("..") ? rel : null,
+            count: 1,
+          });
+        }
+      } catch {
+        // best-effort — swallow
+      }
+    }
+  } catch {
+    // any failure = no hint; a hook must never block an edit over a hint
   }
 }
 

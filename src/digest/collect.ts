@@ -6,6 +6,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  CONFIG_FILENAME,
   doneDir,
   type Event,
   loadConfig,
@@ -165,8 +166,8 @@ function readPlans(worktree: string): {
   ok: boolean;
   detail: string;
 } {
-  const config = loadConfig(join(worktree, "fapony.config.json"));
-  const pDir = join(worktree, planDir(config));
+  const config = loadConfig(join(worktree, CONFIG_FILENAME));
+  const pDir = join(worktree, planDir());
   const dDir = join(worktree, doneDir(config));
 
   if (!existsSync(pDir)) {

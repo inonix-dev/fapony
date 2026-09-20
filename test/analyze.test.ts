@@ -1,17 +1,27 @@
 // test/analyze.test.ts — tests for `fapony analyze` (src/analyze.ts)
 
 import assert from "node:assert";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   blastRadius,
   buildGraph,
+  buildGraphCached,
   collectSourceFiles,
   diagnose,
   exportsThroughBarrels,
   formatAnalyze,
+  graphCachePath,
   isTestFile,
+  resetGraphCache,
 } from "../src/analyze.js";
 
 function withFixture(
@@ -292,4 +302,113 @@ export function testAnalyzeExportsThroughBarrels(): void {
       );
     },
   );
+}
+
+// The disk mirror exists so the Edit hint does not rebuild the graph on every
+// hook call (a Claude Code hook is a fresh process each time). It must write
+// through on build, be read on a later process, invalidate when a source file
+// changes (the fingerprint), and never throw on a corrupt cache.
+export function testGraphCacheWriteThroughInvalidateFallback(): void {
+  const state = mkdtempSync(join(tmpdir(), "fapony-graphcache-"));
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = state;
+  try {
+    withFixture(
+      {
+        "hub.ts": "export const x = 1;\n",
+        "a.ts": 'import { x } from "./hub.js";\nconsole.log(x);\n',
+        "lone.ts": "export const y = 2;\n",
+      },
+      (dir) => {
+        resetGraphCache();
+        const g1 = buildGraphCached(dir);
+        assert.equal(g1.dependents.get("hub.ts")?.size, 1, "a.ts imports hub");
+        const cachePath = graphCachePath(dir);
+        assert.ok(existsSync(cachePath), "build writes the graph cache");
+
+        // A fresh process must read the cache, not rebuild: doctor the stored
+        // graph while leaving the source-file fingerprint valid, and a rebuild
+        // would have produced a different answer.
+        const raw = JSON.parse(readFileSync(cachePath, "utf-8")) as {
+          dependents: Record<string, string[]>;
+        };
+        raw.dependents["hub.ts"] = [];
+        writeFileSync(cachePath, JSON.stringify(raw));
+        resetGraphCache();
+        assert.equal(
+          buildGraphCached(dir).dependents.get("hub.ts")?.size,
+          0,
+          "later call returned the cached graph, not a rebuild",
+        );
+
+        // Editing a source file moves size/mtime → fingerprint mismatch → rebuild.
+        writeFileSync(
+          join(dir, "lone.ts"),
+          'import { x } from "./hub.js";\nconsole.log(x);\n',
+        );
+        resetGraphCache();
+        assert.equal(
+          buildGraphCached(dir).dependents.get("hub.ts")?.size,
+          2,
+          "an edited source file invalidates the cache",
+        );
+
+        // A torn/corrupt cache is ignored, not fatal.
+        writeFileSync(cachePath, "{ not json");
+        resetGraphCache();
+        assert.equal(
+          buildGraphCached(dir).dependents.get("hub.ts")?.size,
+          2,
+          "a corrupt cache falls back to a live build",
+        );
+      },
+    );
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
+    rmSync(state, { recursive: true, force: true });
+  }
+  console.log(
+    "  ✓ graph cache: write-through, read, invalidate, corrupt fallback",
+  );
+}
+
+// Same-process calls must not serve a stale graph: the in-process hit is
+// revalidated against the fingerprint, so an edit between two calls rebuilds
+// even without resetGraphCache() (which only simulates a fresh process).
+export function testGraphCacheInProcessInvalidation(): void {
+  const state = mkdtempSync(join(tmpdir(), "fapony-graphcache-inproc-"));
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = state;
+  try {
+    withFixture(
+      {
+        "hub.ts": "export const x = 1;\n",
+        "a.ts": 'import { x } from "./hub.js";\nconsole.log(x);\n',
+      },
+      (dir) => {
+        resetGraphCache();
+        assert.equal(
+          buildGraphCached(dir).dependents.get("hub.ts")?.size,
+          1,
+          "a.ts imports hub",
+        );
+        writeFileSync(
+          join(dir, "b.ts"),
+          'import { x } from "./hub.js";\nconsole.log(x);\n',
+        );
+        assert.equal(
+          buildGraphCached(dir).dependents.get("hub.ts")?.size,
+          2,
+          "a same-process call after adding an importer rebuilds",
+        );
+        resetGraphCache();
+      },
+    );
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
+    rmSync(state, { recursive: true, force: true });
+  }
+  console.log("  ✓ graph cache: same-process call invalidates on edit");
 }

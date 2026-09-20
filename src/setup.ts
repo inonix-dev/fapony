@@ -6,6 +6,7 @@ import { existsSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { seedConventionsFile } from "./conventions-seed.js";
+import { CONFIG_FILENAME, FAPONY_DIR } from "./db/index.js";
 import { initProject } from "./init.js";
 import { isAffirmative } from "./util.js";
 
@@ -181,7 +182,7 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
       enableMemory,
     });
 
-    const configPath = join(process.cwd(), "fapony.config.json");
+    const configPath = join(process.cwd(), CONFIG_FILENAME);
     if (existsSync(configPath)) {
       const overwrite = await askFn(
         "⚠  fapony.config.json already exists. Overwrite? (y/n)",
@@ -197,7 +198,7 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
     console.log(`\n  ✓  Wrote ${configPath}`);
 
     // --- scaffold worktree ---
-    const faponyDir = join(worktreePath, ".fapony");
+    const faponyDir = join(worktreePath, FAPONY_DIR);
     if (!existsSync(faponyDir)) {
       try {
         initProject(worktreePath);

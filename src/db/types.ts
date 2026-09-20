@@ -55,9 +55,7 @@ export interface Config {
     // state dir override (default: $XDG_CONFIG_HOME/fapony or ~/.config/fapony).
     // $FAPONY_STATE_DIR env wins over this when set.
     stateDir?: string;
-    // plan/spec/memory layout inside each worktree (relative to worktree root).
-    planDir?: string;
-    specDir?: string;
+    // plan/spec live in .fapony/{plan,spec} — not configurable (gitignored = private).
     doneDir?: string;
     memDir?: string;
     evidenceFile?: string;

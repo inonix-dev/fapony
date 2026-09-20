@@ -2,9 +2,9 @@ import {
   DEFAULT_DONE_DIR,
   DEFAULT_EVIDENCE_FILE,
   DEFAULT_MEM_DIR,
-  DEFAULT_PLAN_DIR,
   DEFAULT_SAFETY_DENY,
-  DEFAULT_SPEC_DIR,
+  PLAN_DIR,
+  SPEC_DIR,
 } from "./defaults.js";
 import type { Config } from "./types.js";
 
@@ -12,12 +12,14 @@ export function safetyDeny(config?: Config): string[] {
   return config?.safety?.deny ?? DEFAULT_SAFETY_DENY;
 }
 
-export function planDir(config?: Config): string {
-  return config?.paths?.planDir ?? DEFAULT_PLAN_DIR;
+/** Hardcoded — plan/spec live in .fapony/ (gitignored = private). */
+export function planDir(): string {
+  return PLAN_DIR;
 }
 
-export function specDir(config?: Config): string {
-  return config?.paths?.specDir ?? DEFAULT_SPEC_DIR;
+/** Hardcoded — plan/spec live in .fapony/ (gitignored = private). */
+export function specDir(): string {
+  return SPEC_DIR;
 }
 
 export function doneDir(config?: Config): string {

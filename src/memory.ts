@@ -5,6 +5,7 @@
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { CONFIG_FILENAME, DEFAULT_MEM_DIR, FAPONY_DIR } from "./db/defaults.js";
 import { type Config, loadConfig, safetyDeny } from "./db/index.js";
 import { assertSafe } from "./safety.js";
 import { templateArgs } from "./util.js";
@@ -202,7 +203,7 @@ function walkUpForMemDir(fromDir: string, acceptEmpty: boolean): string | null {
   const boundary = repoRootOf(start) ?? "/";
   let dir = start;
   while (true) {
-    const candidate = join(dir, ".fapony", ".memory");
+    const candidate = join(dir, DEFAULT_MEM_DIR);
     if (existsSync(candidate) && (acceptEmpty || hasMemLogs(candidate))) {
       return candidate;
     }
@@ -254,8 +255,8 @@ function findMemDirsUnder(root: string): string[] {
     }
     for (const e of entries) {
       if (!e.isDirectory()) continue;
-      if (e.name === ".fapony") {
-        const candidate = join(dir, ".fapony", ".memory");
+      if (e.name === FAPONY_DIR) {
+        const candidate = join(dir, DEFAULT_MEM_DIR);
         if (hasMemLogs(candidate)) found.push(candidate);
         continue;
       }
@@ -298,7 +299,7 @@ function resolveMemDirFrom(
   // path source here — spec §1 pins this to fapony.config.json)
   const configDir = root ?? cwd;
   try {
-    const configPath = join(configDir, "fapony.config.json");
+    const configPath = join(configDir, CONFIG_FILENAME);
     if (existsSync(configPath)) {
       const config = loadConfig(configPath);
       if (config?.paths?.memDir) {
@@ -328,7 +329,7 @@ function resolveMemDirFrom(
 
   // Step 4: <repo root>/.fapony/.memory/ — where a new log is created
   if (root) {
-    const rootDir = join(root, ".fapony", ".memory");
+    const rootDir = join(root, DEFAULT_MEM_DIR);
     if (existsSync(rootDir)) return { dir: rootDir, step: "repo-root" };
   }
 

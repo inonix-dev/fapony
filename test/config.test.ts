@@ -20,8 +20,9 @@ function baseConfig(): Config {
 
 export function testConfigDefaults(): void {
   const config = baseConfig();
-  assert.equal(planDir(config), ".fapony/plan");
-  assert.equal(specDir(config), ".fapony/spec");
+  // planDir/specDir are hardcoded — not configurable (gitignored = private).
+  assert.equal(planDir(), ".fapony/plan");
+  assert.equal(specDir(), ".fapony/spec");
   assert.equal(memoryDir(config), ".fapony/.memory");
   assert.equal(evidenceFile(config), ".fapony/evidence.json");
   assert.equal(safetyDeny(config).length, 4);
@@ -37,18 +38,19 @@ export function testConfigFileOverrides(): void {
       file,
       JSON.stringify({
         review: { maxRounds: 5 },
-        paths: { planDir: "plans", evidenceFile: "config/evidence.json" },
+        paths: { evidenceFile: "config/evidence.json" },
         safety: { deny: ["custom-bad-cmd"] },
       }),
     );
     const config = loadConfig(file);
     assert.equal(config.review.maxRounds, 5);
-    assert.equal(planDir(config), "plans");
     assert.equal(evidenceFile(config), "config/evidence.json");
     assert.deepEqual(safetyDeny(config), ["custom-bad-cmd"]);
+    // planDir/specDir are always the same (hardcoded)
+    assert.equal(planDir(), ".fapony/plan");
+    assert.equal(specDir(), ".fapony/spec");
     // unspecified sections keep defaults
     assert.equal(memoryDir(config), ".fapony/.memory");
-    assert.equal(specDir(config), ".fapony/spec");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -77,7 +79,7 @@ export function testConfigUnknownKeysRideAlong(): void {
     );
     const config = loadConfig(file);
     assert.equal(config.review.maxRounds, 3);
-    assert.equal(planDir(config), ".fapony/plan");
+    assert.equal(planDir(), ".fapony/plan");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

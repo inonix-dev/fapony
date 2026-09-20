@@ -17,7 +17,13 @@
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { type Config, evidenceFile, safetyDeny } from "../db/index.js";
+import {
+  type Config,
+  EVIDENCE_FILENAME,
+  evidenceFile,
+  FAPONY_DIR,
+  safetyDeny,
+} from "../db/index.js";
 import { assertSafe } from "../safety.js";
 import type { EvidenceItem, EvidenceStatus } from "./primitives.js";
 
@@ -80,7 +86,13 @@ export function resolveEvidencePath(
       APP_GROUPS.includes(group) &&
       heads.every(([g, a]) => g === group && a === app)
     ) {
-      const candidate = join(worktree, group, app, ".fapony", "evidence.json");
+      const candidate = join(
+        worktree,
+        group,
+        app,
+        FAPONY_DIR,
+        EVIDENCE_FILENAME,
+      );
       if (existsSync(candidate)) return candidate;
     }
   }

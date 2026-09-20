@@ -14,6 +14,7 @@
 import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { DEFAULT_EVIDENCE_FILE } from "./db/index.js";
 import { faponyDir } from "./db/load.js";
 import { assertSafe } from "./safety.js";
 
@@ -57,7 +58,7 @@ function baselinePath(worktree: string): string {
 }
 
 function readEvidenceLintCmd(worktree: string): string | null {
-  const evidence = join(worktree, ".fapony", "evidence.json");
+  const evidence = join(worktree, DEFAULT_EVIDENCE_FILE);
   try {
     const parsed = JSON.parse(readFileSync(evidence, "utf-8")) as {
       commands?: { name?: string; cmd?: string }[];

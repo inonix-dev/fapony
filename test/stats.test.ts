@@ -476,15 +476,7 @@ export function testCountPendingPlans(): void {
     writeFileSync(join(dir, ".fapony/plan/notes.txt"), "");
     assert.equal(countPendingPlans(dir), 2);
 
-    // paths.planDir in the target repo's own config wins over the default.
-    mkdirSync(join(dir, "apps/x/plan"), { recursive: true });
-    writeFileSync(join(dir, "apps/x/plan/PLAN-c.md"), "");
-    writeFileSync(
-      join(dir, "fapony.config.json"),
-      JSON.stringify({ paths: { planDir: "apps/x/plan" } }),
-    );
-    assert.equal(countPendingPlans(dir), 1);
-
+    // planDir is hardcoded — .fapony/plan is always used.
     // Uncountable → null, never 0 ("no plan dir" must not read as "none pending").
     assert.equal(countPendingPlans(join(dir, "nope")), null);
     assert.equal(countPendingPlans("mcp-external"), null);

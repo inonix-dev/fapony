@@ -17,6 +17,7 @@ import {
   type Config,
   doneDir,
   evidenceFile,
+  FAPONY_DIR,
   memoryDir,
   planDir,
   specDir,
@@ -108,7 +109,7 @@ export function initProject(targetPath: string, config?: Config): void {
   mkdirSync(targetPath, { recursive: true });
 
   // --- .fapony/ marker ---
-  const faponyDir = join(targetPath, ".fapony");
+  const faponyDir = join(targetPath, FAPONY_DIR);
   if (existsSync(faponyDir)) {
     throw new Error(
       `${faponyDir} already exists — delete it first if you want a fresh scaffold.`,
@@ -142,7 +143,7 @@ export function initProject(targetPath: string, config?: Config): void {
   writeFileSync(evidencePath, EVIDENCE_JSON);
 
   // --- plan/ spec/ .memory/ — all under .fapony/ ---
-  const planDirAbs = join(targetPath, planDir(config));
+  const planDirAbs = join(targetPath, planDir());
   if (existsSync(planDirAbs)) {
     throw new Error(`${planDirAbs} already exists — not overwriting.`);
   }
@@ -156,7 +157,7 @@ export function initProject(targetPath: string, config?: Config): void {
   mkdirSync(doneDirAbs, { recursive: true });
 
   // --- spec/ ---
-  const specDirAbs = join(targetPath, specDir(config));
+  const specDirAbs = join(targetPath, specDir());
   if (existsSync(specDirAbs)) {
     throw new Error(`${specDirAbs} already exists — not overwriting.`);
   }
@@ -177,9 +178,9 @@ export function initProject(targetPath: string, config?: Config): void {
   console.log(
     `  .fapony/         — project dir (plans, specs, memory, evidence)`,
   );
-  console.log(`  ${planDir(config)}/    — live plan files`);
+  console.log(`  ${planDir()}/    — live plan files`);
   console.log(`  ${doneDir(config)}/    — shipped plans (archive)`);
-  console.log(`  ${specDir(config)}/    — spec files`);
+  console.log(`  ${specDir()}/    — spec files`);
   console.log(
     `  ${evidenceFile(config)}    — allowlist for 'fapony report' (edit the cmds!)`,
   );

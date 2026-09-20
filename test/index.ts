@@ -16,6 +16,8 @@ import {
   testAnalyzeIsTestFile,
   testAnalyzeSkipsNestedCheckouts,
   testAnalyzeSkipsUnresolvableAndBroken,
+  testGraphCacheInProcessInvalidation,
+  testGraphCacheWriteThroughInvalidateFallback,
 } from "./analyze.test.js";
 import {
   testConfigDefaults,
@@ -130,6 +132,13 @@ import {
   testDecideStopBlocksUngradedCommits,
   testDecideStopMemNeverBlocks,
   testDecideStopReportsCommitsAndMem,
+  testEditHintClaudeOutputShape,
+  testEditHintDedupesPerSessionPerFile,
+  testEditHintFiresWithImporters,
+  testEditHintFiresWithoutSession,
+  testEditHintNeedsGitRepo,
+  testEditHintSilentZeroImporters,
+  testEditHintSkipsNonSourceAndMissing,
   testReadContextBasenameAmbiguityStaysSilent,
   testReadContextCombinedCapAndOutsideRepo,
   testReadContextMemRowsByFilesAndPath,
@@ -160,8 +169,10 @@ import {
   testInstallClaudeAbsentAdds,
   testInstallClaudeAddFailureHintsHelp,
   testInstallClaudeAlreadyConfiguredNoOp,
+  testInstallClaudeAlreadyConfiguredStillInstallsHooks,
   testInstallClaudeDifferentCommandRefusesOverwrite,
   testInstallClaudeDryRunNeverAdds,
+  testInstallClaudeEditHintAppendsOnce,
   testInstallClaudeForeignScriptRefusesOverwrite,
   testInstallClaudeForeignStatuslineRefusesOverwrite,
   testInstallClaudeMissingBinary,
@@ -616,6 +627,8 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeIsTestFile();
   testAnalyzeBarrelHidesTests();
   testAnalyzeSkipsNestedCheckouts();
+  testGraphCacheInProcessInvalidation();
+  testGraphCacheWriteThroughInvalidateFallback();
   testMapExtractExports();
   testMapExtractExportsParseError();
   testMapExtractIgnoresSampleText();
@@ -652,6 +665,13 @@ export async function cmdTest(): Promise<void> {
   testRereadHintFiresOnUnchangedRepeat();
   testRereadHintSilentAfterEdit();
   testRereadHintKillSwitch();
+  testEditHintFiresWithImporters();
+  testEditHintSilentZeroImporters();
+  testEditHintSkipsNonSourceAndMissing();
+  testEditHintNeedsGitRepo();
+  testEditHintDedupesPerSessionPerFile();
+  testEditHintFiresWithoutSession();
+  testEditHintClaudeOutputShape();
   testCommitHintMinCommitsConstant();
   testCommitHintNullForNonCommit();
   testCommitHintNullOutsideGitRepo();
@@ -823,10 +843,12 @@ export async function cmdTest(): Promise<void> {
   testClaudeGetPointsToFapony();
   testInstallClaudeAbsentAdds();
   testInstallClaudeAlreadyConfiguredNoOp();
+  testInstallClaudeAlreadyConfiguredStillInstallsHooks();
   testInstallClaudeDifferentCommandRefusesOverwrite();
   testInstallClaudeForeignStatuslineRefusesOverwrite();
   testInstallClaudeStopHookAppendsOnceAndKeepsForeign();
   testInstallClaudeReadHintAppendsOnce();
+  testInstallClaudeEditHintAppendsOnce();
   testInstallClaudeForeignScriptRefusesOverwrite();
   testInstallClaudeStatuslineWiresSettings();
   testInstallClaudeDryRunNeverAdds();

@@ -15,6 +15,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { collectSourceFiles, isSkippedDir, isTestFile } from "./analyze.js";
+import { CONVENTIONS_FILE, FAPONY_DIR } from "./db/index.js";
 import { extractBody, extractExports } from "./map.js";
 
 const RESTRICTED_RULES = new Set([
@@ -376,7 +377,7 @@ function detectWrappers(root: string): SeedRow[] {
 // --- entry ---
 
 export async function seedConventionsFile(target: string): Promise<SeedResult> {
-  const file = join(target, ".fapony", "conventions.json");
+  const file = join(target, CONVENTIONS_FILE);
   const base: SeedResult = {
     file,
     eslintRows: 0,
@@ -407,7 +408,7 @@ export async function seedConventionsFile(target: string): Promise<SeedResult> {
     // a wrapper scan failure is not an init failure
   }
   const payload = `${JSON.stringify({ conventions: rows }, null, 2)}\n`;
-  mkdirSync(join(target, ".fapony"), { recursive: true });
+  mkdirSync(join(target, FAPONY_DIR), { recursive: true });
   writeFileSync(file, payload);
   return {
     file,
