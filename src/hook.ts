@@ -382,11 +382,11 @@ export function normalizeStopInput(
 }
 
 /** Claude blocks with decision:block; Cursor auto-submits as followup_message;
- *  Codex uses continue:false + stopReason. */
+ *  Codex continues with decision:block + reason (continue:false would take
+ *  precedence and end the turn instead — Codex Hooks, Stop section). */
 export function stopOutput(client: StopClient, reason: string): string {
   if (client === "cursor") return JSON.stringify({ followup_message: reason });
-  if (client === "codex")
-    return JSON.stringify({ continue: false, stopReason: reason });
+  if (client === "codex") return JSON.stringify({ decision: "block", reason });
   return JSON.stringify({ decision: "block", reason });
 }
 
