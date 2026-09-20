@@ -308,11 +308,12 @@ export function testCodexStopOutputShape(): void {
     string,
     unknown
   >;
-  assert.equal(out.continue, false);
-  assert.equal(out.stopReason, reason);
-  assert.equal(out.decision, undefined, "codex must not use decision");
+  assert.equal(out.decision, "block");
+  assert.equal(out.reason, reason);
+  assert.equal(out.continue, undefined, "codex must not use continue:false");
+  assert.equal(out.stopReason, undefined, "codex must not use stopReason");
   assert.equal(out.followup_message, undefined, "codex must not use followup");
-  console.log("  ✓ codex stop output = continue:false + stopReason");
+  console.log("  ✓ codex stop output = decision:block + reason");
 }
 
 // --- Read hint (PreToolUse annotate) ---
