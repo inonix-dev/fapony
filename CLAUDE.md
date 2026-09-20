@@ -128,7 +128,7 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 
 | | claude | opencode | cursor | zcode | codex |
 | --- | --- | --- | --- | --- | --- |
-| MCP 3 tools | ✅ | ✅ | ✅ | ✅ | ✅ |
+| MCP 4 tools | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Stop hook (ไม่จบเทิร์นที่มี commit ไม่มี verdict) | ✅ | — | ✅ | — | ✅ after trust |
 | Read hint (ไฟล์ใหญ่ + debt/mem) | ✅ ก่อน | ✅ หลัง | — | — | — |
 | Re-read hint (อ่านซ้ำไฟล์เดิม mtime ไม่ขยับ) | ✅ ก่อน | ✅ หลัง | — | — | — |
@@ -454,7 +454,7 @@ fapony analyze [path]                # hub/orphan/cycle/changed-untested — liv
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym]
 fapony plan-seed <name> [--spec] [--scope <path>]...
 # ── ledger (แช่แข็ง — แก้เฉพาะบั๊ก) ──
-fapony mcp                           # MCP server — stdio JSON-RPC, 3 tools
+fapony mcp                           # MCP server — stdio JSON-RPC, 4 tools
 fapony hook-stop                     # Stop hook — block เทิร์นที่มี commit แต่ไม่มี verdict
 fapony hook-read-hint                # annotate 2 แบบ: อ่านไฟล์ใหญ่ทั้งไฟล์ → review-seed ·
                                      # re-read ไฟล์เดิมใน session เดียวกันที่ mtime ไม่ขยับ → grep
@@ -490,13 +490,15 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 
 ## MCP Tools: fapony
 
-`fapony mcp` — stdio JSON-RPC, **3 tools** (`mem_add` เข้ามาพร้อม PLAN-agent-one-call ·
-`plan_list` ออกไป 2026-09-20 · `fapony_usage` ออกไป 2026-09-20 เหลือ CLI — ดูกฎ 12/13):
+`fapony mcp` — stdio JSON-RPC, **4 tools** (`mem_add` เข้ามาพร้อม PLAN-agent-one-call ·
+`plan_list` ออกไป 2026-09-20 · `fapony_usage` ออกไป 2026-09-20 เหลือ CLI · `mem_close`
+เข้ามา 2026-09-21 เป็น tool แยกเพราะ close row ไม่มี `files[]` — ดูกฎ 12/13):
 
 | Tool | Purpose |
 |------|---------|
 | `mem_find` | **แกน** — ค้น mem log read-only: match `files[]` ที่เก็บจริงในแถวก่อน แล้ว fallback เป็น substring ของ text/spec/ref สำหรับแถวเก่าที่เขียนตอนยังไม่มี `--files` · ทุก kind ไม่มี default filter · `memDir:null` = ไม่มี mem (ไม่ใช่ "ไม่เจอ") |
 | `mem_add` | **แกน — ครึ่งเขียนของ `mem_find`** · append mem row (`decision`/`bug`/`note`/`next`/`hold`) โดย `files[]` **required + reject เมื่อว่าง** (กฎ 9: required ได้ผล การขอไม่ได้ผล) — แถวที่ไม่บอกไฟล์ หาไม่เจอตอนแตะไฟล์นั้น |
+| `mem_close` | **แกน — ครึ่งปิดของ `mem_add`** · ปิด row ด้วย id + tombstone message (`ref`+`text`, ไม่มี `files[]`) ฉะนั้นเป็น tool แยก ไม่ใช่ `kind:"close"` — schema ที่ required field ขึ้นกับค่าของอีก field คือรูปทรงที่เรียกผิดบ่อยที่สุด |
 | `verdict_submit` | เก็บ verdict 6 เกรด + `regime` บังคับ — **อ่านเป็นเซนเซอร์ ไม่ใช่คะแนน** (กฎ 8) |
 
 **ที่ถอดออกไปแล้วและห้ามเอากลับ:** `fapony_usage` (2026-09-20 — สอบตกกฎ 13: คนเรียกมีแต่เจ้าของ
@@ -515,7 +517,8 @@ description ของมันขายว่า "บอกได้ว่าค
 `project_health_context` (caller ศูนย์ — engine `src/context/projectHealth.ts` ยังอยู่ ใช้จาก CLI ได้) ·
 `verification_report` / `handoff_check` / `handoff_collect` (ถอดไปก่อนหน้านี้ด้วยเหตุผลเดียวกัน) ·
 **วัดแล้ว: schema ทั้งชุด 12,019 → 7,249 ตัวอักษร (−40%) → 5,540 (−24% จากการถอด `fapony_usage`
-เหลือ 3 tools — วัดด้วย tools/list JSON + instructions)**
+เหลือ 3 tools ณ ตอนนั้น — วัดด้วย tools/list JSON + instructions)** · 2026-09-21 `mem_close`
+เข้ามาเป็น tool ที่ 4 (schema เล็ก: `worktree`/`id`/`text`)
 
 ดู [docs/mcp-handcheck.md](docs/mcp-handcheck.md) สำหรับ protocol, adapter examples, safety rules
 

@@ -36,6 +36,11 @@ per file, the rest as `(+N)`, so the total is still readable. That is your entry
   the later files' signatures. Many files at once → split the call, don't trust a cut list.
 - No `fapony` CLI or the call errors → read the file normally and carry on. A hint, not a gate.
 
+## History + debt (same paths, two calls)
+
+- `mem_find` with `files: [<same paths>]` — "what was ever decided about this file" (MCP, no CLI spawn).
+- `fapony debt --where <dir|file>` — conventions this path still violates; empty until `conventions.json` exists.
+
 ## After the lookup
 
 1. Pick line ranges from the export list, `Read` those slices only.

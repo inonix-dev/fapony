@@ -8,6 +8,7 @@ import { getServerSha } from "./primitives.js";
 import {
   TOOLS,
   toolMemAdd,
+  toolMemClose,
   toolMemFind,
   toolVerdictSubmit,
 } from "./tools/index.js";
@@ -105,6 +106,9 @@ function dispatchToolCall(params: {
       break;
     case "mem_add":
       result = toolMemAdd(args);
+      break;
+    case "mem_close":
+      result = toolMemClose(args);
       break;
     default:
       return errorResult(`unknown tool: ${params.name}`);

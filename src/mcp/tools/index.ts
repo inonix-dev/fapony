@@ -9,7 +9,7 @@
 import { VERDICT_GRADES } from "../../parse.js";
 import { REASON_CODES, REGIME_CODES } from "../types.js";
 
-export { toolMemAdd, toolMemFind } from "./mem.js";
+export { toolMemAdd, toolMemClose, toolMemFind } from "./mem.js";
 export { toolVerdictSubmit } from "./verdict.js";
 
 // --- Tool definitions ---
@@ -175,6 +175,32 @@ export const TOOLS = [
         },
       },
       required: ["worktree", "kind", "text", "files"],
+    },
+  },
+  {
+    name: "mem_close",
+    description:
+      "Close a mem row by id with a tombstone message (what was done). " +
+      "The write half of closing what mem_find shows as open — id must exist. " +
+      "Returns the ref and timestamp.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        worktree: {
+          type: "string",
+          description:
+            "Absolute path (git rev-parse --show-toplevel) — required",
+        },
+        id: {
+          type: "string",
+          description: "The row id to close",
+        },
+        text: {
+          type: "string",
+          description: "Tombstone message — what was done (commit sha counts)",
+        },
+      },
+      required: ["worktree", "id", "text"],
     },
   },
 ];

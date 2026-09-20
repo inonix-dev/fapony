@@ -280,7 +280,9 @@ export function decideStop(opts: {
       `regime is one of code|fix|review|plan|inquiry|test, and the note must stand alone ` +
       `(it is read months from now with no access to this conversation). ` +
       `Grade what actually happened — pass-family when it held up, fail if the first ` +
-      `attempt was wrong, uncertain when you could not verify it. What deserves a mem ` +
+      `attempt was wrong, uncertain when you could not verify it. ` +
+      `If you did not run typecheck + \`bun fapony.ts test\` + \`fapony lint-baseline --diff\`, ` +
+      `the honest verdict is uncertain, not pass. What deserves a mem ` +
       `row (decision/bug/note) is your call — not every unit needs one.`,
   );
   return lines.join("\n");

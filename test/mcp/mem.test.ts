@@ -10,7 +10,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { memAdd, memFind, toolMemFind } from "../../src/mcp/tools/mem.js";
+import {
+  memAdd,
+  memClose,
+  memFind,
+  toolMemClose,
+  toolMemFind,
+} from "../../src/mcp/tools/mem.js";
 import { parseToolResult } from "../../src/mcp/types.js";
 
 function writeLog(dir: string, rows: object[]): string {
@@ -178,6 +184,70 @@ export function testMemFindMatchesStoredFiles(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_find matches rows by stored files[]");
+}
+
+// mem_close mirrors CLI `mem close <id> "<msg>"` (commands/write.ts cmdClose):
+// the id must exist; the tombstone carries {ref, text} with no files[] —
+// which is exactly why it is a separate tool, not kind:"close" in mem_add.
+
+export function testMemCloseWritesTombstoneForExistingId(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memclose-"));
+  try {
+    const appDir = join(dir, "apps", "vela");
+    writeLog(appDir, [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "old",
+        id: "bug1",
+        kind: "bug",
+        text: "something broke",
+        files: ["src/x.ts"],
+      },
+    ]);
+    const closed = memClose({
+      worktree: appDir,
+      id: "bug1",
+      text: "fixed in abc123",
+    });
+    assert.equal(closed.ref, "bug1");
+    const found = memFind({ worktree: appDir, text: "fixed in abc123" });
+    assert.equal(found.total, 1, "close tombstone must be visible to mem_find");
+    assert.equal(found.rows[0].kind, "close");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_close writes a tombstone for an existing id");
+}
+
+export function testMemCloseRejectsUnknownIdAndEmptyText(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memclose-"));
+  try {
+    writeLog(dir, [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "a",
+        id: "bug1",
+        kind: "bug",
+        text: "x",
+        files: ["src/x.ts"],
+      },
+    ]);
+    assert.throws(
+      () => memClose({ worktree: dir, id: "nope", text: "done" }),
+      /no id/,
+    );
+    assert.throws(
+      () => memClose({ worktree: dir, id: "bug1", text: "  " }),
+      /text/,
+    );
+    const bare = toolMemClose({ worktree: "/tmp", text: "done" });
+    assert.equal(bare.isError, true, "missing id must be rejected");
+    const rel = toolMemClose({ worktree: "wt-vela", id: "bug1", text: "done" });
+    assert.equal(rel.isError, true, "bare worktree must be rejected");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_close rejects unknown id, empty text, bad worktree");
 }
 
 // Regression 2026-09-19 (review-pony): mem_add resolved its mem dir by walking

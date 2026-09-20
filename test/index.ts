@@ -329,6 +329,8 @@ import {
 import {
   testMemAddRejectsMissingFilesAndBadKind,
   testMemAddWritesWhereMemFindReads,
+  testMemCloseRejectsUnknownIdAndEmptyText,
+  testMemCloseWritesTombstoneForExistingId,
   testMemFindFiltersAndMatchesFiles,
   testMemFindMatchesStoredFiles,
   testMemFindReturnsAllKindsNoDefaultFilter,
@@ -763,6 +765,8 @@ export async function cmdTest(): Promise<void> {
   testMemoryExplicitConfigWins();
   testMemAddWritesWhereMemFindReads();
   testMemAddRejectsMissingFilesAndBadKind();
+  testMemCloseWritesTombstoneForExistingId();
+  testMemCloseRejectsUnknownIdAndEmptyText();
   testMemIdentityNeverCollapsesToUnknown();
   testMemFindReturnsAllKindsNoDefaultFilter();
   testMemFindFiltersAndMatchesFiles();

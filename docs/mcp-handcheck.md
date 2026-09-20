@@ -26,14 +26,15 @@ tools until 2026-09-17; the schemas cost every session of every connected client
 and no skill ever called them, so they moved behind the CLI that already did the
 same job. The logic is unchanged.
 
-The server exposes 3 tools in total, all higher-level and taking plain arguments —
-see [README](../README.md#the-3-tools) for what each one answers:
+The server exposes 4 tools in total, all higher-level and taking plain arguments —
+see [README](../README.md#the-4-tools) for what each one answers:
 
 | Tool | In one line |
 |------|-------------|
 | `verdict_submit` | Grade a finished unit of work — the one habit the ledger needs |
 | `mem_find` | The project's mem log, read-only — what was decided about these files |
 | `mem_add` | Append a mem row with files[] required — decision/bug/note/next/hold |
+| `mem_close` | Close a mem row by id — separate tool because a close row has no files[] |
 
 ### Two things that bite
 
