@@ -13,6 +13,7 @@ fapony/
                                 # skill/<name>/, so a link out of that dir is dead on install
     plan-with-pony/             # draft plan + spec จาก conversation (pipe to any agent's stdin)
     review-pony/                # review as verification + scope facts before (review-seed), verdict after
+    lookup-before-edit/         # lookup unfamiliar files (review-seed --files) before reading/editing them
     move-to-done/               # archive PLAN เข้า .fapony/done/ หลัง ship
     git-commit-conventional/    # commit แยก concern + conventional message
     git-ship/                   # push branch, open PR, merge, reset branch onto base
@@ -47,6 +48,14 @@ fapony/
     map.ts              # extractExports() — on-demand source index, library only; the `fapony map` command was deleted once plan-seed/review-seed were its only callers (see PLAN-code-map)
     plan-seed.ts        # fapony plan-seed <name> [--spec] [--scope <path>]... — writes PLAN(+SPEC): frontmatter, 8 empty sections, §8 prior art, Context (fapony); SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200. §2/§5 seed nothing since 2026-09-18 (measured 3-of-3 empty); caller: plan-with-pony Phase 1.5
     review-seed.ts      # fapony review-seed [--staged|--commit|--range|--files|--plan] — read-only scope facts for a review (changed/importers/untested/signatures/cross-check); caller: review-pony "Before"
+    debt/               # fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย": live convention scan, never persisted; caller: hook read-hint
+      types.ts          # DebtReport/Convention/Promotion + caps (DEBT_FILE_CAP, PROMOTION_THRESHOLD, ZONE_*)
+      load.ts           # resolveConventionsPath + loadConventions
+      scan.ts           # compile + debtScan + debtForFile
+      promotion.ts      # findPromotions + formatPromotions (mem fail-verdict recurrence)
+      format.ts         # zone grouping + formatDebt
+      cli.ts            # worktreeOf + cmdDebt
+      index.ts          # barrel re-export
     hook.ts             # fapony hook-stop — Claude Code Stop hook: blocks a turn with ungraded commits · fapony hook-read-hint — PreToolUse(Read) annotate only: large full-file read → review-seed, and a re-read of the same path whose mtime has not moved this session → grep (read-track/<session>.jsonl in stateDir; FAPONY_NO_REREAD_HINT=1 disables)
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
     init.ts            # fapony init — scaffold .fapony/{plan,done,spec,.memory,evidence.json}
