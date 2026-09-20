@@ -409,3 +409,23 @@ export function testInstallClaudeEditHintAppendsOnce(): void {
     "  ✓ install claude edit hint → PreToolUse matcher Edit, appends once, keeps foreign",
   );
 }
+
+export function testInstallClaudeAlreadyConfiguredStillInstallsHooks(): void {
+  const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
+  const { run, calls } = mapRun({ [GET]: PRESENT });
+  silentErrors(() =>
+    captureErrors(() =>
+      cmdInstallClaude(false, { run, exit: testExit, homedir: () => home }),
+    ),
+  );
+  // MCP already wired → no add call, but the hooks must still be written so a
+  // hook added later (the Edit hint) reaches an existing install.
+  assert.deepStrictEqual(calls, [GET]);
+  const settings = JSON.parse(
+    readFileSync(join(home, ".claude", "settings.json"), "utf-8"),
+  ) as { hooks: { PreToolUse: Array<Record<string, unknown>> } };
+  const matchers = settings.hooks.PreToolUse.map((e) => e.matcher);
+  assert.ok(matchers.includes("Read"), "Read hint must be written on upgrade");
+  assert.ok(matchers.includes("Edit"), "Edit hint must be written on upgrade");
+  console.log("  ✓ install claude already-configured → still wires hooks");
+}

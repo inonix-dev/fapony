@@ -105,6 +105,10 @@ export function cmdInstallClaude(
       console.error(`  (Claude Code user scope)`);
       const dir = claudeSkillsDir(deps.homedir ?? homedir);
       reportSkills(linkSkills(dir, dryRun), dir, dryRun);
+      // MCP is already wired, but a hook can be new since the last install
+      // (e.g. the Edit hint) — always ensure the hook wiring, not only on a
+      // fresh MCP add. This is the upgrade path for existing installs.
+      installClaudeHooks(dryRun, deps);
       return;
     }
     console.error(
@@ -122,9 +126,7 @@ export function cmdInstallClaude(
     console.error(`  ${addArgs.join(" ")}`);
     // Dry-run shows the hook wiring too — the installers are dry-run-safe
     // ("would write", no writes), so the preview stays truthful.
-    installStopHook(dryRun, deps);
-    installReadHintHook(dryRun, deps);
-    installEditHintHook(dryRun, deps);
+    installClaudeHooks(dryRun, deps);
     return;
   }
 
@@ -155,9 +157,7 @@ export function cmdInstallClaude(
   // Wire the Stop hook that refuses to end a turn with ungraded commits,
   // and the Read/Edit hints that annotate reads of large files and edits to
   // files with importers (both annotate-only).
-  installStopHook(dryRun, deps);
-  installReadHintHook(dryRun, deps);
-  installEditHintHook(dryRun, deps);
+  installClaudeHooks(dryRun, deps);
 }
 
 /**
@@ -341,6 +341,18 @@ function ensureClaudeHook(
   console.error(
     `  ${hook.label}: ${dryRun ? "would write" : "wrote"} hooks.${hook.event} → ${settingsPath}`,
   );
+}
+
+/**
+ * Wire every hook fapony owns: the Stop hook that refuses to end a turn with
+ * ungraded commits, and the Read/Edit PreToolUse hints (annotate-only).
+ * Idempotent and dry-run-safe. Called on every install, not just a fresh MCP
+ * add — an existing install must still pick up a hook added later.
+ */
+function installClaudeHooks(dryRun: boolean, deps: InstallDeps): void {
+  installStopHook(dryRun, deps);
+  installReadHintHook(dryRun, deps);
+  installEditHintHook(dryRun, deps);
 }
 
 function installStopHook(dryRun: boolean, deps: InstallDeps): void {

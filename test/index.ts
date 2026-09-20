@@ -169,6 +169,7 @@ import {
   testInstallClaudeAbsentAdds,
   testInstallClaudeAddFailureHintsHelp,
   testInstallClaudeAlreadyConfiguredNoOp,
+  testInstallClaudeAlreadyConfiguredStillInstallsHooks,
   testInstallClaudeDifferentCommandRefusesOverwrite,
   testInstallClaudeDryRunNeverAdds,
   testInstallClaudeEditHintAppendsOnce,
@@ -842,6 +843,7 @@ export async function cmdTest(): Promise<void> {
   testClaudeGetPointsToFapony();
   testInstallClaudeAbsentAdds();
   testInstallClaudeAlreadyConfiguredNoOp();
+  testInstallClaudeAlreadyConfiguredStillInstallsHooks();
   testInstallClaudeDifferentCommandRefusesOverwrite();
   testInstallClaudeForeignStatuslineRefusesOverwrite();
   testInstallClaudeStopHookAppendsOnceAndKeepsForeign();
