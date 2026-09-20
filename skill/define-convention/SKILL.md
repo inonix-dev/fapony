@@ -55,12 +55,20 @@ fapony debt --id <new-id>
 
 Read it literally — every outcome names its fix:
 
-- `debt N · moved M` with N > 0 → done. Report id, N, moved% back in chat.
-- `debt 0` → the regex matches nothing you care about; widen `stale` or fix `where`.
-- `dropped: too broad (250+)` → narrow `stale`, shrink `where`, or add `guard`.
-- `dropped: regex broken` / `where does not exist` → fix syntax / path.
-- Row lands in `declared` → `stale` is null; see Phase 3.
-- Nothing tracked at all → you wrote to the wrong `.fapony/` (re-check `mem where`).
+- `debt N · moved M` with N > 0 → the convention now counts. Report id, N, moved%
+  back in chat.
+- `debt 0 · moved M — clean` → the migration is already done; nothing left to
+  track. Report it and change nothing.
+- `debt 0` with no moved → `stale` matches nothing you care about; widen it or
+  fix `where`.
+- `⚠ <id>: ... too broad` → narrow `stale`, shrink `where`, or add `guard` (the
+  match was capped past 250 files, so the entry was dropped).
+- `⚠ <id>: stale regex broken` / `where: <dir> does not exist` → fix syntax / path.
+- A row prints `declared, no checker, stale not filled in` → `stale` is null; see
+  Phase 3.
+- `0 convention(s)` after `--id` → that id does not exist (misspelling — a dropped
+  row still prints its `⚠`). Only `no conventions.json in <dir>` means you wrote
+  to the wrong `.fapony/` (re-check `mem where`).
 
 ## Later
 
