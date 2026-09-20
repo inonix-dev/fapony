@@ -523,7 +523,7 @@ export function readHintFor(opts: ReadHintInput): string | null {
     return (
       `fapony: ${shown} is ${lines} lines — review-seed --files ${shown} ` +
       `returns exports with line numbers, importers, and signatures first ` +
-      `(${READ_HINT_MEASURED})`
+      `(${READ_HINT_MEASURED}; skill /lookup-before-edit has the routine)`
     );
   } catch {
     return null;
@@ -785,7 +785,7 @@ export function editHintFor(opts: EditHintInput): string | null {
     return (
       `fapony: ${rel} has ${n} importer${n === 1 ? "" : "s"} — ` +
       `review-seed --files ${rel} lists them (add --callers <export> for one ` +
-      `export's callers); check before changing its shape`
+      `export's callers); check before changing its shape (skill /lookup-before-edit)`
     );
   } catch {
     return null;
