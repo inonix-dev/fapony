@@ -28,7 +28,7 @@ export {
   claudeGetPointsToFapony,
   cmdInstallClaude,
 } from "./install/claude.js";
-export { cmdInstallCodex } from "./install/codex.js";
+export { cmdInstallCodex, findCodexHooksJson } from "./install/codex.js";
 export { cmdInstallCursor } from "./install/cursor.js";
 export { detectClients } from "./install/detect.js";
 export {

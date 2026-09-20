@@ -18,6 +18,7 @@ import {
   decideStop,
   editHintFor,
   editTrackPath,
+  isCodexPayload,
   isCursorPayload,
   normalizeStopInput,
   READ_HINT_MIN_BYTES,
@@ -227,6 +228,91 @@ export function testStopOutputShapesPerClient(): void {
   assert.equal(cursor.followup_message, reason);
   assert.equal(claude.followup_message, undefined);
   assert.equal(cursor.decision, undefined);
+}
+
+// --- Codex hook contract ---
+
+// https://learn.chatgpt.com/docs/hooks — Codex Stop payload
+const codexPayload = {
+  cwd: "/repo",
+  session_id: "sess-codex-1",
+  transcript_path: "/repo/.codex/transcripts/sess-codex-1.jsonl",
+  stop_hook_active: false,
+  hook_event_name: "Stop",
+  model: "gpt-5",
+  permission_mode: "default",
+};
+
+export function testCodexPayloadDetection(): void {
+  assert.ok(isCodexPayload(codexPayload), "codex payload must be detected");
+  assert.ok(
+    !isCodexPayload(claudePayload),
+    "claude payload must not look codex",
+  );
+  assert.ok(
+    !isCodexPayload(cursorPayload),
+    "cursor payload must not look codex",
+  );
+  // permission_mode alone is enough
+  assert.ok(
+    isCodexPayload({ permission_mode: "default" }),
+    "permission_mode alone detects codex",
+  );
+  // model alone (without cursor fields) detects codex
+  assert.ok(isCodexPayload({ model: "gpt-5" }), "model alone detects codex");
+  // model + cursor fields = cursor wins (cursor is checked first)
+  assert.ok(
+    !isCodexPayload({ model: "gpt-5", workspace_roots: ["/repo"] }),
+    "model + workspace_roots = cursor, not codex",
+  );
+  console.log("  ✓ codex payload detection");
+}
+
+export function testCodexNormalizeMapsToSameDecision(): void {
+  const codex = normalizeStopInput(codexPayload, "/home/u");
+  assert.equal(codex.client, "codex");
+  assert.equal(codex.cwd, "/repo");
+  assert.equal(
+    codex.transcriptPath,
+    "/repo/.codex/transcripts/sess-codex-1.jsonl",
+  );
+  assert.ok(!codex.stopHookActive);
+
+  // Same facts → same decideStop result regardless of wire format.
+  const reason = decideStop({
+    stopHookActive: codex.stopHookActive,
+    worktree: "/repo",
+    commits: 2,
+    verdicts: 0,
+  });
+  assert.ok(reason, "ungraded commits must block via the codex payload");
+  assert.ok(reason.includes("/repo"));
+}
+
+export function testCodexStopHookActiveAllows(): void {
+  const fired = normalizeStopInput(
+    { ...codexPayload, stop_hook_active: true },
+    "/home/u",
+  );
+  assert.ok(fired.stopHookActive);
+  assert.strictEqual(
+    decideStop({ ...base, stopHookActive: fired.stopHookActive }),
+    null,
+  );
+  console.log("  ✓ codex stop_hook_active=true allows");
+}
+
+export function testCodexStopOutputShape(): void {
+  const reason = "call verdict_submit";
+  const out = JSON.parse(stopOutput("codex", reason)) as Record<
+    string,
+    unknown
+  >;
+  assert.equal(out.continue, false);
+  assert.equal(out.stopReason, reason);
+  assert.equal(out.decision, undefined, "codex must not use decision");
+  assert.equal(out.followup_message, undefined, "codex must not use followup");
+  console.log("  ✓ codex stop output = continue:false + stopReason");
 }
 
 // --- Read hint (PreToolUse annotate) ---

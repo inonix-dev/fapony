@@ -1,16 +1,18 @@
 // test/install/codex.test.ts — Codex install provider
 
 import assert from "node:assert";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   cmdInstall,
   cmdInstallCodex,
+  findCodexHooksJson,
   INSTALL_ROOT,
 } from "../../src/install.js";
 import {
   captureErrors,
   silentErrors,
+  skillNames,
   type TestExit,
   testExit,
   withTempHome,
@@ -23,6 +25,12 @@ args = ["run", "${join(INSTALL_ROOT, "fapony.ts")}", "mcp"]
 type = "stdio"
 `;
 }
+
+function hookCommand(): string {
+  return `bun ${join(INSTALL_ROOT, "fapony.ts")} hook-stop`;
+}
+
+// --- MCP config tests ---
 
 export function testInstallCodexNoConfigFails(): void {
   withTempHome((home) => {
@@ -115,5 +123,223 @@ export function testCmdInstallDispatchesCodex(): void {
     const after = readFileSync(configPath, "utf-8");
     assert.ok(after.includes("[mcp_servers.fapony]"), `got: ${after}`);
     console.log("  ✓ install dispatch routes --platform codex");
+  });
+}
+
+// --- Stop hook tests ---
+
+export function testInstallCodexCreatesHooksJson(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.toml"), codexEntryToml());
+
+    silentErrors(() =>
+      cmdInstallCodex(false, { exit: testExit, homedir: () => home }),
+    );
+    const hooksPath = findCodexHooksJson(() => home);
+    assert.ok(hooksPath, "hooks.json should exist");
+    const hooks = JSON.parse(readFileSync(hooksPath!, "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    const stop = (hooks.hooks as Record<string, unknown>)?.Stop as Array<
+      Record<string, unknown>
+    >;
+    assert.ok(Array.isArray(stop), "Stop must be an array");
+    assert.equal(stop.length, 1, "exactly one Stop entry");
+    const entry = stop[0] as Record<string, unknown>;
+    const hookHandlers = entry.hooks as Array<Record<string, unknown>>;
+    assert.equal(hookHandlers.length, 1);
+    assert.equal(hookHandlers[0].type, "command");
+    assert.equal(hookHandlers[0].command, hookCommand());
+    console.log("  ✓ install codex creates hooks.json with Stop hook");
+  });
+}
+
+export function testInstallCodexHooksMergePreservesForeign(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.toml"), codexEntryToml());
+
+    // Pre-existing hooks.json with a foreign Stop entry and a SessionStart group
+    const existing = {
+      hooks: {
+        Stop: [{ hooks: [{ type: "command", command: "foreign-hook" }] }],
+        SessionStart: [
+          { hooks: [{ type: "command", command: "session-start.py" }] },
+        ],
+      },
+    };
+    writeFileSync(
+      join(configDir, "hooks.json"),
+      JSON.stringify(existing, null, 2),
+    );
+
+    silentErrors(() =>
+      cmdInstallCodex(false, { exit: testExit, homedir: () => home }),
+    );
+    const hooks = JSON.parse(
+      readFileSync(join(configDir, "hooks.json"), "utf-8"),
+    ) as Record<string, unknown>;
+    const stop = (hooks.hooks as Record<string, unknown>)?.Stop as Array<
+      Record<string, unknown>
+    >;
+    assert.equal(stop.length, 2, "foreign + fapony Stop entries");
+    assert.ok(
+      JSON.stringify(stop[0]).includes("foreign-hook"),
+      "foreign entry preserved",
+    );
+    assert.ok(
+      JSON.stringify(stop[1]).includes("hook-stop"),
+      "fapony entry appended",
+    );
+    // SessionStart untouched
+    const ss = (hooks.hooks as Record<string, unknown>)?.SessionStart;
+    assert.ok(Array.isArray(ss) && ss.length === 1, "SessionStart untouched");
+    console.log("  ✓ install codex hooks.json merge preserves foreign entries");
+  });
+}
+
+export function testInstallCodexHooksAlreadyConfiguredNoOp(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.toml"), codexEntryToml());
+
+    const existing = {
+      hooks: {
+        Stop: [{ hooks: [{ type: "command", command: hookCommand() }] }],
+      },
+    };
+    writeFileSync(
+      join(configDir, "hooks.json"),
+      JSON.stringify(existing, null, 2),
+    );
+
+    const before = readFileSync(join(configDir, "hooks.json"), "utf-8");
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallCodex(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(join(configDir, "hooks.json"), "utf-8");
+    assert.equal(before, after, "hooks.json must not change");
+    assert.ok(err.includes("already configured"), `got: ${err}`);
+    console.log("  ✓ install codex hooks.json already configured → no-op");
+  });
+}
+
+export function testInstallCodexHooksMalformedSkipsGracefully(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.toml"), codexEntryToml());
+    // Malformed JSON
+    writeFileSync(join(configDir, "hooks.json"), "not json {{{");
+
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallCodex(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.ok(
+      err.includes("malformed") || err.includes("skipping"),
+      `got: ${err}`,
+    );
+    console.log("  ✓ install codex hooks.json malformed → skip gracefully");
+  });
+}
+
+export function testInstallCodexDryRunHooksNoWrite(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.toml"), codexEntryToml());
+
+    silentErrors(() =>
+      cmdInstallCodex(true, { exit: testExit, homedir: () => home }),
+    );
+    assert.ok(
+      !existsSync(join(configDir, "hooks.json")),
+      "hooks.json must not exist in dry-run",
+    );
+    console.log("  ✓ install codex dry-run → no hooks.json written");
+  });
+}
+
+// --- Skill linking tests ---
+
+export function testInstallCodexLinksSkills(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.toml"), codexEntryToml());
+
+    silentErrors(() =>
+      cmdInstallCodex(false, { exit: testExit, homedir: () => home }),
+    );
+    const skillsDir = join(home, ".agents", "skills");
+    for (const name of skillNames()) {
+      const link = join(skillsDir, name);
+      assert.ok(existsSync(link), `skill ${name} should be linked`);
+    }
+    console.log("  ✓ install codex links skills to ~/.agents/skills");
+  });
+}
+
+export function testInstallCodexSkillsConflictUntouched(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.toml"), codexEntryToml());
+
+    // Create a conflicting skill dir (not a symlink)
+    const skillsDir = join(home, ".agents", "skills");
+    const names = skillNames();
+    if (names.length > 0) {
+      mkdirSync(join(skillsDir, names[0]), { recursive: true });
+      writeFileSync(join(skillsDir, names[0], "SKILL.md"), "user content");
+    }
+
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallCodex(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    if (names.length > 0) {
+      assert.ok(
+        err.includes(names[0]) && err.includes("not overwriting"),
+        `conflict reported: ${err}`,
+      );
+      // User content preserved
+      const content = readFileSync(
+        join(skillsDir, names[0], "SKILL.md"),
+        "utf-8",
+      );
+      assert.equal(content, "user content", "conflict must not overwrite");
+    }
+    console.log("  ✓ install codex skill conflict → preserve user content");
+  });
+}
+
+export function testInstallCodexFindHooksJson(): void {
+  withTempHome((home) => {
+    assert.equal(
+      findCodexHooksJson(() => home),
+      null,
+      "no file → null",
+    );
+    const dir = join(home, ".codex");
+    mkdirSync(dir, { recursive: true });
+    const p = join(dir, "hooks.json");
+    writeFileSync(p, "{}");
+    assert.equal(
+      findCodexHooksJson(() => home),
+      p,
+      "file exists → path",
+    );
+    console.log("  ✓ findCodexHooksJson");
   });
 }
