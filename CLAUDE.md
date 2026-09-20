@@ -84,8 +84,10 @@ verified"* · *"Plan is entirely stale"* · ฉะนั้น mem ที่ม�
 คือทำพังได้ด้วย dep เดียว)
 **State:** SQLite ที่ `~/.config/fapony/state.db` (WAL) — `FAPONY_STATE_DIR` ย้ายได้ ·
 `read-track/<session>.jsonl` ใน stateDir เดียวกันคือ log ของ read hint (ต่อ session ทิ้งได้)
-**Topology:** `fapony/` = main checkout (เจ้าของแตะคนเดียว) · `fapony/cl-fapony/` = dev
-(clone คนละ `.git` — agent ทำงานที่นี่เท่านั้น) — ต้อง gitignore `cl-*/`
+**Topology:** `Project/fapony/` เป็นโฟลเดอร์เปล่าที่อุ้มสองรีโปเป็นพี่น้องกัน —
+`fapony/fapony/` = main checkout (เจ้าของแตะคนเดียว) · `fapony/cl-fapony/` = dev
+(clone คนละ `.git` — agent ทำงานที่นี่เท่านั้น) · **พ่อแม่ต้องไม่มี `CLAUDE.md`** ไม่งั้น
+agent ที่เปิดใน `cl-fapony/` โหลดไฟล์เดียวกันสองรอบ (นี่คือเหตุผลที่แยกออกมา 2026-09-20)
 **License:** MIT, public ตั้งแต่ commit แรก
 
 ---
