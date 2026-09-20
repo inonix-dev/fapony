@@ -334,6 +334,23 @@ export function buildGraph(dir: string): ImportGraph {
   return { files, deps, dependents, unresolved, external, barrels };
 }
 
+// --- Session-scoped graph cache ---
+//
+// buildGraph is cheap (~50ms/150 files) but is called by editHintFor,
+// review-seed, debt, and analyze — caching per worktree avoids rebuilding
+// the same graph multiple times within one CLI invocation or plugin session.
+// Invalidated naturally on process exit (CLI) or when worktree changes.
+
+let _graphCache: { dir: string; graph: ImportGraph } | null = null;
+
+export function buildGraphCached(dir: string): ImportGraph {
+  const abs = resolve(dir);
+  if (_graphCache?.dir === abs) return _graphCache.graph;
+  const graph = buildGraph(abs);
+  _graphCache = { dir: abs, graph };
+  return graph;
+}
+
 // --- Diagnosis ---
 
 function findCycles(graph: ImportGraph): string[][] {
