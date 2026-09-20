@@ -106,11 +106,15 @@ export function testVerificationReportToolCount(): void {
     // dropped 2026-09-20: `fapony mem kickoff` answers "what is left" from the
     // same plan files, so the schema was rent with no tenant.
     "plan_list",
+    // dropped 2026-09-20: only the owner ever asked ("what did it cost"),
+    // never the agent mid-turn — and `fapony usage-web` answers it from the
+    // CLI with zero standing rent.
+    "fapony_usage",
   ]) {
     assert.ok(!names.includes(gone), `${gone} is back on the MCP surface`);
   }
-  assert.equal(TOOLS.length, 4);
-  console.log("  ✓ retired tools stay off the MCP surface (4 tools total)");
+  assert.equal(TOOLS.length, 3);
+  console.log("  ✓ retired tools stay off the MCP surface (3 tools total)");
 }
 
 export function testVerificationReportVerdictFromGateEvent(): void {

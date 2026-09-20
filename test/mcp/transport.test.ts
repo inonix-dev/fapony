@@ -9,9 +9,9 @@ export function testMcpToolsList(): void {
   const r = result as { tools: { name: string }[] };
   assert.deepEqual(
     r.tools.map((t) => t.name),
-    ["verdict_submit", "mem_find", "mem_add", "fapony_usage"],
+    ["verdict_submit", "mem_find", "mem_add"],
   );
-  console.log("  ✓ mcp tools/list returns 5 tools");
+  console.log("  ✓ mcp tools/list returns 3 tools");
 }
 
 export function testMcpInitialize(): void {

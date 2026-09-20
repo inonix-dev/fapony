@@ -10,7 +10,6 @@ import { VERDICT_GRADES } from "../../parse.js";
 import { REASON_CODES, REGIME_CODES } from "../types.js";
 
 export { toolMemAdd, toolMemFind } from "./mem.js";
-export { toolPassiveUsage } from "./usage.js";
 export { toolVerdictSubmit } from "./verdict.js";
 
 // --- Tool definitions ---
@@ -176,46 +175,6 @@ export const TOOLS = [
         },
       },
       required: ["worktree", "kind", "text", "files"],
-    },
-  },
-  {
-    name: "fapony_usage",
-    description:
-      "Query passive usage across every coding client on this machine — " +
-      "OpenCode, Claude Code, Codex, and ZCode — on one ruler: token counts, " +
-      "cost, and breakdown by model. No client's own session log can see " +
-      "another's, so this is the only way to compare them. Filter by " +
-      "worktree and time range.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        worktree: {
-          type: "string",
-          description: "Filter by worktree path (absolute)",
-        },
-        since: {
-          type: "number",
-          description:
-            "Unix timestamp — include sessions created at or after this time",
-        },
-        until: {
-          type: "number",
-          description:
-            "Unix timestamp — include sessions created at or before this time",
-        },
-        detail: {
-          type: "boolean",
-          description:
-            "If true, include tool-call breakdown + step counts per session " +
-            "(activity signal, not quality). Default false keeps output compact.",
-        },
-        json: {
-          type: "boolean",
-          description:
-            "If true, return raw JSON PassiveUsageResult. If false (default), return human-readable text.",
-        },
-      },
-      required: [],
     },
   },
 ];

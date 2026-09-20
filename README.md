@@ -122,7 +122,6 @@ fapony usage-scan                         # scan the session logs already on dis
 fapony price-scan                         # fetch the OpenRouter price table → ~/.config/fapony/prices.json
 fapony usage-web                          # dashboard; re-run the scans to refresh
 #    both scans are manual by design — nothing fetches or re-reads session logs behind your back
-#    ask your agent: "Run fapony_usage — what has it cost me, per model?"
 
 # 4. Verify (optional, per project) — scaffold the evidence allowlist
 fapony init /path/to/your-worktree
@@ -131,7 +130,7 @@ fapony init /path/to/your-worktree
 
 With `.fapony/evidence.json` in place, any graded run can be replayed as a report. This one is
 a CLI command, not an MCP tool — the schemas cost every session of every client and no skill
-called them (see [The 4 tools](#the-4-tools) below). Grade something first;
+called them (see [The 3 tools](#the-3-tools) below). Grade something first;
 `verdict_submit` is what creates the run:
 
 ```bash
@@ -185,7 +184,7 @@ is `tool.execute.after`. Nothing here is required: skip the hooks and every MCP 
 
 | | Claude Code | OpenCode | Cursor | ZCode | Codex |
 |---|---|---|---|---|---|
-| MCP tools — `mem_find` `mem_add` `fapony_usage` `verdict_submit` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| MCP tools — `mem_find` `mem_add` `verdict_submit` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Stop hook — refuse to end a turn with ungraded commits | ✅ | — | ✅ | — | ✅ after trust |
 | Read hint — big-file pointer + debt/mem lines | ✅ before | ✅ after | — | — | — |
 | Re-read hint — unchanged repeat read | ✅ before | ✅ after | — | — | — |
@@ -236,11 +235,10 @@ count, once per session, before you change its shape; OpenCode's **commit** hook
 `git commit` that left the run ungraded. Claude Code receives read/edit *before* the call, OpenCode
 *after* it — [What runs where](#what-runs-where) has the full client matrix.
 
-### The 4 tools
+### The 3 tools
 
 | Tool | Tier | Purpose |
 |------|------|---------|
-| `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) with a required `regime` — the task shape the grade applies to |
 | `mem_find` | recall | Search the project's mem log read-only — decisions/bugs/notes matched on the row's `files[]` (text substring for rows written without it), `text`, `kind` (no default filter), `since`. "What was ever decided about this file?" in one call before editing |
 | `mem_add` | recall | Append a mem row (decision/bug/note/next/hold) with `files[]` required and rejected when empty — the write half of `mem_find`, so the row is findable when you next touch that file |
@@ -248,9 +246,9 @@ count, once per session, before you change its shape; OpenCode's **commit** hook
 **A tool earns its schema by being called mid-task without being asked.** Everything you invoke
 deliberately is a CLI command instead: the schema is paid as input tokens in every session of
 every client whether or not it is used, while a CLI command costs nothing until it runs. That is
-why the handoff/report family is CLI-only, and why `fapony_stats`, `project_health_context` and
-`plan_list` left the MCP surface in 2026-09 (`fapony stats` answers the first, `fapony mem
-kickoff` the third; the second had no caller).
+why the handoff/report family is CLI-only, and why `fapony_stats`, `project_health_context`,
+`plan_list` and `fapony_usage` left the MCP surface in 2026-09 (`fapony stats` answers the first, `fapony mem
+kickoff` the third, `fapony usage-web` the fourth; the second had no caller).
 Cutting is not the goal — spending where it pays back is: `mem_find` and `verdict_submit` keep
 their schemas because nobody is going to type them at the right moment. `fapony report <run-id>` prints the full report for a run (facts + handoff conformance + evidence + verdict); `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
 
@@ -363,7 +361,7 @@ plain `/git-ship` detects that and behaves like `pr` on its own.
 
 **What this is not.** It doesn't reduce your token bill — an agent that plans against known
 failure patterns tends to spend fewer rounds getting there, but fapony measures that, it doesn't
-cause it. Use `fapony_usage` to find out whether it actually happened for you rather than taking
+cause it. Use `fapony usage-web` to find out whether it actually happened for you rather than taking
 the claim on faith.
 
 `fapony install --platform claude` (or `opencode`) symlinks these directories into
@@ -447,7 +445,7 @@ archived one: [examples/](https://github.com/kire21b/fapony/tree/main/examples).
 
 ```bash
 # Verification & reporting
-fapony mcp                               # MCP server (stdio JSON-RPC — 4 tools)
+fapony mcp                               # MCP server (stdio JSON-RPC — 3 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
@@ -496,7 +494,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 ## Scope
 
 **Supported:**
-- MCP server — 4 tools via stdio JSON-RPC, works with any MCP client
+- MCP server — 3 tools via stdio JSON-RPC, works with any MCP client
 - Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
 - Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
 - Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file

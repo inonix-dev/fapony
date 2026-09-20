@@ -128,7 +128,7 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 
 | | claude | opencode | cursor | zcode | codex |
 | --- | --- | --- | --- | --- | --- |
-| MCP 4 tools | ✅ | ✅ | ✅ | ✅ | ✅ |
+| MCP 3 tools | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Stop hook (ไม่จบเทิร์นที่มี commit ไม่มี verdict) | ✅ | — | ✅ | — | ✅ after trust |
 | Read hint (ไฟล์ใหญ่ + debt/mem) | ✅ ก่อน | ✅ หลัง | — | — | — |
 | Re-read hint (อ่านซ้ำไฟล์เดิม mtime ไม่ขยับ) | ✅ ก่อน | ✅ หลัง | — | — | — |
@@ -390,7 +390,7 @@ Telegram/iPad แล้วเปิดคอมที่บ้านรัน ag
    มันคือ **ที่จำ ไม่ใช่ผู้ตัดสิน** คนอ่าน HN เปิดซอร์สจริง พูดเกินคำเดียวเสียเครดิตทั้งโพสต์
 2. **ห้ามอ้างว่า fapony บอกได้ว่า model ไหนเก่งกว่า** — self-grading bias ต่างกันรายโมเดล
    (ดู "ทำไมแกนย้าย") · ที่พูดได้คือ **token ต่องาน** ซึ่งวัดจาก log
-3. **นำด้วย day-1 value เสมอ** — `usage-web` / `fapony_usage` ทำงานทันทีที่ติดตั้งเพราะอ่าน log
+3. **นำด้วย day-1 value เสมอ** — `usage-scan` / `usage-web` (CLI) ทำงานทันทีที่ติดตั้งเพราะอ่าน log
    ที่เขามีอยู่แล้ว ส่วน mem + debt คือ **retention ไม่ใช่ acquisition** (ต้องสะสมก่อนถึงมีค่า) ·
    **ห้ามสลับลำดับ README ให้ mem/debt ขึ้นก่อน จนกว่าจะมีเลข moved% สองจุดเวลา** — ใครติดตั้ง
    แล้วเจอ "ยังไม่มีประวัติพอ" เป็นอย่างแรก = ปิดทิ้ง (นี่คือสิ่งที่ฆ่า `project_health_context`)
@@ -454,7 +454,7 @@ fapony analyze [path]                # hub/orphan/cycle/changed-untested — liv
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym]
 fapony plan-seed <name> [--spec] [--scope <path>]...
 # ── ledger (แช่แข็ง — แก้เฉพาะบั๊ก) ──
-fapony mcp                           # MCP server — stdio JSON-RPC, 4 tools
+fapony mcp                           # MCP server — stdio JSON-RPC, 3 tools
 fapony hook-stop                     # Stop hook — block เทิร์นที่มี commit แต่ไม่มี verdict
 fapony hook-read-hint                # annotate 2 แบบ: อ่านไฟล์ใหญ่ทั้งไฟล์ → review-seed ·
                                      # re-read ไฟล์เดิมใน session เดียวกันที่ mtime ไม่ขยับ → grep
@@ -490,17 +490,21 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 
 ## MCP Tools: fapony
 
-`fapony mcp` — stdio JSON-RPC, **4 tools** (`mem_add` เข้ามาพร้อม PLAN-agent-one-call ·
-`plan_list` ออกไป 2026-09-20 — ดูกฎ 12/13):
+`fapony mcp` — stdio JSON-RPC, **3 tools** (`mem_add` เข้ามาพร้อม PLAN-agent-one-call ·
+`plan_list` ออกไป 2026-09-20 · `fapony_usage` ออกไป 2026-09-20 เหลือ CLI — ดูกฎ 12/13):
 
 | Tool | Purpose |
 |------|---------|
 | `mem_find` | **แกน** — ค้น mem log read-only: match `files[]` ที่เก็บจริงในแถวก่อน แล้ว fallback เป็น substring ของ text/spec/ref สำหรับแถวเก่าที่เขียนตอนยังไม่มี `--files` · ทุก kind ไม่มี default filter · `memDir:null` = ไม่มี mem (ไม่ใช่ "ไม่เจอ") |
 | `mem_add` | **แกน — ครึ่งเขียนของ `mem_find`** · append mem row (`decision`/`bug`/`note`/`next`/`hold`) โดย `files[]` **required + reject เมื่อว่าง** (กฎ 9: required ได้ผล การขอไม่ได้ผล) — แถวที่ไม่บอกไฟล์ หาไม่เจอตอนแตะไฟล์นั้น |
-| `fapony_usage` | usage แบบ passive จาก OpenCode / ZCode / Claude Code / Codex (tokens, cost, by-model; `detail:true` เพิ่ม per-step timing) — **ตัวที่ทำงานนาทีแรก** |
 | `verdict_submit` | เก็บ verdict 6 เกรด + `regime` บังคับ — **อ่านเป็นเซนเซอร์ ไม่ใช่คะแนน** (กฎ 8) |
 
-**ที่ถอดออกไปแล้วและห้ามเอากลับ:** `plan_list` (2026-09-20 — `fapony mem kickoff` ตอบ
+**ที่ถอดออกไปแล้วและห้ามเอากลับ:** `fapony_usage` (2026-09-20 — สอบตกกฎ 13: คนเรียกมีแต่เจ้าของ
+("เมื่อวานเผาไปเท่าไหร่") ไม่ใช่ agent กลางเทิร์น · ทุก client แสดง token ของตัวเองอยู่แล้ว เหลือข้ออ้าง
+เดียวคือ cross-client ruler ซึ่ง CLI `usage-scan`/`usage-web` ตอบได้เหมือนกันด้วยค่าเช่าศูนย์ ·
+ลบ `src/mcp/tools/usage.ts` + test ทิ้ง, engine `src/session/` + `src/usage/` อยู่ครบเพราะ CLI ใช้ ·
+statusline เหลือแค่ marker — มันอ่าน cache อย่างเดียว spawn CLI ไม่ได้) ·
+`plan_list` (2026-09-20 — `fapony mem kickoff` ตอบ
 "เหลืออะไร" จาก plan file ชุดเดียวกัน · ลบ `src/mcp/tools/plans.ts` + `getLastVerdictByPlan`
 ทิ้งด้วยเพราะไม่มี caller เหลือ ตามกฎ 12) · **สิ่งที่หายไปจริงวัดแล้วว่าเล็ก** (กฎ 2): ใน plan
 ทั้งหมด 42 ไฟล์ (plan/ 3 + done/ 39) `blocked_by` ถูกใช้ **0 ไฟล์ all-time** · `blocks` 3 ·
@@ -510,7 +514,8 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 description ของมันขายว่า "บอกได้ว่าควรจ่ายให้ model ไหน" ซึ่งขัด Positioning ข้อ 2) ·
 `project_health_context` (caller ศูนย์ — engine `src/context/projectHealth.ts` ยังอยู่ ใช้จาก CLI ได้) ·
 `verification_report` / `handoff_check` / `handoff_collect` (ถอดไปก่อนหน้านี้ด้วยเหตุผลเดียวกัน) ·
-**วัดแล้ว: schema ทั้งชุด 12,019 → 7,249 ตัวอักษร (−40%)**
+**วัดแล้ว: schema ทั้งชุด 12,019 → 7,249 ตัวอักษร (−40%) → 5,540 (−24% จากการถอด `fapony_usage`
+เหลือ 3 tools — วัดด้วย tools/list JSON + instructions)**
 
 ดู [docs/mcp-handcheck.md](docs/mcp-handcheck.md) สำหรับ protocol, adapter examples, safety rules
 

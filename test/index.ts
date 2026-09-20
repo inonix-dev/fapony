@@ -365,11 +365,6 @@ import {
   testMcpUnknownMethod,
 } from "./mcp/transport.test.js";
 import {
-  testUsageDefaultRegression,
-  testUsageDetailJson,
-  testUsageDetailText,
-} from "./mcp/usage.test.js";
-import {
   testVerdictSubmitAllGrades,
   testVerdictSubmitAutoCreatesRun,
   testVerdictSubmitInvalidReasonCode,
@@ -940,9 +935,6 @@ export async function cmdTest(): Promise<void> {
   testMcpNotificationsIgnored();
   testMcpUnknownMethod();
   testMcpToolsCallUnknownTool();
-  testUsageDefaultRegression();
-  testUsageDetailJson();
-  testUsageDetailText();
   testHandoffCollectMissingArgs();
   testHandoffCollectAutoDetectRange();
   testHandoffCollectExplicitRange();

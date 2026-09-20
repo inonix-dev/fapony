@@ -1,0 +1,39 @@
+---
+name: lookup-before-edit
+description: Look up unfamiliar files before reading or editing them — exports, line numbers, and importers without reading the whole file. Trigger on /lookup-before-edit and proactively whenever you are about to read, edit, or refactor a file you do not already know.
+---
+
+# Lookup Before Edit — scope first, read second
+
+You are about to touch files you do not know. Do not `Read` them whole — look them up first.
+A full-file read on a 500-line module costs ~35k tokens of output; a lookup costs under 1k.
+
+## The one command
+
+```bash
+fapony review-seed --files <f1,f2,dir> [--body <sym>] [--callers <sym>]
+```
+
+What it returns: every export with its line number, plus every importer (uncapped). That is
+your entry map — then `Read` only the line ranges you actually need.
+
+## Narrow it
+
+- `--body <sym>` — declaration slice of one export: "what does this do" without the file.
+- `--callers <sym>` — symbol→symbol scan across the importers the static graph sees.
+- Directories expand to the source files under them (cap 40, stated when cut). Paths that do
+  not exist are dropped with a notice, not counted silently.
+
+## Limits (do not work around them)
+
+- **Exports only.** A non-exported function answers "no export named X in scope" — that is
+  the correct answer, not a failure. Read the file for internals.
+- **Static only.** Dynamic use is invisible to the graph; an empty caller list means "not
+  seen statically", never "unused".
+- No `fapony` CLI or the call errors → read the file normally and carry on. A hint, not a gate.
+
+## After the lookup
+
+1. Pick line ranges from the export list, `Read` those slices only.
+2. Before changing a shape, note the importer count the lookup showed — that is your blast radius.
+3. Do not re-read a file whose mtime has not moved; `grep` it instead.

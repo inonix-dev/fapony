@@ -91,7 +91,6 @@ fapony/
       tools/
         mem.ts             # mem_find / mem_add — the core pair: read the mem log, append a row with files[] required
         verdict.ts         # verdict_submit — 6-grade verdict storage
-        usage.ts           # fapony_usage — passive OpenCode session usage
         collect.ts         # git facts — engine only, handoff_collect was removed from the registry
         check.ts           # conformance — engine only, handoff_check was removed
         report.ts          # facts + checks + evidence + verdict — engine only, verification_report was removed
