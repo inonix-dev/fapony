@@ -235,3 +235,74 @@ export function toolMemAdd(args: Record<string, unknown>): ToolResult {
     return errorResult(e instanceof Error ? e.message : String(e));
   }
 }
+
+// --- mem_close ---
+//
+// A separate tool on purpose, not kind:"close" inside mem_add: a close row
+// carries {ref, text} with no files[] and no spec, while mem_add requires a
+// non-empty files[] (and a spec for hold) — folding them into one schema
+// would make required fields depend on the value of another field, the shape
+// models call wrong most often. Mirrors CLI `mem close <id> "<msg>"`
+// (commands/write.ts cmdClose): the id must exist; the tombstone voids the
+// claim by itself.
+
+export interface MemCloseResult {
+  ref: string;
+  text: string;
+  ts: string;
+}
+
+export function memClose(args: {
+  worktree: string;
+  id: string;
+  text: string;
+}): MemCloseResult {
+  if (!args.id.trim()) {
+    throw new Error("id is required");
+  }
+  if (!args.text.trim()) {
+    throw new Error("text is required and must not be empty");
+  }
+
+  initStore(args.worktree);
+  const all = rows();
+  if (!all.some((r) => "id" in r && r.id === args.id)) {
+    throw new Error(`no id "${args.id}" in the log`);
+  }
+
+  const ts = new Date().toISOString();
+  put({ kind: "close", ref: args.id, text: args.text });
+
+  return { ref: args.id, text: args.text, ts };
+}
+
+export function toolMemClose(args: Record<string, unknown>): ToolResult {
+  const worktree =
+    typeof args.worktree === "string" ? args.worktree.trim() : "";
+  if (!worktree) {
+    return errorResult(
+      "worktree is required and must be an absolute path " +
+        "(git rev-parse --show-toplevel)",
+    );
+  }
+  if (!worktree.startsWith("/")) {
+    return errorResult(`worktree must be an absolute path, got: ${worktree}`);
+  }
+
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+  if (!id) {
+    return errorResult("id is required — the row id to close");
+  }
+
+  const text = typeof args.text === "string" ? args.text.trim() : "";
+  if (!text) {
+    return errorResult("text is required and must not be empty");
+  }
+
+  try {
+    const result = memClose({ worktree, id, text });
+    return jsonResult(result);
+  } catch (e) {
+    return errorResult(e instanceof Error ? e.message : String(e));
+  }
+}

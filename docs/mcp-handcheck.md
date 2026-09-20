@@ -14,13 +14,10 @@ fapony mcp
 
 ## The verification pipeline
 
-These three tools are the low-level surface, documented here in full because adapters
-build on them directly:
-
 ```
 git facts  →  conformance  →  verdict_submit
-                                    ↓
-                              store verdict
+                                     ↓
+                               store verdict
 ```
 
 The first two steps are CLI-only: `fapony report <run-id>` runs the whole chain —
@@ -29,7 +26,7 @@ tools until 2026-09-17; the schemas cost every session of every connected client
 and no skill ever called them, so they moved behind the CLI that already did the
 same job. The logic is unchanged.
 
-The server exposes 5 tools in total, all higher-level and taking plain arguments —
+The server exposes 4 tools in total, all higher-level and taking plain arguments —
 see [README](../README.md#the-4-tools) for what each one answers:
 
 | Tool | In one line |
@@ -37,7 +34,7 @@ see [README](../README.md#the-4-tools) for what each one answers:
 | `verdict_submit` | Grade a finished unit of work — the one habit the ledger needs |
 | `mem_find` | The project's mem log, read-only — what was decided about these files |
 | `mem_add` | Append a mem row with files[] required — decision/bug/note/next/hold |
-| `fapony_usage` | Token/cost totals read from client session logs |
+| `mem_close` | Close a mem row by id — separate tool because a close row has no files[] |
 
 ### Two things that bite
 
@@ -52,42 +49,22 @@ see [README](../README.md#the-4-tools) for what each one answers:
   anything (`bun test` in a repo whose tests live behind `bun run test`) is reported as a
   clean pass.
 
-### 1. `handoff_collect` — Get machine facts from git
+### 1. Git facts + conformance — via CLI, not MCP
 
-```json
-{
-  "method": "tools/call",
-  "params": {
-    "name": "handoff_collect",
-    "arguments": {
-      "base_sha": "abc123",
-      "head_sha": "def456",
-      "worktree": "/path/to/repo"
-    }
-  }
-}
+`handoff_collect` and `handoff_check` used to be MCP tools (§§1–2 of older versions
+of this doc). They left the surface with the rest of the handoff trio: the schema
+rent was paid by every session and no caller used them mid-task. The engine is
+unchanged and ships behind one command:
+
+```bash
+fapony report <run-id>   # git facts + handoff conformance + evidence + verdict, printed
 ```
 
-**Returns:** `facts` (files, lines, commits, branch) + `checks` (has_test, has_docs, safety) + `provenance` (verified)
+**Returns:** `facts` (files, lines, commits, branch) + `checks` (has_test, has_docs,
+safety) + conformance `checks[]` (name, pass, note) + `summary` (total, passed,
+failed, needs_human_review).
 
-### 2. `handoff_check` — Verify handoff conformance
-
-```json
-{
-  "method": "tools/call",
-  "params": {
-    "name": "handoff_check",
-    "arguments": {
-      "handoff": "## HANDOFF\nclaimed: abc123\ncommits: abc123\nchecks: pass\nuncertain: none\nnot_done: none",
-      "facts": { "commits": ["abc123"] }
-    }
-  }
-}
-```
-
-**Returns:** `checks[]` (name, pass, note) + `summary` (total, passed, failed, needs_human_review)
-
-**Checks performed:**
+**Conformance checks performed:**
 | Check | Passes when |
 |-------|-------------|
 | `has_handoff_block` | handoff contains `## HANDOFF` |
@@ -97,7 +74,7 @@ see [README](../README.md#the-4-tools) for what each one answers:
 | `checks_declared` | checks field present |
 | `facts_cross_referenced` | commits match git facts |
 
-### 3. `verdict_submit` — Record the verdict
+### 2. `verdict_submit` — Record the verdict
 
 ```json
 {
@@ -139,24 +116,14 @@ see [README](../README.md#the-4-tools) for what each one answers:
 ```bash
 # In your Claude Code session, after writing code:
 
-# Step 1: Collect facts
-FACTS=$(echo '{"method":"tools/call","params":{"name":"handoff_collect","arguments":{"base_sha":"'"$BASE"'","head_sha":"'"$HEAD"'","worktree":"'"$PWD"'"}}}' | fapony mcp)
+# Step 1: Recall — what was decided about these files?
+echo '{"method":"tools/call","params":{"name":"mem_find","arguments":{"worktree":"'"$PWD"'","files":["src/you/touched.ts"]}}}' | fapony mcp
 
-# Step 2: Build handoff and check it
-HANDOFF="## HANDOFF
-claimed: $(git rev-parse --short HEAD)
-commits: $(git log --oneline $BASE..HEAD | awk '{print $1}')
-checks: $(your-checks-here)
-uncertain: none
-not_done: none"
+# Step 2: Facts + conformance — one CLI call, no MCP schema involved
+fapony report <run-id>
 
-CHECK=$(echo '{"method":"tools/call","params":{"name":"handoff_check","arguments":{"handoff":"'"$(echo $HANDOFF | sed 's/"/\\"/g')"'","facts":'"$(echo $FACTS | jq -r '.result.content[0].text')"'}}}' | fapony mcp)
-
-# Step 3: If checks pass, submit verdict
-VERDICT=$(echo $CHECK | jq -r '.result.content[0].text' | jq -r '.summary.failed')
-if [ "$VERDICT" = "0" ]; then
-  echo '{"method":"tools/call","params":{"name":"verdict_submit","arguments":{"run_id":'$RUN_ID',"verdict":"pass","reason_code":"missing_test","regime":"code"}}}' | fapony mcp
-fi
+# Step 3: If the work held up, submit verdict
+echo '{"method":"tools/call","params":{"name":"verdict_submit","arguments":{"run_id":'$RUN_ID',"verdict":"pass","reason_code":"none","regime":"code"}}}' | fapony mcp
 ```
 
 ## Example: Python Adapter
@@ -180,20 +147,13 @@ class FaponyHandcheck:
         self.proc.stdin.flush()
         return json.loads(self.proc.stdout.readline())
     
-    def collect_facts(self, base_sha, head_sha, worktree):
+    def recall(self, worktree, files):
         r = self._call("tools/call", {
-            "name": "handoff_collect",
-            "arguments": {"base_sha": base_sha, "head_sha": head_sha, "worktree": worktree}
+            "name": "mem_find",
+            "arguments": {"worktree": worktree, "files": files}
         })
         return json.loads(r["result"]["content"][0]["text"])
-    
-    def check_handoff(self, handoff, facts=None):
-        args = {"handoff": handoff}
-        if facts:
-            args["facts"] = facts
-        r = self._call("tools/call", {"name": "handoff_check", "arguments": args})
-        return json.loads(r["result"]["content"][0]["text"])
-    
+
     def submit_verdict(self, run_id, verdict, reason_code, regime, note=None):
         args = {
             "run_id": run_id,
@@ -212,10 +172,9 @@ class FaponyHandcheck:
 
 # Usage
 hc = FaponyHandcheck()
-facts = hc.collect_facts("abc123", "def456", "/path/to/repo")
-check = hc.check_handoff(handoff_text, facts)
-if check["summary"]["failed"] == 0:
-    result = hc.submit_verdict(run_id, "pass", "missing_test", "code")
+recall = hc.recall("/path/to/repo", ["src/touched.ts"])
+# facts + conformance run on the CLI: `fapony report <run-id>`
+result = hc.submit_verdict(run_id, "pass", "none", "code")
 hc.close()
 ```
 

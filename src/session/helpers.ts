@@ -270,7 +270,7 @@ export function readDetailFromDb(
     .all(...filter.params) as DetailPerSessionToolRow[];
 
   // Context bytes per tool — summed `state.output` length. Same signal the
-  // Claude Code/Codex readers derive from tool_result blocks, so `fapony_usage`
+  // Claude Code/Codex readers derive from tool_result blocks, so usage-scan
   // stops reporting zero bytes for the SQLite clients.
   const bytesRows = db
     .prepare(

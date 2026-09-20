@@ -117,9 +117,14 @@ them is how a review launders an assumption into a fact.
 
 The reader has the diff and is deciding what to do next. Nothing else belongs here.
 
-**Verdict first, then at most 3 findings, at most 4 lines each, then one deferred line.**
+**Verdict first, then at most 10 findings, at most 4 lines each, then one deferred line.**
 Severity order: blocker → major → nit, and cut the nits entirely when anything structural
 survived — they dilute the only thing worth reading.
+
+**A capped report must not read as a complete one.** When more findings survived pass 3 than
+the cap allows, the report ends with one line naming how many were held back and the worst
+severity among them (`+ 4 more (major) — ask`) — never a silent stop at 10. A reader who
+cannot tell "that's all" from "that's the cap" has been told a lie by omission.
 
 ```
 <ship | fix-then-ship | rework | reject> — the single biggest reason, one sentence.
@@ -130,6 +135,7 @@ survived — they dilute the only thing worth reading.
    fix: <the minimal change>
 
 deferred: <thing> (<where it was specified>) · <thing>
++ <N> more (<worst severity>)   ← required only when findings exceeded the cap
 ```
 
 Four lines is a ceiling, not a quota — a finding that fits in two ships in two. Drop `repro:`
@@ -214,9 +220,11 @@ The four passes are the rules. These three are what they fail on in practice:
 
 - **Order is not optional.** No line-by-line notes before pass 1, no finding before passes 2-3
   earned it, nothing stated as fact that pass 4 cannot cite.
-- **The budget is binding.** Verdict, ≤3 findings, ≤4 lines each, one deferred line. Over budget
+- **The budget is binding.** Verdict, ≤10 findings, ≤4 lines each, one deferred line. Over budget
   means you are reporting process. "LGTM" is not an output either — finding nothing ships as the
-  verdict line plus one line naming what you walked.
+  verdict line plus one line naming what you walked. When the cap bites, say how much it bit:
+  a `+ N more (<severity>)` line is required — a silent stop at 10 is the same lie as a silent
+  stop at 3.
 - **Forget who wrote it.** The author's reasoning is context, never evidence.
 
 ## Example

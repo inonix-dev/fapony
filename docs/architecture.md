@@ -13,6 +13,8 @@ fapony/
                                 # skill/<name>/, so a link out of that dir is dead on install
     plan-with-pony/             # draft plan + spec จาก conversation (pipe to any agent's stdin)
     review-pony/                # review as verification + scope facts before (review-seed), verdict after
+    lookup-before-edit/         # lookup unfamiliar files (review-seed --files) before reading/editing them
+    define-convention/            # turn a not-yet-migrated pattern into a tracked convention (interview + dry-run debt)
     move-to-done/               # archive PLAN เข้า .fapony/done/ หลัง ship
     git-commit-conventional/    # commit แยก concern + conventional message
     git-ship/                   # push branch, open PR, merge, reset branch onto base
@@ -47,6 +49,14 @@ fapony/
     map.ts              # extractExports() — on-demand source index, library only; the `fapony map` command was deleted once plan-seed/review-seed were its only callers (see PLAN-code-map)
     plan-seed.ts        # fapony plan-seed <name> [--spec] [--scope <path>]... — writes PLAN(+SPEC): frontmatter, 8 empty sections, §8 prior art, Context (fapony); SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200. §2/§5 seed nothing since 2026-09-18 (measured 3-of-3 empty); caller: plan-with-pony Phase 1.5
     review-seed.ts      # fapony review-seed [--staged|--commit|--range|--files|--plan] — read-only scope facts for a review (changed/importers/untested/signatures/cross-check); caller: review-pony "Before"
+    debt/               # fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย": live convention scan, never persisted; caller: hook read-hint
+      types.ts          # DebtReport/Convention/Promotion + caps (DEBT_FILE_CAP, PROMOTION_THRESHOLD, ZONE_*)
+      load.ts           # resolveConventionsPath + loadConventions
+      scan.ts           # compile + debtScan + debtForFile
+      promotion.ts      # findPromotions + formatPromotions (mem fail-verdict recurrence)
+      format.ts         # zone grouping + formatDebt
+      cli.ts            # worktreeOf + cmdDebt
+      index.ts          # barrel re-export
     hook.ts             # fapony hook-stop — Claude Code Stop hook: blocks a turn with ungraded commits · fapony hook-read-hint — PreToolUse(Read) annotate only: large full-file read → review-seed, and a re-read of the same path whose mtime has not moved this session → grep (read-track/<session>.jsonl in stateDir; FAPONY_NO_REREAD_HINT=1 disables)
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
     init.ts            # fapony init — scaffold .fapony/{plan,done,spec,.memory,evidence.json}
@@ -83,15 +93,14 @@ fapony/
       utils.ts          # shared JSON(C) helpers
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative
-    mcp/                   # MCP server — stdio JSON-RPC, 4 registered tools (collect/check/report are engines only — their tools were removed from the registry, see CLAUDE.md)
+    mcp/                   # MCP server — stdio JSON-RPC, 4 tools on the surface (collect/check/report are engines only — their tools were removed from the registry, see CLAUDE.md)
       index.ts             # MCP entry point + tool registration
       transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn the grading habit without editing their own rules file
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
       types.ts             # MCP type definitions
       tools/
-        mem.ts             # mem_find / mem_add — the core pair: read the mem log, append a row with files[] required
+        mem.ts             # mem_find / mem_add / mem_close — the core triple: read the mem log, append a row with files[] required, close a row by id (separate tool: close rows carry no files[])
         verdict.ts         # verdict_submit — 6-grade verdict storage
-        usage.ts           # fapony_usage — passive OpenCode session usage
         collect.ts         # git facts — engine only, handoff_collect was removed from the registry
         check.ts           # conformance — engine only, handoff_check was removed
         report.ts          # facts + checks + evidence + verdict — engine only, verification_report was removed

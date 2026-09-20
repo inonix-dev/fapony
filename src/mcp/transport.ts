@@ -4,13 +4,12 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import { mergeBytesByTool, type UsageDetail } from "../session/index.js";
 import { getServerSha } from "./primitives.js";
 import {
   TOOLS,
   toolMemAdd,
+  toolMemClose,
   toolMemFind,
-  toolPassiveUsage,
   toolVerdictSubmit,
 } from "./tools/index.js";
 import { errorResult, type ToolResult } from "./types.js";
@@ -39,68 +38,18 @@ Skip it and every tool still answers correctly, on a thinner history.`;
 //
 // Written after every MCP tool call. The Claude Code statusline script reads
 // this file (< 1ms, no spawn, no db). Format: single line of text.
-// Only fapony_usage with detail:true produces meaningful data (bytes_by_tool,
-// aggregated across all clients — the bytes live on the claude_code
-// sub-object, never top-level); other tools write a minimal "fapony" marker.
+// No remaining tool produces bytes_by_tool detail, so every call writes the
+// minimal "fapony" marker — cross-client spend lives on the CLI now
+// (`fapony usage-scan` + `fapony usage-web`), which the statusline cannot
+// spawn (it must stay < 1ms).
 
 const STATUSLINE_PATH = join(homedir(), ".config", "fapony", "statusline");
 
-function writeStatuslineCache(toolResult: ToolResult): void {
+function writeStatuslineCache(): void {
   try {
-    // Extract bytes_by_tool from fapony_usage detail JSON response.
-    let line = "fapony";
-    if (
-      toolResult &&
-      typeof toolResult === "object" &&
-      "content" in toolResult &&
-      Array.isArray(toolResult.content)
-    ) {
-      for (const c of toolResult.content) {
-        if (
-          c &&
-          typeof c === "object" &&
-          c.type === "text" &&
-          typeof c.text === "string"
-        ) {
-          // Try to extract bytes_by_tool from JSON text response.
-          // Aggregated across all clients: the bytes live on the Claude Code
-          // sub-object (claude_code.detail), never on the top-level detail,
-          // so reading top-level alone would always miss.
-          try {
-            const parsed = JSON.parse(c.text) as {
-              detail?: UsageDetail | null;
-              zcode?: { detail?: UsageDetail | null } | null;
-              claude_code?: { detail?: UsageDetail | null } | null;
-              codex?: { detail?: UsageDetail | null } | null;
-            };
-            const bbt = mergeBytesByTool(
-              parsed?.detail,
-              parsed?.zcode?.detail,
-              parsed?.claude_code?.detail,
-              parsed?.codex?.detail,
-            );
-            const entries = Object.entries(bbt).sort((a, b) => b[1] - a[1]);
-            const total = entries.reduce((s, e) => s + e[1], 0);
-            if (total > 0) {
-              // Format: "84.2k" for total, or "Read 42k · Grep 31k" for top tools.
-              const fmt = (n: number) =>
-                n >= 1024 ? `${(n / 1024).toFixed(1)}k` : `${Math.round(n)}`;
-              if (entries.length <= 3) {
-                line = `fapony ${entries.map((e) => `${e[0]} ${fmt(e[1])}`).join(" · ")}`;
-              } else {
-                line = `fapony ${fmt(total)}`;
-              }
-            }
-          } catch {
-            // Not JSON — that's fine, use default "fapony" marker.
-          }
-          break;
-        }
-      }
-    }
     const dir = join(homedir(), ".config", "fapony");
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(STATUSLINE_PATH, line, "utf-8");
+    writeFileSync(STATUSLINE_PATH, "fapony", "utf-8");
   } catch {
     // Cache write is best-effort — never block MCP on it.
   }
@@ -152,20 +101,20 @@ function dispatchToolCall(params: {
     case "verdict_submit":
       result = toolVerdictSubmit(args);
       break;
-    case "fapony_usage":
-      result = toolPassiveUsage(args);
-      break;
     case "mem_find":
       result = toolMemFind(args);
       break;
     case "mem_add":
       result = toolMemAdd(args);
       break;
+    case "mem_close":
+      result = toolMemClose(args);
+      break;
     default:
       return errorResult(`unknown tool: ${params.name}`);
   }
   // Write statusline cache after every tool call — best-effort, never blocks.
-  writeStatuslineCache(result);
+  writeStatuslineCache();
   return result;
 }
 

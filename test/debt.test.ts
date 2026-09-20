@@ -17,7 +17,7 @@ import {
   PROMOTION_THRESHOLD,
   resolveConventionsPath,
   worktreeOf,
-} from "../src/debt.js";
+} from "../src/debt/index.js";
 import { withTempRepo, withTmpDb } from "./helpers.js";
 
 function seed(

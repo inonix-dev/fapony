@@ -29,7 +29,7 @@ import { homedir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { buildGraphCached, collectSourceFiles, SCAN_EXTS } from "./analyze.js";
 import { openDb } from "./db/index.js";
-import { debtForFile, loadConventions } from "./debt.js";
+import { debtForFile, loadConventions } from "./debt/index.js";
 import { readMemLog } from "./memory.js";
 
 // --- Hint-fire log (PLAN-feedback-surface chunk 1) ---
@@ -280,7 +280,9 @@ export function decideStop(opts: {
       `regime is one of code|fix|review|plan|inquiry|test, and the note must stand alone ` +
       `(it is read months from now with no access to this conversation). ` +
       `Grade what actually happened — pass-family when it held up, fail if the first ` +
-      `attempt was wrong, uncertain when you could not verify it. What deserves a mem ` +
+      `attempt was wrong, uncertain when you could not verify it. ` +
+      `If you did not run typecheck + \`bun fapony.ts test\` + \`fapony lint-baseline --diff\`, ` +
+      `the honest verdict is uncertain, not pass. What deserves a mem ` +
       `row (decision/bug/note) is your call — not every unit needs one.`,
   );
   return lines.join("\n");
@@ -523,7 +525,7 @@ export function readHintFor(opts: ReadHintInput): string | null {
     return (
       `fapony: ${shown} is ${lines} lines — review-seed --files ${shown} ` +
       `returns exports with line numbers, importers, and signatures first ` +
-      `(${READ_HINT_MEASURED})`
+      `(${READ_HINT_MEASURED}; skill /lookup-before-edit has the routine)`
     );
   } catch {
     return null;
@@ -785,7 +787,7 @@ export function editHintFor(opts: EditHintInput): string | null {
     return (
       `fapony: ${rel} has ${n} importer${n === 1 ? "" : "s"} — ` +
       `review-seed --files ${rel} lists them (add --callers <export> for one ` +
-      `export's callers); check before changing its shape`
+      `export's callers); check before changing its shape (skill /lookup-before-edit)`
     );
   } catch {
     return null;

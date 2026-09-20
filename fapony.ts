@@ -5,7 +5,7 @@
 
 import { existsSync } from "node:fs";
 import { cmdAnalyze } from "./src/analyze.js";
-import { cmdDebt } from "./src/debt.js";
+import { cmdDebt } from "./src/debt/cli.js";
 import { cmdDigest } from "./src/digest/cli.js";
 import { cmdHookEditHint, cmdHookReadHint, cmdHookStop } from "./src/hook.js";
 import { cmdInit } from "./src/init.js";

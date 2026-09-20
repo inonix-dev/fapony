@@ -9,8 +9,7 @@
 import { VERDICT_GRADES } from "../../parse.js";
 import { REASON_CODES, REGIME_CODES } from "../types.js";
 
-export { toolMemAdd, toolMemFind } from "./mem.js";
-export { toolPassiveUsage } from "./usage.js";
+export { toolMemAdd, toolMemClose, toolMemFind } from "./mem.js";
 export { toolVerdictSubmit } from "./verdict.js";
 
 // --- Tool definitions ---
@@ -179,43 +178,29 @@ export const TOOLS = [
     },
   },
   {
-    name: "fapony_usage",
+    name: "mem_close",
     description:
-      "Query passive usage across every coding client on this machine — " +
-      "OpenCode, Claude Code, Codex, and ZCode — on one ruler: token counts, " +
-      "cost, and breakdown by model. No client's own session log can see " +
-      "another's, so this is the only way to compare them. Filter by " +
-      "worktree and time range.",
+      "Close a mem row by id with a tombstone message (what was done). " +
+      "The write half of closing what mem_find shows as open — id must exist. " +
+      "Returns the ref and timestamp.",
     inputSchema: {
       type: "object" as const,
       properties: {
         worktree: {
           type: "string",
-          description: "Filter by worktree path (absolute)",
-        },
-        since: {
-          type: "number",
           description:
-            "Unix timestamp — include sessions created at or after this time",
+            "Absolute path (git rev-parse --show-toplevel) — required",
         },
-        until: {
-          type: "number",
-          description:
-            "Unix timestamp — include sessions created at or before this time",
+        id: {
+          type: "string",
+          description: "The row id to close",
         },
-        detail: {
-          type: "boolean",
-          description:
-            "If true, include tool-call breakdown + step counts per session " +
-            "(activity signal, not quality). Default false keeps output compact.",
-        },
-        json: {
-          type: "boolean",
-          description:
-            "If true, return raw JSON PassiveUsageResult. If false (default), return human-readable text.",
+        text: {
+          type: "string",
+          description: "Tombstone message — what was done (commit sha counts)",
         },
       },
-      required: [],
+      required: ["worktree", "id", "text"],
     },
   },
 ];

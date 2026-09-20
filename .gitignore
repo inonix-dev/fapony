@@ -1,5 +1,7 @@
 .DS_Store
 node_modules/
+# Bun-only repo — bun.lock is the committed lockfile; pnpm regenerates this via `pnpm pack`
+pnpm-lock.yaml
 *.db*
 wt-*/
 cl-*/
