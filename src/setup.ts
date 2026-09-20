@@ -229,7 +229,7 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
   │     fapony install --platform claude    │
   │                                         │
   │  2. Ask your agent:                     │
-  │     "Run fapony_stats and fapony_usage" │
+  │     "Find past decisions with mem_find" │
   │                                         │
   │  3. Read a run's report:                │
   │     fapony report <run-id>              │
