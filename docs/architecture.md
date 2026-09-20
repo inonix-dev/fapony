@@ -14,6 +14,7 @@ fapony/
     plan-with-pony/             # draft plan + spec จาก conversation (pipe to any agent's stdin)
     review-pony/                # review as verification + scope facts before (review-seed), verdict after
     lookup-before-edit/         # lookup unfamiliar files (review-seed --files) before reading/editing them
+    define-convention/            # turn a not-yet-migrated pattern into a tracked convention (interview + dry-run debt)
     move-to-done/               # archive PLAN เข้า .fapony/done/ หลัง ship
     git-commit-conventional/    # commit แยก concern + conventional message
     git-ship/                   # push branch, open PR, merge, reset branch onto base

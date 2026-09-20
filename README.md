@@ -303,13 +303,15 @@ That is the whole trick; there is no model in the middle.
 
 ### Skills
 
-fapony ships five portable skills, each as `skill/<name>/SKILL.md` — the layout Claude
+fapony ships seven portable skills, each as `skill/<name>/SKILL.md` — the layout Claude
 Code expects, so a client can symlink the directory rather than copy the file:
 
 | Skill | Purpose | Trigger |
 |-------|---------|---------|
 | `skill/plan-with-pony/` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-pony` |
 | `skill/review-pony/` | Review as verification, wired to fapony: scope facts before (`review-seed`), verdict after | `/review-pony` |
+| `skill/lookup-before-edit/` | Look up unfamiliar files (`review-seed --files` + mem + debt) before reading/editing them | `/lookup-before-edit` |
+| `skill/define-convention/` | Turn a not-yet-migrated pattern into a tracked convention (interview + dry-run `debt`) | `/define-convention` |
 | `skill/move-to-done/` | Archive a shipped PLAN into .fapony/done/ | `/move-to-done` |
 | `skill/git-commit-conventional/` | Commit split by concern + conventional message | `/git-commit` |
 | `skill/git-ship/` | Push branch, open PR with drafted title/body, merge, reset branch onto base | `/ship`, `/pr` |
