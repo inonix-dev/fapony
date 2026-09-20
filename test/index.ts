@@ -16,6 +16,7 @@ import {
   testAnalyzeIsTestFile,
   testAnalyzeSkipsNestedCheckouts,
   testAnalyzeSkipsUnresolvableAndBroken,
+  testGraphCacheInProcessInvalidation,
   testGraphCacheWriteThroughInvalidateFallback,
 } from "./analyze.test.js";
 import {
@@ -623,6 +624,7 @@ export async function cmdTest(): Promise<void> {
   testAnalyzeIsTestFile();
   testAnalyzeBarrelHidesTests();
   testAnalyzeSkipsNestedCheckouts();
+  testGraphCacheInProcessInvalidation();
   testGraphCacheWriteThroughInvalidateFallback();
   testMapExtractExports();
   testMapExtractExportsParseError();

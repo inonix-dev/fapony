@@ -373,7 +373,7 @@ interface SerializedGraph {
   barrels: string[];
 }
 
-let _graphCache: { dir: string; graph: ImportGraph } | null = null;
+let _graphCache: { dir: string; fp: string; graph: ImportGraph } | null = null;
 
 /** Drop the in-process graph cache (tests simulate a fresh hook process). */
 export function resetGraphCache(): void {
@@ -450,11 +450,7 @@ function readCachedGraph(path: string, fp: string): ImportGraph | null {
   }
 }
 
-function writeCachedGraph(
-  absDir: string,
-  path: string,
-  graph: ImportGraph,
-): void {
+function writeCachedGraph(path: string, graph: ImportGraph, fp: string): void {
   try {
     if (!existsSync(join(faponyDir(), GRAPH_CACHE_DIR))) {
       mkdirSync(join(faponyDir(), GRAPH_CACHE_DIR), { recursive: true });
@@ -462,11 +458,7 @@ function writeCachedGraph(
     // pid-suffixed temp + rename: a reader never sees a half-written file even
     // when two hook processes race.
     const tmp = `${path}.${process.pid}.tmp`;
-    writeFileSync(
-      tmp,
-      JSON.stringify(serializeGraph(graph, graphFingerprint(absDir))),
-      "utf-8",
-    );
+    writeFileSync(tmp, JSON.stringify(serializeGraph(graph, fp)), "utf-8");
     renameSync(tmp, path);
   } catch {
     // best-effort — a cache that cannot be written must not break the caller
@@ -475,18 +467,24 @@ function writeCachedGraph(
 
 export function buildGraphCached(dir: string): ImportGraph {
   const abs = resolve(dir);
-  if (_graphCache?.dir === abs) return _graphCache.graph;
+  // One walk per call: the fingerprint doubles as the in-process validity
+  // check, so a same-process second call after an edit rebuilds instead of
+  // serving the stale graph. A drift between this fp and the built graph
+  // self-heals — the next call recomputes and rebuilds again.
+  const fp = graphFingerprint(abs);
+  if (_graphCache?.dir === abs && _graphCache.fp === fp)
+    return _graphCache.graph;
   const path = graphCachePath(abs);
   if (existsSync(path)) {
-    const cached = readCachedGraph(path, graphFingerprint(abs));
+    const cached = readCachedGraph(path, fp);
     if (cached) {
-      _graphCache = { dir: abs, graph: cached };
+      _graphCache = { dir: abs, fp, graph: cached };
       return cached;
     }
   }
   const graph = buildGraph(abs);
-  _graphCache = { dir: abs, graph };
-  writeCachedGraph(abs, path, graph);
+  _graphCache = { dir: abs, fp, graph };
+  writeCachedGraph(path, graph, fp);
   return graph;
 }
 

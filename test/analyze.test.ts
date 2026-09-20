@@ -372,3 +372,43 @@ export function testGraphCacheWriteThroughInvalidateFallback(): void {
     "  ✓ graph cache: write-through, read, invalidate, corrupt fallback",
   );
 }
+
+// Same-process calls must not serve a stale graph: the in-process hit is
+// revalidated against the fingerprint, so an edit between two calls rebuilds
+// even without resetGraphCache() (which only simulates a fresh process).
+export function testGraphCacheInProcessInvalidation(): void {
+  const state = mkdtempSync(join(tmpdir(), "fapony-graphcache-inproc-"));
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = state;
+  try {
+    withFixture(
+      {
+        "hub.ts": "export const x = 1;\n",
+        "a.ts": 'import { x } from "./hub.js";\nconsole.log(x);\n',
+      },
+      (dir) => {
+        resetGraphCache();
+        assert.equal(
+          buildGraphCached(dir).dependents.get("hub.ts")?.size,
+          1,
+          "a.ts imports hub",
+        );
+        writeFileSync(
+          join(dir, "b.ts"),
+          'import { x } from "./hub.js";\nconsole.log(x);\n',
+        );
+        assert.equal(
+          buildGraphCached(dir).dependents.get("hub.ts")?.size,
+          2,
+          "a same-process call after adding an importer rebuilds",
+        );
+        resetGraphCache();
+      },
+    );
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
+    rmSync(state, { recursive: true, force: true });
+  }
+  console.log("  ✓ graph cache: same-process call invalidates on edit");
+}
