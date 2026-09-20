@@ -733,6 +733,13 @@ export function testReadHintPluginSource(): void {
     src.includes("readContextData"),
     "must also wire debt/mem context, matching Claude's cmdHookReadHint",
   );
+  // The fire-log must resolve a relative path against `directory` (the cwd the
+  // hook was handed), not the worktree — a subdir launch must still attribute
+  // the row instead of logging file:null.
+  assert.ok(
+    src.includes("pjoin(directory, filePath)"),
+    "fire-log joins against directory, not worktree",
+  );
   console.log(
     "  ✓ read hint opencode plugin imports shared logic, annotate-only",
   );
@@ -1058,6 +1065,20 @@ export function testEditHintPluginSource(): void {
   assert.ok(
     src.includes('surface: "edit"'),
     "must log through the edit fire surface",
+  );
+  // Fire-log resolves a relative path against `directory`, not worktree, so a
+  // subdir launch attributes the row instead of file:null.
+  assert.ok(
+    src.includes("pjoin(directory, filePath)"),
+    "fire-log joins against directory, not worktree",
+  );
+  // The non-string output guard must run before editHintFor, or a hint that
+  // cannot surface still spends the per-session dedupe row and logs a fire.
+  const guard = src.indexOf('typeof output.output !== "string"');
+  const call = src.indexOf("editHintFor({");
+  assert.ok(
+    guard >= 0 && call >= 0 && guard < call,
+    "output guard must precede the editHintFor call",
   );
   console.log(
     "  ✓ edit hint opencode plugin imports shared logic, annotate-only",

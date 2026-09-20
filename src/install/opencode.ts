@@ -231,7 +231,7 @@ export const FaponyReadHint = async ({ directory }) => {
               const { relative } = require("node:path");
               const { join: pjoin } = require("node:path");
               const wt = ctx.worktree;
-              const abs = realpathSync(filePath.startsWith("/") ? filePath : pjoin(wt, filePath));
+              const abs = realpathSync(filePath.startsWith("/") ? filePath : pjoin(directory, filePath));
               const r = relative(wt, abs).split("\\\\").join("/");
               return r.startsWith("..") ? null : r;
             } catch { return null; }
@@ -342,19 +342,21 @@ export const FaponyEditHint = async ({ directory }) => {
     "tool.execute.after": async (input, output) => {
       try {
         if (input.tool !== "edit" && input.tool !== "write") return;
+        // The only channel that reaches the agent is output.output; if it is
+        // not a string the hint cannot surface, so bail before editHintFor
+        // spends the per-session dedupe row or logs a fire that never showed.
+        if (typeof output.output !== "string") return;
         const filePath = input.args?.filePath;
         const hint = editHintFor({
           filePath,
           cwd: directory,
           session: input.sessionID,
         });
-        if (hint && typeof output.output === "string") {
-          output.output = output.output + "\\n" + hint;
-        }
 
         // --- hint-fire log (PLAN-edit-importer-hint, opencode parity) ---
         // After output — best-effort, never block the hint.
         if (hint) {
+          output.output = output.output + "\\n" + hint;
           try {
             const { spawnSync } = require("node:child_process");
             const git = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: directory, encoding: "utf-8" });
@@ -363,7 +365,7 @@ export const FaponyEditHint = async ({ directory }) => {
               const rel = typeof filePath === "string" ? (() => {
                 try {
                   const { relative, join: pjoin } = require("node:path");
-                  const abs = require("node:fs").realpathSync(filePath.startsWith("/") ? filePath : pjoin(worktree, filePath));
+                  const abs = require("node:fs").realpathSync(filePath.startsWith("/") ? filePath : pjoin(directory, filePath));
                   const r = relative(worktree, abs).split("\\\\").join("/");
                   return r.startsWith("..") ? null : r;
                 } catch { return null; }
