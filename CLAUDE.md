@@ -64,7 +64,7 @@ verified"* · *"Plan is entirely stale"* · ฉะนั้น mem ที่ม�
 
 | | **core — mem + debt** | **usage — วันแรก** | **ledger — แช่แข็ง** |
 | --- | --- | --- | --- |
-| โค้ด | `src/memory.ts` `src/debt.ts` `src/lint-baseline.ts` `src/mcp/tools/mem.ts` `src/init-mem.ts` | `src/session/` `src/usage/` `src/digest/` | `src/db/` `src/stats/` `src/report/` `src/context/` `src/mcp/tools/verdict.ts` |
+| โค้ด | `src/memory.ts` `src/debt/` `src/lint-baseline.ts` `src/mcp/tools/mem.ts` `src/init-mem.ts` | `src/session/` `src/usage/` `src/digest/` | `src/db/` `src/stats/` `src/report/` `src/context/` `src/mcp/tools/verdict.ts` |
 | เขียนอะไร | `.jsonl` ในรีโปที่วัด (ของทีม) | อ่านอย่างเดียว (cache) | 1 graded row ลง `~/.config/fapony/state.db` |
 | สถานะ | ที่ที่งานใหม่ไปลง | ที่มาของ day-1 value | **ไม่รับฟีเจอร์ใหม่** — แก้ได้เฉพาะบั๊ก |
 | ถ้าลบทิ้ง | ไม่เหลือ fapony | คนติดตั้งเห็น N=0 แล้วปิดทิ้ง | core ยังตอบได้ทุกข้อ |
@@ -101,7 +101,7 @@ agent ที่เปิดใน `cl-fapony/` โหลดไฟล์เดี
 fapony.ts       CLI dispatch
 src/mem/        fapony mem <add|close|find|kickoff|now|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
 src/memory.ts   mem log reader/resolver (.fapony/.memory)
-src/debt.ts     fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย" (live, ไม่ persist)
+src/debt/       fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย" (live, ไม่ persist)
 src/lint-baseline.ts  แยก "แดงอยู่ก่อนแล้ว" ออกจาก "ฉันทำให้แดง"
 src/conventions-seed.ts  fill-signal ตอน init — wrapper detector อ่าน snapshot ไม่แตะ history
 src/session/    passive usage reader ราย client + activeSession

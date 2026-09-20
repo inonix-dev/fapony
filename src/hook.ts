@@ -29,7 +29,7 @@ import { homedir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { buildGraphCached, collectSourceFiles, SCAN_EXTS } from "./analyze.js";
 import { openDb } from "./db/index.js";
-import { debtForFile, loadConventions } from "./debt.js";
+import { debtForFile, loadConventions } from "./debt/index.js";
 import { readMemLog } from "./memory.js";
 
 // --- Hint-fire log (PLAN-feedback-surface chunk 1) ---
