@@ -110,7 +110,7 @@ function writeStatuslineCache(toolResult: ToolResult): void {
 
 const MCP_PROTOCOL_VERSION = "2025-03-26";
 const SERVER_NAME = "fapony-handcheck";
-const SERVER_VERSION = "0.2.0";
+const SERVER_VERSION = "0.2.1";
 
 // --- JSON-RPC dispatch ---
 
