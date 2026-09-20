@@ -392,15 +392,19 @@ export function graphCachePath(dir: string): string {
 }
 
 // The graph changes only when the set of source files or their bytes change —
-// mtime/size catch both without reading any file.
+// size/mtime/ctime catch that without reading any file. ctime rides the same
+// stat call for free and cannot be forged like mtime can (only the system
+// moves it), so an mtime-preserving rewrite still invalidates.
 function graphFingerprint(absDir: string): string {
   const parts: string[] = [];
   for (const rel of collectSourceFiles(absDir)) {
     try {
       const st = statSync(join(absDir, rel));
-      parts.push(`${rel}\u0000${st.size}\u0000${st.mtimeMs}`);
+      parts.push(
+        `${rel}\u0000${st.size}\u0000${st.mtimeMs}\u0000${st.ctimeMs}`,
+      );
     } catch {
-      parts.push(`${rel}\u0000?\u0000?`);
+      parts.push(`${rel}\u0000?\u0000?\u0000?`);
     }
   }
   return Bun.hash(parts.join("\n")).toString(36);
