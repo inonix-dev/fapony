@@ -135,6 +135,7 @@ import {
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
   testDecideStopMemNeverBlocks,
+  testDecideStopMessageIsRepoNeutral,
   testDecideStopReportsCommitsAndMem,
   testEditHintClaudeOutputShape,
   testEditHintDedupesPerSessionPerFile,
@@ -670,6 +671,7 @@ export async function cmdTest(): Promise<void> {
   testDecideStopBlocksUngradedCommits();
   testDecideStopReportsCommitsAndMem();
   testDecideStopMemNeverBlocks();
+  testDecideStopMessageIsRepoNeutral();
   testReadHintAnnotatesLargeFullRead();
   testReadHintSkipsCheapReads();
   testReadHintNeedsGitRepo();

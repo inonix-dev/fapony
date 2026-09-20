@@ -113,6 +113,19 @@ export function testDecideStopReportsCommitsAndMem(): void {
   assert.ok(noMem?.includes("no rows at all"));
 }
 
+export function testDecideStopMessageIsRepoNeutral(): void {
+  // The block message installs globally and fires in every repo — a repo-specific
+  // command in it teaches agents the message is untrustworthy, which erodes the
+  // verdict enforcement. Twice bitten (setup.ts, hook.ts); the test remembers.
+  const reason = decideStop(base);
+  assert(reason);
+  assert.doesNotMatch(
+    reason,
+    /bun fapony\.ts|fapony lint-baseline|npm (run|test|exec)|pnpm |npx |yarn /,
+    "block message must not name repo-specific commands",
+  );
+}
+
 export function testDecideStopMemNeverBlocks(): void {
   // กฎ 7 — mem status is data: the block condition stays verdict-only,
   // so a fresh mem row changes the message, not the decision.
