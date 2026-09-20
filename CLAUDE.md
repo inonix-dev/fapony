@@ -473,9 +473,11 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 
 **ที่ถอดออกไปแล้วและห้ามเอากลับ:** `plan_list` (2026-09-20 — `fapony mem kickoff` ตอบ
 "เหลืออะไร" จาก plan file ชุดเดียวกัน · ลบ `src/mcp/tools/plans.ts` + `getLastVerdictByPlan`
-ทิ้งด้วยเพราะไม่มี caller เหลือ ตามกฎ 12 · frontmatter `status`/`blocked_by`/`blocks`/
-`superseded_by` **ไม่มีเครื่องอ่านแล้ว** เหลือเป็นบันทึกให้คนอ่าน — ถ้าจะให้กลับมาถูกอ่าน
-ต้องเป็น CLI ไม่ใช่ MCP) · `fapony_stats` (CLI `fapony stats` ตอบเหมือนกันทุกอย่าง และ
+ทิ้งด้วยเพราะไม่มี caller เหลือ ตามกฎ 12) · **สิ่งที่หายไปจริงวัดแล้วว่าเล็ก** (กฎ 2): ใน plan
+ทั้งหมด 42 ไฟล์ (plan/ 3 + done/ 39) `blocked_by` ถูกใช้ **0 ไฟล์ all-time** · `blocks` 3 ·
+`superseded_by` 2 · `status` 18 — คำถาม "อะไร blocked" ที่ plan_list ถูกสร้างมาตอบ ไม่เคยมี
+ข้อมูลให้ตอบ และ plan ที่ยังไม่ ship มี 3 ไฟล์ซึ่ง `ls` ก็พอ · ถ้าวันหนึ่งอยากได้ view นั้นจริง
+**ให้ฟื้นเป็น CLI `fapony plan-list`** (engine อยู่ใน git ที่ 46e0dac) ไม่ใช่เอากลับเข้า MCP · `fapony_stats` (CLI `fapony stats` ตอบเหมือนกันทุกอย่าง และ
 description ของมันขายว่า "บอกได้ว่าควรจ่ายให้ model ไหน" ซึ่งขัด Positioning ข้อ 2) ·
 `project_health_context` (caller ศูนย์ — engine `src/context/projectHealth.ts` ยังอยู่ ใช้จาก CLI ได้) ·
 `verification_report` / `handoff_check` / `handoff_collect` (ถอดไปก่อนหน้านี้ด้วยเหตุผลเดียวกัน) ·
