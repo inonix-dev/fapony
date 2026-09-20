@@ -338,3 +338,87 @@ export function testInstallOpencodeCommitHintDryRun(): void {
     console.log("  ✓ install opencode commit hint → dry-run no write");
   });
 }
+
+export function testInstallOpencodeEditHintPlugin(): void {
+  withTempHome((home) => {
+    const pluginPath = join(
+      home,
+      ".config",
+      "opencode",
+      "plugins",
+      "fapony-edit-hint.ts",
+    );
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.ok(
+      existsSync(pluginPath),
+      "edit hint plugin file should be written",
+    );
+    const src = readFileSync(pluginPath, "utf-8");
+    assert.ok(src.includes("editHintFor"), "must import the shared logic");
+    assert.ok(src.includes('input.tool !== "edit"'), "must hook the edit tool");
+    assert.ok(
+      src.includes('input.tool !== "write"'),
+      "must hook the write tool",
+    );
+    assert.ok(src.includes("output.output"), "must mutate the tool output");
+    assert.ok(err.includes("edit hint"), `got: ${err}`);
+
+    // Idempotent — and the already-configured early-return path still runs it.
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(pluginPath, "utf-8");
+    assert.equal(src, after, "second install must not rewrite the plugin");
+  });
+  console.log(
+    "  ✓ install opencode edit hint → plugin written once, both paths",
+  );
+}
+
+export function testInstallOpencodeEditHintForeignFileUntouched(): void {
+  withTempHome((home) => {
+    const pluginsDir = join(home, ".config", "opencode", "plugins");
+    mkdirSync(pluginsDir, { recursive: true });
+    const pluginPath = join(pluginsDir, "fapony-edit-hint.ts");
+    writeFileSync(pluginPath, "// someone else's plugin\n");
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.equal(
+      readFileSync(pluginPath, "utf-8"),
+      "// someone else's plugin\n",
+      "a foreign file at our name must never be overwritten",
+    );
+  });
+  console.log("  ✓ install opencode edit hint → foreign plugin untouched");
+}
+
+export function testInstallOpencodeEditHintDryRun(): void {
+  withTempHome((home) => {
+    const pluginPath = join(
+      home,
+      ".config",
+      "opencode",
+      "plugins",
+      "fapony-edit-hint.ts",
+    );
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(true, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.ok(
+      !existsSync(pluginPath),
+      "dry-run must not write the edit hint plugin",
+    );
+    console.log("  ✓ install opencode edit hint → dry-run no write");
+  });
+}

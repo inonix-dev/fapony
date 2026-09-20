@@ -137,6 +137,7 @@ import {
   testEditHintFiresWithImporters,
   testEditHintFiresWithoutSession,
   testEditHintNeedsGitRepo,
+  testEditHintPluginSource,
   testEditHintSilentZeroImporters,
   testEditHintSkipsNonSourceAndMissing,
   testReadContextBasenameAmbiguityStaysSilent,
@@ -219,6 +220,9 @@ import {
   testInstallOpencodeCommitHintIdempotent,
   testInstallOpencodeCommitHintPlugin,
   testInstallOpencodeDryRunNoWrite,
+  testInstallOpencodeEditHintDryRun,
+  testInstallOpencodeEditHintForeignFileUntouched,
+  testInstallOpencodeEditHintPlugin,
   testInstallOpencodeMcpCommandIsAbsolute,
   testInstallOpencodeNewFile,
   testInstallOpencodeParseErrorFails,
@@ -672,6 +676,7 @@ export async function cmdTest(): Promise<void> {
   testEditHintDedupesPerSessionPerFile();
   testEditHintFiresWithoutSession();
   testEditHintClaudeOutputShape();
+  testEditHintPluginSource();
   testCommitHintMinCommitsConstant();
   testCommitHintNullForNonCommit();
   testCommitHintNullOutsideGitRepo();
@@ -868,6 +873,9 @@ export async function cmdTest(): Promise<void> {
   testInstallOpencodeCommitHintIdempotent();
   testInstallOpencodeCommitHintForeignFileUntouched();
   testInstallOpencodeCommitHintDryRun();
+  testInstallOpencodeEditHintPlugin();
+  testInstallOpencodeEditHintForeignFileUntouched();
+  testInstallOpencodeEditHintDryRun();
   testInstallOpencodeAlreadyConfiguredNoOp();
   testInstallOpencodeAlreadyConfiguredLinksSkills();
   testInstallOpencodeDryRunNoWrite();

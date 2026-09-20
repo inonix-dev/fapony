@@ -31,6 +31,7 @@ import {
 } from "../src/hook.js";
 import {
   commitHintPluginSource,
+  editHintPluginSource,
   readHintPluginSource,
 } from "../src/install/opencode.js";
 
@@ -1033,6 +1034,33 @@ export function testCommitHintPluginSource(): void {
   );
   console.log(
     "  ✓ commit hint opencode plugin imports shared logic, annotate-only",
+  );
+}
+
+export function testEditHintPluginSource(): void {
+  // The generated OpenCode plugin must import the shared editHintFor logic
+  // (no second implementation), target the edit + write tools, mutate output
+  // only, and log through the "edit" fire surface.
+  const src = editHintPluginSource("/install/root");
+  assert.ok(
+    src.includes("/install/root/src/hook.ts"),
+    "bakes the install root",
+  );
+  assert.ok(src.includes('input.tool !== "edit"'), "guards the edit tool");
+  assert.ok(src.includes('input.tool !== "write"'), "guards the write tool");
+  assert.ok(!src.includes("apply_patch"), "apply_patch stays out of scope");
+  assert.ok(src.includes("output.output"), "mutates the tool output");
+  assert.ok(!src.includes("throw"), "must never throw into the tool call");
+  assert.ok(
+    src.includes("editHintFor"),
+    "must import editHintFor from the shared module",
+  );
+  assert.ok(
+    src.includes('surface: "edit"'),
+    "must log through the edit fire surface",
+  );
+  console.log(
+    "  ✓ edit hint opencode plugin imports shared logic, annotate-only",
   );
 }
 

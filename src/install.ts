@@ -34,6 +34,7 @@ export { detectClients } from "./install/detect.js";
 export {
   cmdInstallOpencode,
   commitHintPluginSource,
+  editHintPluginSource,
   readHintPluginSource,
 } from "./install/opencode.js";
 export {
