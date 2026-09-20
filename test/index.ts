@@ -130,6 +130,12 @@ import {
   testDecideStopBlocksUngradedCommits,
   testDecideStopMemNeverBlocks,
   testDecideStopReportsCommitsAndMem,
+  testEditHintDedupesPerSessionPerFile,
+  testEditHintFiresWithImporters,
+  testEditHintFiresWithoutSession,
+  testEditHintNeedsGitRepo,
+  testEditHintSilentZeroImporters,
+  testEditHintSkipsNonSourceAndMissing,
   testReadContextBasenameAmbiguityStaysSilent,
   testReadContextCombinedCapAndOutsideRepo,
   testReadContextMemRowsByFilesAndPath,
@@ -652,6 +658,12 @@ export async function cmdTest(): Promise<void> {
   testRereadHintFiresOnUnchangedRepeat();
   testRereadHintSilentAfterEdit();
   testRereadHintKillSwitch();
+  testEditHintFiresWithImporters();
+  testEditHintSilentZeroImporters();
+  testEditHintSkipsNonSourceAndMissing();
+  testEditHintNeedsGitRepo();
+  testEditHintDedupesPerSessionPerFile();
+  testEditHintFiresWithoutSession();
   testCommitHintMinCommitsConstant();
   testCommitHintNullForNonCommit();
   testCommitHintNullOutsideGitRepo();

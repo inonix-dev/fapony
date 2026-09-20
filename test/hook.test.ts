@@ -14,6 +14,8 @@ import {
   computeHintImpact,
   cursorTranscriptPath,
   decideStop,
+  editHintFor,
+  editTrackPath,
   isCursorPayload,
   normalizeStopInput,
   READ_HINT_MIN_BYTES,
@@ -415,6 +417,181 @@ export function testRereadHintKillSwitch(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ re-read hint kill switch silences and stops tracking");
+}
+
+// --- Edit hint (importer count + once-per-session dedupe) ---
+
+function editFixture(dir: string): {
+  lib: string;
+  top: string;
+  lone: string;
+} {
+  const lib = join(dir, "lib.ts");
+  writeFileSync(lib, "export const value = 1;\n");
+  writeFileSync(
+    join(dir, "mid.ts"),
+    'import { value } from "./lib.js";\nimport { top } from "./top.js";\nconsole.log(value, top);\n',
+  );
+  writeFileSync(
+    join(dir, "top.ts"),
+    'import { value } from "./lib.js";\nexport const top = value + 1;\n',
+  );
+  const lone = join(dir, "lone.ts");
+  writeFileSync(lone, "export const alone = 1;\n");
+  // lib ← mid, top (2 importers) · top ← mid (1 importer) · mid, lone ← nobody
+  return { lib, top: join(dir, "top.ts"), lone };
+}
+
+/** Isolated FAPONY_STATE_DIR for the edit-track log; restored after. */
+function withEditState(fn: () => void): void {
+  const state = mkdtempSync(join(tmpdir(), "fapony-eh-"));
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = state;
+  try {
+    fn();
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
+    rmSync(state, { recursive: true, force: true });
+  }
+}
+
+export function testEditHintFiresWithImporters(): void {
+  withTempRepo((dir) => {
+    withEditState(() => {
+      const { lib } = editFixture(dir);
+      const hint = editHintFor({
+        filePath: lib,
+        cwd: dir,
+        session: "sess-eh-1",
+      });
+      assert.ok(hint, "file with importers must get a hint");
+      assert.match(hint ?? "", /lib\.ts has 2 importers/);
+      assert.match(hint ?? "", /review-seed --files lib\.ts/);
+      assert.match(hint ?? "", /--callers/);
+    });
+  });
+  console.log(
+    "  ✓ edit hint names the importer count with review-seed pointer",
+  );
+}
+
+export function testEditHintSilentZeroImporters(): void {
+  withTempRepo((dir) => {
+    withEditState(() => {
+      const { lone } = editFixture(dir);
+      const session = "sess-eh-zero";
+      assert.equal(
+        editHintFor({ filePath: lone, cwd: dir, session }),
+        null,
+        "file nobody imports must stay silent",
+      );
+      assert.ok(
+        !existsSync(editTrackPath(session)),
+        "zero-importer file must not write the track log",
+      );
+    });
+  });
+  console.log("  ✓ edit hint stays silent with 0 importers, writes nothing");
+}
+
+export function testEditHintSkipsNonSourceAndMissing(): void {
+  withTempRepo((dir) => {
+    withEditState(() => {
+      editFixture(dir);
+      const md = join(dir, "NOTES.md");
+      writeFileSync(md, "x".repeat(READ_HINT_MIN_BYTES * 2));
+      assert.equal(
+        editHintFor({ filePath: md, cwd: dir, session: "s" }),
+        null,
+        "non-source ext must stay silent",
+      );
+      assert.equal(
+        editHintFor({ filePath: join(dir, "new.ts"), cwd: dir, session: "s" }),
+        null,
+        "new/unsaved file must stay silent",
+      );
+      assert.equal(editHintFor({ filePath: null, cwd: dir }), null);
+      assert.equal(editHintFor({ filePath: "", cwd: dir }), null);
+      // a source file outside the worktree resolves to null, not a guess
+      const outside = mkdtempSync(join(tmpdir(), "fapony-eh-out-"));
+      try {
+        const op = join(outside, "o.ts");
+        writeFileSync(op, "export const o = 1;\n");
+        assert.equal(
+          editHintFor({ filePath: op, cwd: dir, session: "s" }),
+          null,
+        );
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
+    });
+  });
+  console.log("  ✓ edit hint skips non-source, new, missing, outside files");
+}
+
+export function testEditHintNeedsGitRepo(): void {
+  // Outside a repo the hint would point at a command that cannot run.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-eh-norepo-"));
+  try {
+    const p = join(dir, "a.ts");
+    writeFileSync(p, "export const x = 1;\n");
+    withEditState(() => {
+      assert.equal(editHintFor({ filePath: p, cwd: dir, session: "s" }), null);
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ edit hint stays silent outside a git repo");
+}
+
+export function testEditHintDedupesPerSessionPerFile(): void {
+  withTempRepo((dir) => {
+    withEditState(() => {
+      const { lib, top } = editFixture(dir);
+      const s1 = "sess-eh-a";
+      const s2 = "sess-eh-b";
+      assert.ok(
+        editHintFor({ filePath: lib, cwd: dir, session: s1 }),
+        "first edit fires",
+      );
+      assert.equal(
+        editHintFor({ filePath: lib, cwd: dir, session: s1 }),
+        null,
+        "repeat edit of the same file in the same session stays silent",
+      );
+      assert.ok(
+        editHintFor({ filePath: lib, cwd: dir, session: s2 }),
+        "no cross-session leak",
+      );
+      assert.ok(
+        editHintFor({ filePath: top, cwd: dir, session: s1 }),
+        "dedupe is per file, not per session",
+      );
+      assert.equal(
+        editHintFor({ filePath: top, cwd: dir, session: s1 }),
+        null,
+        "second file also dedupes on repeat",
+      );
+    });
+  });
+  console.log("  ✓ edit hint fires once per (session, file)");
+}
+
+export function testEditHintFiresWithoutSession(): void {
+  // No session identity = nothing to dedupe against, but the importer fact
+  // still holds — the hint fires rather than guessing silence.
+  withTempRepo((dir) => {
+    withEditState(() => {
+      const { lib } = editFixture(dir);
+      assert.ok(editHintFor({ filePath: lib, cwd: dir }), "fires");
+      assert.ok(
+        editHintFor({ filePath: lib, cwd: dir }),
+        "fires again with no session to dedupe against",
+      );
+    });
+  });
+  console.log("  ✓ edit hint fires (no dedupe) when the session is unknown");
 }
 
 export function testReadHintClaudeOutputShape(): void {
