@@ -13,7 +13,7 @@ import {
   rmSync,
 } from "node:fs";
 import { join } from "node:path";
-import { loadConfig } from "./db/index.js";
+import { DEFAULT_MEM_DIR, FAPONY_DIR, loadConfig } from "./db/index.js";
 
 export function copyDir(src: string, dest: string): string[] {
   mkdirSync(dest, { recursive: true });
@@ -62,8 +62,8 @@ export function cmdInitMem(args: string[]): void {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         if (
           entry.isDirectory() &&
-          !entry.name.startsWith(".") &&
-          entry.name !== "node_modules"
+          entry.name !== "node_modules" &&
+          (!entry.name.startsWith(".") || entry.name === FAPONY_DIR)
         ) {
           walk(join(dir, entry.name), depth + 1);
         }
@@ -95,7 +95,7 @@ export function cmdInitMem(args: string[]): void {
           `keeping ${d} — has ${logs.length} log file(s): ${logs.join(", ")}`,
         );
         console.log(
-          `  move them under ${join(d, "..", ".fapony", ".memory")}/, or re-run with --force to delete`,
+          `  move them under ${DEFAULT_MEM_DIR}/, or re-run with --force to delete`,
         );
         kept++;
         continue;
@@ -109,7 +109,7 @@ export function cmdInitMem(args: string[]): void {
     console.log(
       `\nremoved ${removed} legacy .memory/ director${removed === 1 ? "y" : "ies"}${
         kept > 0
-          ? ` · kept ${kept} with logs — move them under .fapony/.memory/, then re-run`
+          ? ` · kept ${kept} with logs — move them under ${DEFAULT_MEM_DIR}/, then re-run`
           : ""
       }`,
     );

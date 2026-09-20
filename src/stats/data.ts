@@ -1,9 +1,8 @@
 // src/stats/data.ts — StatsData shape + getStatsData()
 
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
-
-import { type Event, openDb, type Run } from "../db/index.js";
+import { type Event, openDb, PLAN_DIR, type Run } from "../db/index.js";
 import { loadConfig } from "../db/load.js";
 import { enrichGateWindows } from "../gates.js";
 import { avg, minutesBetween } from "../math.js";
@@ -89,9 +88,7 @@ function enrichGates(
 /**
  * Count un-shipped plan files in a worktree's planDir.
  *
- * Reads the *target repo's own* fapony.config.json for `paths.planDir` — the
- * central config's worktrees map is optional and usually absent, and each repo
- * picks its own plan dir (vela uses apps/vela/plan, not .fapony/plan).
+ * planDir is hardcoded to .fapony/plan — not configurable (gitignored = private).
  *
  * Returns null — never 0 — when the path isn't a readable directory, so a
  * sentinel row like "mcp-external" renders as "—" instead of claiming
@@ -99,19 +96,10 @@ function enrichGates(
  */
 export function countPendingPlans(worktree: string): number | null {
   if (!worktree.startsWith("/")) return null;
-  let planDir = ".fapony/plan";
   try {
-    const cfg = JSON.parse(
-      readFileSync(join(worktree, "fapony.config.json"), "utf8"),
-    ) as { paths?: { planDir?: unknown } };
-    if (typeof cfg.paths?.planDir === "string" && cfg.paths.planDir)
-      planDir = cfg.paths.planDir;
-  } catch {
-    // no config (or unreadable/malformed) — fall back to the scaffold default
-  }
-  try {
-    return readdirSync(join(worktree, planDir)).filter((f) => f.endsWith(".md"))
-      .length;
+    return readdirSync(join(worktree, PLAN_DIR)).filter((f) =>
+      f.endsWith(".md"),
+    ).length;
   } catch {
     return null;
   }

@@ -21,6 +21,11 @@
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { collectSourceFiles } from "./analyze.js";
+import {
+  CONVENTIONS_FILE,
+  CONVENTIONS_FILENAME,
+  FAPONY_DIR,
+} from "./db/defaults.js";
 import { openDb } from "./db/index.js";
 import { readMemLog, resolveMemDir } from "./memory.js";
 
@@ -52,13 +57,13 @@ export function resolveConventionsPath(worktree: string): string | null {
   // Conventions live in the same .fapony/ dir as the mem log — derive from
   // the resolved mem dir so both resolvers cannot drift apart.
   const memDir = resolveMemDir(worktree);
-  const base = memDir ? join(memDir, "..") : join(worktree, ".fapony");
-  const app = join(base, "conventions.json");
+  const base = memDir ? join(memDir, "..") : join(worktree, FAPONY_DIR);
+  const app = join(base, CONVENTIONS_FILENAME);
   if (existsSync(app)) return app;
   // Monorepo where the app has not scaffolded .fapony/ yet, and single repos
   // that ran `fapony init` at the root — the root file still scopes fine
   // because every `where` is repo-relative.
-  const root = join(worktree, ".fapony", "conventions.json");
+  const root = join(worktree, CONVENTIONS_FILE);
   return existsSync(root) ? root : null;
 }
 
@@ -668,7 +673,7 @@ export function worktreeOf(arg: string | undefined): string {
   const boundary = gitRoot ? real(gitRoot) : null;
   let dir = base;
   while (true) {
-    if (existsSync(join(dir, ".fapony", "conventions.json"))) return dir;
+    if (existsSync(join(dir, CONVENTIONS_FILE))) return dir;
     if (boundary && real(dir) === boundary) break;
     const parent = dirname(dir);
     if (parent === dir) break;

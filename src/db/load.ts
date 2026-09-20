@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_CONFIG } from "./defaults.js";
+import { CONFIG_FILENAME, DEFAULT_CONFIG } from "./defaults.js";
 import type { Config } from "./types.js";
 
 // XDG Base Directory convention (macOS ignores Apple's ~/Library/Application Support
@@ -20,7 +20,7 @@ function _dbPath(config?: Config): string {
 
 export function configFilePath(): string {
   if (process.env.FAPONY_CONFIG) return process.env.FAPONY_CONFIG;
-  return join(process.cwd(), "fapony.config.json");
+  return join(process.cwd(), CONFIG_FILENAME);
 }
 
 function freshDefaultConfig(): Config {

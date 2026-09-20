@@ -316,19 +316,8 @@ export function testPlanSeedOverlapScopeDedup(): void {
 
 export function testPlanSeedConfigFallback(): void {
   withFixture((dir) => {
-    // A config file that sets custom dirs must be honoured; a broken one must
-    // fall back to defaults without throwing.
-    writeFileSync(
-      join(dir, "fapony.config.json"),
-      JSON.stringify({
-        paths: { planDir: "docs/plans", specDir: "docs/specs" },
-      }),
-    );
-    withCwd(dir, () => {
-      cmdPlanSeed(["bar"]);
-      assert.ok(existsSync(join(dir, "docs", "plans", "PLAN-bar.md")));
-      assert.ok(!existsSync(join(dir, ".fapony", "plan", "PLAN-bar.md")));
-    });
+    // planDir/specDir are hardcoded — not configurable (gitignored = private).
+    // A broken config must fall back to defaults without throwing.
     writeFileSync(join(dir, "fapony.config.json"), "{broken json");
     withCwd(dir, () => {
       cmdPlanSeed(["baz"]);
@@ -336,7 +325,7 @@ export function testPlanSeedConfigFallback(): void {
     });
   });
   console.log(
-    "  ✓ plan-seed honours config planDir; broken config falls back to defaults",
+    "  ✓ plan-seed: broken config falls back to defaults (planDir is hardcoded)",
   );
 }
 

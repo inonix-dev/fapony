@@ -15,6 +15,7 @@ import {
 } from "node:fs";
 import { hostname, networkInterfaces } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
+import { CONFIG_FILENAME, DEFAULT_MEM_DIR, FAPONY_DIR } from "../db/index.js";
 import { whereMemDir } from "../memory.js";
 
 // --- types ---
@@ -174,7 +175,7 @@ export function initStore(worktree: string, overrideMemDir?: string): void {
       `two or more .fapony/.memory dirs under ${root} — refusing to guess:\n` +
       `${list}\ncd into one, set paths.memDir, or pass --mem-dir`;
   }
-  dir = resolved.dir ?? join(root, ".fapony", ".memory");
+  dir = resolved.dir ?? join(root, DEFAULT_MEM_DIR);
 
   // planBase: the .fapony dir — plan/done/conventions live here.
   // Derive from dir by going up from .fapony/.memory → .fapony
@@ -184,10 +185,11 @@ export function initStore(worktree: string, overrideMemDir?: string): void {
   app = dirname(planBase);
 
   // Read fapony.config.json
-  const configDir = planBase === `${root}/.fapony` ? root : dirname(planBase);
+  const configDir =
+    planBase === `${root}/${FAPONY_DIR}` ? root : dirname(planBase);
   const configPaths = ((): Record<string, string> => {
     try {
-      const raw = readFileSync(`${configDir}/fapony.config.json`, "utf8");
+      const raw = readFileSync(`${configDir}/${CONFIG_FILENAME}`, "utf8");
       return (JSON.parse(raw)?.paths ?? {}) as Record<string, string>;
     } catch {
       return {};
@@ -198,7 +200,7 @@ export function initStore(worktree: string, overrideMemDir?: string): void {
       ? join(configDir, configPaths[key])
       : null;
 
-  planDir = fromConfig("planDir") ?? `${planBase}/plan`;
+  planDir = `${planBase}/plan`;
 
   // done/ sits beside plan/ (same depth, relative links survive)
   doneDir =
