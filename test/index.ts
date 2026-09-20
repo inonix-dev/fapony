@@ -119,6 +119,10 @@ import {
   testGateOnceUncertain,
 } from "./gate.test.js";
 import {
+  testCodexNormalizeMapsToSameDecision,
+  testCodexPayloadDetection,
+  testCodexStopHookActiveAllows,
+  testCodexStopOutputShape,
   testCommitHintMinCommitsConstant,
   testCommitHintNullForNonCommit,
   testCommitHintNullOutsideGitRepo,
@@ -185,8 +189,16 @@ import {
   testCmdInstallDispatchesCodex,
   testInstallCodexAlreadyConfiguredNoOp,
   testInstallCodexAppendsEntry,
+  testInstallCodexCreatesHooksJson,
+  testInstallCodexDryRunHooksNoWrite,
   testInstallCodexDryRunNoWrite,
+  testInstallCodexFindHooksJson,
+  testInstallCodexHooksAlreadyConfiguredNoOp,
+  testInstallCodexHooksMalformedSkipsGracefully,
+  testInstallCodexHooksMergePreservesForeign,
+  testInstallCodexLinksSkills,
   testInstallCodexNoConfigFails,
+  testInstallCodexSkillsConflictUntouched,
 } from "./install/codex.test.js";
 import {
   testCmdInstallDispatchesCursor,
@@ -691,6 +703,10 @@ export async function cmdTest(): Promise<void> {
   testStopPayloadsMapToSameDecision();
   testCursorPayloadEdges();
   testStopOutputShapesPerClient();
+  testCodexPayloadDetection();
+  testCodexNormalizeMapsToSameDecision();
+  testCodexStopHookActiveAllows();
+  testCodexStopOutputShape();
   testUtcStampMatchesSqliteFormat();
   testComputeHintImpact();
   testComputeHintImpactNoLog();
@@ -886,6 +902,14 @@ export async function cmdTest(): Promise<void> {
   testInstallCodexAlreadyConfiguredNoOp();
   testInstallCodexDryRunNoWrite();
   testCmdInstallDispatchesCodex();
+  testInstallCodexCreatesHooksJson();
+  testInstallCodexHooksMergePreservesForeign();
+  testInstallCodexHooksAlreadyConfiguredNoOp();
+  testInstallCodexHooksMalformedSkipsGracefully();
+  testInstallCodexDryRunHooksNoWrite();
+  testInstallCodexLinksSkills();
+  testInstallCodexSkillsConflictUntouched();
+  testInstallCodexFindHooksJson();
   testInstallCursorNoDirFails();
   testInstallCursorFreshWritesMcpAndHooks();
   testInstallCursorMergesStopHookKeepsOthers();

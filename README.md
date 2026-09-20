@@ -88,8 +88,8 @@ Stated up front, because the gap between these two things is where most tooling 
   facts and that uncertainty was declared — not that the code works. Those are different
   guarantees and fapony only offers the first.
 - **Almost nothing blocks.** No CI failure, no gate on your own commands. The one exception is the
-  Stop hook, once per turn when a commit ends ungraded; the read hint only annotates. Skip the
-  install of both and you are back to exactly the workflow you had.
+  Stop hook, once per turn when a commit ends ungraded; the read/edit/commit hints only annotate.
+  Skip the install of all of them and you are back to exactly the workflow you had.
 - **Model attribution is inferred, not declared.** A gate is attributed to whichever client
   session was live in that worktree at that moment. When one model writes the code and another
   reviews and files the verdict, the grade lands on the reviewer. Reports label it `inferred`;
@@ -157,6 +157,7 @@ flowchart LR
     B[OpenCode] --> F
     C[ZCode] --> F
     D[Codex] --> F
+    E[Cursor] --> F
     F --> G[git facts + session logs]
     G --> S[stats / usage]
     G --> V[verification report]
@@ -174,6 +175,31 @@ losing a single number.
 | Needs | an MCP client | nothing — or your own tooling instead |
 | Writes | one graded row per unit of work | nothing |
 | Skip it and | there is no fapony | fapony still answers every question |
+
+### What runs where
+
+`fapony install` wires five clients (Claude Code, OpenCode, Cursor, ZCode, Codex). MCP is the only
+piece all of them get — the hooks and in-process hints are per-client, and the read/edit hints
+arrive **before** the call on Claude Code but **after** it on OpenCode, whose only annotate channel
+is `tool.execute.after`. Nothing here is required: skip the hooks and every MCP tool still answers.
+
+| | Claude Code | OpenCode | Cursor | ZCode | Codex |
+|---|---|---|---|---|---|
+| MCP tools — `mem_find` `mem_add` `fapony_usage` `verdict_submit` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Stop hook — refuse to end a turn with ungraded commits | ✅ | — | ✅ | — | ✅ after trust |
+| Read hint — big-file pointer + debt/mem lines | ✅ before | ✅ after | — | — | — |
+| Re-read hint — unchanged repeat read | ✅ before | ✅ after | — | — | — |
+| Edit hint — importer count before a shape change | ✅ before | ✅ after | — | — | — |
+| Commit hint — `git commit` → ungraded-run nudge | — | ✅ after | — | — | — |
+| Skills symlinked into `~/.claude/skills` | ✅ | ✅ | — | — | — |
+| Skills symlinked into `~/.agents/skills` | — | — | — | ✅ | ✅ |
+| `usage-scan` reads this client's session log | ✅ | ✅ | — | ✅ | ✅ |
+
+`—` means not wired, not impossible: Cursor has no PreToolUse hook, and ZCode/Codex expose no
+in-process hook surface for read/edit hints yet (Codex's `apply_patch` sends patch text, not
+resolved file paths). Codex hooks require trust via `/hooks` before they run — `fapony install`
+tells you when. The hints live on hooks rather than MCP on purpose — they must fire mid-turn
+without the agent deciding to call anything ([why](#when-to-call-what)).
 
 ## The ledger — this is the product
 
@@ -202,10 +228,13 @@ sequenceDiagram
 ```
 
 The Stop hook is the only thing fapony *blocks* — once per turn, when a commit ends ungraded.
-It never picks the grade; it cannot see whether the work held up. The Read hook only annotates:
-one factual line when a read is large enough to be cheaper as `review-seed`, or when the same
-file is read again in a session and its mtime has not moved. The read always proceeds, and
-`FAPONY_NO_REREAD_HINT=1` turns the re-read line off.
+It never picks the grade; it cannot see whether the work held up. The hints only annotate and never
+block: the **Read** hook adds one factual line when a read is large enough to be cheaper as
+`review-seed`, or when the same file is read again in a session and its mtime has not moved
+(`FAPONY_NO_REREAD_HINT=1` turns the re-read line off); the **Edit** hook names a file's importer
+count, once per session, before you change its shape; OpenCode's **commit** hook nudges after a
+`git commit` that left the run ungraded. Claude Code receives read/edit *before* the call, OpenCode
+*after* it — [What runs where](#what-runs-where) has the full client matrix.
 
 ### The 4 tools
 
@@ -339,8 +368,9 @@ the claim on faith.
 
 `fapony install --platform claude` (or `opencode`) symlinks these directories into
 `~/.claude/skills` rather than copying them, so `fapony update` refreshes every client
-at once. A destination that already exists and isn't a fapony link is reported and left
-alone — replace it by hand if you want fapony's version.
+at once. ZCode and Codex get the same skills linked into `~/.agents/skills`. A destination
+that already exists and isn't a fapony link is reported and left alone — replace it by hand
+if you want fapony's version.
 
 `plan-with-pony` is vendor-neutral — the SKILL.md *is* the prompt, so pipe it to any agent:
 
@@ -475,8 +505,12 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 - Memory integration via shell adapter, per project (configurable or default-wired)
 - Opt-in telemetry, off by default ([TELEMETRY.md](https://github.com/kire21b/fapony/blob/main/TELEMETRY.md) lists exactly what leaves the machine)
 - Bun-only; run state in SQLite via `bun:sqlite` (WAL mode)
+- Per-client hooks alongside MCP: Stop hook on Claude Code + Cursor · read/re-read/Edit hints on
+  Claude Code + OpenCode · commit hint on OpenCode — [What runs where](#what-runs-where)
 
 **Not supported (yet):**
+- PreToolUse hints on Cursor, ZCode or Codex — Cursor has no such hook and the other two expose no
+  in-process hook surface for read/edit hints (Codex's `apply_patch` sends patch text, not file paths)
 - A hosted or shared ledger for a team — `runs.worktree` is the only sharing key today, and it's a
   path, not an identity. If you want to try pointing two machines at the same ledger anyway,
   `FAPONY_STATE_DIR` can be set to a synced folder (Syncthing, a shared drive) — but SQLite's WAL

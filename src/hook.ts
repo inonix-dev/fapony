@@ -218,9 +218,13 @@ export interface RawStopPayload {
   conversation_id?: string;
   loop_count?: number;
   status?: string;
+  // Codex — hooks contract (https://learn.chatgpt.com/docs/hooks)
+  session_id?: string;
+  model?: string;
+  permission_mode?: string;
 }
 
-export type StopClient = "claude" | "cursor";
+export type StopClient = "claude" | "cursor" | "codex";
 
 export interface NormalizedStopInput {
   client: StopClient;
@@ -325,11 +329,32 @@ export function isCursorPayload(raw: RawStopPayload): boolean {
   );
 }
 
-/** Field-mapping only — both clients feed the same decideStop below. */
+/** Codex sends permission_mode and/or model — fields neither Claude nor Cursor include in Stop. */
+export function isCodexPayload(raw: RawStopPayload): boolean {
+  return (
+    typeof raw.permission_mode === "string" ||
+    (typeof raw.model === "string" && !isCursorPayload(raw))
+  );
+}
+
+/** Field-mapping only — all three clients feed the same decideStop below. */
 export function normalizeStopInput(
   raw: RawStopPayload,
   home: string,
 ): NormalizedStopInput {
+  if (isCodexPayload(raw)) {
+    // Codex: cwd is the session working directory; stop_hook_active means
+    // the hook already fired once (same semantics as Claude).
+    return {
+      client: "codex",
+      cwd: raw.cwd ?? process.cwd(),
+      transcriptPath:
+        typeof raw.transcript_path === "string" && raw.transcript_path
+          ? raw.transcript_path
+          : null,
+      stopHookActive: raw.stop_hook_active === true,
+    };
+  }
   if (isCursorPayload(raw)) {
     const cwd = raw.workspace_roots?.[0] ?? raw.cwd ?? process.cwd();
     let transcriptPath =
@@ -356,12 +381,13 @@ export function normalizeStopInput(
   };
 }
 
-/** Claude blocks with decision:block; Cursor's stop hook "blocks" by
- *  auto-submitting the reason as the next user message. */
+/** Claude blocks with decision:block; Cursor auto-submits as followup_message;
+ *  Codex uses continue:false + stopReason. */
 export function stopOutput(client: StopClient, reason: string): string {
-  return client === "cursor"
-    ? JSON.stringify({ followup_message: reason })
-    : JSON.stringify({ decision: "block", reason });
+  if (client === "cursor") return JSON.stringify({ followup_message: reason });
+  if (client === "codex")
+    return JSON.stringify({ continue: false, stopReason: reason });
+  return JSON.stringify({ decision: "block", reason });
 }
 
 /** Reads the Stop-hook JSON on stdin, prints a block decision or nothing. */
@@ -376,6 +402,7 @@ export async function cmdHookStop(): Promise<void> {
     // died — commits from those turns are still caught at the next completed
     // stop (the window is the conversation transcript's birthtime).
     if (client === "cursor" && raw.status !== "completed") return;
+    // Codex: no status guard needed — Stop fires at turn end unconditionally.
 
     const worktree = git(["rev-parse", "--show-toplevel"], norm.cwd);
 
