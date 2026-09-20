@@ -31,6 +31,7 @@ import {
 } from "../src/hook.js";
 import {
   commitHintPluginSource,
+  editHintPluginSource,
   readHintPluginSource,
 } from "../src/install/opencode.js";
 
@@ -732,6 +733,13 @@ export function testReadHintPluginSource(): void {
     src.includes("readContextData"),
     "must also wire debt/mem context, matching Claude's cmdHookReadHint",
   );
+  // The fire-log must resolve a relative path against `directory` (the cwd the
+  // hook was handed), not the worktree — a subdir launch must still attribute
+  // the row instead of logging file:null.
+  assert.ok(
+    src.includes("pjoin(directory, filePath)"),
+    "fire-log joins against directory, not worktree",
+  );
   console.log(
     "  ✓ read hint opencode plugin imports shared logic, annotate-only",
   );
@@ -1033,6 +1041,47 @@ export function testCommitHintPluginSource(): void {
   );
   console.log(
     "  ✓ commit hint opencode plugin imports shared logic, annotate-only",
+  );
+}
+
+export function testEditHintPluginSource(): void {
+  // The generated OpenCode plugin must import the shared editHintFor logic
+  // (no second implementation), target the edit + write tools, mutate output
+  // only, and log through the "edit" fire surface.
+  const src = editHintPluginSource("/install/root");
+  assert.ok(
+    src.includes("/install/root/src/hook.ts"),
+    "bakes the install root",
+  );
+  assert.ok(src.includes('input.tool !== "edit"'), "guards the edit tool");
+  assert.ok(src.includes('input.tool !== "write"'), "guards the write tool");
+  assert.ok(!src.includes("apply_patch"), "apply_patch stays out of scope");
+  assert.ok(src.includes("output.output"), "mutates the tool output");
+  assert.ok(!src.includes("throw"), "must never throw into the tool call");
+  assert.ok(
+    src.includes("editHintFor"),
+    "must import editHintFor from the shared module",
+  );
+  assert.ok(
+    src.includes('surface: "edit"'),
+    "must log through the edit fire surface",
+  );
+  // Fire-log resolves a relative path against `directory`, not worktree, so a
+  // subdir launch attributes the row instead of file:null.
+  assert.ok(
+    src.includes("pjoin(directory, filePath)"),
+    "fire-log joins against directory, not worktree",
+  );
+  // The non-string output guard must run before editHintFor, or a hint that
+  // cannot surface still spends the per-session dedupe row and logs a fire.
+  const guard = src.indexOf('typeof output.output !== "string"');
+  const call = src.indexOf("editHintFor({");
+  assert.ok(
+    guard >= 0 && call >= 0 && guard < call,
+    "output guard must precede the editHintFor call",
+  );
+  console.log(
+    "  ✓ edit hint opencode plugin imports shared logic, annotate-only",
   );
 }
 
