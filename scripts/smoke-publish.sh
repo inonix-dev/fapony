@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/smoke-publish.sh — prepublishOnly gate.
 #
-# Packs the tarball exactly as npm/pnpm would ship it, extracts it away from
+# Packs the tarball exactly as npm would ship it, extracts it away from
 # the repo (so nothing outside `files` is reachable by accident), and runs
 # the CLI with no args. Bun resolves every static import in fapony.ts before
 # any branch runs, so this alone reproduces the class of bug it exists to
@@ -15,7 +15,7 @@ set -euo pipefail
 dir=$(mktemp -d)
 trap 'rm -rf "$dir"' EXIT
 
-pnpm pack --silent --pack-destination "$dir" >/dev/null
+npm pack --silent --pack-destination "$dir" >/dev/null
 tgz=$(ls "$dir"/*.tgz)
 tar xzf "$tgz" -C "$dir"
 
