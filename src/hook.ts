@@ -32,6 +32,7 @@ import { openDb } from "./db/index.js";
 import { debtForFile, loadConventions } from "./debt/index.js";
 import { detectTestRunner } from "./detect.js";
 import { readMemLog, whereMemDir } from "./memory.js";
+import { renderSeed } from "./seed/review-seed.js";
 
 // --- Hint-fire log (PLAN-feedback-surface chunk 1) ---
 //
@@ -586,16 +587,35 @@ function headLines(text: string, max: number): string {
 /**
  * Trim to whole lines within the cap, with an honest truncation marker.
  *
- * "## next up" is kickoff's last section and its most actionable one, so a
- * plain head-cut drops exactly the part worth injecting in a repo with a long
- * open list (measured here: 92 rows, the cut landed mid-history). Keep it and
- * spend the rest of the budget on the head.
+ * Kickoff's ordering is now: ranked rows → "## next up" → "## recent". The
+ * most actionable content is at the top (bugs, diff-matched) and in "## next
+ * up". A plain head-cut drops the suggestions — so we try to keep "## next up"
+ * visible. When "## recent" exists, we cut it first; otherwise fall back to
+ * keeping "## next up" at the tail.
  */
 export function capContext(
   text: string,
   max = SESSION_START_MAX_CHARS,
 ): string {
   if (text.length <= max) return text;
+  // New ordering: ranked → ## next up → ## recent → sweep/rotate
+  // Cut ## recent first to keep ranked content + suggestions visible.
+  const recentIdx = text.indexOf("\n## recent");
+  if (recentIdx > 0) {
+    const head = text.slice(0, recentIdx).trimEnd();
+    if (head.length <= max) return head;
+    // Head still too long — try to keep ## next up at the end
+    const nextIdx = head.lastIndexOf("\n## next up");
+    if (nextIdx > 0) {
+      const beforeNext = head.slice(0, nextIdx).trimEnd();
+      const nextTail = head.slice(nextIdx).trimEnd();
+      if (nextTail.length < max / 2) {
+        return `${headLines(beforeNext, max - nextTail.length)}\n${TRUNCATED}\n${nextTail}`;
+      }
+    }
+    return `${headLines(head, max)}\n${TRUNCATED}`;
+  }
+  // Fallback: no ## recent found (short output or other path)
   const at = text.lastIndexOf("\n## next up");
   const tail = at > 0 ? text.slice(at).trimEnd() : "";
   if (tail && tail.length < max / 2) {
@@ -671,6 +691,8 @@ export const READ_HINT_MIN_BYTES = 24_000;
 export const READ_HINT_MIN_LIMIT = 300;
 /** One-time measurement (2026-09-17, this repo): 5 files / 2,146 lines ≈ 3.7KB out. */
 const READ_HINT_MEASURED = "measured ~3.7KB output on a 2,146-line file";
+/** Cap on the outline attached to the read hint — keeps the hint compact. */
+const READ_HINT_OUTLINE_CAP = 2_000;
 
 export interface ReadHintInput {
   filePath: unknown;
@@ -685,6 +707,10 @@ export interface ReadHintInput {
  * repo, stat/read failure) resolves to null — a hint must never fire on a
  * guess. Fast path is statSync only; the file is read just to count lines,
  * and only after the size threshold passed.
+ *
+ * When review-seed succeeds, the hint attaches the actual outline (exports
+ * with line numbers) instead of telling the agent to run a command (rules
+ * 9/13: ask does not work, attach the data directly).
  */
 export function readHintFor(opts: ReadHintInput): string | null {
   try {
@@ -708,6 +734,41 @@ export function readHintFor(opts: ReadHintInput): string | null {
     // relative path, outside it relative() climbs dots, show absolute.
     const rel = relative(opts.cwd, opts.filePath);
     const shown = rel.startsWith("..") ? opts.filePath : rel;
+
+    // Try to attach the actual outline from review-seed (cap ~2KB)
+    let outline = "";
+    try {
+      const seed = renderSeed(["--files", shown], opts.cwd);
+      // Extract signatures section — the most useful part for reading
+      const sigMatch = seed.match(
+        /signatures \(current\):\n([\s\S]*?)(?:\n\w|\nstatic graph)/,
+      );
+      if (sigMatch) {
+        outline = sigMatch[1].trim();
+      } else {
+        // Fallback: take the first section after the file list
+        const afterFiles = seed.indexOf("\nimporters");
+        if (afterFiles > 0) {
+          outline = seed
+            .slice(0, Math.min(afterFiles, READ_HINT_OUTLINE_CAP))
+            .trim();
+        } else {
+          outline = seed.slice(0, READ_HINT_OUTLINE_CAP).trim();
+        }
+      }
+      if (outline.length > READ_HINT_OUTLINE_CAP) {
+        outline = `${outline.slice(0, READ_HINT_OUTLINE_CAP).trimEnd()}\n… truncated`;
+      }
+    } catch {
+      // review-seed failed — fall back to the command suggestion
+    }
+
+    if (outline) {
+      return (
+        `fapony: ${shown} is ${lines} lines\n${outline}\n` +
+        `(review-seed --files ${shown} for importers + callers; skill /lookup-before-edit)`
+      );
+    }
     return (
       `fapony: ${shown} is ${lines} lines — review-seed --files ${shown} ` +
       `returns exports with line numbers, importers, and signatures first ` +
