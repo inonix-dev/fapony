@@ -24,7 +24,7 @@ subcommands:
   add <kind> "<text>" --files f1,f2 [spec.md]
   close <id> "<msg>"          close a bug
   find "<text>"               substring-search every row
-  now | done | stale          views
+  done | stale              views
   claim <id> | release <id> | synced   bookkeeping
   plan-sweep [<plan.md> [--apply]]     move shipped plans + fix links
   plan-check <plan.md>        validate a plan's frontmatter/sections
@@ -56,9 +56,6 @@ example: fapony mem close mt14 "fixed in a2c6beb"`,
   find: `usage: fapony mem find "<text>"
 substring search over every row's text/spec/ref — all kinds, no default filter
 example: fapony mem find "usage-web"`,
-  now: `usage: fapony mem now
-next + bug + hold still open (decision/note are search-only — use find)
-example: fapony mem now`,
   done: `usage: fapony mem done
 closed rows with their tombstone message
 example: fapony mem done`,

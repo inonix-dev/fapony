@@ -578,14 +578,11 @@ export function testReadHintAnnotatesLargeFullRead(): void {
     assert.ok(hint, "large full read must get a hint");
     assert.match(hint ?? "", /big\.ts is \d+ lines/);
     assert.match(hint ?? "", /review-seed --files big\.ts/);
-    // New format: attaches actual outline (exports with line numbers) when
-    // review-seed succeeds, or falls back to the measured description.
-    const hasOutline = /\d+ lines\n/.test(hint ?? "");
-    const hasMeasured = /measured /.test(hint ?? "");
-    assert.ok(
-      hasOutline || hasMeasured,
-      "hint must contain either an outline or the measured description",
-    );
+    // The fixture exports `entry`, so the hint must carry the outline with
+    // its line number — not the old measured-description fallback. (The
+    // previous /\d+ lines\n/ matched the hint's own first line, so it passed
+    // with or without an outline.)
+    assert.match(hint ?? "", /\n.*entry:\d+/);
   });
   console.log("  ✓ read hint annotates large full-file read");
 }
