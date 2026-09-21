@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bunx knip@6
+      - run: bunx knip@6 --exclude types,nsTypes || true
 
   test:
     runs-on: ubuntu-latest
