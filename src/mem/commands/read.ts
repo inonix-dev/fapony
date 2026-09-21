@@ -335,6 +335,16 @@ export const cmdKickoff = (a: string[]) => {
           specCloses.map((c) => fmtClose(c, byId)).join("\n"),
       );
     }
+  } else if (planFile) {
+    const title = readPlanTitle(planFile);
+    console.log(`# ${title || basename(planFile)} — plan`);
+    if (planCheckboxes.length) {
+      console.log(
+        `\n## unchecked\n${planCheckboxes.map((c) => `- [ ] ${c}`).join("\n")}`,
+      );
+    } else {
+      console.log(`\n(all chunks checked — ready to ship or archive)`);
+    }
   } else if (arg) {
     console.error(`no id "${arg}" in the log`);
     process.exit(1);
