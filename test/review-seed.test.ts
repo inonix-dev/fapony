@@ -12,7 +12,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { renderSeed, SeedError } from "../src/review-seed.js";
+import { SeedError } from "../src/seed/primitives.js";
+import { renderSeed } from "../src/seed/review-seed.js";
 
 /**
  * Fixture repo: init commit (from withTempRepo), then one commit with source

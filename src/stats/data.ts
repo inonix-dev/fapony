@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { type Event, openDb, PLAN_DIR, type Run } from "../db/index.js";
 import { loadConfig } from "../db/load.js";
 import { enrichGateWindows } from "../gates.js";
-import { avg, minutesBetween } from "../math.js";
 import { REASON_CODES, REGIME_CODES } from "../mcp/types.js";
 import {
   isPassFamily,
@@ -20,6 +19,7 @@ import {
   readPassiveUsage,
   readZcodeUsage,
 } from "../session/index.js";
+import { avg, minutesBetween } from "../util.js";
 
 // Walks events per run in order and pairs up spawn→route (executor time)
 // and route→gate (review turnaround) per round, since one run row can span

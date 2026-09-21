@@ -12,6 +12,7 @@
 // ZCode gets skill/<name>/ symlinked into ~/.agents/skills.
 
 import { createInterface } from "node:readline";
+import { cmdInstallAntigravity } from "./install/antigravity.js";
 import { cmdInstallClaude } from "./install/claude.js";
 import { cmdInstallCodex } from "./install/codex.js";
 import { cmdInstallCursor } from "./install/cursor.js";
@@ -22,6 +23,7 @@ import { cmdInstallZcode } from "./install/zcode.js";
 import { ask } from "./setup.js";
 import { isAffirmative } from "./util.js";
 
+export { cmdInstallAntigravity } from "./install/antigravity.js";
 export {
   claudeAddArgs,
   claudeGetArgs,
@@ -58,6 +60,10 @@ export async function cmdInstall(
   const installAll = args.includes("--all");
 
   // --- explicit platform: original behavior, unchanged ---
+  if (platform === "antigravity") {
+    cmdInstallAntigravity(dryRun, deps);
+    return;
+  }
   if (platform === "claude") {
     cmdInstallClaude(dryRun, deps);
     return;
@@ -80,10 +86,10 @@ export async function cmdInstall(
   }
   if (platform !== undefined) {
     console.error(
-      `usage: fapony install --platform opencode|claude|cursor|zcode|codex [--dry-run]`,
+      `usage: fapony install --platform antigravity|opencode|claude|cursor|zcode|codex [--dry-run]`,
     );
     console.error(
-      `  supported platforms: opencode, claude, cursor, zcode, codex`,
+      `  supported platforms: antigravity, opencode, claude, cursor, zcode, codex`,
     );
     (deps.exit ?? defaultExit)(1);
     return;
@@ -107,7 +113,7 @@ export async function cmdInstall(
   if (found.length === 0) {
     console.error();
     console.error(
-      `  no MCP client found (looked for claude on PATH; config files for cursor, opencode, zcode, codex).`,
+      `  no MCP client found (looked for claude on PATH; config files for antigravity, cursor, opencode, zcode, codex).`,
     );
     console.error(
       `  open the app once, then re-run — or force with: fapony install --platform <name>`,
@@ -162,6 +168,9 @@ function installPlatform(
   deps: InstallDeps,
 ): void {
   switch (platform) {
+    case "antigravity":
+      cmdInstallAntigravity(dryRun, deps);
+      break;
     case "claude":
       cmdInstallClaude(dryRun, deps);
       break;

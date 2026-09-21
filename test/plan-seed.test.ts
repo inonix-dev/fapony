@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cmdPlanSeed } from "../src/plan-seed.js";
+import { cmdPlanSeed } from "../src/seed/plan-seed.js";
 import { captureErrors } from "./helpers.js";
 
 // Fixture with one module dir + one root file. The mem/ledger reads inside

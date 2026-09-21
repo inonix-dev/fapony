@@ -157,6 +157,7 @@ import {
   testEditHintPluginSource,
   testEditHintSilentZeroImporters,
   testEditHintSkipsNonSourceAndMissing,
+  testHookSessionStartSilentWithoutMemLog,
   testReadContextBasenameAmbiguityStaysSilent,
   testReadContextCombinedCapAndOutsideRepo,
   testReadContextMemRowsByFilesAndPath,
@@ -184,6 +185,15 @@ import {
   testInitSnippetPathMatchesScaffold,
 } from "./init.test.js";
 // Install tests (split into test/install/)
+import {
+  testCmdInstallDispatchesAntigravity,
+  testInstallAntigravityAlreadyConfiguredNoOp,
+  testInstallAntigravityDryRunNoWrite,
+  testInstallAntigravityForeignMcpRefuses,
+  testInstallAntigravityFreshWritesMcpAndSkills,
+  testInstallAntigravityMergesExistingServers,
+  testInstallAntigravityNoDirFails,
+} from "./install/antigravity.test.js";
 import {
   testClaudeAddUsesAbsolutePath,
   testClaudeGetPointsToFapony,
@@ -261,6 +271,7 @@ import {
   testInstallOpencodeSessionStartDryRun,
   testInstallOpencodeSessionStartForeignFileUntouched,
   testInstallOpencodeSessionStartPlugin,
+  testInstallOpencodeSessionStartStaleWarns,
 } from "./install/opencode.test.js";
 import {
   testLinkSkillsCreatesSymlinks,
@@ -697,6 +708,7 @@ export async function cmdTest(): Promise<void> {
   testDecideStopNamesOutOfScopeMemLog();
   testStopBlocksOncePerSessionPerWorktree();
   testSessionStartContextIsCapped();
+  testHookSessionStartSilentWithoutMemLog();
   testSessionStartPluginSource();
   testStopHookSourceHasNoRepoSpecificCommands();
   testReadHintAnnotatesLargeFullRead();
@@ -930,6 +942,7 @@ export async function cmdTest(): Promise<void> {
   testInstallOpencodeEditHintForeignFileUntouched();
   testInstallOpencodeEditHintDryRun();
   testInstallOpencodeSessionStartPlugin();
+  testInstallOpencodeSessionStartStaleWarns();
   testInstallOpencodeSessionStartForeignFileUntouched();
   testInstallOpencodeSessionStartDryRun();
   testInstallOpencodeAlreadyConfiguredNoOp();
@@ -958,6 +971,13 @@ export async function cmdTest(): Promise<void> {
   testInstallCursorAlreadyConfiguredNoOp();
   testInstallCursorDryRunNoWrite();
   testCmdInstallDispatchesCursor();
+  testInstallAntigravityNoDirFails();
+  testInstallAntigravityFreshWritesMcpAndSkills();
+  testInstallAntigravityForeignMcpRefuses();
+  testInstallAntigravityAlreadyConfiguredNoOp();
+  testInstallAntigravityDryRunNoWrite();
+  testInstallAntigravityMergesExistingServers();
+  testCmdInstallDispatchesAntigravity();
   testInstallZcodeNoConfigFails();
   testInstallZcodePrimaryPath();
   testInstallZcodeFallbackPath();
