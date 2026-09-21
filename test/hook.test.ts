@@ -46,7 +46,8 @@ const base = {
   stopHookActive: false,
   worktree: "/repo",
   commits: 2,
-  verdicts: 0,
+  memLastTs: "2026-09-15T00:00:00Z",
+  since: "2026-09-20T00:00:00Z",
 };
 
 const claudePayload = {
@@ -72,17 +73,16 @@ const cursorPayload = {
 
 export function testDecideStopBlocksUngradedCommits(): void {
   const reason = decideStop(base);
-  assert(reason, "ungraded commits must block");
+  assert(reason, "commits with no new mem row must block");
   assert(reason.includes("/repo"), "reason must name the absolute worktree");
   assert(
-    reason.includes("verdict_submit"),
-    "reason must name the call the agent has to make",
+    reason.includes("mem add"),
+    "reason must name the mem command the agent has to make",
   );
 }
 
 export function testDecideStopReportsCommitsAndMem(): void {
-  // PLAN-mem-mcp chunk 3 (Done criteria 4): the block message carries the
-  // commit list and the mem status — information, never a block condition.
+  // The block message carries the commit list and the mem status.
   const reason = decideStop({
     ...base,
     commits: 7,
@@ -107,16 +107,12 @@ export function testDecideStopReportsCommitsAndMem(): void {
     reason.includes("mem: last row 2026-09-16"),
     "mem status is information",
   );
-  assert.ok(
-    reason.includes("your call"),
-    "mem is never presented as required — the agent decides",
-  );
   // ≤ 12 lines (spec §6)
   assert.ok(reason.split("\n").length <= 12, "message stays short");
 
-  // No mem at all must read differently from "nothing newer"
+  // No mem at all must NOT block (allow = null)
   const noMem = decideStop({ ...base, memLastTs: null });
-  assert.ok(noMem?.includes("no rows at all"));
+  assert.strictEqual(noMem, null, "no mem log at all = allow");
 }
 
 // Regression 2026-09-21: a monorepo whose only log lives in apps/<x> got
@@ -265,8 +261,7 @@ export function testHookSessionStartSilentWithoutMemLog(): void {
 
 export function testDecideStopMessageIsRepoNeutral(): void {
   // The block message installs globally and fires in every repo — a repo-specific
-  // command in it teaches agents the message is untrustworthy, which erodes the
-  // verdict enforcement. Twice bitten (setup.ts, hook.ts); the test remembers.
+  // command in it teaches agents the message is untrustworthy.
   const reason = decideStop(base);
   assert(reason);
   assert.doesNotMatch(
@@ -290,10 +285,10 @@ export function testDecideStopDerivesCommandFromWorktree(): void {
       stopHookActive: false,
       worktree: dir,
       commits: 1,
-      verdicts: 0,
+      memLastTs: "2026-09-15T00:00:00Z",
+      since: "2026-09-20T00:00:00Z",
     });
     assert(reason, "blocks");
-    assert.match(reason, /`bun test`/, "names the derived bun command");
     assert.doesNotMatch(
       reason,
       /bun fapony\.ts|fapony lint-baseline/,
@@ -312,14 +307,11 @@ export function testDecideStopDerivesCommandFromWorktree(): void {
       stopHookActive: false,
       worktree: foreign,
       commits: 1,
-      verdicts: 0,
+      memLastTs: "2026-09-15T00:00:00Z",
+      since: "2026-09-20T00:00:00Z",
     });
     assert(reason);
-    assert.match(
-      reason,
-      /this repo's typecheck and test suite/,
-      "foreign worktree → generic fallback",
-    );
+    assert.match(reason, /mem add/, "foreign worktree → mem add command");
   } finally {
     rmSync(foreign, { recursive: true, force: true });
   }
@@ -351,27 +343,37 @@ export function testStopHookSourceHasNoRepoSpecificCommands(): void {
   );
 }
 
-export function testDecideStopMemNeverBlocks(): void {
-  // กฎ 7 — mem status is data: the block condition stays verdict-only,
-  // so a fresh mem row changes the message, not the decision.
+export function testDecideStopMemBlocksWhenStale(): void {
+  // PLAN-verdict-to-mem: mem rows ARE the block condition now. A stale mem row
+  // (older than session start) means no mem was recorded for this session's work.
   const without = decideStop(base);
-  const withFreshMem = decideStop({
+  const withStaleMem = decideStop({
     ...base,
-    memLastTs: "2026-09-17T00:00:00Z",
+    memLastTs: "2026-09-10T00:00:00Z",
   });
   assert.ok(without, "blocks without mem");
-  assert.ok(withFreshMem, "blocks identically with mem present");
-  assert.notEqual(without, withFreshMem);
+  assert.ok(withStaleMem, "blocks with stale mem (older than session start)");
+  // But a fresh mem row (newer than session start) allows.
+  const withFreshMem = decideStop({
+    ...base,
+    memLastTs: "2026-09-21T00:00:00Z",
+  });
+  assert.strictEqual(
+    withFreshMem,
+    null,
+    "allows when mem row is newer than session",
+  );
 }
 
 export function testDecideStopAllowsEveryUnknown(): void {
   // Each of these must resolve to allow — a hook that guesses wrong traps
-  // the agent, so anything it cannot prove is treated as "nothing to grade".
+  // the agent, so anything it cannot prove is treated as "nothing to record".
   const allowed: Array<[string, Parameters<typeof decideStop>[0]]> = [
     ["already blocked once", { ...base, stopHookActive: true }],
     ["not a git repo", { ...base, worktree: null }],
     ["no commits landed", { ...base, commits: 0 }],
-    ["verdict already filed", { ...base, verdicts: 1 }],
+    ["no mem log at all", { ...base, memLastTs: null, memCandidates: [] }],
+    ["fresh mem row exists", { ...base, memLastTs: "2026-09-21T00:00:00Z" }],
   ];
   for (const [label, opts] of allowed) {
     assert.strictEqual(decideStop(opts), null, `should allow: ${label}`);
@@ -407,21 +409,29 @@ export function testStopPayloadsMapToSameDecision(): void {
   assert.ok(!claude.stopHookActive);
   assert.ok(!cursor.stopHookActive);
 
-  // Same facts through either wire format → the same verdict.
+  // Same facts through either wire format → the same decision.
   const claudeReason = decideStop({
     stopHookActive: claude.stopHookActive,
     worktree: "/repo",
     commits: 2,
-    verdicts: 0,
+    memLastTs: "2026-09-15T00:00:00Z",
+    since: "2026-09-20T00:00:00Z",
   });
   const cursorReason = decideStop({
     stopHookActive: cursor.stopHookActive,
     worktree: "/repo",
     commits: 2,
-    verdicts: 0,
+    memLastTs: "2026-09-15T00:00:00Z",
+    since: "2026-09-20T00:00:00Z",
   });
-  assert.ok(claudeReason, "ungraded commits must block via the claude payload");
-  assert.ok(cursorReason, "ungraded commits must block via the cursor payload");
+  assert.ok(
+    claudeReason,
+    "commits with no new mem must block via the claude payload",
+  );
+  assert.ok(
+    cursorReason,
+    "commits with no new mem must block via the cursor payload",
+  );
   assert.equal(claudeReason, cursorReason);
 }
 
@@ -452,7 +462,7 @@ export function testCursorPayloadEdges(): void {
 }
 
 export function testStopOutputShapesPerClient(): void {
-  const reason = "call verdict_submit";
+  const reason = "record a mem row";
   const claude = JSON.parse(stopOutput("claude", reason)) as Record<
     string,
     string
@@ -521,9 +531,10 @@ export function testCodexNormalizeMapsToSameDecision(): void {
     stopHookActive: codex.stopHookActive,
     worktree: "/repo",
     commits: 2,
-    verdicts: 0,
+    memLastTs: "2026-09-15T00:00:00Z",
+    since: "2026-09-20T00:00:00Z",
   });
-  assert.ok(reason, "ungraded commits must block via the codex payload");
+  assert.ok(reason, "commits with no new mem must block via the codex payload");
   assert.ok(reason.includes("/repo"));
 }
 
@@ -541,7 +552,7 @@ export function testCodexStopHookActiveAllows(): void {
 }
 
 export function testCodexStopOutputShape(): void {
-  const reason = "call verdict_submit";
+  const reason = "record a mem row";
   const out = JSON.parse(stopOutput("codex", reason)) as Record<
     string,
     unknown
@@ -1250,7 +1261,8 @@ export function testCommitHintNullOutsideGitRepo(): void {
 }
 
 export function testCommitHintWhenNoGradedVerdicts(): void {
-  // Create a git repo with a commit and no verdicts in the DB.
+  // Create a git repo with a commit — the hint should fire as an annotate-only
+  // nudge to record a mem row.
   const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
   try {
     execSync("git init", { cwd: dir, stdio: "ignore" });
@@ -1263,24 +1275,13 @@ export function testCommitHintWhenNoGradedVerdicts(): void {
     execSync("git add .", { cwd: dir, stdio: "ignore" });
     execSync('git commit -m "init"', { cwd: dir, stdio: "ignore" });
 
-    // Set FAPONY_STATE_DIR so openDb() uses an isolated db.
-    const orig = process.env.FAPONY_STATE_DIR;
-    process.env.FAPONY_STATE_DIR = dir;
-    try {
-      const hint = commitHintFor({
-        command: "git commit -m 'test'",
-        cwd: dir,
-      });
-      assert.ok(hint, "must return a hint when commits have no verdicts");
-      assert.ok(hint.includes("fapony:"), "hint must be prefixed with fapony:");
-      assert.ok(
-        hint.includes("verdict_submit"),
-        "hint must name verdict_submit",
-      );
-    } finally {
-      if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
-      else process.env.FAPONY_STATE_DIR = orig;
-    }
+    const hint = commitHintFor({
+      command: "git commit -m 'test'",
+      cwd: dir,
+    });
+    assert.ok(hint, "must return a hint when ungraded commits exist");
+    assert.ok(hint.includes("fapony:"), "hint must be prefixed with fapony:");
+    assert.ok(hint.includes("mem add"), "hint must name the mem add command");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

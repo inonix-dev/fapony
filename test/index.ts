@@ -145,7 +145,7 @@ import {
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
   testDecideStopDerivesCommandFromWorktree,
-  testDecideStopMemNeverBlocks,
+  testDecideStopMemBlocksWhenStale,
   testDecideStopMessageIsRepoNeutral,
   testDecideStopNamesOutOfScopeMemLog,
   testDecideStopReportsCommitsAndMem,
@@ -700,7 +700,7 @@ export async function cmdTest(): Promise<void> {
   testDecideStopBlocksUngradedCommits();
   testDecideStopDerivesCommandFromWorktree();
   testDecideStopReportsCommitsAndMem();
-  testDecideStopMemNeverBlocks();
+  testDecideStopMemBlocksWhenStale();
   testDecideStopMessageIsRepoNeutral();
   testDecideStopNamesOutOfScopeMemLog();
   testStopBlocksOncePerSessionPerWorktree();

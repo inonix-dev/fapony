@@ -1,5 +1,5 @@
 // src/hook.ts — Claude Code / Cursor Stop hook: refuse to end a turn that produced
-// commits but no verdict.
+// commits but no mem row.
 //
 // Why a hook and not a message: SERVER_INSTRUCTIONS is a *request* that the
 // agent remember, and it measured as not enough · the hook does not grade in
@@ -30,7 +30,6 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import { buildGraphCached, collectSourceFiles, SCAN_EXTS } from "./analyze.js";
 import { openDb } from "./db/index.js";
 import { debtForFile, loadConventions } from "./debt/index.js";
-import { detectTestRunner } from "./detect.js";
 import { readMemLog, whereMemDir } from "./memory.js";
 import { renderSeed } from "./seed/review-seed.js";
 
@@ -241,20 +240,21 @@ export function utcStamp(d: Date): string {
 }
 
 /**
- * Pure decision: block only when this session produced commits and none of
- * them got graded. Every unknown (no git, no transcript, hook already fired)
- * resolves to "allow" — a hook that guesses wrong must never trap the agent.
+ * Pure decision: block when this session produced commits but no mem row
+ * newer than session start exists. Every unknown (no git, no transcript,
+ * hook already fired, no mem log) resolves to "allow" — a hook that guesses
+ * wrong must never trap the agent.
  *
- * PLAN-mem-mcp chunk 3: the block message now carries the commit list and the
- * mem-log status (last row date). Both are *information*, never conditions —
- * the block condition stays verdict-only (rule 7: the hook does not judge, it
- * reports what is pending so the agent decides what deserves recording).
+ * PLAN-verdict-to-mem: block condition changed from verdicts to mem rows.
+ * The stop hook is the most expensive enforcement tool we have (rule 9);
+ * using it for verdicts that are 94% pass-family was wasteful. Now it
+ * enforces mem_add — rows that session N can actually read.
  */
 export function decideStop(opts: {
   stopHookActive: boolean;
   worktree: string | null;
   commits: number;
-  verdicts: number;
+  since?: string | null;
   commitList?: string[];
   memLastTs?: string | null;
   /** Logs that exist in the repo but are out of scope from this worktree. */
@@ -263,10 +263,13 @@ export function decideStop(opts: {
   if (opts.stopHookActive) return null; // already blocked once — let it end
   if (!opts.worktree) return null;
   if (opts.commits < 1) return null;
-  if (opts.verdicts > 0) return null;
+  // No mem log at all = allow (same as sessionStartContext — silent when missing).
+  if (!opts.memLastTs && !opts.memCandidates?.length) return null;
+  // Has mem rows — block only if nothing newer than session start.
+  if (opts.since && opts.memLastTs && opts.memLastTs >= opts.since) return null;
 
   const lines: string[] = [
-    `${opts.commits} commit(s) landed in ${opts.worktree} this session with no verdict filed.`,
+    `${opts.commits} commit(s) landed in ${opts.worktree} this session — no mem row recorded for this work.`,
   ];
   // ≤ 5 commits listed, rest folded into "… +N more" (spec §6: ≤ 12 lines).
   const list = opts.commitList ?? [];
@@ -277,29 +280,16 @@ export function decideStop(opts: {
       `mem: last row ${opts.memLastTs.slice(0, 10)} — nothing newer this session`,
     );
   } else if (opts.memCandidates?.length) {
-    // "nothing recorded" would be a lie: the log exists, it is just not in
-    // scope from here (monorepo — the log lives in the app dir). Say where.
     lines.push(
       `mem: no log in scope from ${opts.worktree} — found ` +
         `${opts.memCandidates.join(", ")} (run mem commands from there, or --mem-dir)`,
     );
-  } else {
-    lines.push("mem: no rows at all — nothing recorded in this project yet");
   }
-  const runner = detectTestRunner(opts.worktree);
-  const verifyLine = runner
-    ? `If you did not run \`${runner.typecheckCmd ? `${runner.typecheckCmd} and ` : ""}${runner.testCmd}\` to a real exit code, ` +
-      `the honest verdict is uncertain, not pass. `
-    : `If you did not run this repo's typecheck and test suite to a real exit code, ` +
-      `the honest verdict is uncertain, not pass. `;
 
   lines.push(
-    `Call verdict_submit before ending: worktree must be the absolute path above, ` +
-      `regime is one of code|fix|review|plan|inquiry|test, and the note must stand alone ` +
-      `(it is read months from now with no access to this conversation). ` +
-      `Grade what actually happened — pass-family when it held up, fail if the first ` +
-      `attempt was wrong, uncertain when you could not verify it. ${verifyLine}` +
-      `What deserves a mem row (decision/bug/note) is your call — not every unit needs one.`,
+    `Record a mem row before ending: fapony mem add <decision|bug|note> "what happened" --files <files> ` +
+      `${opts.worktree}/.fapony/plan/PLAN.md (or the relevant plan). ` +
+      `files[] is required — a row without it is unfindable when you touch that file next session.`,
   );
   return lines.join("\n");
 }
@@ -498,7 +488,6 @@ export async function cmdHookStop(): Promise<void> {
 
     let commits = 0;
     let commitList: string[] = [];
-    let verdicts = 0;
     let memLastTs: string | null = null;
     let memCandidates: string[] = [];
     if (worktree && since) {
@@ -508,25 +497,14 @@ export async function cmdHookStop(): Promise<void> {
       );
       commitList = log ? log.split("\n").filter(Boolean) : [];
       commits = commitList.length;
-      if (commits > 0) {
-        const db = openDb();
-        const row = db
-          .query(
-            `SELECT COUNT(*) AS n FROM events e JOIN runs r ON r.id = e.run_id
-             WHERE e.kind = 'gate' AND r.worktree = ? AND e.ts >= ?`,
-          )
-          .get(worktree, since) as { n: number } | null;
-        verdicts = row?.n ?? 0;
-        // Informational only — read-only, degrade silently (mem status never
-        // becomes a block condition, rule 7).
-        try {
-          const mem = readMemLog(worktree);
-          memLastTs = mem.rows[0]?.ts ?? null;
-          if (!memLastTs)
-            memCandidates = whereMemDir(worktree).candidates ?? [];
-        } catch {
-          memLastTs = null;
-        }
+      // Read mem log regardless of commits — the block condition is mem rows,
+      // not verdicts (PLAN-verdict-to-mem).
+      try {
+        const mem = readMemLog(worktree);
+        memLastTs = mem.rows[0]?.ts ?? null;
+        if (!memLastTs) memCandidates = whereMemDir(worktree).candidates ?? [];
+      } catch {
+        memLastTs = null;
       }
     }
 
@@ -534,7 +512,7 @@ export async function cmdHookStop(): Promise<void> {
       stopHookActive: norm.stopHookActive,
       worktree: since ? worktree : null,
       commits,
-      verdicts,
+      since,
       commitList,
       memLastTs,
       memCandidates,
@@ -1055,8 +1033,6 @@ export function editHintFor(opts: EditHintInput): string | null {
 
 /** Below this number of commits, the hint is unnecessary noise. */
 export const COMMIT_HINT_MIN_COMMITS = 1;
-/** Cap commits shown in the hint message. */
-const COMMIT_HINT_MAX_LIST = 5;
 
 export interface CommitHintInput {
   command: unknown;
@@ -1112,21 +1088,18 @@ export function commitHintFor(opts: CommitHintInput): string | null {
     const commitList = log ? log.split("\n").filter(Boolean) : [];
     if (commitList.length < COMMIT_HINT_MIN_COMMITS) return null;
 
-    const reason = decideStop({
-      stopHookActive: false, // annotate-only: never "already blocked"
-      worktree,
-      commits: commitList.length,
-      verdicts: 0, // every commit left in the window is, by construction, ungraded
-      commitList: commitList.slice(0, COMMIT_HINT_MAX_LIST),
-    });
-    if (!reason) return null;
+    // Build the nudge directly — commitHintFor is annotate-only (informational),
+    // while decideStop is blocking enforcement. They serve different purposes.
+    const lines: string[] = [
+      `${commitList.length} commit(s) since last verdict — record a mem row for this work.`,
+    ];
+    for (const c of commitList.slice(0, 5)) lines.push(`  ${c}`);
+    if (commitList.length > 5) lines.push(`  … +${commitList.length - 5} more`);
+    lines.push(
+      `fapony mem add <decision|bug|note> "what happened" --files <files> ${worktree}/.fapony/plan/PLAN.md`,
+    );
 
-    // Prefix each line with "fapony:" so it's visually distinct
-    // from normal bash output in the agent's context.
-    const prefixed = reason
-      .split("\n")
-      .map((l) => `fapony: ${l}`)
-      .join("\n");
+    const prefixed = lines.map((l) => `fapony: ${l}`).join("\n");
     return prefixed;
   } catch {
     return null; // any failure = no hint
