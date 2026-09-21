@@ -14,11 +14,18 @@
 
 ---
 
+## Non-goals
+What this explicitly does **not** do, one line of why each. Widening scope is an
+agent's default; a spec that only says what to build never stopped anything.
+
 ## Shape (data / API / schema)
 Concrete types, request/response bodies, DB columns — whatever the code needs.
 
 ## Edge cases
-Table or bullets: input → expected behavior.
+Three columns: input → expected → **verify** (a command that actually runs).
+An edge case with no check after it is an opinion, not a requirement — and a
+verify built from a substring of the prose is not a verify (real case: `grep "sed"`
+matched "superseded", so the check passed while the work was missing).
 
 ## Examples
 Before / after, request / response, sample payloads — as long as it needs to be.
