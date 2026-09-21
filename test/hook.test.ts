@@ -365,6 +365,33 @@ export function testDecideStopMemBlocksWhenStale(): void {
   );
 }
 
+export function testDecideStopComparesProductionTimestampShapes(): void {
+  // Production sends mixed shapes: since is utcStamp ('YYYY-MM-DD HH:MM:SS',
+  // no TZ) while mem rows are ISO. String comparison reads 'T' > ' ' and lets
+  // any same-date row pass as "newer" — the second session of the day would
+  // never block. Compare as dates instead.
+  const prod = {
+    stopHookActive: false,
+    worktree: "/repo",
+    commits: 1,
+    commitList: ["abc work"],
+    since: "2026-09-21 08:00:00",
+  };
+  assert.ok(
+    decideStop({ ...prod, memLastTs: "2026-09-21T07:59:59.000Z" }),
+    "same-day row older than session start must block",
+  );
+  assert.strictEqual(
+    decideStop({ ...prod, memLastTs: "2026-09-21T08:00:01.000Z" }),
+    null,
+    "same-day row newer than session start must allow",
+  );
+  assert.ok(
+    decideStop({ ...prod, memLastTs: "2026-09-20T23:00:00.000Z" }),
+    "previous-day row must block",
+  );
+}
+
 export function testDecideStopAllowsEveryUnknown(): void {
   // Each of these must resolve to allow — a hook that guesses wrong traps
   // the agent, so anything it cannot prove is treated as "nothing to record".

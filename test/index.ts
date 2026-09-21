@@ -144,6 +144,7 @@ import {
   testCursorPayloadEdges,
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
+  testDecideStopComparesProductionTimestampShapes,
   testDecideStopDerivesCommandFromWorktree,
   testDecideStopMemBlocksWhenStale,
   testDecideStopMessageIsRepoNeutral,
@@ -685,6 +686,7 @@ export async function cmdTest(): Promise<void> {
   testDecideStopDerivesCommandFromWorktree();
   testDecideStopReportsCommitsAndMem();
   testDecideStopMemBlocksWhenStale();
+  testDecideStopComparesProductionTimestampShapes();
   testDecideStopMessageIsRepoNeutral();
   testDecideStopNamesOutOfScopeMemLog();
   testStopBlocksOncePerSessionPerWorktree();

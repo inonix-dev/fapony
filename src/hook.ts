@@ -240,6 +240,19 @@ export function utcStamp(d: Date): string {
 }
 
 /**
+ * Parse either timestamp shape this repo produces: mem rows are ISO
+ * (`new Date().toISOString()`), session start is utcStamp
+ * ('YYYY-MM-DD HH:MM:SS', UTC). Never compare them as strings — 'T' > ' '
+ * makes any same-date mem row read as "newer than session start".
+ */
+export function hookTsMs(ts: string): number {
+  const iso = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(ts)
+    ? `${ts.replace(" ", "T")}Z`
+    : ts;
+  return new Date(iso).getTime();
+}
+
+/**
  * Pure decision: block when this session produced commits but no mem row
  * newer than session start exists. Every unknown (no git, no transcript,
  * hook already fired, no mem log) resolves to "allow" — a hook that guesses
@@ -265,8 +278,16 @@ export function decideStop(opts: {
   if (opts.commits < 1) return null;
   // No mem log at all = allow (same as sessionStartContext — silent when missing).
   if (!opts.memLastTs && !opts.memCandidates?.length) return null;
-  // Has mem rows — block only if nothing newer than session start.
-  if (opts.since && opts.memLastTs && opts.memLastTs >= opts.since) return null;
+  // Has mem rows — block only if nothing newer than session start. Parsed
+  // as dates, not strings: the two sides arrive in different shapes (ISO mem
+  // rows vs utcStamp session start). Unparseable = allow, per the contract
+  // above — an unknown timestamp is not proof either way.
+  if (opts.since && opts.memLastTs) {
+    const sinceMs = hookTsMs(opts.since);
+    const memMs = hookTsMs(opts.memLastTs);
+    if (Number.isNaN(sinceMs) || Number.isNaN(memMs)) return null;
+    if (memMs >= sinceMs) return null;
+  }
 
   const lines: string[] = [
     `${opts.commits} commit(s) landed in ${opts.worktree} this session — no mem row recorded for this work.`,
