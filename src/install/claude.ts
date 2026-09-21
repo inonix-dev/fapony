@@ -353,6 +353,7 @@ function installClaudeHooks(dryRun: boolean, deps: InstallDeps): void {
   installStopHook(dryRun, deps);
   installReadHintHook(dryRun, deps);
   installEditHintHook(dryRun, deps);
+  installSessionStartHook(dryRun, deps);
 }
 
 function installStopHook(dryRun: boolean, deps: InstallDeps): void {
@@ -393,5 +394,18 @@ function installEditHintHook(dryRun: boolean, deps: InstallDeps): void {
     matcher: "Edit",
     subcommand: "hook-edit-hint",
     label: "edit hint",
+  });
+}
+
+/**
+ * SessionStart hook: injects `fapony mem kickoff` as context when the repo has
+ * a mem log, and stays silent when it does not. Context only — SessionStart
+ * cannot block, and a repo without mem never sees a line.
+ */
+function installSessionStartHook(dryRun: boolean, deps: InstallDeps): void {
+  ensureClaudeHook(dryRun, deps, {
+    event: "SessionStart",
+    subcommand: "hook-session-start",
+    label: "session start",
   });
 }

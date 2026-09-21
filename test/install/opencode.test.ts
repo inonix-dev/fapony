@@ -422,3 +422,86 @@ export function testInstallOpencodeEditHintDryRun(): void {
     console.log("  ✓ install opencode edit hint → dry-run no write");
   });
 }
+
+export function testInstallOpencodeSessionStartPlugin(): void {
+  withTempHome((home) => {
+    const pluginPath = join(
+      home,
+      ".config",
+      "opencode",
+      "plugins",
+      "fapony-session-start.ts",
+    );
+    // Fresh install path.
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.ok(existsSync(pluginPath), "plugin file should be written");
+    const src = readFileSync(pluginPath, "utf-8");
+    assert.ok(
+      src.includes("experimental.chat.system.transform"),
+      "must inject via system.transform, the documented channel",
+    );
+    assert.ok(
+      src.includes("capContext"),
+      "must share the cap logic, no second implementation",
+    );
+    assert.ok(err.includes("session start"), `got: ${err}`);
+
+    // Idempotent — and the already-configured early-return path still runs it.
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(pluginPath, "utf-8");
+    assert.equal(src, after, "second install must not rewrite the plugin");
+  });
+  console.log(
+    "  ✓ install opencode session start → plugin written once, both paths",
+  );
+}
+
+export function testInstallOpencodeSessionStartForeignFileUntouched(): void {
+  withTempHome((home) => {
+    const pluginsDir = join(home, ".config", "opencode", "plugins");
+    mkdirSync(pluginsDir, { recursive: true });
+    const pluginPath = join(pluginsDir, "fapony-session-start.ts");
+    writeFileSync(pluginPath, "// someone else's plugin\n");
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.equal(
+      readFileSync(pluginPath, "utf-8"),
+      "// someone else's plugin\n",
+      "a foreign file at our name must never be overwritten",
+    );
+  });
+  console.log("  ✓ install opencode session start → foreign plugin untouched");
+}
+
+export function testInstallOpencodeSessionStartDryRun(): void {
+  withTempHome((home) => {
+    const pluginPath = join(
+      home,
+      ".config",
+      "opencode",
+      "plugins",
+      "fapony-session-start.ts",
+    );
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(true, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.ok(
+      !existsSync(pluginPath),
+      "dry-run must not write the session start plugin",
+    );
+    console.log("  ✓ install opencode session start → dry-run no write");
+  });
+}

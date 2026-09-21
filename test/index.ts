@@ -71,6 +71,16 @@ import {
   testDebtWorktreeFollowsThePathNotGitRoot,
 } from "./debt.test.js";
 import {
+  testDetectBunViaPackageManager,
+  testDetectBunViaPackageManagerWithTypecheckScript,
+  testDetectNpmViaLockfile,
+  testDetectNullWhenNoPackageJson,
+  testDetectNullWhenPackageJsonHasNoSignal,
+  testDetectPnpmViaLockfile,
+  testDetectSkipsUnrecognizedPackageManager,
+  testDetectYarnViaLockfile,
+} from "./detect.test.js";
+import {
   testDigestBugOpenClose,
   testDigestEmptyRepo,
   testDigestEscInjection,
@@ -134,7 +144,10 @@ import {
   testCursorPayloadEdges,
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
+  testDecideStopDerivesCommandFromWorktree,
   testDecideStopMemNeverBlocks,
+  testDecideStopMessageIsRepoNeutral,
+  testDecideStopNamesOutOfScopeMemLog,
   testDecideStopReportsCommitsAndMem,
   testEditHintClaudeOutputShape,
   testEditHintDedupesPerSessionPerFile,
@@ -156,6 +169,10 @@ import {
   testRereadHintFiresOnUnchangedRepeat,
   testRereadHintKillSwitch,
   testRereadHintSilentAfterEdit,
+  testSessionStartContextIsCapped,
+  testSessionStartPluginSource,
+  testStopBlocksOncePerSessionPerWorktree,
+  testStopHookSourceHasNoRepoSpecificCommands,
   testStopOutputShapesPerClient,
   testStopPayloadsMapToSameDecision,
   testUtcStampMatchesSqliteFormat,
@@ -198,6 +215,7 @@ import {
   testInstallCodexHooksMergePreservesForeign,
   testInstallCodexLinksSkills,
   testInstallCodexNoConfigFails,
+  testInstallCodexSessionStartUpgradeAppends,
   testInstallCodexSkillsConflictUntouched,
 } from "./install/codex.test.js";
 import {
@@ -240,6 +258,9 @@ import {
   testInstallOpencodeParseErrorFails,
   testInstallOpencodeReadHintForeignFileUntouched,
   testInstallOpencodeReadHintPlugin,
+  testInstallOpencodeSessionStartDryRun,
+  testInstallOpencodeSessionStartForeignFileUntouched,
+  testInstallOpencodeSessionStartPlugin,
 } from "./install/opencode.test.js";
 import {
   testLinkSkillsCreatesSymlinks,
@@ -394,6 +415,7 @@ import {
   testMemDirAmbiguousRefusesWrite,
   testMemDirConfigIsRepoRootRelative,
   testMemDirOverrideWinsAndRefusesMissing,
+  testMemDirSingleOutOfScopeReportsCandidate,
   testMemDirSkipsEmptyCandidate,
   testMemDirWalkStopsAtRepoRoot,
   testMemoryDefaultWiringNoDir,
@@ -668,8 +690,15 @@ export async function cmdTest(): Promise<void> {
   testReviewSeedNotARepo();
   testReviewSeedStateDbUntouched();
   testDecideStopBlocksUngradedCommits();
+  testDecideStopDerivesCommandFromWorktree();
   testDecideStopReportsCommitsAndMem();
   testDecideStopMemNeverBlocks();
+  testDecideStopMessageIsRepoNeutral();
+  testDecideStopNamesOutOfScopeMemLog();
+  testStopBlocksOncePerSessionPerWorktree();
+  testSessionStartContextIsCapped();
+  testSessionStartPluginSource();
+  testStopHookSourceHasNoRepoSpecificCommands();
   testReadHintAnnotatesLargeFullRead();
   testReadHintSkipsCheapReads();
   testReadHintNeedsGitRepo();
@@ -723,6 +752,14 @@ export async function cmdTest(): Promise<void> {
   testDebtTooBroadRegexDropped();
   testDebtForFileAndMonorepoResolution();
   testDebtWorktreeFollowsThePathNotGitRoot();
+  testDetectBunViaPackageManager();
+  testDetectBunViaPackageManagerWithTypecheckScript();
+  testDetectNpmViaLockfile();
+  testDetectPnpmViaLockfile();
+  testDetectYarnViaLockfile();
+  testDetectNullWhenNoPackageJson();
+  testDetectNullWhenPackageJsonHasNoSignal();
+  testDetectSkipsUnrecognizedPackageManager();
   testDebtPromotionAsksAtThresholdOnly();
   testDebtPromotionCountsLedgerFails();
   testDebtConventionsPathResolution();
@@ -782,6 +819,7 @@ export async function cmdTest(): Promise<void> {
   testMemDirConfigIsRepoRootRelative();
   testMemDirOverrideWinsAndRefusesMissing();
   testMemDirAmbiguousRefusesWrite();
+  testMemDirSingleOutOfScopeReportsCandidate();
   // Digest tests
   await testDigestEmptyRepo();
   await testDigestSinceFilter();
@@ -891,6 +929,9 @@ export async function cmdTest(): Promise<void> {
   testInstallOpencodeEditHintPlugin();
   testInstallOpencodeEditHintForeignFileUntouched();
   testInstallOpencodeEditHintDryRun();
+  testInstallOpencodeSessionStartPlugin();
+  testInstallOpencodeSessionStartForeignFileUntouched();
+  testInstallOpencodeSessionStartDryRun();
   testInstallOpencodeAlreadyConfiguredNoOp();
   testInstallOpencodeAlreadyConfiguredLinksSkills();
   testInstallOpencodeDryRunNoWrite();
@@ -904,6 +945,7 @@ export async function cmdTest(): Promise<void> {
   testInstallCodexCreatesHooksJson();
   testInstallCodexHooksMergePreservesForeign();
   testInstallCodexHooksAlreadyConfiguredNoOp();
+  testInstallCodexSessionStartUpgradeAppends();
   testInstallCodexHooksMalformedSkipsGracefully();
   testInstallCodexDryRunHooksNoWrite();
   testInstallCodexLinksSkills();

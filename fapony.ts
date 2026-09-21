@@ -7,7 +7,12 @@ import { existsSync } from "node:fs";
 import { cmdAnalyze } from "./src/analyze.js";
 import { cmdDebt } from "./src/debt/cli.js";
 import { cmdDigest } from "./src/digest/cli.js";
-import { cmdHookEditHint, cmdHookReadHint, cmdHookStop } from "./src/hook.js";
+import {
+  cmdHookEditHint,
+  cmdHookReadHint,
+  cmdHookSessionStart,
+  cmdHookStop,
+} from "./src/hook.js";
 import { cmdInit } from "./src/init.js";
 import { cmdInitMem } from "./src/init-mem.js";
 import { cmdInstall } from "./src/install.js";
@@ -87,6 +92,8 @@ if (cmd === "analyze") {
   await cmdHookReadHint();
 } else if (cmd === "hook-edit-hint") {
   await cmdHookEditHint();
+} else if (cmd === "hook-session-start") {
+  await cmdHookSessionStart();
 } else if (cmd === "mcp") {
   cmdMcp();
 } else if (cmd === "report") {
@@ -108,7 +115,7 @@ if (cmd === "analyze") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|hook-edit-hint|test> [args]",
+    "usage: fapony <setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|hook-edit-hint|hook-session-start|test> [args]",
   );
   process.exit(1);
 }

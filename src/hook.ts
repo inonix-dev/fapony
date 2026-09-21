@@ -30,7 +30,8 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import { buildGraphCached, collectSourceFiles, SCAN_EXTS } from "./analyze.js";
 import { openDb } from "./db/index.js";
 import { debtForFile, loadConventions } from "./debt/index.js";
-import { readMemLog } from "./memory.js";
+import { detectTestRunner } from "./detect.js";
+import { readMemLog, whereMemDir } from "./memory.js";
 
 // --- Hint-fire log (PLAN-feedback-surface chunk 1) ---
 //
@@ -255,6 +256,8 @@ export function decideStop(opts: {
   verdicts: number;
   commitList?: string[];
   memLastTs?: string | null;
+  /** Logs that exist in the repo but are out of scope from this worktree. */
+  memCandidates?: string[];
 }): string | null {
   if (opts.stopHookActive) return null; // already blocked once — let it end
   if (!opts.worktree) return null;
@@ -272,18 +275,30 @@ export function decideStop(opts: {
     lines.push(
       `mem: last row ${opts.memLastTs.slice(0, 10)} — nothing newer this session`,
     );
+  } else if (opts.memCandidates?.length) {
+    // "nothing recorded" would be a lie: the log exists, it is just not in
+    // scope from here (monorepo — the log lives in the app dir). Say where.
+    lines.push(
+      `mem: no log in scope from ${opts.worktree} — found ` +
+        `${opts.memCandidates.join(", ")} (run mem commands from there, or --mem-dir)`,
+    );
   } else {
     lines.push("mem: no rows at all — nothing recorded in this project yet");
   }
+  const runner = detectTestRunner(opts.worktree);
+  const verifyLine = runner
+    ? `If you did not run \`${runner.typecheckCmd ? `${runner.typecheckCmd} and ` : ""}${runner.testCmd}\` to a real exit code, ` +
+      `the honest verdict is uncertain, not pass. `
+    : `If you did not run this repo's typecheck and test suite to a real exit code, ` +
+      `the honest verdict is uncertain, not pass. `;
+
   lines.push(
     `Call verdict_submit before ending: worktree must be the absolute path above, ` +
       `regime is one of code|fix|review|plan|inquiry|test, and the note must stand alone ` +
       `(it is read months from now with no access to this conversation). ` +
       `Grade what actually happened — pass-family when it held up, fail if the first ` +
-      `attempt was wrong, uncertain when you could not verify it. ` +
-      `If you did not run this repo's typecheck and test suite to a real exit code, ` +
-      `the honest verdict is uncertain, not pass. What deserves a mem ` +
-      `row (decision/bug/note) is your call — not every unit needs one.`,
+      `attempt was wrong, uncertain when you could not verify it. ${verifyLine}` +
+      `What deserves a mem row (decision/bug/note) is your call — not every unit needs one.`,
   );
   return lines.join("\n");
 }
@@ -392,6 +407,67 @@ export function stopOutput(client: StopClient, reason: string): string {
   return JSON.stringify({ decision: "block", reason });
 }
 
+// --- Block dedupe (one block per session + worktree) ---
+//
+// stop_hook_active only suppresses the block that fires *immediately* after
+// one. Every later turn that still carries ungraded commits blocks again, so
+// a session that keeps committing gets the same paragraph 4-5 times. The
+// first block already delivered it; the repeats add noise, not force (rule 9
+// — the forcing happens once, and the agent that ignored it once is not
+// persuaded by the fifth copy).
+//
+// Keyed by the transcript path, which is already the session identity the
+// commit window is measured from — no session field to thread through.
+
+const STOP_BLOCK_DIR = "stop-block";
+
+interface StopBlockRow {
+  ts: string;
+  worktree: string;
+}
+
+/** Absolute path of a session's block log — may not exist. */
+export function stopBlockPath(session: string): string {
+  const base =
+    process.env.FAPONY_STATE_DIR || join(homedir(), ".config", "fapony");
+  return join(base, STOP_BLOCK_DIR, `${sessionKey(session)}.jsonl`);
+}
+
+/**
+ * True when this session already blocked for this worktree — the caller then
+ * lets the turn end. Records the block when it has not. Every unknown (no
+ * session identity, unwritable state dir) resolves to false: a dedupe that
+ * guesses must fail towards blocking, never towards silence.
+ */
+export function stopBlockedBefore(
+  session: string | null,
+  worktree: string,
+): boolean {
+  if (!session) return false;
+  const path = stopBlockPath(session);
+  try {
+    if (existsSync(path)) {
+      for (const line of readFileSync(path, "utf-8").split("\n")) {
+        if (!line) continue;
+        try {
+          if ((JSON.parse(line) as StopBlockRow).worktree === worktree) {
+            return true;
+          }
+        } catch {
+          // a torn line must not lose the rest of the log
+        }
+      }
+    }
+    const dir = join(path, "..");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const row: StopBlockRow = { ts: new Date().toISOString(), worktree };
+    appendFileSync(path, `${JSON.stringify(row)}\n`, "utf-8");
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 /** Reads the Stop-hook JSON on stdin, prints a block decision or nothing. */
 export async function cmdHookStop(): Promise<void> {
   let reason: string | null = null;
@@ -423,6 +499,7 @@ export async function cmdHookStop(): Promise<void> {
     let commitList: string[] = [];
     let verdicts = 0;
     let memLastTs: string | null = null;
+    let memCandidates: string[] = [];
     if (worktree && since) {
       const log = git(
         ["log", "--since", `${since} +0000`, "--format=%h %s"],
@@ -444,6 +521,8 @@ export async function cmdHookStop(): Promise<void> {
         try {
           const mem = readMemLog(worktree);
           memLastTs = mem.rows[0]?.ts ?? null;
+          if (!memLastTs)
+            memCandidates = whereMemDir(worktree).candidates ?? [];
         } catch {
           memLastTs = null;
         }
@@ -457,12 +536,93 @@ export async function cmdHookStop(): Promise<void> {
       verdicts,
       commitList,
       memLastTs,
+      memCandidates,
     });
+    // Already blocked for this worktree in this session — say it once.
+    if (
+      reason &&
+      worktree &&
+      stopBlockedBefore(norm.transcriptPath, worktree)
+    ) {
+      reason = null;
+    }
   } catch {
     reason = null; // any failure = allow the turn to end
   }
 
   if (reason) console.log(stopOutput(client, reason));
+}
+
+// --- Session start (kickoff as context, not as a thing to remember) ---
+//
+// `fapony mem kickoff` is the one command that pays for itself at session
+// open — what is open, what is stale, what the last rows touched. Asking the
+// agent to run it measured as not enough (rule 9), and an MCP tool would pay
+// schema rent in every session of every client to save one bash round
+// (rule 13). A SessionStart hook is neither: zero rent, and it fires whether
+// or not anyone remembers.
+//
+// Runs the CLI in a subprocess rather than calling cmdKickoff: kickoff prints
+// to stdout and exits on bad input, both of which would be this hook's stdout.
+
+/** Cap on injected context — kickoff is short, a broken repo's output is not. */
+export const SESSION_START_MAX_CHARS = 4_000;
+
+const TRUNCATED = "… truncated — run `fapony mem kickoff` for the rest";
+
+/** Trim to whole lines, keeping the marker's line boundary intact. */
+function headLines(text: string, max: number): string {
+  const cut = text.slice(0, max);
+  const lastNl = cut.lastIndexOf("\n");
+  return (lastNl > 0 ? cut.slice(0, lastNl) : cut).trimEnd();
+}
+
+/**
+ * Trim to whole lines within the cap, with an honest truncation marker.
+ *
+ * "## next up" is kickoff's last section and its most actionable one, so a
+ * plain head-cut drops exactly the part worth injecting in a repo with a long
+ * open list (measured here: 92 rows, the cut landed mid-history). Keep it and
+ * spend the rest of the budget on the head.
+ */
+export function capContext(
+  text: string,
+  max = SESSION_START_MAX_CHARS,
+): string {
+  if (text.length <= max) return text;
+  const at = text.lastIndexOf("\n## next up");
+  const tail = at > 0 ? text.slice(at).trimEnd() : "";
+  if (tail && tail.length < max / 2) {
+    return `${headLines(text, max - tail.length)}\n${TRUNCATED}\n${tail}`;
+  }
+  return `${headLines(text, max)}\n${TRUNCATED}`;
+}
+
+/** SessionStart hook: inject `fapony mem kickoff` output as context. */
+export async function cmdHookSessionStart(): Promise<void> {
+  try {
+    const raw = JSON.parse(await Bun.stdin.text()) as { cwd?: string };
+    const cwd = raw.cwd ?? process.cwd();
+    // No mem log in scope = nothing to say. Silence beats "no rows yet".
+    if (!whereMemDir(cwd).dir) return;
+    const p = Bun.spawnSync([process.execPath, Bun.main, "mem", "kickoff"], {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const out = p.stdout.toString().trim();
+    if (p.exitCode !== 0 || !out) return;
+    console.log(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "SessionStart",
+          additionalContext: capContext(out),
+        },
+      }),
+    );
+  } catch {
+    // any failure = no context, never a broken session start
+  }
 }
 
 // --- Read hint (PreToolUse annotate — never block, never dedupe) ---

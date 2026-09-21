@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   COMMIT_HINT_MIN_COMMITS,
+  capContext,
   commitHintFor,
   computeHintImpact,
   cursorTranscriptPath,
@@ -26,7 +27,10 @@ import {
   readTrackPath,
   recordHintFire,
   rereadHintFor,
+  SESSION_START_MAX_CHARS,
   sessionKey,
+  stopBlockedBefore,
+  stopBlockPath,
   stopOutput,
   utcStamp,
 } from "../src/hook.js";
@@ -34,6 +38,7 @@ import {
   commitHintPluginSource,
   editHintPluginSource,
   readHintPluginSource,
+  sessionStartPluginSource,
 } from "../src/install/opencode.js";
 
 const base = {
@@ -111,6 +116,182 @@ export function testDecideStopReportsCommitsAndMem(): void {
   // No mem at all must read differently from "nothing newer"
   const noMem = decideStop({ ...base, memLastTs: null });
   assert.ok(noMem?.includes("no rows at all"));
+}
+
+// Regression 2026-09-21: a monorepo whose only log lives in apps/<x> got
+// "no rows at all — nothing recorded in this project yet" on every block,
+// which is false. Out of scope and absent must read differently.
+export function testDecideStopNamesOutOfScopeMemLog(): void {
+  const reason = decideStop({
+    ...base,
+    memLastTs: null,
+    memCandidates: ["/repo/apps/vela/.fapony/.memory"],
+  });
+  assert.ok(reason);
+  assert.ok(
+    !reason.includes("no rows at all"),
+    "must not claim nothing was recorded when a log exists",
+  );
+  assert.ok(
+    reason.includes("/repo/apps/vela/.fapony/.memory"),
+    "names where the log actually is",
+  );
+  console.log("  ✓ block message names an out-of-scope mem log");
+}
+
+// The first block delivers the message; blocks 2-5 in the same session deliver
+// noise. stop_hook_active only covers the turn immediately after a block.
+export function testStopBlocksOncePerSessionPerWorktree(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-sb-"));
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = dir;
+  try {
+    const session = "/tmp/transcripts/sess-b.jsonl";
+    assert.equal(
+      stopBlockedBefore(session, "/repo/a"),
+      false,
+      "first block goes through",
+    );
+    assert.equal(
+      stopBlockedBefore(session, "/repo/a"),
+      true,
+      "second block in the same session is suppressed",
+    );
+    assert.equal(
+      stopBlockedBefore(session, "/repo/b"),
+      false,
+      "a different worktree still blocks once",
+    );
+    assert.equal(
+      stopBlockedBefore("/tmp/transcripts/sess-c.jsonl", "/repo/a"),
+      false,
+      "a new session starts over",
+    );
+    assert.equal(
+      stopBlockedBefore(null, "/repo/a"),
+      false,
+      "no session identity = no dedupe, block as before",
+    );
+    assert.ok(existsSync(stopBlockPath(session)));
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ Stop blocks once per session + worktree");
+}
+
+// SessionStart context is injected whole — a repo with a long open list must
+// not push the session's own prompt out of the way.
+export function testSessionStartContextIsCapped(): void {
+  const short = "one line";
+  assert.equal(capContext(short), short, "short output passes through");
+  const long = `${"x".repeat(50)}\n`.repeat(200);
+  const capped = capContext(long);
+  assert.ok(capped.length <= SESSION_START_MAX_CHARS + 120, "stays near cap");
+  assert.ok(capped.includes("truncated"), "says it was cut");
+  assert.ok(
+    capped.includes("fapony mem kickoff"),
+    "points at the full command",
+  );
+  // The actionable section is the last one — a plain head-cut would drop it.
+  const withNext = `${long}\n## next up\n  [1] bug #abc — fix the thing\n`;
+  const keptNext = capContext(withNext);
+  assert.ok(keptNext.includes("[1] bug #abc"), "keeps the next-up section");
+  assert.ok(keptNext.includes("truncated"), "still says it was cut");
+  assert.ok(
+    keptNext.length <= SESSION_START_MAX_CHARS + 200,
+    "keeping next up stays within budget",
+  );
+  console.log("  ✓ session-start context is capped with an honest marker");
+}
+
+export function testDecideStopMessageIsRepoNeutral(): void {
+  // The block message installs globally and fires in every repo — a repo-specific
+  // command in it teaches agents the message is untrustworthy, which erodes the
+  // verdict enforcement. Twice bitten (setup.ts, hook.ts); the test remembers.
+  const reason = decideStop(base);
+  assert(reason);
+  assert.doesNotMatch(
+    reason,
+    /bun fapony\.ts|fapony lint-baseline|npm (run|test|exec)|pnpm |npx |yarn /,
+    "block message must not name repo-specific commands",
+  );
+}
+
+export function testDecideStopDerivesCommandFromWorktree(): void {
+  // When the worktree is real, the message names the repo's actual test
+  // command — not a generic phrase, not a hardcoded fapony one. derive, don't
+  // assume: this is the whole point of detectTestRunner.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-stop-derive-"));
+  try {
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ packageManager: "bun@1.2.0" }),
+    );
+    const reason = decideStop({
+      stopHookActive: false,
+      worktree: dir,
+      commits: 1,
+      verdicts: 0,
+    });
+    assert(reason, "blocks");
+    assert.match(reason, /`bun test`/, "names the derived bun command");
+    assert.doesNotMatch(
+      reason,
+      /bun fapony\.ts|fapony lint-baseline/,
+      "never names fapony commands",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  // A foreign worktree (no packageManager, no lockfile) falls back to the
+  // generic phrase — detectTestRunner returns null, no guessing.
+  const foreign = mkdtempSync(join(tmpdir(), "fapony-stop-foreign-"));
+  try {
+    writeFileSync(join(foreign, "package.json"), JSON.stringify({ name: "x" }));
+    const reason = decideStop({
+      stopHookActive: false,
+      worktree: foreign,
+      commits: 1,
+      verdicts: 0,
+    });
+    assert(reason);
+    assert.match(
+      reason,
+      /this repo's typecheck and test suite/,
+      "foreign worktree → generic fallback",
+    );
+  } finally {
+    rmSync(foreign, { recursive: true, force: true });
+  }
+  console.log(
+    "  ✓ decideStop derives test command from worktree, falls back for foreign",
+  );
+}
+
+const REPO_SPECIFIC_CMDS =
+  /bun fapony\.ts|npm (run test|test|exec)|pnpm test|yarn test/;
+
+export function testStopHookSourceHasNoRepoSpecificCommands(): void {
+  // The Stop hook installs globally but fires in every repo. Its source must
+  // not hardcode a verify command that only works in one repo —
+  // detectTestRunner owns derivation now. Sweep the files that build the block
+  // message so the third occurrence of this bug class is caught at commit time,
+  // not in someone's worktree. (Informational CLI refs like "fapony report" in
+  // a setup banner are global commands, not verify commands — allowed.)
+  for (const file of ["hook.ts", "setup.ts"]) {
+    const src = readFileSync(join(__dirname, "..", "src", file), "utf-8");
+    const bad = src.match(REPO_SPECIFIC_CMDS);
+    assert.ok(
+      !bad,
+      `${file} hardcodes repo-specific verify command: "${bad?.[0]}" — derive via detectTestRunner`,
+    );
+  }
+  console.log(
+    "  ✓ hook.ts / setup.ts source sweeps clean (no hardcoded repo verify commands)",
+  );
 }
 
 export function testDecideStopMemNeverBlocks(): void {
@@ -882,16 +1063,14 @@ export function testReadContextMemRowsByFilesAndPath(): void {
         text,
         ...(files ? { files } : []),
       });
-    writeFileSync(
-      join(dir, ".fapony/.memory/log.t.jsonl"),
-      [
-        row("2026-09-17T00:00:00Z", "money drifted via toLocaleString", [
-          "src/bill.tsx",
-        ]),
-        row("2026-09-16T00:00:00Z", "old row mentions src/form.tsx by path"),
-        row("2026-09-15T00:00:00Z", "unrelated row about nothing"),
-      ].join("\n") + "\n",
-    );
+    const logRows = [
+      row("2026-09-17T00:00:00Z", "money drifted via toLocaleString", [
+        "src/bill.tsx",
+      ]),
+      row("2026-09-16T00:00:00Z", "old row mentions src/form.tsx by path"),
+      row("2026-09-15T00:00:00Z", "unrelated row about nothing"),
+    ].join("\n");
+    writeFileSync(join(dir, ".fapony/.memory/log.t.jsonl"), `${logRows}\n`);
     writeFileSync(join(dir, "src/bill.tsx"), "x");
     writeFileSync(join(dir, "src/form.tsx"), "x");
     const byFiles = readContextLines(join(dir, "src/bill.tsx"), dir);
@@ -917,15 +1096,13 @@ export function testReadContextBasenameAmbiguityStaysSilent(): void {
     mkdirSync(join(dir, ".fapony/.memory"), { recursive: true });
     writeFileSync(join(dir, "src/a/index.ts"), "x");
     writeFileSync(join(dir, "src/b/index.ts"), "x");
-    writeFileSync(
-      join(dir, ".fapony/.memory/log.t.jsonl"),
-      JSON.stringify({
-        ts: "2026-09-17T00:00:00Z",
-        agent: "t",
-        kind: "note",
-        text: "watch out for index.ts",
-      }) + "\n",
-    );
+    const memRow = JSON.stringify({
+      ts: "2026-09-17T00:00:00Z",
+      agent: "t",
+      kind: "note",
+      text: "watch out for index.ts",
+    });
+    writeFileSync(join(dir, ".fapony/.memory/log.t.jsonl"), `${memRow}\n`);
     // two index.ts exist — the row cannot be attributed, so: silence
     const lines = readContextLines(join(dir, "src/a/index.ts"), dir);
     assert.equal(lines.length, 0, "ambiguous basename must not guess");
@@ -1175,6 +1352,36 @@ export function testEditHintPluginSource(): void {
 export function testCommitHintMinCommitsConstant(): void {
   assert.strictEqual(COMMIT_HINT_MIN_COMMITS, 1);
   console.log("  ✓ commit hint min commits constant is 1");
+}
+
+export function testSessionStartPluginSource(): void {
+  // The generated OpenCode plugin must reuse the shared capContext (no
+  // second implementation), inject through output.system — the only channel
+  // the event hook cannot offer — and fire once per session.
+  const src = sessionStartPluginSource("/install/root");
+  assert.ok(
+    src.includes("/install/root/src/hook.ts"),
+    "bakes the install root",
+  );
+  assert.ok(
+    src.includes("experimental.chat.system.transform"),
+    "injects via system.transform, the documented channel",
+  );
+  assert.ok(
+    src.includes("capContext"),
+    "must import capContext from the shared module",
+  );
+  assert.ok(src.includes("mem"), "must run the kickoff command");
+  assert.ok(src.includes("kickoff"), "must run the kickoff command");
+  assert.ok(src.includes("output.system"), "pushes into system, never args");
+  assert.ok(
+    src.includes("sessionID") && src.includes("seen"),
+    "dedupes once per session",
+  );
+  assert.ok(!src.includes("throw"), "must never break a session start");
+  console.log(
+    "  ✓ session start opencode plugin imports shared logic, annotate-only",
+  );
 }
 
 export function testComputeHintImpact(): void {

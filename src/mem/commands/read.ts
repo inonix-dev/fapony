@@ -2,10 +2,11 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { baselinePath, readEvidenceLintCmd } from "../../lint-baseline.js";
 import { doneLines, fmtClose, fmtRow, printOpenRows } from "../render.js";
 import { claimsOf, openRows, staleReport } from "../selectors.js";
 import type { CloseRow, WorkRow } from "../store.js";
-import { allRows, app, memCmd, planDir, rows } from "../store.js";
+import { allRows, app, memCmd, planDir, root, rows } from "../store.js";
 import { planSweepCmd, shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
 
@@ -404,6 +405,22 @@ export const cmdKickoff = (a: string[]) => {
       text: `แตะล่าสุด: ${uniqueRecent.join(", ")}`,
       run: `fapony review-seed --files ${uniqueRecent.join(",")}`,
     });
+  }
+
+  // group 4 — the lint baseline. "Is this red mine or was it already red" is
+  // already answered by `lint-baseline`, but only if it was captured before
+  // the work started — and nobody remembers at session open, which is what
+  // kickoff is. Only offered when the repo declared a lint command; without
+  // one the capture would just fail.
+  try {
+    if (readEvidenceLintCmd(root) && !existsSync(baselinePath(root))) {
+      suggestions.push({
+        text: "lint baseline ยังไม่ capture — แดงที่มีอยู่ก่อนจะถูกนับเป็นของคุณ",
+        run: "fapony lint-baseline --capture",
+      });
+    }
+  } catch {
+    // state dir unreadable — the baseline line is a convenience, never a gate
   }
 
   // Print and optionally execute. Only a suggestion with a complete command is

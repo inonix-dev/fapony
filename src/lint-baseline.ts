@@ -52,12 +52,12 @@ function gitSha(cwd: string): string {
   return p.exitCode === 0 ? p.stdout.toString().trim().slice(0, 12) : "none";
 }
 
-function baselinePath(worktree: string): string {
+export function baselinePath(worktree: string): string {
   const key = worktree.replace(/[^A-Za-z0-9._-]+/g, "_");
   return join(faponyDir(), "lint-baseline", `${key}.json`);
 }
 
-function readEvidenceLintCmd(worktree: string): string | null {
+export function readEvidenceLintCmd(worktree: string): string | null {
   const evidence = join(worktree, DEFAULT_EVIDENCE_FILE);
   try {
     const parsed = JSON.parse(readFileSync(evidence, "utf-8")) as {

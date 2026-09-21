@@ -119,7 +119,7 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 
 ---
 
-## Client support — อะไรใช้ได้กับใคร (ปรับ 2026-09-20)
+## Client support — อะไรใช้ได้กับใคร (ปรับ 2026-09-21)
 
 `fapony install` รู้จัก 5 ไคลเอนต์ · **MCP เป็นชิ้นเดียวที่ทุกตัวได้** · hook/hint เป็นรายไคลเอนต์
 และ **ลำดับยิงต่างกัน** — Claude Code ยิง *ก่อน* tool call (`PreToolUse` → `additionalContext`)
@@ -134,6 +134,7 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 | Re-read hint (อ่านซ้ำไฟล์เดิม mtime ไม่ขยับ) | ✅ ก่อน | ✅ หลัง | — | — | — |
 | Edit hint (จำนวน importer ก่อนแก้ shape) | ✅ ก่อน | ✅ หลัง (edit+write) | — | — | — |
 | Commit hint (`git commit` → เตือน verdict) | — | ✅ หลัง | — | — | — |
+| SessionStart (ยิง `mem kickoff` เป็น context) | ✅ | ✅ ครั้งแรกที่ dispatch | — | — | ✅ after trust |
 | Skill symlink → `~/.claude/skills` | ✅ | ✅ | — | — | — |
 | Skill symlink → `~/.agents/skills` | — | — | — | ✅ | ✅ |
 | `usage-scan` อ่าน session log ของเจ้านั้น | ✅ | ✅ | — | ✅ | ✅ |
@@ -142,7 +143,9 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 สำหรับ read/edit hints — Codex `apply_patch` ส่ง patch text ไม่ใช่ file path) · **ทำไม hint อยู่บน hook ไม่ใช่
 MCP** — มันต้องยิงกลางเทิร์นเองโดย agent ไม่ต้องนึก ตรงเกณฑ์ MCP-vs-CLI (กฎ 13) เป๊ะ · **commit hint
 มีแต่ OpenCode** เพราะ Claude ใช้ Stop hook รายงาน commit ที่ยังไม่ grade แทน · Codex hooks ต้อง
-trust ผ่าน `/hooks` ก่อน run — `fapony install` บอกเมื่อต้องทำ · ตัวติดตั้ง **ไม่เคยเขียนทับ plugin ของตัวเอง**
+trust ผ่าน `/hooks` ก่อน run — `fapony install` บอกเมื่อต้องทำ · **SessionStart บน OpenCode มาตอน
+dispatch ครั้งแรก** (`experimental.chat.system.transform` ครั้งเดียวต่อ session — ช่อง inject เดียวที่
+`event` hook ไม่มี) ไม่ใช่ตอนสร้าง session · ตัวติดตั้ง **ไม่เคยเขียนทับ plugin ของตัวเอง**
 ฉะนั้นแก้ `*PluginSource` แล้วต้องลบไฟล์ใน `~/.config/opencode/plugins/` ทิ้งก่อน install ใหม่ ไม่งั้นได้ของเก่าเงียบ ๆ
 
 ## Memory: `.fapony/.memory/log.<คุณ>.jsonl` (append-only)
@@ -459,6 +462,7 @@ fapony hook-stop                     # Stop hook — block เทิร์นท
 fapony hook-read-hint                # annotate 2 แบบ: อ่านไฟล์ใหญ่ทั้งไฟล์ → review-seed ·
                                      # re-read ไฟล์เดิมใน session เดียวกันที่ mtime ไม่ขยับ → grep
 fapony hook-edit-hint                # PreToolUse Edit — บอกจำนวน importer ของไฟล์ที่กำลังแก้ (Claude)
+fapony hook-session-start            # SessionStart — ยิง `mem kickoff` เข้า context (เงียบถ้าไม่มี mem log)
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]
 fapony report <run-id>  ·  fapony report-web [file]
 # ── setup ──

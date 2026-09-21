@@ -1,7 +1,7 @@
 // src/install/codex.ts — Codex install provider
 //
 // Reads/writes ~/.codex/config.toml directly for MCP config.
-// Reads/writes ~/.codex/hooks.json for lifecycle hooks (Stop).
+// Reads/writes ~/.codex/hooks.json for lifecycle hooks (Stop, SessionStart).
 // Symlinks skills into ~/.agents/skills/ (same dir as ZCode).
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -46,18 +46,25 @@ function readJsonObject(path: string): Record<string, unknown> | null {
 }
 
 /**
- * Append the fapony Stop hook to ~/.codex/hooks.json.
- * Never replaces other hook groups or foreign entries within the Stop group.
- * Fapony-owned entry is identified by the command string containing "hook-stop".
+ * Append a fapony command hook to one event group in ~/.codex/hooks.json.
+ * Never replaces other hook groups or foreign entries within the group.
+ * A fapony-owned entry is identified by the subcommand string
+ * ("hook-stop" / "hook-session-start") inside its command — per-group
+ * idempotence, so an existing install with only Stop still picks up
+ * SessionStart on the next run.
  */
-function installStopHook(dryRun: boolean, getHome: () => string): void {
+function installCodexHookGroup(
+  dryRun: boolean,
+  getHome: () => string,
+  opts: { event: "Stop" | "SessionStart"; subcommand: string; label: string },
+): void {
   const hooksPath = join(getHome(), ".codex", "hooks.json");
   let config: Record<string, unknown> = {};
   if (existsSync(hooksPath)) {
     const parsed = readJsonObject(hooksPath);
     if (!parsed) {
       console.error(
-        `  stop hook: ${hooksPath} is unreadable or malformed — skipping`,
+        `  ${opts.label}: ${hooksPath} is unreadable or malformed — skipping`,
       );
       return;
     }
@@ -70,43 +77,74 @@ function installStopHook(dryRun: boolean, getHome: () => string): void {
     (typeof hookMap !== "object" || Array.isArray(hookMap))
   ) {
     console.error(
-      `  stop hook: ${hooksPath} has an unexpected "hooks" shape — skipping`,
+      `  ${opts.label}: ${hooksPath} has an unexpected "hooks" shape — skipping`,
     );
     return;
   }
 
   const map = (hookMap ?? {}) as Record<string, unknown>;
-  // Codex Stop array: each element is { matcher?, hooks: [...] }
-  const stop = Array.isArray(map.Stop) ? (map.Stop as unknown[]) : [];
+  // Codex event arrays: each element is { matcher?, hooks: [...] }
+  const group = Array.isArray(map[opts.event])
+    ? (map[opts.event] as unknown[])
+    : [];
 
-  // Check if fapony stop hook already present (by command string)
-  const serialized = JSON.stringify(stop);
-  if (serialized.includes("hook-stop")) {
-    console.error(`  stop hook: already configured in hooks.json — no change`);
+  // Check if the fapony hook is already present in this group (by subcommand)
+  const serialized = JSON.stringify(group);
+  if (serialized.includes(opts.subcommand)) {
+    console.error(
+      `  ${opts.label}: already configured in hooks.json — no change`,
+    );
     return;
   }
 
-  const command = `bun ${join(INSTALL_ROOT, "fapony.ts")} hook-stop`;
+  const command = `bun ${join(INSTALL_ROOT, "fapony.ts")} ${opts.subcommand}`;
   const faponyEntry = { hooks: [{ type: "command", command }] };
   const after = {
     ...config,
-    hooks: { ...map, Stop: [...stop, faponyEntry] },
+    hooks: { ...map, [opts.event]: [...group, faponyEntry] },
   };
 
   if (!dryRun) {
     try {
       writeFileSync(hooksPath, `${JSON.stringify(after, null, 2)}\n`, "utf-8");
     } catch (e) {
-      console.error(`  stop hook: failed to write — ${(e as Error).message}`);
+      console.error(
+        `  ${opts.label}: failed to write — ${(e as Error).message}`,
+      );
       return;
     }
   }
   console.error(
-    `  stop hook: ${dryRun ? "would write" : "wrote"} hooks.Stop → ${hooksPath}`,
+    `  ${opts.label}: ${dryRun ? "would write" : "wrote"} hooks.${opts.event} → ${hooksPath}`,
   );
   console.error(
     `    review and trust via Codex /hooks before the hook will run`,
   );
+}
+
+function installStopHook(dryRun: boolean, getHome: () => string): void {
+  installCodexHookGroup(dryRun, getHome, {
+    event: "Stop",
+    subcommand: "hook-stop",
+    label: "stop hook",
+  });
+}
+
+/**
+ * SessionStart hook: injects `fapony mem kickoff` as context when the repo
+ * has a mem log, silent when it does not (cmdHookSessionStart exits quiet).
+ * Same `hookSpecificOutput.additionalContext` contract Claude uses — Codex
+ * SessionStart reads that channel too. No matcher: match-all fires on every
+ * source including `clear` and on versions that send no source at all, where
+ * a `startup|resume` matcher would silently never fire; kickoff is capped at
+ * 4k and costs one cheap spawn, so the /clear path stays fast.
+ */
+function installSessionStartHook(dryRun: boolean, getHome: () => string): void {
+  installCodexHookGroup(dryRun, getHome, {
+    event: "SessionStart",
+    subcommand: "hook-session-start",
+    label: "session start",
+  });
 }
 
 export function cmdInstallCodex(dryRun: boolean, deps: InstallDeps = {}): void {
@@ -144,8 +182,9 @@ export function cmdInstallCodex(dryRun: boolean, deps: InstallDeps = {}): void {
     console.error(`  restart Codex to load the MCP server`);
   }
 
-  // --- Stop hook (~/.codex/hooks.json) ---
+  // --- Stop + SessionStart hooks (~/.codex/hooks.json) ---
   installStopHook(dryRun, getHome);
+  installSessionStartHook(dryRun, getHome);
 
   // --- Skills (~/.agents/skills/) ---
   const skillsDir = agentsSkillsDir(getHome);

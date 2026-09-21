@@ -30,6 +30,10 @@ function hookCommand(): string {
   return `bun ${join(INSTALL_ROOT, "fapony.ts")} hook-stop`;
 }
 
+function sessionStartCommand(): string {
+  return `bun ${join(INSTALL_ROOT, "fapony.ts")} hook-session-start`;
+}
+
 // --- MCP config tests ---
 
 export function testInstallCodexNoConfigFails(): void {
@@ -153,7 +157,20 @@ export function testInstallCodexCreatesHooksJson(): void {
     assert.equal(hookHandlers.length, 1);
     assert.equal(hookHandlers[0].type, "command");
     assert.equal(hookHandlers[0].command, hookCommand());
-    console.log("  ✓ install codex creates hooks.json with Stop hook");
+    const ss = (hooks.hooks as Record<string, unknown>)?.SessionStart as Array<
+      Record<string, unknown>
+    >;
+    assert.ok(Array.isArray(ss), "SessionStart must be an array");
+    assert.equal(ss.length, 1, "exactly one SessionStart entry");
+    const ssHandlers = (ss[0] as Record<string, unknown>).hooks as Array<
+      Record<string, unknown>
+    >;
+    assert.equal(ssHandlers.length, 1);
+    assert.equal(ssHandlers[0].type, "command");
+    assert.equal(ssHandlers[0].command, sessionStartCommand());
+    console.log(
+      "  ✓ install codex creates hooks.json with Stop + SessionStart hooks",
+    );
   });
 }
 
@@ -195,9 +212,19 @@ export function testInstallCodexHooksMergePreservesForeign(): void {
       JSON.stringify(stop[1]).includes("hook-stop"),
       "fapony entry appended",
     );
-    // SessionStart untouched
-    const ss = (hooks.hooks as Record<string, unknown>)?.SessionStart;
-    assert.ok(Array.isArray(ss) && ss.length === 1, "SessionStart untouched");
+    // SessionStart: foreign entry preserved, fapony entry appended
+    const ss = (hooks.hooks as Record<string, unknown>)?.SessionStart as Array<
+      Record<string, unknown>
+    >;
+    assert.equal(ss.length, 2, "foreign + fapony SessionStart entries");
+    assert.ok(
+      JSON.stringify(ss[0]).includes("session-start.py"),
+      "foreign entry preserved",
+    );
+    assert.ok(
+      JSON.stringify(ss[1]).includes("hook-session-start"),
+      "fapony entry appended",
+    );
     console.log("  ✓ install codex hooks.json merge preserves foreign entries");
   });
 }
@@ -211,6 +238,9 @@ export function testInstallCodexHooksAlreadyConfiguredNoOp(): void {
     const existing = {
       hooks: {
         Stop: [{ hooks: [{ type: "command", command: hookCommand() }] }],
+        SessionStart: [
+          { hooks: [{ type: "command", command: sessionStartCommand() }] },
+        ],
       },
     };
     writeFileSync(
@@ -228,6 +258,42 @@ export function testInstallCodexHooksAlreadyConfiguredNoOp(): void {
     assert.equal(before, after, "hooks.json must not change");
     assert.ok(err.includes("already configured"), `got: ${err}`);
     console.log("  ✓ install codex hooks.json already configured → no-op");
+  });
+}
+
+export function testInstallCodexSessionStartUpgradeAppends(): void {
+  // Every existing install has Stop but no SessionStart — the upgrade path
+  // must append the new group and leave Stop byte-identical.
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.toml"), codexEntryToml());
+
+    const stopEntry = {
+      hooks: [{ type: "command", command: hookCommand() }],
+    };
+    writeFileSync(
+      join(configDir, "hooks.json"),
+      JSON.stringify({ hooks: { Stop: [stopEntry] } }, null, 2),
+    );
+
+    silentErrors(() =>
+      cmdInstallCodex(false, { exit: testExit, homedir: () => home }),
+    );
+    const hooks = JSON.parse(
+      readFileSync(join(configDir, "hooks.json"), "utf-8"),
+    ) as Record<string, unknown>;
+    const stop = (hooks.hooks as Record<string, unknown>)?.Stop as unknown[];
+    assert.deepEqual(stop, [stopEntry], "Stop group must be untouched");
+    const ss = (hooks.hooks as Record<string, unknown>)?.SessionStart as Array<
+      Record<string, unknown>
+    >;
+    assert.ok(Array.isArray(ss) && ss.length === 1, "SessionStart appended");
+    const handlers = (ss[0] as Record<string, unknown>).hooks as Array<
+      Record<string, unknown>
+    >;
+    assert.equal(handlers[0].command, sessionStartCommand());
+    console.log("  ✓ install codex Stop-only install → SessionStart appended");
   });
 }
 

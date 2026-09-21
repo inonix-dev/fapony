@@ -218,7 +218,13 @@ function walkUpForMemDir(fromDir: string, acceptEmpty: boolean): string | null {
 export interface MemDirResult {
   dir: string | null;
   step: "flag" | "config" | "walk-up" | "repo-root" | "ambiguous" | "none";
-  /** For step "ambiguous" — the sibling `.fapony/.memory/` dirs that hold logs. */
+  /**
+   * `.fapony/.memory/` dirs under the repo root that hold logs but are not in
+   * scope from `fromDir`. Set for "ambiguous" (two or more, the refusal) and
+   * also for "repo-root"/"none" (one) — a caller that reports "nothing
+   * recorded here" is lying when a single app-scoped log exists one level
+   * down, and the honest line needs the path to say where.
+   */
   candidates?: string[];
 }
 
@@ -320,20 +326,23 @@ function resolveMemDirFrom(
   // Guard (SPEC §1 fail example): nothing at/above cwd holds a log, but the repo
   // has two or more app-scoped ones — refuse instead of silently creating a
   // third log at the root that no app-scoped reader will ever see.
-  if (root) {
-    const candidates = findMemDirsUnder(root);
-    if (candidates.length >= 2) {
-      return { dir: null, step: "ambiguous", candidates };
-    }
+  // One candidate is not ambiguous, so resolution is unchanged — but it still
+  // travels back with the result: out-of-scope is not the same as absent.
+  const candidates = root ? findMemDirsUnder(root) : [];
+  if (candidates.length >= 2) {
+    return { dir: null, step: "ambiguous", candidates };
   }
+  const outOfScope = candidates.length ? { candidates } : {};
 
   // Step 4: <repo root>/.fapony/.memory/ — where a new log is created
   if (root) {
     const rootDir = join(root, DEFAULT_MEM_DIR);
-    if (existsSync(rootDir)) return { dir: rootDir, step: "repo-root" };
+    if (existsSync(rootDir)) {
+      return { dir: rootDir, step: "repo-root", ...outOfScope };
+    }
   }
 
-  return { dir: null, step: "none" };
+  return { dir: null, step: "none", ...outOfScope };
 }
 
 export function resolveMemDir(
