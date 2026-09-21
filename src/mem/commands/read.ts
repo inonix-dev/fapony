@@ -39,9 +39,11 @@ const planSweepLine = () => {
     : "";
 };
 
-// Tier-3 caps: same row budget as ## recent (doneLines takes 10). Per-row text
-// is cut at a word boundary — a kickoff line points at the row (mem find has
-// the full text), it must not reprint it.
+// Row-list caps: no row-list section exceeds 10 (same budget as ## recent,
+// which takes doneLines(all, 10)). Per-row text is cut at a word boundary —
+// a kickoff line points at the row (mem find has the full text), it must not
+// reprint it.
+const BUGS_LIMIT = 10;
 const RECENT_OPEN_LIMIT = 10;
 const RECENT_OPEN_TEXT = 160;
 
@@ -367,11 +369,16 @@ export const cmdKickoff = (a: string[]) => {
     const claims = claimsOf(all);
     const diffFiles = getBranchDiffFiles(root);
 
-    // Tier 1: unclaimed bugs (always first, no matter how old)
+    // Tier 1: unclaimed bugs (always first, no matter how old) — capped: a
+    // backlog of unclosable bugs must not push the rest of the ranking out.
     const bugs = open.filter((r) => r.kind === "bug" && !claims.has(r.id));
     if (bugs.length) {
       console.log(`\n## bugs`);
-      for (const r of bugs) console.log(fmtRow(r));
+      for (const r of bugs.slice(0, BUGS_LIMIT)) console.log(fmtRow(r));
+      if (bugs.length > BUGS_LIMIT)
+        console.log(
+          `… +${bugs.length - BUGS_LIMIT} more unclosed bugs — \`fapony mem find <word>\` for the rest`,
+        );
     }
 
     // Tier 2: rows whose files[] overlap with git diff --name-only dev...HEAD
