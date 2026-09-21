@@ -188,8 +188,12 @@ export function testSessionStartContextIsCapped(): void {
   assert.ok(capped.length <= SESSION_START_MAX_CHARS + 120, "stays near cap");
   assert.ok(capped.includes("truncated"), "says it was cut");
   assert.ok(
-    capped.includes("fapony mem kickoff"),
-    "points at the full command",
+    capped.includes("fapony mem find"),
+    "points at capped recall, not the full dump",
+  );
+  assert.ok(
+    !capped.includes("mem kickoff"),
+    "never sends the agent back to the uncapped dump",
   );
   // The actionable section is the last one — a plain head-cut would drop it.
   const withNext = `${long}\n## next up\n  [1] bug #abc — fix the thing\n`;

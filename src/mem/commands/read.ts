@@ -39,6 +39,19 @@ const planSweepLine = () => {
     : "";
 };
 
+// Tier-3 caps: same row budget as ## recent (doneLines takes 10). Per-row text
+// is cut at a word boundary — a kickoff line points at the row (mem find has
+// the full text), it must not reprint it.
+const RECENT_OPEN_LIMIT = 10;
+const RECENT_OPEN_TEXT = 160;
+
+const shortText = (text: string, max = RECENT_OPEN_TEXT): string => {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut}…`;
+};
+
 export const cmdDone = () => {
   const all = rows();
   for (const l of doneLines(all)) console.log(l);
@@ -376,14 +389,22 @@ export const cmdKickoff = (a: string[]) => {
     // Print next up BEFORE the recency tier so it survives the 4KB cap
     printNextUp();
 
-    // Tier 3: rest by recency (newest first)
+    // Tier 3: rest by recency (newest first) — tie-breaker only, capped like
+    // ## recent (doneLines takes 10): decision/note can never close, so an
+    // uncapped tier reprints the whole log. Lines are pointers, not prose —
+    // cut at a word boundary and point at mem find for the rest.
     const shown = new Set([...bugIds, ...diffMatched.map((r) => r.id)]);
     const rest = open
       .filter((r) => !shown.has(r.id))
       .sort((a, b) => b.ts.localeCompare(a.ts));
     if (rest.length) {
       console.log(`\n## recent open`);
-      for (const r of rest) console.log(fmtRow(r, claims));
+      for (const r of rest.slice(0, RECENT_OPEN_LIMIT))
+        console.log(fmtRow({ ...r, text: shortText(r.text) }, claims));
+      if (rest.length > RECENT_OPEN_LIMIT)
+        console.log(
+          `… +${rest.length - RECENT_OPEN_LIMIT} more — \`fapony mem find <word>\` for the rest`,
+        );
     }
 
     // recent closes, plan sweep, rotate — after next up

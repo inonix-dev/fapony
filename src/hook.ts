@@ -573,7 +573,7 @@ export async function cmdHookStop(): Promise<void> {
 /** Cap on injected context — kickoff is short, a broken repo's output is not. */
 export const SESSION_START_MAX_CHARS = 4_000;
 
-const TRUNCATED = "… truncated — run `fapony mem kickoff` for the rest";
+const TRUNCATED = "… truncated — run `fapony mem find <word>` for the rest";
 
 /** Trim to whole lines, keeping the marker's line boundary intact. */
 function headLines(text: string, max: number): string {
