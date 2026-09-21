@@ -445,8 +445,8 @@ export function testInstallOpencodeSessionStartPlugin(): void {
       "must inject via system.transform, the documented channel",
     );
     assert.ok(
-      src.includes("capContext"),
-      "must share the cap logic, no second implementation",
+      src.includes("hook-session-start"),
+      "must defer to the shared hook, no second guard/cap implementation",
     );
     assert.ok(err.includes("session start"), `got: ${err}`);
 

@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -204,6 +205,62 @@ export function testSessionStartContextIsCapped(): void {
     "keeping next up stays within budget",
   );
   console.log("  ✓ session-start context is capped with an honest marker");
+}
+
+export function testHookSessionStartSilentWithoutMemLog(): void {
+  // Bug mub2ezhi: the no-mem-log guard is the whole reason the OpenCode plugin
+  // now spawns this hook instead of `mem kickoff` — kickoff exits 0 and prints
+  // "# <path> — 0 entries" in a repo with no log, and that header was landing
+  // in the first dispatch of every session. Silence must be a clean exit with
+  // zero stdout, because whatever lands here is injected as session context.
+  withTempRepo((dir) => {
+    const p = Bun.spawnSync(
+      ["bun", join(import.meta.dir, "..", "fapony.ts"), "hook-session-start"],
+      {
+        cwd: dir,
+        stdin: Buffer.from(JSON.stringify({ cwd: dir })),
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, FAPONY_STATE_DIR: join(dir, ".state") },
+      },
+    );
+    assert.equal(p.exitCode, 0, "silence is a clean exit, not an error");
+    assert.equal(p.stdout.toString().trim(), "", "no mem log = no context");
+  });
+
+  // The same hook emits the documented SessionStart JSON once a log exists.
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony/.memory"), { recursive: true });
+    const row = JSON.stringify({
+      ts: "2026-09-17T00:00:00Z",
+      agent: "t",
+      kind: "note",
+      text: "remember this",
+      files: ["README.md"],
+    });
+    writeFileSync(join(dir, ".fapony/.memory/log.t.jsonl"), `${row}\n`);
+    const p = Bun.spawnSync(
+      ["bun", join(import.meta.dir, "..", "fapony.ts"), "hook-session-start"],
+      {
+        cwd: dir,
+        stdin: Buffer.from(JSON.stringify({ cwd: dir })),
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, FAPONY_STATE_DIR: join(dir, ".state") },
+      },
+    );
+    assert.equal(p.exitCode, 0);
+    const out = JSON.parse(p.stdout.toString()) as {
+      hookSpecificOutput: Record<string, string>;
+    };
+    assert.equal(out.hookSpecificOutput.hookEventName, "SessionStart");
+    assert.ok(
+      typeof out.hookSpecificOutput.additionalContext === "string" &&
+        out.hookSpecificOutput.additionalContext.length > 0,
+      "carries the kickoff context",
+    );
+  });
+  console.log("  ✓ hook-session-start: silent with no mem log, JSON with one");
 }
 
 export function testDecideStopMessageIsRepoNeutral(): void {
@@ -1015,7 +1072,6 @@ export function testReadHintPluginSource(): void {
 
 // --- Debt + mem context lines (PLAN-convention-debt chunk 4) ---
 
-import { mkdirSync } from "node:fs";
 import { readContextLines } from "../src/hook.js";
 
 export function testReadContextShowsDebtBeforeFix(): void {
@@ -1355,33 +1411,36 @@ export function testCommitHintMinCommitsConstant(): void {
 }
 
 export function testSessionStartPluginSource(): void {
-  // The generated OpenCode plugin must reuse the shared capContext (no
-  // second implementation), inject through output.system — the only channel
-  // the event hook cannot offer — and fire once per session.
+  // The generated OpenCode plugin must defer to cmdHookSessionStart — one
+  // guard and one cap shared with the Claude/Codex hooks, not a second copy —
+  // and inject through output.system, the only channel the event hook cannot
+  // offer. It used to spawn `mem kickoff` and push stdout, which injected the
+  // empty-repo "# <path> — 0 entries" header into every session (mub2ezhi).
   const src = sessionStartPluginSource("/install/root");
-  assert.ok(
-    src.includes("/install/root/src/hook.ts"),
-    "bakes the install root",
-  );
+  assert.ok(src.includes("/install/root/fapony.ts"), "bakes the install root");
   assert.ok(
     src.includes("experimental.chat.system.transform"),
     "injects via system.transform, the documented channel",
   );
   assert.ok(
-    src.includes("capContext"),
-    "must import capContext from the shared module",
+    src.includes("hook-session-start"),
+    "spawns the shared hook, not mem kickoff",
   );
-  assert.ok(src.includes("mem"), "must run the kickoff command");
-  assert.ok(src.includes("kickoff"), "must run the kickoff command");
+  assert.ok(
+    src.includes("hookSpecificOutput") && src.includes("additionalContext"),
+    "parses the hook's documented JSON shape back out",
+  );
+  assert.ok(
+    !src.includes("capContext"),
+    "no second cap — the hook owns the guard and the cap",
+  );
   assert.ok(src.includes("output.system"), "pushes into system, never args");
   assert.ok(
     src.includes("sessionID") && src.includes("seen"),
     "dedupes once per session",
   );
   assert.ok(!src.includes("throw"), "must never break a session start");
-  console.log(
-    "  ✓ session start opencode plugin imports shared logic, annotate-only",
-  );
+  console.log("  ✓ session start opencode plugin defers to the shared hook");
 }
 
 export function testComputeHintImpact(): void {

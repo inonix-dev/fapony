@@ -157,6 +157,7 @@ import {
   testEditHintPluginSource,
   testEditHintSilentZeroImporters,
   testEditHintSkipsNonSourceAndMissing,
+  testHookSessionStartSilentWithoutMemLog,
   testReadContextBasenameAmbiguityStaysSilent,
   testReadContextCombinedCapAndOutsideRepo,
   testReadContextMemRowsByFilesAndPath,
@@ -697,6 +698,7 @@ export async function cmdTest(): Promise<void> {
   testDecideStopNamesOutOfScopeMemLog();
   testStopBlocksOncePerSessionPerWorktree();
   testSessionStartContextIsCapped();
+  testHookSessionStartSilentWithoutMemLog();
   testSessionStartPluginSource();
   testStopHookSourceHasNoRepoSpecificCommands();
   testReadHintAnnotatesLargeFullRead();
