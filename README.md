@@ -126,9 +126,11 @@ fapony price-scan                         # fetch the OpenRouter price table →
 fapony usage-web                          # dashboard; re-run the scans to refresh
 #    both scans are manual by design — nothing fetches or re-reads session logs behind your back
 
-# 4. Verify (optional, per project) — scaffold the evidence allowlist
+# 4. Turn on the knowledge layer (per project you want it in)
 fapony init /path/to/your-worktree
-#    edit .fapony/evidence.json to your real test/typecheck commands, then commit it
+#    creates .fapony/ — .memory/ (the mem log the 3 MCP tools read and write),
+#    conventions.json for `fapony debt`, plan/spec/done, and evidence.json
+#    conventions.json + evidence.json are shared rules: commit them
 ```
 
 With `.fapony/evidence.json` in place, any graded run from the frozen ledger can be replayed

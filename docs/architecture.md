@@ -27,7 +27,7 @@ fapony/
   templates/
     PLAN.md / SPEC.md              # plan+spec templates for `fapony init`
   src/
-    mem/                # fapony mem <add|close|find|kickoff|now|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
+    mem/                # fapony mem <add|close|find|kickoff|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
     db/               # SQLite + config
       store.ts        # openDb + schema/migration (PRAGMA user_version) + CRUD
       load.ts         # loadConfig()

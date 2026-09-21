@@ -99,7 +99,7 @@ agent ที่เปิดใน `cl-fapony/` โหลดไฟล์เดี
 
 ```
 fapony.ts       CLI dispatch
-src/mem/        fapony mem <add|close|find|kickoff|now|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
+src/mem/        fapony mem <add|close|find|kickoff|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
 src/memory.ts   mem log reader/resolver (.fapony/.memory)
 src/debt/       fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย" (live, ไม่ persist)
 src/lint-baseline.ts  แยก "แดงอยู่ก่อนแล้ว" ออกจาก "ฉันทำให้แดง"
@@ -440,7 +440,7 @@ relative รอดทั้งหมด archive เหลือ `git mv` + sed �
 
 ```bash
 # ── core: mem + debt ──
-fapony mem <add|close|find|kickoff|now|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
+fapony mem <add|close|find|kickoff|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
 fapony debt [--id <convention>] [--where <path>]   # ไฟล์ไหนยังไม่ย้ายไป convention ที่ประกาศไว้ (live, read-only)
 fapony lint-baseline [--cmd ...] [--diff]   # แยก "แดงอยู่ก่อนแล้ว" ออกจาก "ฉันทำให้แดง"
 fapony init-mem                     # ลบ .memory/ เก่า + เตือน call site ที่ยังอ้างถึง (data files ไม่ถูกแตะ)

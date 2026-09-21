@@ -1,7 +1,7 @@
 {
   "name": "fapony",
   "version": "0.3.0",
-  "description": "Measurement layer for coding agents \u2014 measure what agents do, verify what they claim. 4 MCP tools, any agent, no loop required",
+  "description": "Token usage across Claude Code, OpenCode, Codex & ZCode on one yardstick \u2014 plus a project mem log and convention-debt tracker agents query via 3 MCP tools. No server, your data stays local",
   "license": "MIT",
   "author": "delamind (https://github.com/kire21b)",
   "homepage": "https://github.com/kire21b/fapony#readme",
