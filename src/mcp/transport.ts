@@ -2,13 +2,7 @@
 
 import { createInterface } from "node:readline";
 import { getServerSha } from "./primitives.js";
-import {
-  TOOLS,
-  toolMemAdd,
-  toolMemClose,
-  toolMemFind,
-  toolVerdictSubmit,
-} from "./tools/index.js";
+import { TOOLS, toolMemAdd, toolMemClose, toolMemFind } from "./tools/index.js";
 import { errorResult, type ToolResult } from "./types.js";
 
 // --- Server instructions ---
@@ -23,11 +17,11 @@ import { errorResult, type ToolResult } from "./types.js";
 // Both habits degrade silently — an agent that ignores them still gets
 // correct answers from every tool, just a thinner history.
 
-const SERVER_INSTRUCTIONS = `fapony is a ledger of how work in this project turned out: which model, on which shape of task, produced work that held up. One habit feeds it.
+const SERVER_INSTRUCTIONS = `fapony records decisions, bugs, and notes about this project so the next session (or the next agent) knows what happened and what to watch out for.
 
-When a unit of work is finished, call verdict_submit to grade it — pass-excellent..pass when it holds, fail when the first attempt was wrong, uncertain when you could not verify it (never guess pass). This is a grade on the work, not a confession: grade routinely, including work that went right the first time, because a model's record is only as good as the number of graded units behind it.
+When you finish a unit of work, record a mem row: fapony mem add <decision|bug|note> "what happened" --files <files> <path/to/PLAN.md>. files[] is required — a row without it is unfindable when you touch that file next session.
 
-worktree must be the absolute path (git rev-parse --show-toplevel): every query scopes by it, so a bare name or none files the verdict where nothing reads it, and nothing errors to say so. Write the note standalone — what the work was and how it held up — it is read months later with no access to this conversation. Never leave a run non-terminal; an open run absorbs later unrelated verdicts for that worktree.
+worktree must be the absolute path (git rev-parse --show-toplevel): every query scopes by it, so a bare name or none files the row where nothing reads it, and nothing errors to say so. Write the note standalone — it is read months later with no access to this conversation.
 
 Skip it and every tool still answers correctly, on a thinner history.`;
 
@@ -74,9 +68,6 @@ function dispatchToolCall(params: {
   const args = params.arguments ?? {};
   let result: ToolResult;
   switch (params.name) {
-    case "verdict_submit":
-      result = toolVerdictSubmit(args);
-      break;
     case "mem_find":
       result = toolMemFind(args);
       break;

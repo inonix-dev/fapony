@@ -6,85 +6,11 @@
 // saves more than it costs (see CLAUDE.md "จ่าย token อย่างฉลาด"). Keep
 // descriptions imperative — say what to send, not why it matters.
 
-import { VERDICT_GRADES } from "../../parse.js";
-import { REASON_CODES, REGIME_CODES } from "../types.js";
-
 export { toolMemAdd, toolMemClose, toolMemFind } from "./mem.js";
-export { toolVerdictSubmit } from "./verdict.js";
 
 // --- Tool definitions ---
 
 export const TOOLS = [
-  {
-    name: "verdict_submit",
-    description:
-      "Grade a finished unit of work — every unit that ends, including work " +
-      "that went right the first time. Submit 'fail' the moment a first " +
-      "attempt turns out wrong, then a pass-family verdict once the fix is " +
-      "verified. Never leave a run open: one stuck at running/fixing absorbs " +
-      "later unrelated verdicts for that worktree. Without run_id, binds to " +
-      "the latest open run for the same worktree+plan, else creates one.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        run_id: {
-          type: "number",
-          description: "Existing run to attach to. Omitted = bind or create.",
-        },
-        verdict: {
-          type: "string",
-          enum: [...VERDICT_GRADES],
-          description: "Verdict grade",
-        },
-        reason_code: {
-          type: "string",
-          enum: [...REASON_CODES],
-          description:
-            "Failure reason. Clean passes take 'none', never 'other'.",
-        },
-        regime: {
-          type: "string",
-          enum: [...REGIME_CODES],
-          description:
-            "Task shape: code=feature/refactor, fix=debugging a defect, " +
-            "review=reviewing a diff, plan=producing a plan or spec, " +
-            "inquiry=questions without editing files, test=writing tests",
-        },
-        note: {
-          type: "string",
-          description:
-            "Standalone note — read months later with no access to this " +
-            "conversation. Required when reason_code = 'other'.",
-        },
-        worktree: {
-          type: "string",
-          description:
-            "Absolute repo path (git rev-parse --show-toplevel). Every query " +
-            "scopes by it, so a bare name or an omission files the verdict " +
-            "where nothing reads it. Neither case errors.",
-        },
-        plan: {
-          type: "string",
-          description: "Plan file path, for a new run",
-        },
-        session_id: {
-          type: "string",
-          description:
-            "Client session id (Claude Code/Codex: the transcript .jsonl " +
-            "path; OpenCode/ZCode: the session id) — this is what attributes " +
-            "the verdict to a model. Cannot find it → omit, never invent one.",
-        },
-        files: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "Repo-relative paths this unit touched. Optional, but always " +
-            "send them: nothing else records where the work landed.",
-        },
-      },
-      required: ["verdict", "reason_code", "regime"],
-    },
-  },
   {
     name: "mem_find",
     description:

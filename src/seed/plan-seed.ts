@@ -223,7 +223,7 @@ next step in the same session is what rule 9 forbids.
 1. _(agent fills in — each step must be verifiable)_
 
 **Closing a step:** tick its TL;DR box with the sha · \`git commit\` this step's
-files only · \`verdict_submit\` (MCP) with this step's \`regime\` · then hand off:
+files only · then hand off:
 
 \`\`\`bash
 fapony mem add note "<what chunk N+1 must know>" --files <f1,f2> ${planRel}

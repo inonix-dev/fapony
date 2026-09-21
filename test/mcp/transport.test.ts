@@ -9,9 +9,9 @@ export function testMcpToolsList(): void {
   const r = result as { tools: { name: string }[] };
   assert.deepEqual(
     r.tools.map((t) => t.name),
-    ["verdict_submit", "mem_find", "mem_add", "mem_close"],
+    ["mem_find", "mem_add", "mem_close"],
   );
-  console.log("  ✓ mcp tools/list returns 4 tools");
+  console.log("  ✓ mcp tools/list returns 3 tools");
 }
 
 export function testMcpInitialize(): void {
@@ -31,7 +31,8 @@ export function testMcpInitialize(): void {
   // project_health_context is deliberately absent: the pre-edit habit was cut
   // (rework base rate 1-9%), and this string is paid on every session.
   assert.doesNotMatch(r.instructions ?? "", /project_health_context/);
-  assert.match(r.instructions ?? "", /verdict_submit/);
+  assert.match(r.instructions ?? "", /mem add/);
+  assert.doesNotMatch(r.instructions ?? "", /verdict_submit/);
   console.log("  ✓ mcp initialize returns protocol version + instructions");
 }
 

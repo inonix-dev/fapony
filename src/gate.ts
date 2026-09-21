@@ -1,6 +1,6 @@
-// gateOnce is the core review-verdict logic — still live, called by the MCP
-// verdict_submit tool (src/mcp/tools/verdict.ts). The CLI wrapper (cmdGate)
-// was removed with the rest of the execute→review→fix loop (Wave 2).
+// gateOnce is the core review-verdict logic — still live, called by the CLI
+// wrapper (cmdGate) was removed with the rest of the execute→review→fix loop
+// (Wave 2). The MCP verdict_submit tool was removed in PLAN-verdict-to-mem.
 import {
   addEvent,
   getRun,

@@ -349,7 +349,6 @@ export function testPlanSeedStepCloseCarriesLiteralPlanPath(): void {
       assert.ok(!s6.includes("<path"), "no path placeholder left in §6");
       // The close sequence is spelled out as commands, not implied.
       assert.ok(s6.includes("git commit"), "§6 names the commit step");
-      assert.ok(s6.includes("verdict_submit"), "§6 names the verdict step");
       assert.ok(
         s6.includes("fapony mem add note"),
         "§6 names the handoff-note step",

@@ -1070,10 +1070,9 @@ export function commitHintFor(opts: CommitHintInput): string | null {
          WHERE e.kind = 'gate' AND r.worktree = ?`,
       )
       .get(worktree) as { ts: string | null } | null;
-    // git's --since is inclusive to the second, and the commit a verdict
-    // just graded often lands in the same UTC second as the verdict itself
-    // (verdict_submit runs right after the commit) — bump by 1s so that
-    // commit isn't re-flagged as ungraded because of its own grade.
+    // git's --since is inclusive to the second, and the commit the last
+    // verdict graded often lands in the same UTC second as the verdict itself
+    // — bump by 1s so that commit isn't re-flagged as ungraded.
     const since = lastVerdict?.ts
       ? utcStamp(
           new Date(

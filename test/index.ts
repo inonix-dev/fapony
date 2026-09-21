@@ -396,22 +396,6 @@ import {
   testMcpUnknownMethod,
 } from "./mcp/transport.test.js";
 import {
-  testVerdictSubmitAllGrades,
-  testVerdictSubmitAutoCreatesRun,
-  testVerdictSubmitInvalidReasonCode,
-  testVerdictSubmitInvalidRegimeRejects,
-  testVerdictSubmitInvalidVerdict,
-  testVerdictSubmitMissingRegimeRejects,
-  testVerdictSubmitNullPlanAlwaysCreatesNew,
-  testVerdictSubmitOtherRequiresNote,
-  testVerdictSubmitPassedRunNotReused,
-  testVerdictSubmitRegimeStoredInGateEvent,
-  testVerdictSubmitReusesOpenRunAcrossRounds,
-  testVerdictSubmitRunNotFound,
-  testVerdictSubmitStoresMcpSource,
-  testVerdictSubmitSuccess,
-} from "./mcp/verdict.test.js";
-import {
   testResolveWorktreeArgAbsolutePath,
   testResolveWorktreeArgKeyLookup,
   testResolveWorktreeArgKeyNotFound,
@@ -1014,20 +998,6 @@ export async function cmdTest(): Promise<void> {
   testHandoffCheckWithFactsCrossRef();
   testHandoffCheckWithoutFacts();
   testHandoffCheckMultiLineUncertain();
-  testVerdictSubmitInvalidVerdict();
-  testVerdictSubmitInvalidReasonCode();
-  testVerdictSubmitOtherRequiresNote();
-  testVerdictSubmitRunNotFound();
-  testVerdictSubmitSuccess();
-  testVerdictSubmitStoresMcpSource();
-  testVerdictSubmitAutoCreatesRun();
-  testVerdictSubmitAllGrades();
-  testVerdictSubmitReusesOpenRunAcrossRounds();
-  testVerdictSubmitNullPlanAlwaysCreatesNew();
-  testVerdictSubmitPassedRunNotReused();
-  testVerdictSubmitMissingRegimeRejects();
-  testVerdictSubmitInvalidRegimeRejects();
-  testVerdictSubmitRegimeStoredInGateEvent();
   testEndToEndPipeline();
   testExtractMultiFieldNone();
   testExtractMultiFieldSingle();
