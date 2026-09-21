@@ -28,7 +28,6 @@ import {
 import { homedir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { buildGraphCached, collectSourceFiles, SCAN_EXTS } from "./analyze.js";
-import { openDb } from "./db/index.js";
 import { debtForFile, loadConventions } from "./debt/index.js";
 import { readMemLog, whereMemDir } from "./memory.js";
 import { renderSeed } from "./seed/review-seed.js";
@@ -1044,13 +1043,13 @@ export function editHintFor(opts: EditHintInput): string | null {
 //
 // OpenCode has no Stop hook (Cursor does — see cursor.ts hook-stop wiring)
 // so it cannot block a turn; instead it appends an annotate to the bash tool
-// output whenever there is a git commit with no verdict pending. It is the
-// same kind of nudge as the read hint: no block, no dedupe, every unknown →
+// output whenever there is a git commit with no mem row recorded for it. It is
+// the same kind of nudge as the read hint: no block, no dedupe, every unknown →
 // silent · called from the opencode plugin by direct import (like
 // readHintFor), no CLI subcommand because no client needs it as a subprocess
 // (Cursor uses its own hook-stop instead)
 //
-// The text is facts only (commit list + verdict status), not an estimate
+// The text is facts only (commit list + mem status), not an estimate
 
 /** Below this number of commits, the hint is unnecessary noise. */
 export const COMMIT_HINT_MIN_COMMITS = 1;
@@ -1061,14 +1060,16 @@ export interface CommitHintInput {
 }
 
 /**
- * Nudge for bash commands containing `git commit` that produced
- * ungraded commits. Returns a one-to-two line hint string, or null
- * when there is nothing to nudge about (already graded, no commits,
- * not a git commit command, not a git repo, any failure).
+ * Nudge for bash commands containing `git commit` that produced commits with
+ * no mem row recorded for them. Returns a one-to-two line hint string, or
+ * null when there is nothing to nudge about (no new commits, not a git
+ * commit command, not a git repo, no mem log to window on, any failure).
  *
- * Every unknown resolves to null — a hint must never fire on a
- * guess. The work is cheap: one git rev-parse + one git log + one
- * SQLite count.
+ * Every unknown resolves to null — a hint must never fire on a guess. The
+ * work is cheap: one git rev-parse + one mem-log read + one git log.
+ * The window is the mem log, never the verdict ledger: gate events have no
+ * writer left (PLAN-verdict-to-mem), so the last verdict is frozen — fresh
+ * machines listed their entire repo history as unrecorded.
  */
 export function commitHintFor(opts: CommitHintInput): string | null {
   try {
@@ -1079,39 +1080,33 @@ export function commitHintFor(opts: CommitHintInput): string | null {
     const worktree = git(["rev-parse", "--show-toplevel"], opts.cwd);
     if (!worktree) return null;
 
-    // Window = commits since the worktree's last verdict, not "does a
-    // verdict exist anywhere in its history" — a worktree that earned one
-    // verdict months ago must still nudge on every commit made since, the
-    // same way cmdHookStop windows on `e.ts >= since` (session start) rather
-    // than "any verdict this worktree has ever had".
-    const db = openDb();
-    const lastVerdict = db
-      .query(
-        `SELECT MAX(e.ts) AS ts FROM events e JOIN runs r ON r.id = e.run_id
-         WHERE e.kind = 'gate' AND r.worktree = ?`,
-      )
-      .get(worktree) as { ts: string | null } | null;
-    // git's --since is inclusive to the second, and the commit the last
-    // verdict graded often lands in the same UTC second as the verdict itself
-    // — bump by 1s so that commit isn't re-flagged as ungraded.
-    const since = lastVerdict?.ts
-      ? utcStamp(
-          new Date(
-            new Date(`${lastVerdict.ts.replace(" ", "T")}Z`).getTime() + 1000,
-          ),
-        )
-      : null;
+    // Window = commits newer than the last mem row. No mem log in scope =
+    // no window to measure — stay silent (same as the stop hook: a hint must
+    // never fire on a guess, and the whole-history fire on fresh machines is
+    // what this replaced).
+    let memLastTs: string | null = null;
+    try {
+      memLastTs = readMemLog(worktree).rows[0]?.ts ?? null;
+    } catch {
+      memLastTs = null;
+    }
+    if (!memLastTs) return null;
+    // git's --since is inclusive to the second, and a commit can land in the
+    // same UTC second as the row recorded for it — bump by 1s so recorded
+    // work isn't re-flagged.
+    const since = utcStamp(new Date(hookTsMs(memLastTs) + 1000));
 
-    const log = since
-      ? git(["log", "--since", `${since} +0000`, "--format=%h %s"], worktree)
-      : git(["log", "--format=%h %s"], worktree);
+    const log = git(
+      ["log", "--since", `${since} +0000`, "--format=%h %s"],
+      worktree,
+    );
     const commitList = log ? log.split("\n").filter(Boolean) : [];
     if (commitList.length < COMMIT_HINT_MIN_COMMITS) return null;
 
     // Build the nudge directly — commitHintFor is annotate-only (informational),
     // while decideStop is blocking enforcement. They serve different purposes.
     const lines: string[] = [
-      `${commitList.length} commit(s) since last verdict — record a mem row for this work.`,
+      `${commitList.length} commit(s) since last mem row (${memLastTs.slice(0, 10)}) — record a mem row for this work.`,
     ];
     for (const c of commitList.slice(0, 5)) lines.push(`  ${c}`);
     if (commitList.length > 5) lines.push(`  … +${commitList.length - 5} more`);

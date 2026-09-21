@@ -133,12 +133,13 @@ import {
   testCodexPayloadDetection,
   testCodexStopHookActiveAllows,
   testCodexStopOutputShape,
+  testCommitHintFiresForCommitsSinceMemRow,
   testCommitHintMinCommitsConstant,
   testCommitHintNullForNonCommit,
   testCommitHintNullOutsideGitRepo,
   testCommitHintPluginSource,
-  testCommitHintWhenGradedVerdictsExist,
-  testCommitHintWhenNoGradedVerdicts,
+  testCommitHintSilentWhenMemRowCoversCommits,
+  testCommitHintSilentWithoutMemLog,
   testComputeHintImpact,
   testComputeHintImpactNoLog,
   testCursorPayloadEdges,
@@ -713,8 +714,9 @@ export async function cmdTest(): Promise<void> {
   testCommitHintMinCommitsConstant();
   testCommitHintNullForNonCommit();
   testCommitHintNullOutsideGitRepo();
-  testCommitHintWhenNoGradedVerdicts();
-  testCommitHintWhenGradedVerdictsExist();
+  testCommitHintFiresForCommitsSinceMemRow();
+  testCommitHintSilentWithoutMemLog();
+  testCommitHintSilentWhenMemRowCoversCommits();
   testCommitHintPluginSource();
   testReadContextShowsDebtBeforeFix();
   testReadContextMemRowsByFilesAndPath();

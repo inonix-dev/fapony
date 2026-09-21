@@ -1247,7 +1247,6 @@ export function testReadContextCombinedCapAndOutsideRepo(): void {
 // --- Commit hint (tool.execute.after annotate-only) ---
 
 import { execSync } from "node:child_process";
-import { openDb } from "../src/db/index.js";
 
 export function testCommitHintNullForNonCommit(): void {
   assert.strictEqual(
@@ -1287,9 +1286,9 @@ export function testCommitHintNullOutsideGitRepo(): void {
   console.log("  ✓ commit hint → silent outside a git repo");
 }
 
-export function testCommitHintWhenNoGradedVerdicts(): void {
-  // Create a git repo with a commit — the hint should fire as an annotate-only
-  // nudge to record a mem row.
+export function testCommitHintSilentWithoutMemLog(): void {
+  // No mem log = no window to measure — the hint stays silent instead of
+  // listing the entire repo history (the frozen-verdict bug this replaced).
   const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
   try {
     execSync("git init", { cwd: dir, stdio: "ignore" });
@@ -1306,20 +1305,28 @@ export function testCommitHintWhenNoGradedVerdicts(): void {
       command: "git commit -m 'test'",
       cwd: dir,
     });
-    assert.ok(hint, "must return a hint when ungraded commits exist");
-    assert.ok(hint.includes("fapony:"), "hint must be prefixed with fapony:");
-    assert.ok(hint.includes("mem add"), "hint must name the mem add command");
+    assert.strictEqual(hint, null, "no mem log = no window = silent");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-  console.log("  ✓ commit hint → returns hint when ungraded commits exist");
+  console.log("  ✓ commit hint → silent with no mem log to window on");
 }
 
-export function testCommitHintWhenGradedVerdictsExist(): void {
-  // Create a git repo + DB with a verdict, then check the hint is null.
+function writeTempMemRow(dir: string, ts: string): void {
+  mkdirSync(join(dir, ".fapony/.memory"), { recursive: true });
+  const row = JSON.stringify({
+    ts,
+    agent: "t",
+    kind: "note",
+    text: "test row",
+    files: ["README.md"],
+  });
+  writeFileSync(join(dir, ".fapony/.memory/log.t.jsonl"), `${row}\n`);
+}
+
+export function testCommitHintFiresForCommitsSinceMemRow(): void {
+  // A mem row older than the repo's commits windows the hint to just those.
   const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
-  const orig = process.env.FAPONY_STATE_DIR;
-  process.env.FAPONY_STATE_DIR = dir;
   try {
     execSync("git init", { cwd: dir, stdio: "ignore" });
     execSync("git config user.email 'test@test.com'", {
@@ -1330,49 +1337,54 @@ export function testCommitHintWhenGradedVerdictsExist(): void {
     writeFileSync(join(dir, "README.md"), "# test\n");
     execSync("git add .", { cwd: dir, stdio: "ignore" });
     execSync('git commit -m "init"', { cwd: dir, stdio: "ignore" });
-    // commitHintFor resolves the worktree via `git rev-parse --show-toplevel`,
-    // which canonicalizes symlinks (macOS: /tmp → /private/tmp) — the row
-    // must be keyed on that same resolved path, not the raw mkdtemp path.
-    const worktree = execSync("git rev-parse --show-toplevel", {
+    writeTempMemRow(dir, "2020-01-01T00:00:00.000Z");
+
+    const hint = commitHintFor({
+      command: "git commit -m 'test'",
       cwd: dir,
-    })
-      .toString()
-      .trim();
-
-    const db = openDb();
-    try {
-      db.exec(`INSERT INTO runs (worktree, status) VALUES (?, 'passed')`, [
-        worktree,
-      ]);
-      db.run("PRAGMA wal_checkpoint(TRUNCATE)");
-      const row = db
-        .query(`SELECT id FROM runs WHERE worktree = ?`)
-        .get(worktree) as { id: number } | null;
-      if (row) {
-        db.exec(`INSERT INTO events (run_id, kind) VALUES (?, 'gate')`, [
-          row.id,
-        ]);
-        db.run("PRAGMA wal_checkpoint(TRUNCATE)");
-      }
-
-      const hint = commitHintFor({
-        command: "git commit -m 'test'",
-        cwd: dir,
-      });
-      assert.strictEqual(
-        hint,
-        null,
-        "must be silent when verdicts already exist",
-      );
-    } finally {
-      db.close();
-    }
+    });
+    assert.ok(hint, "must nudge for commits newer than the last mem row");
+    assert.ok(hint.includes("fapony:"), "hint must be prefixed with fapony:");
+    assert.ok(hint.includes("mem add"), "hint must name the mem add command");
+    assert.ok(
+      hint.includes("since last mem row"),
+      "window must read as mem rows, not verdicts",
+    );
+    assert.doesNotMatch(hint, /verdict/i, "verdict wording must be gone");
   } finally {
-    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
-    else process.env.FAPONY_STATE_DIR = orig;
     rmSync(dir, { recursive: true, force: true });
   }
-  console.log("  ✓ commit hint → silent when verdicts already exist");
+  console.log("  ✓ commit hint → fires for commits newer than the mem row");
+}
+
+export function testCommitHintSilentWhenMemRowCoversCommits(): void {
+  // A mem row newer than every commit means nothing is unrecorded.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
+  try {
+    execSync("git init", { cwd: dir, stdio: "ignore" });
+    execSync("git config user.email 'test@test.com'", {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    execSync("git config user.name 'Test'", { cwd: dir, stdio: "ignore" });
+    writeFileSync(join(dir, "README.md"), "# test\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "init"', { cwd: dir, stdio: "ignore" });
+    writeTempMemRow(dir, new Date(Date.now() + 3600_000).toISOString());
+
+    const hint = commitHintFor({
+      command: "git commit -m 'test'",
+      cwd: dir,
+    });
+    assert.strictEqual(
+      hint,
+      null,
+      "must be silent when the mem row covers all commits",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ commit hint → silent when the mem row covers all commits");
 }
 
 export function testCommitHintPluginSource(): void {
