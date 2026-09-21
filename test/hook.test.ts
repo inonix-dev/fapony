@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   COMMIT_HINT_MIN_COMMITS,
+  capContext,
   commitHintFor,
   computeHintImpact,
   cursorTranscriptPath,
@@ -26,7 +27,10 @@ import {
   readTrackPath,
   recordHintFire,
   rereadHintFor,
+  SESSION_START_MAX_CHARS,
   sessionKey,
+  stopBlockedBefore,
+  stopBlockPath,
   stopOutput,
   utcStamp,
 } from "../src/hook.js";
@@ -111,6 +115,94 @@ export function testDecideStopReportsCommitsAndMem(): void {
   // No mem at all must read differently from "nothing newer"
   const noMem = decideStop({ ...base, memLastTs: null });
   assert.ok(noMem?.includes("no rows at all"));
+}
+
+// Regression 2026-09-21: a monorepo whose only log lives in apps/<x> got
+// "no rows at all — nothing recorded in this project yet" on every block,
+// which is false. Out of scope and absent must read differently.
+export function testDecideStopNamesOutOfScopeMemLog(): void {
+  const reason = decideStop({
+    ...base,
+    memLastTs: null,
+    memCandidates: ["/repo/apps/vela/.fapony/.memory"],
+  });
+  assert.ok(reason);
+  assert.ok(
+    !reason.includes("no rows at all"),
+    "must not claim nothing was recorded when a log exists",
+  );
+  assert.ok(
+    reason.includes("/repo/apps/vela/.fapony/.memory"),
+    "names where the log actually is",
+  );
+  console.log("  ✓ block message names an out-of-scope mem log");
+}
+
+// The first block delivers the message; blocks 2-5 in the same session deliver
+// noise. stop_hook_active only covers the turn immediately after a block.
+export function testStopBlocksOncePerSessionPerWorktree(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-sb-"));
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = dir;
+  try {
+    const session = "/tmp/transcripts/sess-b.jsonl";
+    assert.equal(
+      stopBlockedBefore(session, "/repo/a"),
+      false,
+      "first block goes through",
+    );
+    assert.equal(
+      stopBlockedBefore(session, "/repo/a"),
+      true,
+      "second block in the same session is suppressed",
+    );
+    assert.equal(
+      stopBlockedBefore(session, "/repo/b"),
+      false,
+      "a different worktree still blocks once",
+    );
+    assert.equal(
+      stopBlockedBefore("/tmp/transcripts/sess-c.jsonl", "/repo/a"),
+      false,
+      "a new session starts over",
+    );
+    assert.equal(
+      stopBlockedBefore(null, "/repo/a"),
+      false,
+      "no session identity = no dedupe, block as before",
+    );
+    assert.ok(existsSync(stopBlockPath(session)));
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ Stop blocks once per session + worktree");
+}
+
+// SessionStart context is injected whole — a repo with a long open list must
+// not push the session's own prompt out of the way.
+export function testSessionStartContextIsCapped(): void {
+  const short = "one line";
+  assert.equal(capContext(short), short, "short output passes through");
+  const long = `${"x".repeat(50)}\n`.repeat(200);
+  const capped = capContext(long);
+  assert.ok(capped.length <= SESSION_START_MAX_CHARS + 120, "stays near cap");
+  assert.ok(capped.includes("truncated"), "says it was cut");
+  assert.ok(
+    capped.includes("fapony mem kickoff"),
+    "points at the full command",
+  );
+  // The actionable section is the last one — a plain head-cut would drop it.
+  const withNext = `${long}\n## next up\n  [1] bug #abc — fix the thing\n`;
+  const keptNext = capContext(withNext);
+  assert.ok(keptNext.includes("[1] bug #abc"), "keeps the next-up section");
+  assert.ok(keptNext.includes("truncated"), "still says it was cut");
+  assert.ok(
+    keptNext.length <= SESSION_START_MAX_CHARS + 200,
+    "keeping next up stays within budget",
+  );
+  console.log("  ✓ session-start context is capped with an honest marker");
 }
 
 export function testDecideStopMessageIsRepoNeutral(): void {

@@ -134,6 +134,7 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 | Re-read hint (อ่านซ้ำไฟล์เดิม mtime ไม่ขยับ) | ✅ ก่อน | ✅ หลัง | — | — | — |
 | Edit hint (จำนวน importer ก่อนแก้ shape) | ✅ ก่อน | ✅ หลัง (edit+write) | — | — | — |
 | Commit hint (`git commit` → เตือน verdict) | — | ✅ หลัง | — | — | — |
+| SessionStart (ยิง `mem kickoff` เป็น context) | ✅ | — | — | — | — |
 | Skill symlink → `~/.claude/skills` | ✅ | ✅ | — | — | — |
 | Skill symlink → `~/.agents/skills` | — | — | — | ✅ | ✅ |
 | `usage-scan` อ่าน session log ของเจ้านั้น | ✅ | ✅ | — | ✅ | ✅ |
@@ -459,6 +460,7 @@ fapony hook-stop                     # Stop hook — block เทิร์นท
 fapony hook-read-hint                # annotate 2 แบบ: อ่านไฟล์ใหญ่ทั้งไฟล์ → review-seed ·
                                      # re-read ไฟล์เดิมใน session เดียวกันที่ mtime ไม่ขยับ → grep
 fapony hook-edit-hint                # PreToolUse Edit — บอกจำนวน importer ของไฟล์ที่กำลังแก้ (Claude)
+fapony hook-session-start            # SessionStart — ยิง `mem kickoff` เข้า context (เงียบถ้าไม่มี mem log)
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]
 fapony report <run-id>  ·  fapony report-web [file]
 # ── setup ──

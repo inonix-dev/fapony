@@ -329,6 +329,24 @@ export function testMemDirAmbiguousRefusesWrite(): void {
   );
 }
 
+// Regression 2026-09-21: with ONE app-scoped log and nothing at/above cwd the
+// resolver returned "none" with no trace of it, so the Stop hook told the agent
+// "nothing recorded in this project yet" while apps/vela/.fapony/.memory held
+// rows. Resolution is unchanged (one candidate is not ambiguous) — the
+// candidate just travels back so callers can say out-of-scope, not absent.
+export function testMemDirSingleOutOfScopeReportsCandidate(): void {
+  withTempRepo((repo) => {
+    const dir = join(repo, "apps", "vela", ".fapony", ".memory");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "log.jsonl"), "");
+    const got = whereMemDir(repo);
+    assert.equal(got.dir, null, "one app-scoped log is still out of scope");
+    assert.notEqual(got.step, "ambiguous", "one candidate is not ambiguous");
+    assert.deepEqual(got.candidates, [dir], "the path must come back");
+  });
+  console.log("  ✓ one out-of-scope mem dir comes back as a candidate");
+}
+
 export function testMemDirOverrideWinsAndRefusesMissing(): void {
   withTempRepo((repo) => {
     mkdirSync(join(repo, ".fapony", ".memory"), { recursive: true });

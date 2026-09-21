@@ -147,6 +147,7 @@ import {
   testDecideStopDerivesCommandFromWorktree,
   testDecideStopMemNeverBlocks,
   testDecideStopMessageIsRepoNeutral,
+  testDecideStopNamesOutOfScopeMemLog,
   testDecideStopReportsCommitsAndMem,
   testEditHintClaudeOutputShape,
   testEditHintDedupesPerSessionPerFile,
@@ -168,6 +169,8 @@ import {
   testRereadHintFiresOnUnchangedRepeat,
   testRereadHintKillSwitch,
   testRereadHintSilentAfterEdit,
+  testSessionStartContextIsCapped,
+  testStopBlocksOncePerSessionPerWorktree,
   testStopHookSourceHasNoRepoSpecificCommands,
   testStopOutputShapesPerClient,
   testStopPayloadsMapToSameDecision,
@@ -407,6 +410,7 @@ import {
   testMemDirAmbiguousRefusesWrite,
   testMemDirConfigIsRepoRootRelative,
   testMemDirOverrideWinsAndRefusesMissing,
+  testMemDirSingleOutOfScopeReportsCandidate,
   testMemDirSkipsEmptyCandidate,
   testMemDirWalkStopsAtRepoRoot,
   testMemoryDefaultWiringNoDir,
@@ -685,6 +689,9 @@ export async function cmdTest(): Promise<void> {
   testDecideStopReportsCommitsAndMem();
   testDecideStopMemNeverBlocks();
   testDecideStopMessageIsRepoNeutral();
+  testDecideStopNamesOutOfScopeMemLog();
+  testStopBlocksOncePerSessionPerWorktree();
+  testSessionStartContextIsCapped();
   testStopHookSourceHasNoRepoSpecificCommands();
   testReadHintAnnotatesLargeFullRead();
   testReadHintSkipsCheapReads();
@@ -806,6 +813,7 @@ export async function cmdTest(): Promise<void> {
   testMemDirConfigIsRepoRootRelative();
   testMemDirOverrideWinsAndRefusesMissing();
   testMemDirAmbiguousRefusesWrite();
+  testMemDirSingleOutOfScopeReportsCandidate();
   // Digest tests
   await testDigestEmptyRepo();
   await testDigestSinceFilter();
