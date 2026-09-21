@@ -30,6 +30,9 @@ jobs:
         with:
           node-version: "lts/*"
           registry-url: "https://registry.npmjs.org"
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Trusted Publishing (OIDC) needs npm >= 11.5.1; setup-node still ships older.
+      - run: npm install -g npm@latest
+      # No NODE_AUTH_TOKEN: npm trusts this repo + workflow filename, configured at
+      # npmjs.com -> package -> Settings -> Trusted Publisher. Nothing to rotate every
+      # 90 days, and provenance is attached automatically, so no --provenance flag.
+      - run: npm publish --access public
