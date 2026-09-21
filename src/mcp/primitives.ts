@@ -157,7 +157,7 @@ export interface VerificationReport {
   evidence: EvidenceItem[];
   /** Evidence summary (computed from evidence array). */
   evidence_summary: EvidenceSummary;
-  /** Verdict grade + note (from gate/verdict_submit, or null if not yet). */
+  /** Verdict grade + note (from the frozen gate/verdict ledger, or null if never graded). */
   verdict: {
     grade: string;
     note: string;

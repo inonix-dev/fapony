@@ -139,5 +139,5 @@ export function cmdInitMem(args: string[]): void {
   console.log('  fapony mem close <id> "<text>"');
   console.log("  fapony mem find <word>");
   console.log("  fapony mem kickoff [id|spec.md]");
-  console.log("  fapony mem now");
+  console.log("  fapony mem done | stale");
 }

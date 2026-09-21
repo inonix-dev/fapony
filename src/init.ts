@@ -95,10 +95,9 @@ work done. Cut at chunk boundaries instead:
 Finish a chunk, before starting the next:
 1. Tick its checkbox + stamp the TL;DR in the plan file
 2. Commit — separate from other chunks
-3. \`verdict_submit\` (fapony MCP), grading what actually happened
-4. \`fapony mem add note "what the next chunk needs" --files f1,f2 <path/to/PLAN-x.md>\`
+3. \`fapony mem add note "what the next chunk needs" --files f1,f2 <path/to/PLAN-x.md>\`
    — use the same plan path every time
-5. Stop. Do not continue to the next chunk in the same session unless told to.
+4. Stop. Do not continue to the next chunk in the same session unless told to.
 
 Next chunk, new session — open with \`fapony mem kickoff <path/to/PLAN-x.md>\` instead
 of carrying the old transcript forward. kickoff already filters to the rows for that plan,

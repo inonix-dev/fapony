@@ -7,7 +7,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { toolHandoffCheck } from "../../src/mcp/tools/check.js";
 import { toolHandoffCollect } from "../../src/mcp/tools/collect.js";
-import { toolVerdictSubmit } from "../../src/mcp/tools/verdict.js";
 import {
   errorResult,
   jsonResult,
@@ -117,19 +116,6 @@ export function testEndToEndPipeline(): void {
         summary: { failed: number };
       };
       assert.equal(checkData.summary.failed, 0);
-
-      // Step 3: submit (auto-creates run)
-      const verdictResult = toolVerdictSubmit({
-        verdict: "pass",
-        reason_code: "missing_test",
-        regime: "code",
-      });
-      const verdictData = parseToolResult(verdictResult) as {
-        stored: boolean;
-        run_id: number;
-      };
-      assert.equal(verdictData.stored, true);
-      assert.ok(verdictData.run_id > 0);
     });
   } finally {
     if (oldEnv !== undefined) {
@@ -138,5 +124,5 @@ export function testEndToEndPipeline(): void {
       delete process.env.FAPONY_STATE_DIR;
     }
   }
-  console.log("  ✓ end-to-end pipeline: collect → check → submit");
+  console.log("  ✓ end-to-end pipeline: collect → check");
 }

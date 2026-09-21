@@ -46,7 +46,8 @@ const base = {
   stopHookActive: false,
   worktree: "/repo",
   commits: 2,
-  verdicts: 0,
+  memLastTs: "2026-09-15T00:00:00Z",
+  since: "2026-09-20T00:00:00Z",
 };
 
 const claudePayload = {
@@ -72,17 +73,16 @@ const cursorPayload = {
 
 export function testDecideStopBlocksUngradedCommits(): void {
   const reason = decideStop(base);
-  assert(reason, "ungraded commits must block");
+  assert(reason, "commits with no new mem row must block");
   assert(reason.includes("/repo"), "reason must name the absolute worktree");
   assert(
-    reason.includes("verdict_submit"),
-    "reason must name the call the agent has to make",
+    reason.includes("mem add"),
+    "reason must name the mem command the agent has to make",
   );
 }
 
 export function testDecideStopReportsCommitsAndMem(): void {
-  // PLAN-mem-mcp chunk 3 (Done criteria 4): the block message carries the
-  // commit list and the mem status — information, never a block condition.
+  // The block message carries the commit list and the mem status.
   const reason = decideStop({
     ...base,
     commits: 7,
@@ -107,16 +107,12 @@ export function testDecideStopReportsCommitsAndMem(): void {
     reason.includes("mem: last row 2026-09-16"),
     "mem status is information",
   );
-  assert.ok(
-    reason.includes("your call"),
-    "mem is never presented as required — the agent decides",
-  );
   // ≤ 12 lines (spec §6)
   assert.ok(reason.split("\n").length <= 12, "message stays short");
 
-  // No mem at all must read differently from "nothing newer"
+  // No mem at all must NOT block (allow = null)
   const noMem = decideStop({ ...base, memLastTs: null });
-  assert.ok(noMem?.includes("no rows at all"));
+  assert.strictEqual(noMem, null, "no mem log at all = allow");
 }
 
 // Regression 2026-09-21: a monorepo whose only log lives in apps/<x> got
@@ -192,8 +188,12 @@ export function testSessionStartContextIsCapped(): void {
   assert.ok(capped.length <= SESSION_START_MAX_CHARS + 120, "stays near cap");
   assert.ok(capped.includes("truncated"), "says it was cut");
   assert.ok(
-    capped.includes("fapony mem kickoff"),
-    "points at the full command",
+    capped.includes("fapony mem find"),
+    "points at capped recall, not the full dump",
+  );
+  assert.ok(
+    !capped.includes("mem kickoff"),
+    "never sends the agent back to the uncapped dump",
   );
   // The actionable section is the last one — a plain head-cut would drop it.
   const withNext = `${long}\n## next up\n  [1] bug #abc — fix the thing\n`;
@@ -265,8 +265,7 @@ export function testHookSessionStartSilentWithoutMemLog(): void {
 
 export function testDecideStopMessageIsRepoNeutral(): void {
   // The block message installs globally and fires in every repo — a repo-specific
-  // command in it teaches agents the message is untrustworthy, which erodes the
-  // verdict enforcement. Twice bitten (setup.ts, hook.ts); the test remembers.
+  // command in it teaches agents the message is untrustworthy.
   const reason = decideStop(base);
   assert(reason);
   assert.doesNotMatch(
@@ -290,10 +289,10 @@ export function testDecideStopDerivesCommandFromWorktree(): void {
       stopHookActive: false,
       worktree: dir,
       commits: 1,
-      verdicts: 0,
+      memLastTs: "2026-09-15T00:00:00Z",
+      since: "2026-09-20T00:00:00Z",
     });
     assert(reason, "blocks");
-    assert.match(reason, /`bun test`/, "names the derived bun command");
     assert.doesNotMatch(
       reason,
       /bun fapony\.ts|fapony lint-baseline/,
@@ -312,14 +311,11 @@ export function testDecideStopDerivesCommandFromWorktree(): void {
       stopHookActive: false,
       worktree: foreign,
       commits: 1,
-      verdicts: 0,
+      memLastTs: "2026-09-15T00:00:00Z",
+      since: "2026-09-20T00:00:00Z",
     });
     assert(reason);
-    assert.match(
-      reason,
-      /this repo's typecheck and test suite/,
-      "foreign worktree → generic fallback",
-    );
+    assert.match(reason, /mem add/, "foreign worktree → mem add command");
   } finally {
     rmSync(foreign, { recursive: true, force: true });
   }
@@ -351,27 +347,64 @@ export function testStopHookSourceHasNoRepoSpecificCommands(): void {
   );
 }
 
-export function testDecideStopMemNeverBlocks(): void {
-  // กฎ 7 — mem status is data: the block condition stays verdict-only,
-  // so a fresh mem row changes the message, not the decision.
+export function testDecideStopMemBlocksWhenStale(): void {
+  // PLAN-verdict-to-mem: mem rows ARE the block condition now. A stale mem row
+  // (older than session start) means no mem was recorded for this session's work.
   const without = decideStop(base);
-  const withFreshMem = decideStop({
+  const withStaleMem = decideStop({
     ...base,
-    memLastTs: "2026-09-17T00:00:00Z",
+    memLastTs: "2026-09-10T00:00:00Z",
   });
   assert.ok(without, "blocks without mem");
-  assert.ok(withFreshMem, "blocks identically with mem present");
-  assert.notEqual(without, withFreshMem);
+  assert.ok(withStaleMem, "blocks with stale mem (older than session start)");
+  // But a fresh mem row (newer than session start) allows.
+  const withFreshMem = decideStop({
+    ...base,
+    memLastTs: "2026-09-21T00:00:00Z",
+  });
+  assert.strictEqual(
+    withFreshMem,
+    null,
+    "allows when mem row is newer than session",
+  );
+}
+
+export function testDecideStopComparesProductionTimestampShapes(): void {
+  // Production sends mixed shapes: since is utcStamp ('YYYY-MM-DD HH:MM:SS',
+  // no TZ) while mem rows are ISO. String comparison reads 'T' > ' ' and lets
+  // any same-date row pass as "newer" — the second session of the day would
+  // never block. Compare as dates instead.
+  const prod = {
+    stopHookActive: false,
+    worktree: "/repo",
+    commits: 1,
+    commitList: ["abc work"],
+    since: "2026-09-21 08:00:00",
+  };
+  assert.ok(
+    decideStop({ ...prod, memLastTs: "2026-09-21T07:59:59.000Z" }),
+    "same-day row older than session start must block",
+  );
+  assert.strictEqual(
+    decideStop({ ...prod, memLastTs: "2026-09-21T08:00:01.000Z" }),
+    null,
+    "same-day row newer than session start must allow",
+  );
+  assert.ok(
+    decideStop({ ...prod, memLastTs: "2026-09-20T23:00:00.000Z" }),
+    "previous-day row must block",
+  );
 }
 
 export function testDecideStopAllowsEveryUnknown(): void {
   // Each of these must resolve to allow — a hook that guesses wrong traps
-  // the agent, so anything it cannot prove is treated as "nothing to grade".
+  // the agent, so anything it cannot prove is treated as "nothing to record".
   const allowed: Array<[string, Parameters<typeof decideStop>[0]]> = [
     ["already blocked once", { ...base, stopHookActive: true }],
     ["not a git repo", { ...base, worktree: null }],
     ["no commits landed", { ...base, commits: 0 }],
-    ["verdict already filed", { ...base, verdicts: 1 }],
+    ["no mem log at all", { ...base, memLastTs: null, memCandidates: [] }],
+    ["fresh mem row exists", { ...base, memLastTs: "2026-09-21T00:00:00Z" }],
   ];
   for (const [label, opts] of allowed) {
     assert.strictEqual(decideStop(opts), null, `should allow: ${label}`);
@@ -407,21 +440,29 @@ export function testStopPayloadsMapToSameDecision(): void {
   assert.ok(!claude.stopHookActive);
   assert.ok(!cursor.stopHookActive);
 
-  // Same facts through either wire format → the same verdict.
+  // Same facts through either wire format → the same decision.
   const claudeReason = decideStop({
     stopHookActive: claude.stopHookActive,
     worktree: "/repo",
     commits: 2,
-    verdicts: 0,
+    memLastTs: "2026-09-15T00:00:00Z",
+    since: "2026-09-20T00:00:00Z",
   });
   const cursorReason = decideStop({
     stopHookActive: cursor.stopHookActive,
     worktree: "/repo",
     commits: 2,
-    verdicts: 0,
+    memLastTs: "2026-09-15T00:00:00Z",
+    since: "2026-09-20T00:00:00Z",
   });
-  assert.ok(claudeReason, "ungraded commits must block via the claude payload");
-  assert.ok(cursorReason, "ungraded commits must block via the cursor payload");
+  assert.ok(
+    claudeReason,
+    "commits with no new mem must block via the claude payload",
+  );
+  assert.ok(
+    cursorReason,
+    "commits with no new mem must block via the cursor payload",
+  );
   assert.equal(claudeReason, cursorReason);
 }
 
@@ -452,7 +493,7 @@ export function testCursorPayloadEdges(): void {
 }
 
 export function testStopOutputShapesPerClient(): void {
-  const reason = "call verdict_submit";
+  const reason = "record a mem row";
   const claude = JSON.parse(stopOutput("claude", reason)) as Record<
     string,
     string
@@ -521,9 +562,10 @@ export function testCodexNormalizeMapsToSameDecision(): void {
     stopHookActive: codex.stopHookActive,
     worktree: "/repo",
     commits: 2,
-    verdicts: 0,
+    memLastTs: "2026-09-15T00:00:00Z",
+    since: "2026-09-20T00:00:00Z",
   });
-  assert.ok(reason, "ungraded commits must block via the codex payload");
+  assert.ok(reason, "commits with no new mem must block via the codex payload");
   assert.ok(reason.includes("/repo"));
 }
 
@@ -541,7 +583,7 @@ export function testCodexStopHookActiveAllows(): void {
 }
 
 export function testCodexStopOutputShape(): void {
-  const reason = "call verdict_submit";
+  const reason = "record a mem row";
   const out = JSON.parse(stopOutput("codex", reason)) as Record<
     string,
     unknown
@@ -578,7 +620,11 @@ export function testReadHintAnnotatesLargeFullRead(): void {
     assert.ok(hint, "large full read must get a hint");
     assert.match(hint ?? "", /big\.ts is \d+ lines/);
     assert.match(hint ?? "", /review-seed --files big\.ts/);
-    assert.match(hint ?? "", /measured /);
+    // The fixture exports `entry`, so the hint must carry the outline with
+    // its line number — not the old measured-description fallback. (The
+    // previous /\d+ lines\n/ matched the hint's own first line, so it passed
+    // with or without an outline.)
+    assert.match(hint ?? "", /\n.*entry:\d+/);
   });
   console.log("  ✓ read hint annotates large full-file read");
 }
@@ -1205,7 +1251,6 @@ export function testReadContextCombinedCapAndOutsideRepo(): void {
 // --- Commit hint (tool.execute.after annotate-only) ---
 
 import { execSync } from "node:child_process";
-import { openDb } from "../src/db/index.js";
 
 export function testCommitHintNullForNonCommit(): void {
   assert.strictEqual(
@@ -1245,8 +1290,9 @@ export function testCommitHintNullOutsideGitRepo(): void {
   console.log("  ✓ commit hint → silent outside a git repo");
 }
 
-export function testCommitHintWhenNoGradedVerdicts(): void {
-  // Create a git repo with a commit and no verdicts in the DB.
+export function testCommitHintSilentWithoutMemLog(): void {
+  // No mem log = no window to measure — the hint stays silent instead of
+  // listing the entire repo history (the frozen-verdict bug this replaced).
   const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
   try {
     execSync("git init", { cwd: dir, stdio: "ignore" });
@@ -1259,35 +1305,32 @@ export function testCommitHintWhenNoGradedVerdicts(): void {
     execSync("git add .", { cwd: dir, stdio: "ignore" });
     execSync('git commit -m "init"', { cwd: dir, stdio: "ignore" });
 
-    // Set FAPONY_STATE_DIR so openDb() uses an isolated db.
-    const orig = process.env.FAPONY_STATE_DIR;
-    process.env.FAPONY_STATE_DIR = dir;
-    try {
-      const hint = commitHintFor({
-        command: "git commit -m 'test'",
-        cwd: dir,
-      });
-      assert.ok(hint, "must return a hint when commits have no verdicts");
-      assert.ok(hint.includes("fapony:"), "hint must be prefixed with fapony:");
-      assert.ok(
-        hint.includes("verdict_submit"),
-        "hint must name verdict_submit",
-      );
-    } finally {
-      if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
-      else process.env.FAPONY_STATE_DIR = orig;
-    }
+    const hint = commitHintFor({
+      command: "git commit -m 'test'",
+      cwd: dir,
+    });
+    assert.strictEqual(hint, null, "no mem log = no window = silent");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-  console.log("  ✓ commit hint → returns hint when ungraded commits exist");
+  console.log("  ✓ commit hint → silent with no mem log to window on");
 }
 
-export function testCommitHintWhenGradedVerdictsExist(): void {
-  // Create a git repo + DB with a verdict, then check the hint is null.
+function writeTempMemRow(dir: string, ts: string): void {
+  mkdirSync(join(dir, ".fapony/.memory"), { recursive: true });
+  const row = JSON.stringify({
+    ts,
+    agent: "t",
+    kind: "note",
+    text: "test row",
+    files: ["README.md"],
+  });
+  writeFileSync(join(dir, ".fapony/.memory/log.t.jsonl"), `${row}\n`);
+}
+
+export function testCommitHintFiresForCommitsSinceMemRow(): void {
+  // A mem row older than the repo's commits windows the hint to just those.
   const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
-  const orig = process.env.FAPONY_STATE_DIR;
-  process.env.FAPONY_STATE_DIR = dir;
   try {
     execSync("git init", { cwd: dir, stdio: "ignore" });
     execSync("git config user.email 'test@test.com'", {
@@ -1298,49 +1341,54 @@ export function testCommitHintWhenGradedVerdictsExist(): void {
     writeFileSync(join(dir, "README.md"), "# test\n");
     execSync("git add .", { cwd: dir, stdio: "ignore" });
     execSync('git commit -m "init"', { cwd: dir, stdio: "ignore" });
-    // commitHintFor resolves the worktree via `git rev-parse --show-toplevel`,
-    // which canonicalizes symlinks (macOS: /tmp → /private/tmp) — the row
-    // must be keyed on that same resolved path, not the raw mkdtemp path.
-    const worktree = execSync("git rev-parse --show-toplevel", {
+    writeTempMemRow(dir, "2020-01-01T00:00:00.000Z");
+
+    const hint = commitHintFor({
+      command: "git commit -m 'test'",
       cwd: dir,
-    })
-      .toString()
-      .trim();
-
-    const db = openDb();
-    try {
-      db.exec(`INSERT INTO runs (worktree, status) VALUES (?, 'passed')`, [
-        worktree,
-      ]);
-      db.run("PRAGMA wal_checkpoint(TRUNCATE)");
-      const row = db
-        .query(`SELECT id FROM runs WHERE worktree = ?`)
-        .get(worktree) as { id: number } | null;
-      if (row) {
-        db.exec(`INSERT INTO events (run_id, kind) VALUES (?, 'gate')`, [
-          row.id,
-        ]);
-        db.run("PRAGMA wal_checkpoint(TRUNCATE)");
-      }
-
-      const hint = commitHintFor({
-        command: "git commit -m 'test'",
-        cwd: dir,
-      });
-      assert.strictEqual(
-        hint,
-        null,
-        "must be silent when verdicts already exist",
-      );
-    } finally {
-      db.close();
-    }
+    });
+    assert.ok(hint, "must nudge for commits newer than the last mem row");
+    assert.ok(hint.includes("fapony:"), "hint must be prefixed with fapony:");
+    assert.ok(hint.includes("mem add"), "hint must name the mem add command");
+    assert.ok(
+      hint.includes("since last mem row"),
+      "window must read as mem rows, not verdicts",
+    );
+    assert.doesNotMatch(hint, /verdict/i, "verdict wording must be gone");
   } finally {
-    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
-    else process.env.FAPONY_STATE_DIR = orig;
     rmSync(dir, { recursive: true, force: true });
   }
-  console.log("  ✓ commit hint → silent when verdicts already exist");
+  console.log("  ✓ commit hint → fires for commits newer than the mem row");
+}
+
+export function testCommitHintSilentWhenMemRowCoversCommits(): void {
+  // A mem row newer than every commit means nothing is unrecorded.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
+  try {
+    execSync("git init", { cwd: dir, stdio: "ignore" });
+    execSync("git config user.email 'test@test.com'", {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    execSync("git config user.name 'Test'", { cwd: dir, stdio: "ignore" });
+    writeFileSync(join(dir, "README.md"), "# test\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "init"', { cwd: dir, stdio: "ignore" });
+    writeTempMemRow(dir, new Date(Date.now() + 3600_000).toISOString());
+
+    const hint = commitHintFor({
+      command: "git commit -m 'test'",
+      cwd: dir,
+    });
+    assert.strictEqual(
+      hint,
+      null,
+      "must be silent when the mem row covers all commits",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ commit hint → silent when the mem row covers all commits");
 }
 
 export function testCommitHintPluginSource(): void {

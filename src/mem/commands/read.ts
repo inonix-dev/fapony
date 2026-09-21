@@ -3,12 +3,27 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { baselinePath, readEvidenceLintCmd } from "../../lint-baseline.js";
-import { doneLines, fmtClose, fmtRow, printOpenRows } from "../render.js";
+import { doneLines, fmtClose, fmtRow } from "../render.js";
 import { claimsOf, openRows, staleReport } from "../selectors.js";
 import type { CloseRow, WorkRow } from "../store.js";
 import { allRows, app, memCmd, planDir, root, rows } from "../store.js";
 import { planSweepCmd, shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
+
+/** Files changed on this branch vs dev — empty set when dev is missing or diff fails. */
+function getBranchDiffFiles(cwd: string): Set<string> {
+  try {
+    const p = Bun.spawnSync(["git", "diff", "--name-only", "dev...HEAD"], {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (p.exitCode !== 0) return new Set();
+    return new Set(p.stdout.toString().trim().split("\n").filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
 
 const rotateLine = (n: number) =>
   n >= THRESHOLD
@@ -24,26 +39,20 @@ const planSweepLine = () => {
     : "";
 };
 
-export const cmdNow = () => {
-  // mem now (default) — next+bug+hold. decision/note is not pending work → search with find instead
-  const all = rows();
-  console.log(`# ${app} — ${all.length} entries`);
-  printOpenRows(all, { showHold: true });
-  const decisionN = openRows(all).filter((r) => r.kind === "decision").length;
-  const noteN = openRows(all).filter((r) => r.kind === "note").length;
-  console.log(
-    `\n## decision ${decisionN} · note ${noteN} — search: ${memCmd} find <word>`,
-  );
-  const stale = staleReport(all);
-  if (stale.length)
-    console.log(
-      `\n## ⚠ stale (${stale.length})\n` +
-        stale.map((l) => `- ${l}`).join("\n"),
-    );
-  const sweep = planSweepLine();
-  if (sweep) console.log(sweep);
-  const rotate = rotateLine(all.length);
-  if (rotate) console.log(rotate);
+// Row-list caps: no row-list section exceeds 10 (same budget as ## recent,
+// which takes doneLines(all, 10)). Per-row text is cut at a word boundary —
+// a kickoff line points at the row (mem find has the full text), it must not
+// reprint it.
+const BUGS_LIMIT = 10;
+const BRANCH_LIMIT = 10;
+const RECENT_OPEN_LIMIT = 10;
+const RECENT_OPEN_TEXT = 160;
+
+const shortText = (text: string, max = RECENT_OPEN_TEXT): string => {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut}…`;
 };
 
 export const cmdDone = () => {
@@ -235,23 +244,194 @@ export const cmdKickoff = (a: string[]) => {
     }
   }
 
-  // --- main output (unchanged behavior) ---
+  // --- suggestions (generated early so the no-args path can print next up
+  //     before the recency tier, keeping it inside the 4KB cap) ---
+
+  type Suggestion = { text: string; run?: string; manual?: boolean };
+  const suggestions: Suggestion[] = [];
+  const GROUP_CAP = 3;
+
+  const truncate = (s: string, n = 80) =>
+    s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s;
+
+  // group 1 — plans: priority: high first, then the first unchecked chunk
+  const planLines: Suggestion[] = [];
+  if (existsSync(planDir)) {
+    const files = readdirSync(planDir).filter((f) => f.endsWith(".md"));
+    for (const file of files) {
+      if (planLines.length >= GROUP_CAP) break;
+      const fullPath = join(planDir, file);
+      if (planFile && fullPath === planFile) continue;
+      if (hasHighPriority(fullPath)) {
+        const title = readPlanTitle(fullPath);
+        planLines.push({
+          text: `${title || file} (${file})`,
+          run: `fapony mem kickoff ${file}`,
+        });
+      }
+    }
+  }
+  if (planLines.length < GROUP_CAP && planCheckboxes.length) {
+    const planName = planFile ? basename(planFile) : "plan";
+    planLines.push({ text: `${planCheckboxes[0]} (${planName})` });
+  }
+  suggestions.push(...planLines);
+
+  // group 2 — open bugs, oldest first
+  const suggClaims = claimsOf(all);
+  const openBugs = openRows(all)
+    .filter((r) => r.kind === "bug" && !suggClaims.has(r.id))
+    .slice(0, GROUP_CAP);
+  for (const b of openBugs) {
+    suggestions.push({
+      text: `bug #${b.id} — ${truncate(b.text)}`,
+      run: `fapony mem close ${b.id} "<msg>"`,
+      manual: true,
+    });
+  }
+
+  // group 3 — the files of the last 3 rows that carried files[]
+  const recentFiles = all
+    .filter(
+      (r): r is WorkRow =>
+        "id" in r && "files" in r && !!(r as WorkRow).files?.length,
+    )
+    .slice(-3)
+    .flatMap((r) => r.files ?? []);
+  const uniqueRecent = [...new Set(recentFiles)].slice(0, GROUP_CAP);
+  if (uniqueRecent.length) {
+    suggestions.push({
+      text: `แตะล่าสุด: ${uniqueRecent.join(", ")}`,
+      run: `fapony review-seed --files ${uniqueRecent.join(",")}`,
+    });
+  }
+
+  // group 4 — the lint baseline
+  try {
+    if (readEvidenceLintCmd(root) && !existsSync(baselinePath(root))) {
+      suggestions.push({
+        text: "lint baseline ยังไม่ capture — แดงที่มีอยู่ก่อนจะถูกนับเป็นของคุณ",
+        run: "fapony lint-baseline --capture",
+      });
+    }
+  } catch {
+    // state dir unreadable — the baseline line is a convenience, never a gate
+  }
+
+  /** Print ## next up and handle --pick. */
+  const printNextUp = () => {
+    if (!suggestions.length) return;
+    console.log(`\n## next up`);
+    for (let i = 0; i < suggestions.length; i++) {
+      console.log(`  [${i + 1}] ${suggestions[i].text}`);
+      if (suggestions[i].run) console.log(`      → ${suggestions[i].run}`);
+    }
+    if (pickIdx !== null) {
+      if (pickIdx > suggestions.length) {
+        console.error(
+          `--pick ${pickIdx}: only ${suggestions.length} suggestion(s) available`,
+        );
+        process.exit(1);
+      }
+      const picked = suggestions[pickIdx - 1];
+      if (!picked.run) {
+        console.error(
+          `--pick ${pickIdx}: "${picked.text}" is context, not a command — nothing to run`,
+        );
+        process.exit(1);
+      }
+      if (picked.manual) {
+        console.error(
+          `--pick ${pickIdx}: the command needs your own message — run it yourself:\n  ${picked.run}`,
+        );
+        process.exit(1);
+      }
+      const cmd = picked.run;
+      console.log(`\n> running: ${cmd}`);
+      const { execSync } = require("node:child_process");
+      try {
+        execSync(cmd, { stdio: "inherit", cwd: process.cwd() });
+      } catch {
+        process.exit(1);
+      }
+    }
+  };
+
+  // --- main output ---
+
+  // Deferred output for the no-args path — recent closes, plan sweep, rotate
+  let kickoffExtras: (() => void) | null = null;
 
   if (!arg && !planFile) {
-    // no args = now + a "recent" section = the last 10 closes
+    // no args = ranked open rows + next up + recent closes
     console.log(`# ${app} — ${all.length} entries`);
-    printOpenRows(all, { showHold: true });
-    console.log(`\n## recent\n${doneLines(all, 10).join("\n")}`);
-    const stale = staleReport(all);
-    if (stale.length)
-      console.log(
-        `\n## ⚠ stale (${stale.length})\n` +
-          stale.map((l) => `- ${l}`).join("\n"),
-      );
-    const sweep = planSweepLine();
-    if (sweep) console.log(sweep);
-    const rotate = rotateLine(all.length);
-    if (rotate) console.log(rotate);
+
+    const open = openRows(all);
+    const claims = claimsOf(all);
+    const diffFiles = getBranchDiffFiles(root);
+
+    // Tier 1: unclaimed bugs (always first, no matter how old) — capped: a
+    // backlog of unclosable bugs must not push the rest of the ranking out.
+    const bugs = open.filter((r) => r.kind === "bug" && !claims.has(r.id));
+    if (bugs.length) {
+      console.log(`\n## bugs`);
+      for (const r of bugs.slice(0, BUGS_LIMIT)) console.log(fmtRow(r));
+      if (bugs.length > BUGS_LIMIT)
+        console.log(
+          `… +${bugs.length - BUGS_LIMIT} more unclosed bugs — \`fapony mem find <word>\` for the rest`,
+        );
+    }
+
+    // next up BEFORE the branch/recency tiers so no row-list section can
+    // push it out — order is by actionability, never by "this tier is short".
+    printNextUp();
+
+    // Tier 2: rows whose files[] overlap with git diff --name-only dev...HEAD
+    // — capped like every other row-list section (≤10 + overflow, pointer
+    // lines via shortText): the branch diff is unbounded and mem clusters on
+    // files every real branch touches, so uncapped this reprints the log.
+    const bugIds = new Set(bugs.map((r) => r.id));
+    const diffMatched = open.filter((r) => {
+      if (bugIds.has(r.id)) return false;
+      if (diffFiles.size === 0) return false;
+      return (r.files ?? []).some((f) => diffFiles.has(f));
+    });
+    if (diffMatched.length) {
+      console.log(`\n## on this branch`);
+      for (const r of diffMatched.slice(0, BRANCH_LIMIT))
+        console.log(fmtRow({ ...r, text: shortText(r.text) }, claims));
+      if (diffMatched.length > BRANCH_LIMIT)
+        console.log(
+          `… +${diffMatched.length - BRANCH_LIMIT} more — \`fapony mem find <word>\` for the rest`,
+        );
+    }
+
+    // Tier 3: rest by recency (newest first) — tie-breaker only, capped like
+    // ## recent (doneLines takes 10): decision/note can never close, so an
+    // uncapped tier reprints the whole log. Lines are pointers, not prose —
+    // cut at a word boundary and point at mem find for the rest.
+    const shown = new Set([...bugIds, ...diffMatched.map((r) => r.id)]);
+    const rest = open
+      .filter((r) => !shown.has(r.id))
+      .sort((a, b) => b.ts.localeCompare(a.ts));
+    if (rest.length) {
+      console.log(`\n## recent open`);
+      for (const r of rest.slice(0, RECENT_OPEN_LIMIT))
+        console.log(fmtRow({ ...r, text: shortText(r.text) }, claims));
+      if (rest.length > RECENT_OPEN_LIMIT)
+        console.log(
+          `… +${rest.length - RECENT_OPEN_LIMIT} more — \`fapony mem find <word>\` for the rest`,
+        );
+    }
+
+    // recent closes, plan sweep, rotate — after next up
+    kickoffExtras = () => {
+      console.log(`\n## recent\n${doneLines(all, 10).join("\n")}`);
+      const sweep = planSweepLine();
+      if (sweep) console.log(sweep);
+      const rotate = rotateLine(all.length);
+      if (rotate) console.log(rotate);
+    };
   } else if (resolvedSpec) {
     // spec.md = a brief for that spec
     const open = openRows(all);
@@ -350,126 +530,9 @@ export const cmdKickoff = (a: string[]) => {
     process.exit(1);
   }
 
-  // --- next up section (chunk 3) ---
+  // For non-no-args paths, print next up at the end
+  if (arg || planFile) printNextUp();
 
-  // A suggestion may carry a fully-runnable command. `manual` marks a command
-  // that is a template with a placeholder (bug close) — show it, never auto-run it.
-  type Suggestion = { text: string; run?: string; manual?: boolean };
-  const suggestions: Suggestion[] = [];
-  const GROUP_CAP = 3; // SPEC §3: at most 3 groups, at most 3 lines each
-
-  const truncate = (s: string, n = 80) =>
-    s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s;
-
-  // group 1 — plans: priority: high first, then the first unchecked chunk
-  const planLines: Suggestion[] = [];
-  if (existsSync(planDir)) {
-    const files = readdirSync(planDir).filter((f) => f.endsWith(".md"));
-    for (const file of files) {
-      if (planLines.length >= GROUP_CAP) break;
-      const fullPath = join(planDir, file);
-      // Skip the plan we already showed
-      if (planFile && fullPath === planFile) continue;
-      if (hasHighPriority(fullPath)) {
-        const title = readPlanTitle(fullPath);
-        planLines.push({
-          text: `${title || file} (${file})`,
-          run: `fapony mem kickoff ${file}`,
-        });
-      }
-    }
-  }
-  // Only the first unchecked chunk (SPEC §3) — the body of the plan is the plan's job.
-  // There is no per-chunk command, so this line is context, not a runnable item.
-  if (planLines.length < GROUP_CAP && planCheckboxes.length) {
-    const planName = planFile ? basename(planFile) : "plan";
-    planLines.push({ text: `${planCheckboxes[0]} (${planName})` });
-  }
-  suggestions.push(...planLines);
-
-  // group 2 — open bugs, oldest first. openRows excludes tombstoned refs; the
-  // old bug filter forgot that and offered already-closed bugs as work.
-  const claims = claimsOf(all);
-  const openBugs = openRows(all)
-    .filter((r) => r.kind === "bug" && !claims.has(r.id))
-    .slice(0, GROUP_CAP);
-  for (const b of openBugs) {
-    suggestions.push({
-      text: `bug #${b.id} — ${truncate(b.text)}`,
-      run: `fapony mem close ${b.id} "<msg>"`,
-      manual: true,
-    });
-  }
-
-  // group 3 — the files of the last 3 rows that carried files[]
-  const recentFiles = all
-    .filter(
-      (r): r is WorkRow =>
-        "id" in r && "files" in r && !!(r as WorkRow).files?.length,
-    )
-    .slice(-3)
-    .flatMap((r) => r.files ?? []);
-  const uniqueRecent = [...new Set(recentFiles)].slice(0, GROUP_CAP);
-  if (uniqueRecent.length) {
-    suggestions.push({
-      text: `แตะล่าสุด: ${uniqueRecent.join(", ")}`,
-      run: `fapony review-seed --files ${uniqueRecent.join(",")}`,
-    });
-  }
-
-  // group 4 — the lint baseline. "Is this red mine or was it already red" is
-  // already answered by `lint-baseline`, but only if it was captured before
-  // the work started — and nobody remembers at session open, which is what
-  // kickoff is. Only offered when the repo declared a lint command; without
-  // one the capture would just fail.
-  try {
-    if (readEvidenceLintCmd(root) && !existsSync(baselinePath(root))) {
-      suggestions.push({
-        text: "lint baseline ยังไม่ capture — แดงที่มีอยู่ก่อนจะถูกนับเป็นของคุณ",
-        run: "fapony lint-baseline --capture",
-      });
-    }
-  } catch {
-    // state dir unreadable — the baseline line is a convenience, never a gate
-  }
-
-  // Print and optionally execute. Only a suggestion with a complete command is
-  // runnable — a plan item is context, a bug's close is a template needing a message.
-  if (suggestions.length) {
-    console.log(`\n## next up`);
-    for (let i = 0; i < suggestions.length; i++) {
-      console.log(`  [${i + 1}] ${suggestions[i].text}`);
-      if (suggestions[i].run) console.log(`      → ${suggestions[i].run}`);
-    }
-
-    if (pickIdx !== null) {
-      if (pickIdx > suggestions.length) {
-        console.error(
-          `--pick ${pickIdx}: only ${suggestions.length} suggestion(s) available`,
-        );
-        process.exit(1);
-      }
-      const picked = suggestions[pickIdx - 1];
-      if (!picked.run) {
-        console.error(
-          `--pick ${pickIdx}: "${picked.text}" is context, not a command — nothing to run`,
-        );
-        process.exit(1);
-      }
-      if (picked.manual) {
-        console.error(
-          `--pick ${pickIdx}: the command needs your own message — run it yourself:\n  ${picked.run}`,
-        );
-        process.exit(1);
-      }
-      const cmd = picked.run;
-      console.log(`\n> running: ${cmd}`);
-      const { execSync } = require("node:child_process");
-      try {
-        execSync(cmd, { stdio: "inherit", cwd: process.cwd() });
-      } catch {
-        process.exit(1);
-      }
-    }
-  }
+  // Deferred output from no-args path (recent closes, plan sweep, rotate)
+  kickoffExtras?.();
 };

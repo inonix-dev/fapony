@@ -1,6 +1,6 @@
 ---
 name: review-pony
-description: Review a plan, PR, diff, or design doc as a verification rather than an opinion — scope first, walk the real path, break it on paper, cite everything. Takes optional effort (low|medium|high|max, widens the walk only, never skips a pass) and --fix (apply CONFIRMED blocker/major findings after the report). Records the verdict to fapony after the report. Trigger on /review-pony and proactively whenever the user asks to review, audit, scrutinize, sanity-check, or get a second opinion on a plan, PR, diff, design doc, or proposed code change.
+description: Review a plan, PR, diff, or design doc as a verification rather than an opinion — scope first, walk the real path, break it on paper, cite everything. Takes optional effort (low|medium|high|max, widens the walk only, never skips a pass) and --fix (apply CONFIRMED blocker/major findings after the report). Records surviving findings to the project's mem log after the report. Trigger on /review-pony and proactively whenever the user asks to review, audit, scrutinize, sanity-check, or get a second opinion on a plan, PR, diff, design doc, or proposed code change.
 ---
 
 # Review Pony
@@ -83,10 +83,10 @@ Write down every place the walk surprises you. Surprises outrank style; chase th
 - `low` — direct callers only, one hop. No test reading unless the diff touches a test file.
 - `medium` (default) — as written above: full path, callers, tests on the path.
 - `high` — also second-degree callers, and read the tests that exercise them, not just the path.
-- `max` — also run `get_impact_radius_tool` (or grep if the graph isn't wired) on every changed
-  file and re-open every `deferred` line from the last review of this scope, if fapony has one.
+- `max` — also grep every changed file for second-degree callers, and re-open
+  every `deferred` line from the last review of this scope, if fapony has one.
 
-Whatever level stopped you, say so in the one-line coverage note (rule below) — "walked to 1 hop"
+Whatever level stopped you, say so in the one-line coverage note (see Report) — "walked to 1 hop"
 is honest, "walked" alone at `low` is not.
 
 ## Pass 3 — A finding needs a failing input
@@ -161,56 +161,25 @@ fixed: 1, 2 · skipped: 3 (PLAUSIBLE — could not reach the failing state)
 ```
 
 Fixing changes what actually shipped, not what the review found — re-run pass 4's citation
-check on the new state before calling it done, but don't re-run the whole review. Submit the
-verdict on what you found, not on the post-fix state (`verdict_submit`'s `note` can say the fix
-was applied).
+check on the new state before calling it done, but don't re-run the whole review. Record
+what you found, not the post-fix state (the row's text can say the fix was applied).
 
-## After: record the verdict (fapony)
+## After: record what the next session needs (fapony)
 
-Call `verdict_submit` once, after the report is shown. Don't block the report on it, and don't
-let it change the report's content. Pass `regime="review"` — required, and a review is what this
-was; it is what puts this run in the `regime × model` table.
+If a blocker/major CONFIRMED finding survived, or the verdict is rework/reject,
+call `mem_add` once, after the report is shown. Don't block the report on it,
+and don't let it change the report's content. Clean reviews (ship, nit-only
+findings) record nothing — there is nothing the next session needs to find.
 
-| Report verdict | `verdict` |
-|---|---|
-| ship, 0 findings | `pass-excellent` |
-| ship, nit-only findings | `pass-good` |
-| fix-then-ship | `pass-adequate` |
-| rework / reject | `fail` |
-| could not walk enough to have a verdict | `uncertain` |
-
-`uncertain` is not a softer `fail`. It is the honest answer when the walk never
-reached the thing under review — the branch wouldn't build, the path is behind a
-service you cannot run, every finding came out `PLAUSIBLE`. Say so in the report
-too. Guessing `pass` there is the one outcome that makes the ledger lie.
-
-`reason_code` — the *lead* (most severe) finding, not a generic bucket:
-
-- **0 findings, or a clean pass → `none`** — never `other`. `other` means "a real
-  finding that none of these buckets name", so filing clean passes there puts them
-  in the recurring-fail-reasons list, where they crowd out the reasons that mean
-  something. It is the one value in this table that costs other people accuracy.
-- missing or weak test coverage on the path you walked → `missing_test`
-- change is narrower or wider than the plan / PR description claims → `scope_mismatch`
-- a shell/eval/deploy command runs without the guard it needs → `unsafe_command`
-- the plan or spec didn't cover a case the walk exposed → `spec_gap`
-- the change stops short of what it set out to do → `incomplete`
-- a real finding none of the above names → `other`, and then `note` is **required**
-
-Always attach a one-line `note` — the only field a later review can act on. Say what broke or
-was walked, not that a review happened.
-
-Args: `verdict`, `reason_code`, `note`, `regime`, `worktree` — **absolute path** via
-`git rev-parse --show-toplevel`, never a bare name (`runs.worktree` is free text; a bare name
-writes where no query reads it and every fapony tool misses the run), `plan` (the PLAN file
-path under review, omitted for a bare PR/diff), and `files` — the repo-relative paths you
-actually walked. **Always send `files`.** It is the only input to per-file risk history; a
-verdict without it tells the next session that something failed but not where. No `run_id` —
-fapony reuses the latest still-open run for the same worktree+plan (so round 2+ counts toward
-the round cap), creating a row only when none is open. `session_id` (optional) — the client
-session id, only if the client exposes it; attribute the model, never block the submit on it.
-If `verdict_submit` errors, say so in one line and move on — never re-run a review because
-storage failed.
+kind is `bug` when a finding survived (something is broken), `decision` when
+the verdict turns on scope alone (rework/reject from pass 1 — the review locks
+a direction). text is the report's verdict line, standalone — what broke or was
+decided, not that a review happened. files are the repo-relative paths actually
+walked — required, a row without them is unfindable. worktree is the absolute
+path (`git rev-parse --show-toplevel`), never a bare name. Only record into a
+project that already has a mem log — never create one uninvited.
+If `mem_add` errors, say so in one line and move on — never re-run a review
+because storage failed.
 
 ---
 
@@ -232,10 +201,10 @@ The four passes are the rules. These three are what they fail on in practice:
 ```
 1-4.  scope holds; walked the new gate branch; ran the evidence command — it exits 0
       without running the suite (CONFIRMED: `bun test` with no test dir exits 0)
-post. verdict_submit(verdict="pass-adequate", reason_code="other", regime="review",
-        note="evidence entry `bun test` exits 0 while running zero tests — real entry is `bun run test`",
-        worktree="/Users/you/Project/fapony/wt-fapony",
-        plan=".fapony/plan/PLAN-verdict-notes.md")
+post. mem_add(kind="bug",
+        text="incremental scan replaces cached history with a delta — cache holds 500, truth 1500",
+        files=["cache.ts", "claude-code.ts"],
+        worktree="/Users/you/Project/fapony/wt-fapony")
 ```
 
 A report in budget — same review that, narrated, ran five paragraphs:

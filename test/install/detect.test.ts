@@ -9,6 +9,8 @@ import { withTempHome } from "./helpers.js";
 export function testDetectClientsAllFound(): void {
   withTempHome((home) => {
     // claude: checkCmd returns true
+    // antigravity: ~/.gemini exists
+    mkdirSync(join(home, ".gemini"), { recursive: true });
     // cursor: ~/.cursor exists
     mkdirSync(join(home, ".cursor"), { recursive: true });
     // opencode: config exists
@@ -29,7 +31,7 @@ export function testDetectClientsAllFound(): void {
       checkCmd: () => true,
     };
     const result = detectClients(deps);
-    assert.equal(result.length, 5);
+    assert.equal(result.length, 6);
     assert.ok(
       result.every((d) => d.installed),
       "all should be installed",
@@ -45,7 +47,7 @@ export function testDetectClientsNoneFound(): void {
       checkCmd: () => false,
     };
     const result = detectClients(deps);
-    assert.equal(result.length, 5);
+    assert.equal(result.length, 6);
     assert.ok(
       result.every((d) => !d.installed),
       "none should be installed",

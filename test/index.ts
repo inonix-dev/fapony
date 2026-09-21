@@ -94,7 +94,6 @@ import {
 } from "./digest.test.js";
 import {
   testAddingFakeEnumValueFailsDocsCheck,
-  testReasonCodesListedInDocs,
   testRegimeCodesListedInDocs,
 } from "./docs.test.js";
 import {
@@ -133,19 +132,21 @@ import {
   testCodexPayloadDetection,
   testCodexStopHookActiveAllows,
   testCodexStopOutputShape,
+  testCommitHintFiresForCommitsSinceMemRow,
   testCommitHintMinCommitsConstant,
   testCommitHintNullForNonCommit,
   testCommitHintNullOutsideGitRepo,
   testCommitHintPluginSource,
-  testCommitHintWhenGradedVerdictsExist,
-  testCommitHintWhenNoGradedVerdicts,
+  testCommitHintSilentWhenMemRowCoversCommits,
+  testCommitHintSilentWithoutMemLog,
   testComputeHintImpact,
   testComputeHintImpactNoLog,
   testCursorPayloadEdges,
   testDecideStopAllowsEveryUnknown,
   testDecideStopBlocksUngradedCommits,
+  testDecideStopComparesProductionTimestampShapes,
   testDecideStopDerivesCommandFromWorktree,
-  testDecideStopMemNeverBlocks,
+  testDecideStopMemBlocksWhenStale,
   testDecideStopMessageIsRepoNeutral,
   testDecideStopNamesOutOfScopeMemLog,
   testDecideStopReportsCommitsAndMem,
@@ -186,6 +187,15 @@ import {
 } from "./init.test.js";
 // Install tests (split into test/install/)
 import {
+  testCmdInstallDispatchesAntigravity,
+  testInstallAntigravityAlreadyConfiguredNoOp,
+  testInstallAntigravityDryRunNoWrite,
+  testInstallAntigravityForeignMcpRefuses,
+  testInstallAntigravityFreshWritesMcpAndSkills,
+  testInstallAntigravityMergesExistingServers,
+  testInstallAntigravityNoDirFails,
+} from "./install/antigravity.test.js";
+import {
   testClaudeAddUsesAbsolutePath,
   testClaudeGetPointsToFapony,
   testCmdInstallDispatchesClaude,
@@ -196,11 +206,8 @@ import {
   testInstallClaudeDifferentCommandRefusesOverwrite,
   testInstallClaudeDryRunNeverAdds,
   testInstallClaudeEditHintAppendsOnce,
-  testInstallClaudeForeignScriptRefusesOverwrite,
-  testInstallClaudeForeignStatuslineRefusesOverwrite,
   testInstallClaudeMissingBinary,
   testInstallClaudeReadHintAppendsOnce,
-  testInstallClaudeStatuslineWiresSettings,
   testInstallClaudeStopHookAppendsOnceAndKeepsForeign,
 } from "./install/claude.test.js";
 import {
@@ -389,22 +396,6 @@ import {
   testMcpToolsList,
   testMcpUnknownMethod,
 } from "./mcp/transport.test.js";
-import {
-  testVerdictSubmitAllGrades,
-  testVerdictSubmitAutoCreatesRun,
-  testVerdictSubmitInvalidReasonCode,
-  testVerdictSubmitInvalidRegimeRejects,
-  testVerdictSubmitInvalidVerdict,
-  testVerdictSubmitMissingRegimeRejects,
-  testVerdictSubmitNullPlanAlwaysCreatesNew,
-  testVerdictSubmitOtherRequiresNote,
-  testVerdictSubmitPassedRunNotReused,
-  testVerdictSubmitRegimeStoredInGateEvent,
-  testVerdictSubmitReusesOpenRunAcrossRounds,
-  testVerdictSubmitRunNotFound,
-  testVerdictSubmitStoresMcpSource,
-  testVerdictSubmitSuccess,
-} from "./mcp/verdict.test.js";
 import {
   testResolveWorktreeArgAbsolutePath,
   testResolveWorktreeArgKeyLookup,
@@ -694,7 +685,8 @@ export async function cmdTest(): Promise<void> {
   testDecideStopBlocksUngradedCommits();
   testDecideStopDerivesCommandFromWorktree();
   testDecideStopReportsCommitsAndMem();
-  testDecideStopMemNeverBlocks();
+  testDecideStopMemBlocksWhenStale();
+  testDecideStopComparesProductionTimestampShapes();
   testDecideStopMessageIsRepoNeutral();
   testDecideStopNamesOutOfScopeMemLog();
   testStopBlocksOncePerSessionPerWorktree();
@@ -721,8 +713,9 @@ export async function cmdTest(): Promise<void> {
   testCommitHintMinCommitsConstant();
   testCommitHintNullForNonCommit();
   testCommitHintNullOutsideGitRepo();
-  testCommitHintWhenNoGradedVerdicts();
-  testCommitHintWhenGradedVerdictsExist();
+  testCommitHintFiresForCommitsSinceMemRow();
+  testCommitHintSilentWithoutMemLog();
+  testCommitHintSilentWhenMemRowCoversCommits();
   testCommitHintPluginSource();
   testReadContextShowsDebtBeforeFix();
   testReadContextMemRowsByFilesAndPath();
@@ -906,12 +899,9 @@ export async function cmdTest(): Promise<void> {
   testInstallClaudeAlreadyConfiguredNoOp();
   testInstallClaudeAlreadyConfiguredStillInstallsHooks();
   testInstallClaudeDifferentCommandRefusesOverwrite();
-  testInstallClaudeForeignStatuslineRefusesOverwrite();
   testInstallClaudeStopHookAppendsOnceAndKeepsForeign();
   testInstallClaudeReadHintAppendsOnce();
   testInstallClaudeEditHintAppendsOnce();
-  testInstallClaudeForeignScriptRefusesOverwrite();
-  testInstallClaudeStatuslineWiresSettings();
   testInstallClaudeDryRunNeverAdds();
   testInstallClaudeMissingBinary();
   testInstallClaudeAddFailureHintsHelp();
@@ -962,6 +952,13 @@ export async function cmdTest(): Promise<void> {
   testInstallCursorAlreadyConfiguredNoOp();
   testInstallCursorDryRunNoWrite();
   testCmdInstallDispatchesCursor();
+  testInstallAntigravityNoDirFails();
+  testInstallAntigravityFreshWritesMcpAndSkills();
+  testInstallAntigravityForeignMcpRefuses();
+  testInstallAntigravityAlreadyConfiguredNoOp();
+  testInstallAntigravityDryRunNoWrite();
+  testInstallAntigravityMergesExistingServers();
+  testCmdInstallDispatchesAntigravity();
   testInstallZcodeNoConfigFails();
   testInstallZcodePrimaryPath();
   testInstallZcodeFallbackPath();
@@ -1004,20 +1001,6 @@ export async function cmdTest(): Promise<void> {
   testHandoffCheckWithFactsCrossRef();
   testHandoffCheckWithoutFacts();
   testHandoffCheckMultiLineUncertain();
-  testVerdictSubmitInvalidVerdict();
-  testVerdictSubmitInvalidReasonCode();
-  testVerdictSubmitOtherRequiresNote();
-  testVerdictSubmitRunNotFound();
-  testVerdictSubmitSuccess();
-  testVerdictSubmitStoresMcpSource();
-  testVerdictSubmitAutoCreatesRun();
-  testVerdictSubmitAllGrades();
-  testVerdictSubmitReusesOpenRunAcrossRounds();
-  testVerdictSubmitNullPlanAlwaysCreatesNew();
-  testVerdictSubmitPassedRunNotReused();
-  testVerdictSubmitMissingRegimeRejects();
-  testVerdictSubmitInvalidRegimeRejects();
-  testVerdictSubmitRegimeStoredInGateEvent();
   testEndToEndPipeline();
   testExtractMultiFieldNone();
   testExtractMultiFieldSingle();
@@ -1029,7 +1012,6 @@ export async function cmdTest(): Promise<void> {
   testParseToolResult();
   testReasonCodesAreLocked();
   testRegimeCodesAreLocked();
-  testReasonCodesListedInDocs();
   testRegimeCodesListedInDocs();
   testLintBaselineCaptureAndCleanDiff();
   testLintBaselineDiffReportsOnlyNewFindings();

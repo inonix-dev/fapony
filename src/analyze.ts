@@ -147,7 +147,7 @@ export const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 // have real importers here — scanning them produces false wrapper/orphan
 // signals (measured: conventions-seed flagged 8 "wrappers" that were all
 // src/mem/commands/*.ts helpers matched against unrelated identically-
-// named calls elsewhere in the repo, e.g. "cmdNow() instead of now(").
+// named calls elsewhere in the repo, e.g. "cmdDone() instead of done(").
 const SKIP_DIRS = new Set([
   "node_modules",
   "dist",

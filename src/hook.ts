@@ -1,5 +1,5 @@
 // src/hook.ts — Claude Code / Cursor Stop hook: refuse to end a turn that produced
-// commits but no verdict.
+// commits but no mem row.
 //
 // Why a hook and not a message: SERVER_INSTRUCTIONS is a *request* that the
 // agent remember, and it measured as not enough · the hook does not grade in
@@ -28,10 +28,9 @@ import {
 import { homedir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { buildGraphCached, collectSourceFiles, SCAN_EXTS } from "./analyze.js";
-import { openDb } from "./db/index.js";
 import { debtForFile, loadConventions } from "./debt/index.js";
-import { detectTestRunner } from "./detect.js";
 import { readMemLog, whereMemDir } from "./memory.js";
+import { renderSeed } from "./seed/review-seed.js";
 
 // --- Hint-fire log (PLAN-feedback-surface chunk 1) ---
 //
@@ -240,20 +239,34 @@ export function utcStamp(d: Date): string {
 }
 
 /**
- * Pure decision: block only when this session produced commits and none of
- * them got graded. Every unknown (no git, no transcript, hook already fired)
- * resolves to "allow" — a hook that guesses wrong must never trap the agent.
+ * Parse either timestamp shape this repo produces: mem rows are ISO
+ * (`new Date().toISOString()`), session start is utcStamp
+ * ('YYYY-MM-DD HH:MM:SS', UTC). Never compare them as strings — 'T' > ' '
+ * makes any same-date mem row read as "newer than session start".
+ */
+export function hookTsMs(ts: string): number {
+  const iso = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(ts)
+    ? `${ts.replace(" ", "T")}Z`
+    : ts;
+  return new Date(iso).getTime();
+}
+
+/**
+ * Pure decision: block when this session produced commits but no mem row
+ * newer than session start exists. Every unknown (no git, no transcript,
+ * hook already fired, no mem log) resolves to "allow" — a hook that guesses
+ * wrong must never trap the agent.
  *
- * PLAN-mem-mcp chunk 3: the block message now carries the commit list and the
- * mem-log status (last row date). Both are *information*, never conditions —
- * the block condition stays verdict-only (rule 7: the hook does not judge, it
- * reports what is pending so the agent decides what deserves recording).
+ * PLAN-verdict-to-mem: block condition changed from verdicts to mem rows.
+ * The stop hook is the most expensive enforcement tool we have (rule 9);
+ * using it for verdicts that are 94% pass-family was wasteful. Now it
+ * enforces mem_add — rows that session N can actually read.
  */
 export function decideStop(opts: {
   stopHookActive: boolean;
   worktree: string | null;
   commits: number;
-  verdicts: number;
+  since?: string | null;
   commitList?: string[];
   memLastTs?: string | null;
   /** Logs that exist in the repo but are out of scope from this worktree. */
@@ -262,10 +275,21 @@ export function decideStop(opts: {
   if (opts.stopHookActive) return null; // already blocked once — let it end
   if (!opts.worktree) return null;
   if (opts.commits < 1) return null;
-  if (opts.verdicts > 0) return null;
+  // No mem log at all = allow (same as sessionStartContext — silent when missing).
+  if (!opts.memLastTs && !opts.memCandidates?.length) return null;
+  // Has mem rows — block only if nothing newer than session start. Parsed
+  // as dates, not strings: the two sides arrive in different shapes (ISO mem
+  // rows vs utcStamp session start). Unparseable = allow, per the contract
+  // above — an unknown timestamp is not proof either way.
+  if (opts.since && opts.memLastTs) {
+    const sinceMs = hookTsMs(opts.since);
+    const memMs = hookTsMs(opts.memLastTs);
+    if (Number.isNaN(sinceMs) || Number.isNaN(memMs)) return null;
+    if (memMs >= sinceMs) return null;
+  }
 
   const lines: string[] = [
-    `${opts.commits} commit(s) landed in ${opts.worktree} this session with no verdict filed.`,
+    `${opts.commits} commit(s) landed in ${opts.worktree} this session — no mem row recorded for this work.`,
   ];
   // ≤ 5 commits listed, rest folded into "… +N more" (spec §6: ≤ 12 lines).
   const list = opts.commitList ?? [];
@@ -276,29 +300,16 @@ export function decideStop(opts: {
       `mem: last row ${opts.memLastTs.slice(0, 10)} — nothing newer this session`,
     );
   } else if (opts.memCandidates?.length) {
-    // "nothing recorded" would be a lie: the log exists, it is just not in
-    // scope from here (monorepo — the log lives in the app dir). Say where.
     lines.push(
       `mem: no log in scope from ${opts.worktree} — found ` +
         `${opts.memCandidates.join(", ")} (run mem commands from there, or --mem-dir)`,
     );
-  } else {
-    lines.push("mem: no rows at all — nothing recorded in this project yet");
   }
-  const runner = detectTestRunner(opts.worktree);
-  const verifyLine = runner
-    ? `If you did not run \`${runner.typecheckCmd ? `${runner.typecheckCmd} and ` : ""}${runner.testCmd}\` to a real exit code, ` +
-      `the honest verdict is uncertain, not pass. `
-    : `If you did not run this repo's typecheck and test suite to a real exit code, ` +
-      `the honest verdict is uncertain, not pass. `;
 
   lines.push(
-    `Call verdict_submit before ending: worktree must be the absolute path above, ` +
-      `regime is one of code|fix|review|plan|inquiry|test, and the note must stand alone ` +
-      `(it is read months from now with no access to this conversation). ` +
-      `Grade what actually happened — pass-family when it held up, fail if the first ` +
-      `attempt was wrong, uncertain when you could not verify it. ${verifyLine}` +
-      `What deserves a mem row (decision/bug/note) is your call — not every unit needs one.`,
+    `Record a mem row before ending: fapony mem add <decision|bug|note> "what happened" --files <files> ` +
+      `${opts.worktree}/.fapony/plan/PLAN.md (or the relevant plan). ` +
+      `files[] is required — a row without it is unfindable when you touch that file next session.`,
   );
   return lines.join("\n");
 }
@@ -497,7 +508,6 @@ export async function cmdHookStop(): Promise<void> {
 
     let commits = 0;
     let commitList: string[] = [];
-    let verdicts = 0;
     let memLastTs: string | null = null;
     let memCandidates: string[] = [];
     if (worktree && since) {
@@ -507,25 +517,14 @@ export async function cmdHookStop(): Promise<void> {
       );
       commitList = log ? log.split("\n").filter(Boolean) : [];
       commits = commitList.length;
-      if (commits > 0) {
-        const db = openDb();
-        const row = db
-          .query(
-            `SELECT COUNT(*) AS n FROM events e JOIN runs r ON r.id = e.run_id
-             WHERE e.kind = 'gate' AND r.worktree = ? AND e.ts >= ?`,
-          )
-          .get(worktree, since) as { n: number } | null;
-        verdicts = row?.n ?? 0;
-        // Informational only — read-only, degrade silently (mem status never
-        // becomes a block condition, rule 7).
-        try {
-          const mem = readMemLog(worktree);
-          memLastTs = mem.rows[0]?.ts ?? null;
-          if (!memLastTs)
-            memCandidates = whereMemDir(worktree).candidates ?? [];
-        } catch {
-          memLastTs = null;
-        }
+      // Read mem log regardless of commits — the block condition is mem rows,
+      // not verdicts (PLAN-verdict-to-mem).
+      try {
+        const mem = readMemLog(worktree);
+        memLastTs = mem.rows[0]?.ts ?? null;
+        if (!memLastTs) memCandidates = whereMemDir(worktree).candidates ?? [];
+      } catch {
+        memLastTs = null;
       }
     }
 
@@ -533,7 +532,7 @@ export async function cmdHookStop(): Promise<void> {
       stopHookActive: norm.stopHookActive,
       worktree: since ? worktree : null,
       commits,
-      verdicts,
+      since,
       commitList,
       memLastTs,
       memCandidates,
@@ -574,7 +573,7 @@ export async function cmdHookStop(): Promise<void> {
 /** Cap on injected context — kickoff is short, a broken repo's output is not. */
 export const SESSION_START_MAX_CHARS = 4_000;
 
-const TRUNCATED = "… truncated — run `fapony mem kickoff` for the rest";
+const TRUNCATED = "… truncated — run `fapony mem find <word>` for the rest";
 
 /** Trim to whole lines, keeping the marker's line boundary intact. */
 function headLines(text: string, max: number): string {
@@ -586,16 +585,35 @@ function headLines(text: string, max: number): string {
 /**
  * Trim to whole lines within the cap, with an honest truncation marker.
  *
- * "## next up" is kickoff's last section and its most actionable one, so a
- * plain head-cut drops exactly the part worth injecting in a repo with a long
- * open list (measured here: 92 rows, the cut landed mid-history). Keep it and
- * spend the rest of the budget on the head.
+ * Kickoff's ordering is now: ranked rows → "## next up" → "## recent". The
+ * most actionable content is at the top (bugs, diff-matched) and in "## next
+ * up". A plain head-cut drops the suggestions — so we try to keep "## next up"
+ * visible. When "## recent" exists, we cut it first; otherwise fall back to
+ * keeping "## next up" at the tail.
  */
 export function capContext(
   text: string,
   max = SESSION_START_MAX_CHARS,
 ): string {
   if (text.length <= max) return text;
+  // New ordering: ranked → ## next up → ## recent → sweep/rotate
+  // Cut ## recent first to keep ranked content + suggestions visible.
+  const recentIdx = text.indexOf("\n## recent");
+  if (recentIdx > 0) {
+    const head = text.slice(0, recentIdx).trimEnd();
+    if (head.length <= max) return head;
+    // Head still too long — try to keep ## next up at the end
+    const nextIdx = head.lastIndexOf("\n## next up");
+    if (nextIdx > 0) {
+      const beforeNext = head.slice(0, nextIdx).trimEnd();
+      const nextTail = head.slice(nextIdx).trimEnd();
+      if (nextTail.length < max / 2) {
+        return `${headLines(beforeNext, max - nextTail.length)}\n${TRUNCATED}\n${nextTail}`;
+      }
+    }
+    return `${headLines(head, max)}\n${TRUNCATED}`;
+  }
+  // Fallback: no ## recent found (short output or other path)
   const at = text.lastIndexOf("\n## next up");
   const tail = at > 0 ? text.slice(at).trimEnd() : "";
   if (tail && tail.length < max / 2) {
@@ -671,6 +689,8 @@ export const READ_HINT_MIN_BYTES = 24_000;
 export const READ_HINT_MIN_LIMIT = 300;
 /** One-time measurement (2026-09-17, this repo): 5 files / 2,146 lines ≈ 3.7KB out. */
 const READ_HINT_MEASURED = "measured ~3.7KB output on a 2,146-line file";
+/** Cap on the outline attached to the read hint — keeps the hint compact. */
+const READ_HINT_OUTLINE_CAP = 2_000;
 
 export interface ReadHintInput {
   filePath: unknown;
@@ -685,6 +705,10 @@ export interface ReadHintInput {
  * repo, stat/read failure) resolves to null — a hint must never fire on a
  * guess. Fast path is statSync only; the file is read just to count lines,
  * and only after the size threshold passed.
+ *
+ * When review-seed succeeds, the hint attaches the actual outline (exports
+ * with line numbers) instead of telling the agent to run a command (rules
+ * 9/13: ask does not work, attach the data directly).
  */
 export function readHintFor(opts: ReadHintInput): string | null {
   try {
@@ -708,6 +732,41 @@ export function readHintFor(opts: ReadHintInput): string | null {
     // relative path, outside it relative() climbs dots, show absolute.
     const rel = relative(opts.cwd, opts.filePath);
     const shown = rel.startsWith("..") ? opts.filePath : rel;
+
+    // Try to attach the actual outline from review-seed (cap ~2KB)
+    let outline = "";
+    try {
+      const seed = renderSeed(["--files", shown], opts.cwd);
+      // Extract signatures section — the most useful part for reading
+      const sigMatch = seed.match(
+        /signatures \(current\):\n([\s\S]*?)(?:\n\w|\nstatic graph)/,
+      );
+      if (sigMatch) {
+        outline = sigMatch[1].trim();
+      } else {
+        // Fallback: take the first section after the file list
+        const afterFiles = seed.indexOf("\nimporters");
+        if (afterFiles > 0) {
+          outline = seed
+            .slice(0, Math.min(afterFiles, READ_HINT_OUTLINE_CAP))
+            .trim();
+        } else {
+          outline = seed.slice(0, READ_HINT_OUTLINE_CAP).trim();
+        }
+      }
+      if (outline.length > READ_HINT_OUTLINE_CAP) {
+        outline = `${outline.slice(0, READ_HINT_OUTLINE_CAP).trimEnd()}\n… truncated`;
+      }
+    } catch {
+      // review-seed failed — fall back to the command suggestion
+    }
+
+    if (outline) {
+      return (
+        `fapony: ${shown} is ${lines} lines\n${outline}\n` +
+        `(review-seed --files ${shown} for importers + callers; skill /lookup-before-edit)`
+      );
+    }
     return (
       `fapony: ${shown} is ${lines} lines — review-seed --files ${shown} ` +
       `returns exports with line numbers, importers, and signatures first ` +
@@ -984,18 +1043,16 @@ export function editHintFor(opts: EditHintInput): string | null {
 //
 // OpenCode has no Stop hook (Cursor does — see cursor.ts hook-stop wiring)
 // so it cannot block a turn; instead it appends an annotate to the bash tool
-// output whenever there is a git commit with no verdict pending. It is the
-// same kind of nudge as the read hint: no block, no dedupe, every unknown →
+// output whenever there is a git commit with no mem row recorded for it. It is
+// the same kind of nudge as the read hint: no block, no dedupe, every unknown →
 // silent · called from the opencode plugin by direct import (like
 // readHintFor), no CLI subcommand because no client needs it as a subprocess
 // (Cursor uses its own hook-stop instead)
 //
-// The text is facts only (commit list + verdict status), not an estimate
+// The text is facts only (commit list + mem status), not an estimate
 
 /** Below this number of commits, the hint is unnecessary noise. */
 export const COMMIT_HINT_MIN_COMMITS = 1;
-/** Cap commits shown in the hint message. */
-const COMMIT_HINT_MAX_LIST = 5;
 
 export interface CommitHintInput {
   command: unknown;
@@ -1003,14 +1060,16 @@ export interface CommitHintInput {
 }
 
 /**
- * Nudge for bash commands containing `git commit` that produced
- * ungraded commits. Returns a one-to-two line hint string, or null
- * when there is nothing to nudge about (already graded, no commits,
- * not a git commit command, not a git repo, any failure).
+ * Nudge for bash commands containing `git commit` that produced commits with
+ * no mem row recorded for them. Returns a one-to-two line hint string, or
+ * null when there is nothing to nudge about (no new commits, not a git
+ * commit command, not a git repo, no mem log to window on, any failure).
  *
- * Every unknown resolves to null — a hint must never fire on a
- * guess. The work is cheap: one git rev-parse + one git log + one
- * SQLite count.
+ * Every unknown resolves to null — a hint must never fire on a guess. The
+ * work is cheap: one git rev-parse + one mem-log read + one git log.
+ * The window is the mem log, never the verdict ledger: gate events have no
+ * writer left (PLAN-verdict-to-mem), so the last verdict is frozen — fresh
+ * machines listed their entire repo history as unrecorded.
  */
 export function commitHintFor(opts: CommitHintInput): string | null {
   try {
@@ -1021,51 +1080,41 @@ export function commitHintFor(opts: CommitHintInput): string | null {
     const worktree = git(["rev-parse", "--show-toplevel"], opts.cwd);
     if (!worktree) return null;
 
-    // Window = commits since the worktree's last verdict, not "does a
-    // verdict exist anywhere in its history" — a worktree that earned one
-    // verdict months ago must still nudge on every commit made since, the
-    // same way cmdHookStop windows on `e.ts >= since` (session start) rather
-    // than "any verdict this worktree has ever had".
-    const db = openDb();
-    const lastVerdict = db
-      .query(
-        `SELECT MAX(e.ts) AS ts FROM events e JOIN runs r ON r.id = e.run_id
-         WHERE e.kind = 'gate' AND r.worktree = ?`,
-      )
-      .get(worktree) as { ts: string | null } | null;
-    // git's --since is inclusive to the second, and the commit a verdict
-    // just graded often lands in the same UTC second as the verdict itself
-    // (verdict_submit runs right after the commit) — bump by 1s so that
-    // commit isn't re-flagged as ungraded because of its own grade.
-    const since = lastVerdict?.ts
-      ? utcStamp(
-          new Date(
-            new Date(`${lastVerdict.ts.replace(" ", "T")}Z`).getTime() + 1000,
-          ),
-        )
-      : null;
+    // Window = commits newer than the last mem row. No mem log in scope =
+    // no window to measure — stay silent (same as the stop hook: a hint must
+    // never fire on a guess, and the whole-history fire on fresh machines is
+    // what this replaced).
+    let memLastTs: string | null = null;
+    try {
+      memLastTs = readMemLog(worktree).rows[0]?.ts ?? null;
+    } catch {
+      memLastTs = null;
+    }
+    if (!memLastTs) return null;
+    // git's --since is inclusive to the second, and a commit can land in the
+    // same UTC second as the row recorded for it — bump by 1s so recorded
+    // work isn't re-flagged.
+    const since = utcStamp(new Date(hookTsMs(memLastTs) + 1000));
 
-    const log = since
-      ? git(["log", "--since", `${since} +0000`, "--format=%h %s"], worktree)
-      : git(["log", "--format=%h %s"], worktree);
+    const log = git(
+      ["log", "--since", `${since} +0000`, "--format=%h %s"],
+      worktree,
+    );
     const commitList = log ? log.split("\n").filter(Boolean) : [];
     if (commitList.length < COMMIT_HINT_MIN_COMMITS) return null;
 
-    const reason = decideStop({
-      stopHookActive: false, // annotate-only: never "already blocked"
-      worktree,
-      commits: commitList.length,
-      verdicts: 0, // every commit left in the window is, by construction, ungraded
-      commitList: commitList.slice(0, COMMIT_HINT_MAX_LIST),
-    });
-    if (!reason) return null;
+    // Build the nudge directly — commitHintFor is annotate-only (informational),
+    // while decideStop is blocking enforcement. They serve different purposes.
+    const lines: string[] = [
+      `${commitList.length} commit(s) since last mem row (${memLastTs.slice(0, 10)}) — record a mem row for this work.`,
+    ];
+    for (const c of commitList.slice(0, 5)) lines.push(`  ${c}`);
+    if (commitList.length > 5) lines.push(`  … +${commitList.length - 5} more`);
+    lines.push(
+      `fapony mem add <decision|bug|note> "what happened" --files <files> ${worktree}/.fapony/plan/PLAN.md`,
+    );
 
-    // Prefix each line with "fapony:" so it's visually distinct
-    // from normal bash output in the agent's context.
-    const prefixed = reason
-      .split("\n")
-      .map((l) => `fapony: ${l}`)
-      .join("\n");
+    const prefixed = lines.map((l) => `fapony: ${l}`).join("\n");
     return prefixed;
   } catch {
     return null; // any failure = no hint
@@ -1184,7 +1233,10 @@ export async function cmdHookReadHint(): Promise<void> {
 
 /** Claude Code PreToolUse (matcher Edit): stdin JSON in, additionalContext out.
  *  No permissionDecision ever — the edit always proceeds. Fires once per
- *  (session, file); the dedupe lives inside editHintFor. */
+ *  (session, file); the dedupe lives inside editHintFor.
+ *
+ *  Also attaches mem/debt context lines (same as read hint) — the moment
+ *  paying down debt is worth tokens is when the file is already open. */
 export async function cmdHookEditHint(): Promise<void> {
   try {
     const raw = JSON.parse(await Bun.stdin.text()) as {
@@ -1199,13 +1251,22 @@ export async function cmdHookEditHint(): Promise<void> {
     const filePath = raw.tool_input?.file_path;
     // One edit log per session — same identity as the read hint.
     const session = raw.transcript_path ?? raw.session_id;
+    const parts: string[] = [];
     const hint = editHintFor({ filePath, cwd, session });
-    if (hint) {
+    if (hint) parts.push(hint);
+    // Attach mem/debt context (same as read hint — annotate only, cap 5 lines)
+    const ctx = readContextData(filePath, cwd);
+    if (ctx) {
+      for (const line of [...ctx.debtLines, ...ctx.memLines]) {
+        parts.push(line);
+      }
+    }
+    if (parts.length > 0) {
       console.log(
         JSON.stringify({
           hookSpecificOutput: {
             hookEventName: "PreToolUse",
-            additionalContext: hint,
+            additionalContext: parts.join("\n"),
           },
         }),
       );

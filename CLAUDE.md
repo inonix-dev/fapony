@@ -71,7 +71,7 @@ verified"* · *"Plan is entirely stale"* · ฉะนั้น mem ที่ม�
 
 **กฎที่ตามมา:**
 1. **ledger ห้ามเป็นเงื่อนไขของ core และกลับกัน** — `fapony debt` / `mem_find` ต้องทำงานได้
-   โดยไม่มี `state.db` และ `verdict_submit` ต้องทำงานได้โดยไม่มี `.fapony/`
+   โดยไม่มี `state.db` ·
 2. **ห้ามให้ ledger เขียนลง worktree** — เคยมีข้อเสนอให้ `verdict_submit` เขียน mem row
    อัตโนมัติ **ปฏิเสธแล้ว**: มันบังคับให้เส้นทางที่ร้อนที่สุด spawn shell จาก config และพัง
    เมื่อไม่มี `.fapony/` · ที่สำคัญกว่า — mem row มีค่าเพราะเป็นร้อยแก้ว standalone ที่คนหรือ
@@ -128,12 +128,12 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 
 | | claude | opencode | cursor | zcode | codex |
 | --- | --- | --- | --- | --- | --- |
-| MCP 4 tools | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Stop hook (ไม่จบเทิร์นที่มี commit ไม่มี verdict) | ✅ | — | ✅ | — | ✅ after trust |
+| MCP 3 tools | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Stop hook (ไม่จบเทิร์นที่มี commit แต่ไม่มี mem row ใหม่) | ✅ | — | ✅ | — | ✅ after trust |
 | Read hint (ไฟล์ใหญ่ + debt/mem) | ✅ ก่อน | ✅ หลัง | — | — | — |
 | Re-read hint (อ่านซ้ำไฟล์เดิม mtime ไม่ขยับ) | ✅ ก่อน | ✅ หลัง | — | — | — |
 | Edit hint (จำนวน importer ก่อนแก้ shape) | ✅ ก่อน | ✅ หลัง (edit+write) | — | — | — |
-| Commit hint (`git commit` → เตือน verdict) | — | ✅ หลัง | — | — | — |
+| Commit hint (`git commit` → เตือน mem row) | — | ✅ หลัง | — | — | — |
 | SessionStart (ยิง `mem kickoff` เป็น context) | ✅ | ✅ ครั้งแรกที่ dispatch | — | — | ✅ after trust |
 | Skill symlink → `~/.claude/skills` | ✅ | ✅ | — | — | — |
 | Skill symlink → `~/.agents/skills` | — | — | — | ✅ | ✅ |
@@ -142,7 +142,7 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 `—` = ยังไม่ต่อ ไม่ใช่ทำไม่ได้ (Cursor ไม่มี PreToolUse · ZCode/Codex ไม่มี in-process hook surface
 สำหรับ read/edit hints — Codex `apply_patch` ส่ง patch text ไม่ใช่ file path) · **ทำไม hint อยู่บน hook ไม่ใช่
 MCP** — มันต้องยิงกลางเทิร์นเองโดย agent ไม่ต้องนึก ตรงเกณฑ์ MCP-vs-CLI (กฎ 13) เป๊ะ · **commit hint
-มีแต่ OpenCode** เพราะ Claude ใช้ Stop hook รายงาน commit ที่ยังไม่ grade แทน · Codex hooks ต้อง
+มีแต่ OpenCode** เพราะ Claude ใช้ Stop hook รายงาน commit ที่ยังไม่มี mem row แทน · Codex hooks ต้อง
 trust ผ่าน `/hooks` ก่อน run — `fapony install` บอกเมื่อต้องทำ · **SessionStart บน OpenCode มาตอน
 dispatch ครั้งแรก** (`experimental.chat.system.transform` ครั้งเดียวต่อ session — ช่อง inject เดียวที่
 `event` hook ไม่มี) ไม่ใช่ตอนสร้าง session · ตัวติดตั้ง **ไม่เคยเขียนทับ plugin ของตัวเอง**
@@ -300,14 +300,11 @@ plan/spec templates, และ skill ทั้งหมด
 7. **บันทึก mem ระหว่างทำงาน พร้อม `--files` เสมอ** — นี่คือกฎที่แทนกฎ "ยิง verdict ทุกครั้ง"
    ในฐานะ habit หลัก · เขียน `decision` ตอนตัดสินใจอะไรที่ session หน้าจะงง, `bug` ตอนเจอของพัง,
    `note` ตอนจบ chunk · แถวที่ไม่มี `--files` ตกพื้นตอน cluster = เขียนไปเท่ากับไม่ได้เขียน
-8. **`verdict_submit` ยังยิงอยู่ แต่ด้วยเหตุผลใหม่** — มันคือเซนเซอร์ ไม่ใช่คะแนน · ของที่มีค่า
-   ในนั้นคือ `files[]` + `note` (ข้อเท็จจริง) และ token ที่ join ได้ **ไม่ใช่ตัวเกรด** · `regime`
-   ยังบังคับ · `reason_code` ของงานสะอาดคือ `none` ไม่ใช่ `other` (`other` = เจอปัญหาจริงที่ไม่มี
-   bucket ตรง) · เจอว่าเดารอบแรกผิด ยิง `fail` ทันทีที่รู้ ตรวจไม่ได้ → `uncertain` ห้ามเดา pass ·
-   `note` ต้อง standalone · ห้ามทิ้ง run ค้าง — run ที่ไม่ terminal ดูด verdict อื่นของ worktree
-   นั้นมาเกาะ · **Stop hook บังคับอยู่** ([src/hook.ts](src/hook.ts)): จบเทิร์นที่มี commit แต่
-   ไม่มี verdict = ถูก block หนึ่งครั้ง · hook ไม่ตัดสินเกรดแทน — แยก "ใครตัดสิน" ออกจาก
-   "ใครบังคับให้ตัดสิน" อันหลังเท่านั้นที่ automate ได้
+8. **Stop hook บังคับ mem row** ([src/hook.ts](src/hook.ts)): จบเทิร์นที่มี commit แต่
+   ไม่มี mem row ใหม่ = ถูก block หนึ่งครั้ง · ไม่มี mem log เลย = ไม่ block ·
+   `verdict_submit` ถอดออกจาก MCP แล้ว (PLAN-verdict-to-mem) — engine อยู่ใน git
+   ฟื้นเป็น CLI ได้ · hook ไม่ตัดสินเกรดแทน — แยก "ใครตัดสิน" ออกจาก
+   "ใครบังคับให้บันทึก" อันหลังเท่านั้นที่ automate ได้
 9. **การ *ขอ* ไม่ได้ผล การ *บังคับ* ได้ผล** — วัดแล้วมีสองอย่างที่เปลี่ยนพฤติกรรมจริง:
    required + enum + reject (`regime`) กับ Stop hook · ทุกอย่างที่เขียนว่า "ควรทำ" ในไฟล์กฎ
    ไม่มีผลวัดได้ · **ฉะนั้นฟีเจอร์ที่พึ่ง "agent จะจำไปทำเอง" = ยังไม่เสร็จ**
@@ -316,8 +313,8 @@ plan/spec templates, และ skill ทั้งหมด
     **ห้ามบังคับ ห้ามเอากลับเข้า `SERVER_INSTRUCTIONS`**
 11. **Execute plan ทีละ chunk ห้ามลากยาวเป็น session เดียว** — context ใน session เดียวมีแต่โต
     ไม่เคยหด (วัดจริง: session 300-500 steps ลาก token สูงกว่า session สั้นอย่างไม่เป็นสัดส่วน
-    กับงานที่ทำ) จบ 1 chunk: ติ๊ก checkbox + stamp TL;DR → commit แยก → `verdict_submit` →
-    `mem.ts add note "สิ่งที่ chunk ถัดไปต้องรู้" --files f1,f2 <path/to/PLAN-x.md>` (path ต้อง
+     กับงานที่ทำ) จบ 1 chunk: ติ๊ก checkbox + stamp TL;DR → commit แยก →
+     `mem.ts add note "สิ่งที่ chunk ถัดไปต้องรู้" --files f1,f2 <path/to/PLAN-x.md>` (path ต้อง
     พิมพ์เหมือนเดิมทุกครั้ง — `kickoff` เทียบ string ตรงตัว) → **หยุด** · session ถัดไปเปิดด้วย
     `mem.ts kickoff <path เดิม>` แทนแบก transcript เก่า
 12. **ฟีเจอร์ที่ไม่มี caller = ลบ** — ทำจริงแล้ว: `fapony map` ไม่มี caller, `plan-seed` §2/§5
@@ -330,8 +327,8 @@ plan/spec templates, และ skill ทั้งหมด
     แล้วประหยัด output ได้มากกว่าไหม"** (ของจริง: `review-seed --files` จ่าย ~940 → เลี่ยง ~35k)
     - **MCP vs CLI ตัดกันตรงนี้:** schema ใน `tools/list` เป็น **ค่าเช่าคงที่** จ่ายทุก session
       ของทุก client แม้ไม่เรียกสักครั้ง ส่วน CLI เป็น **0 จนกว่าจะรัน** · ฉะนั้น
-      **สิ่งที่คนสั่งให้ทำ = CLI · สิ่งที่ agent ต้องนึกได้เองกลางเทิร์นโดยไม่มีใครสั่ง = MCP** ·
-      `mem_find` กับ `verdict_submit` ผ่านข้อนี้ ส่วน `fapony_stats` ไม่ผ่านเพราะคนเป็นคนถามเสมอ
+       **สิ่งที่คนสั่งให้ทำ = CLI · สิ่งที่ agent ต้องนึกได้เองกลางเทิร์นโดยไม่มีใครสั่ง = MCP** ·
+       `mem_find` ผ่านข้อนี้ ส่วน `fapony_stats` ไม่ผ่านเพราะคนเป็นคนถามเสมอ
     - **เก็บให้พอ ไม่ใช่อธิบายให้เยอะ** — field ที่ต้องเขียนคำอธิบายสามย่อหน้าแปลว่ายังไม่รู้ว่า
       จะเก็บอะไร · **ถ้าสรุปด้วยประโยคเดียวไม่ได้ แปลว่ายังไม่เข้าใจปัญหาพอ** (รูปเดียวกับกฎ 3)
     - description เขียนแบบ **สั่ง ไม่ใช่โน้มน้าว** — "ส่งอันนี้มาด้วย" สั้นกว่าและได้ผลเท่ากับ
@@ -457,8 +454,8 @@ fapony analyze [path]                # hub/orphan/cycle/changed-untested — liv
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym]
 fapony plan-seed <name> [--spec] [--scope <path>]...
 # ── ledger (แช่แข็ง — แก้เฉพาะบั๊ก) ──
-fapony mcp                           # MCP server — stdio JSON-RPC, 4 tools
-fapony hook-stop                     # Stop hook — block เทิร์นที่มี commit แต่ไม่มี verdict
+fapony mcp                           # MCP server — stdio JSON-RPC, 3 tools
+fapony hook-stop                     # Stop hook — block เทิร์นที่มี commit แต่ไม่มี mem row ใหม่
 fapony hook-read-hint                # annotate 2 แบบ: อ่านไฟล์ใหญ่ทั้งไฟล์ → review-seed ·
                                      # re-read ไฟล์เดิมใน session เดียวกันที่ mtime ไม่ขยับ → grep
 fapony hook-edit-hint                # PreToolUse Edit — บอกจำนวน importer ของไฟล์ที่กำลังแก้ (Claude)
@@ -494,7 +491,7 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 
 ## MCP Tools: fapony
 
-`fapony mcp` — stdio JSON-RPC, **4 tools** (`mem_add` เข้ามาพร้อม PLAN-agent-one-call ·
+`fapony mcp` — stdio JSON-RPC, **3 tools** (`mem_add` เข้ามาพร้อม PLAN-agent-one-call ·
 `plan_list` ออกไป 2026-09-20 · `fapony_usage` ออกไป 2026-09-20 เหลือ CLI · `mem_close`
 เข้ามา 2026-09-21 เป็น tool แยกเพราะ close row ไม่มี `files[]` — ดูกฎ 12/13):
 
@@ -503,13 +500,16 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 | `mem_find` | **แกน** — ค้น mem log read-only: match `files[]` ที่เก็บจริงในแถวก่อน แล้ว fallback เป็น substring ของ text/spec/ref สำหรับแถวเก่าที่เขียนตอนยังไม่มี `--files` · ทุก kind ไม่มี default filter · `memDir:null` = ไม่มี mem (ไม่ใช่ "ไม่เจอ") |
 | `mem_add` | **แกน — ครึ่งเขียนของ `mem_find`** · append mem row (`decision`/`bug`/`note`/`next`/`hold`) โดย `files[]` **required + reject เมื่อว่าง** (กฎ 9: required ได้ผล การขอไม่ได้ผล) — แถวที่ไม่บอกไฟล์ หาไม่เจอตอนแตะไฟล์นั้น |
 | `mem_close` | **แกน — ครึ่งปิดของ `mem_add`** · ปิด row ด้วย id + tombstone message (`ref`+`text`, ไม่มี `files[]`) ฉะนั้นเป็น tool แยก ไม่ใช่ `kind:"close"` — schema ที่ required field ขึ้นกับค่าของอีก field คือรูปทรงที่เรียกผิดบ่อยที่สุด |
-| `verdict_submit` | เก็บ verdict 6 เกรด + `regime` บังคับ — **อ่านเป็นเซนเซอร์ ไม่ใช่คะแนน** (กฎ 8) |
 
-**ที่ถอดออกไปแล้วและห้ามเอากลับ:** `fapony_usage` (2026-09-20 — สอบตกกฎ 13: คนเรียกมีแต่เจ้าของ
+**ที่ถอดออกไปแล้วและห้ามเอากลับ:** `verdict_submit` (2026-09-21 — PLAN-verdict-to-mem: schema
+2,126/5,049 ตัวอักษร = 42% ของค่าเช่าทุก session · เกรด 93.9% pass-family ไม่เคย discriminate ·
+Stop hook เปลี่ยนไปบังคับ mem row แทน · engine อยู่ใน git ฟื้นเป็น CLI ได้) · `fapony_usage` (2026-09-20 — สอบตกกฎ 13: คนเรียกมีแต่เจ้าของ
 ("เมื่อวานเผาไปเท่าไหร่") ไม่ใช่ agent กลางเทิร์น · ทุก client แสดง token ของตัวเองอยู่แล้ว เหลือข้ออ้าง
 เดียวคือ cross-client ruler ซึ่ง CLI `usage-scan`/`usage-web` ตอบได้เหมือนกันด้วยค่าเช่าศูนย์ ·
 ลบ `src/mcp/tools/usage.ts` + test ทิ้ง, engine `src/session/` + `src/usage/` อยู่ครบเพราะ CLI ใช้ ·
-statusline เหลือแค่ marker — มันอ่าน cache อย่างเดียว spawn CLI ไม่ได้) ·
+statusline integration ถอดออกทั้งฟีเจอร์ 2026-09-21 — caller ศูนย์บนเครื่องเจ้าของ (ponytail
+plugin's statusline ชนะไปแล้ว) และ cache write (`writeStatuslineCache` ใน transport.ts) ไม่มีใคร
+อ่านต่อ ตามกฎ 12) ·
 `plan_list` (2026-09-20 — `fapony mem kickoff` ตอบ
 "เหลืออะไร" จาก plan file ชุดเดียวกัน · ลบ `src/mcp/tools/plans.ts` + `getLastVerdictByPlan`
 ทิ้งด้วยเพราะไม่มี caller เหลือ ตามกฎ 12) · **สิ่งที่หายไปจริงวัดแล้วว่าเล็ก** (กฎ 2): ใน plan
@@ -520,9 +520,11 @@ statusline เหลือแค่ marker — มันอ่าน cache อ�
 description ของมันขายว่า "บอกได้ว่าควรจ่ายให้ model ไหน" ซึ่งขัด Positioning ข้อ 2) ·
 `project_health_context` (caller ศูนย์ — engine `src/context/projectHealth.ts` ยังอยู่ ใช้จาก CLI ได้) ·
 `verification_report` / `handoff_check` / `handoff_collect` (ถอดไปก่อนหน้านี้ด้วยเหตุผลเดียวกัน) ·
-**วัดแล้ว: schema ทั้งชุด 12,019 → 7,249 ตัวอักษร (−40%) → 5,540 (−24% จากการถอด `fapony_usage`
-เหลือ 3 tools ณ ตอนนั้น — วัดด้วย tools/list JSON + instructions)** · 2026-09-21 `mem_close`
-เข้ามาเป็น tool ที่ 4 (schema เล็ก: `worktree`/`id`/`text`)
+`verdict_submit` (2026-09-21 — PLAN-verdict-to-mem: schema 2,126/5,049 ตัวอักษร = 42% ของค่าเช่า
+ทุก session · เกรด 93.9% pass-family ไม่เคย discriminate · Stop hook เปลี่ยนไปบังคับ mem row
+แทน · engine อยู่ใน git ฟื้นเป็น CLI ได้) ·
+**วัดแล้ว: schema ทั้งชุด 5,049 → 3,654 ตัวอักษร (−27.6% จากการถอด `verdict_submit`
+เหลือ 3 tools — วัดด้วย tools/list JSON + instructions)**
 
 ดู [docs/mcp-handcheck.md](docs/mcp-handcheck.md) สำหรับ protocol, adapter examples, safety rules
 

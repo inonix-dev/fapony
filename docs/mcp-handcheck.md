@@ -1,7 +1,7 @@
 # MCP Handcheck Protocol — Usage Guide
 
 > For external agents (Claude Code / OpenCode / Codex / any MCP client) that want
-> machine facts about their work before submitting, without adopting fapony's loop.
+> machine facts about their work before recording it, without adopting fapony's loop.
 
 ## Quick Start
 
@@ -12,33 +12,38 @@ fapony mcp
 # It reads JSON-RPC from stdin, writes to stdout (newline-delimited)
 ```
 
-## The verification pipeline
+## The recall pipeline
 
 ```
-git facts  →  conformance  →  verdict_submit
-                                     ↓
-                               store verdict
+mem_find (recall)  →  work  →  mem_add (record)  →  mem_close (when resolved)
 ```
 
-The first two steps are CLI-only: `fapony report <run-id>` runs the whole chain —
-git facts, handoff conformance, evidence, verdict — and prints it. They were MCP
-tools until 2026-09-17; the schemas cost every session of every connected client
-and no skill ever called them, so they moved behind the CLI that already did the
-same job. The logic is unchanged.
+One habit feeds the log: when a unit of work ends, append a mem row saying what was
+decided or what broke, with the files it touched. The next session recalls it by file
+before editing. Git facts + handoff conformance live behind one CLI command, not on
+the MCP surface:
 
-The server exposes 4 tools in total, all higher-level and taking plain arguments —
-see [README](../README.md#the-4-tools) for what each one answers:
+```bash
+fapony report <run-id>   # git facts + handoff conformance + evidence + verdict, printed
+```
+
+`report` replays the whole chain for runs from the frozen ledger — no new graded runs
+can be created. Facts tools were MCP tools until 2026-09-17; the schemas cost every
+session of every connected client and no skill ever called them, so they moved behind
+the CLI that already did the same job. The logic is unchanged.
+
+The server exposes 3 tools in total, all higher-level and taking plain arguments —
+see [README](../README.md#the-3-tools) for what each one answers:
 
 | Tool | In one line |
 |------|-------------|
-| `verdict_submit` | Grade a finished unit of work — the one habit the ledger needs |
 | `mem_find` | The project's mem log, read-only — what was decided about these files |
 | `mem_add` | Append a mem row with files[] required — decision/bug/note/next/hold |
 | `mem_close` | Close a mem row by id — separate tool because a close row has no files[] |
 
 ### Two things that bite
 
-- **`server_sha`** — `verification_report` stamps every report with the git SHA of the
+- **`server_sha`** — `fapony report` stamps every report with the git SHA of the
   fapony code that produced it, read once at server start. An MCP server is a long-lived
   process: edit fapony without restarting the client and reports keep coming from the old
   build, with nothing else to signal it. Compare the stamp against `git log -1` in the
@@ -74,42 +79,52 @@ failed, needs_human_review).
 | `checks_declared` | checks field present |
 | `facts_cross_referenced` | commits match git facts |
 
-### 2. `verdict_submit` — Record the verdict
+### 2. `mem_add` / `mem_close` — Record what happened
 
 ```json
 {
   "method": "tools/call",
   "params": {
-    "name": "verdict_submit",
+    "name": "mem_add",
     "arguments": {
-      "run_id": 42,
-      "verdict": "pass",
-      "reason_code": "missing_test",
-      "regime": "code",
-      "note": "needs integration test"
+      "worktree": "/path/to/repo",
+      "kind": "bug",
+      "text": "hook-stop compared timestamps as strings; pulling the fix into one commit",
+      "files": ["src/hook.ts"]
     }
   }
 }
 ```
 
-**Regimes** (required — the task shape the grade applies to):
-- `code` — new feature or refactor
-- `fix` — debugging an existing defect
-- `review` — reviewing someone else's work or diff
-- `plan` — producing a plan or spec, not code
-- `inquiry` — asking questions without editing files
-- `test` — writing or editing tests as primary work
+**Kinds** (required — what shape of record this is):
+- `decision` — decided something the next session would wonder about
+- `bug` — found something broken
+- `note` — end-of-chunk status the next session needs
+- `next` / `hold` — bookkeeping, owned by the mem tooling
 
-**Reason codes:**
-- `missing_test` — claims test pass but no new test covers the change
-- `scope_mismatch` — diff exceeds agreed plan
-- `unsafe_command` — dangerous command detected
-- `spec_gap` — spec doesn't cover edge case found
-- `timeout` — agent ran too long and had to be cut
-- `blocked` — stuck on external dependency/env, not the task itself
-- `incomplete` — ended with work still unfinished
-- `none` — clean pass, nothing to report (use this instead of `other` for clean passes)
-- `other` — requires `note` field
+**`files[]` is required and rejected when empty** — a row that names no file is
+unfindable when you next touch that file, so the server refuses it. Write `text`
+standalone: it is read months later with no access to this conversation.
+
+Close the row when the pain is resolved:
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "mem_close",
+    "arguments": {
+      "worktree": "/path/to/repo",
+      "id": "mubjyf0h",
+      "text": "fixed in <sha>"
+    }
+  }
+}
+```
+
+`mem_close` is a separate tool, not `kind:"close"`, because a close row carries no
+`files[]` — sharing `mem_add`'s schema would make required fields depend on another
+field's value.
 
 ## Example: Claude Code Adapter
 
@@ -122,8 +137,8 @@ echo '{"method":"tools/call","params":{"name":"mem_find","arguments":{"worktree"
 # Step 2: Facts + conformance — one CLI call, no MCP schema involved
 fapony report <run-id>
 
-# Step 3: If the work held up, submit verdict
-echo '{"method":"tools/call","params":{"name":"verdict_submit","arguments":{"run_id":'$RUN_ID',"verdict":"pass","reason_code":"none","regime":"code"}}}' | fapony mcp
+# Step 3: If the work taught something, record it
+echo '{"method":"tools/call","params":{"name":"mem_add","arguments":{"worktree":"'"$PWD"'","kind":"bug","text":"what broke and why","files":["src/you/touched.ts"]}}}' | fapony mcp
 ```
 
 ## Example: Python Adapter
@@ -140,13 +155,13 @@ class FaponyHandcheck:
             stdout=subprocess.PIPE,
             text=True,
         )
-    
+
     def _call(self, method, params=None):
         msg = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}
         self.proc.stdin.write(json.dumps(msg) + "\n")
         self.proc.stdin.flush()
         return json.loads(self.proc.stdout.readline())
-    
+
     def recall(self, worktree, files):
         r = self._call("tools/call", {
             "name": "mem_find",
@@ -154,18 +169,23 @@ class FaponyHandcheck:
         })
         return json.loads(r["result"]["content"][0]["text"])
 
-    def submit_verdict(self, run_id, verdict, reason_code, regime, note=None):
-        args = {
-            "run_id": run_id,
-            "verdict": verdict,
-            "reason_code": reason_code,
-            "regime": regime,
-        }
-        if note:
-            args["note"] = note
-        r = self._call("tools/call", {"name": "verdict_submit", "arguments": args})
+    def add_row(self, worktree, kind, text, files):
+        r = self._call("tools/call", {"name": "mem_add", "arguments": {
+            "worktree": worktree,
+            "kind": kind,
+            "text": text,
+            "files": files,
+        }})
         return json.loads(r["result"]["content"][0]["text"])
-    
+
+    def close_row(self, worktree, row_id, text):
+        r = self._call("tools/call", {"name": "mem_close", "arguments": {
+            "worktree": worktree,
+            "id": row_id,
+            "text": text,
+        }})
+        return json.loads(r["result"]["content"][0]["text"])
+
     def close(self):
         self.proc.stdin.close()
         self.proc.wait()
@@ -174,7 +194,8 @@ class FaponyHandcheck:
 hc = FaponyHandcheck()
 recall = hc.recall("/path/to/repo", ["src/touched.ts"])
 # facts + conformance run on the CLI: `fapony report <run-id>`
-result = hc.submit_verdict(run_id, "pass", "none", "code")
+row = hc.add_row("/path/to/repo", "bug", "what broke and why", ["src/touched.ts"])
+hc.close_row("/path/to/repo", row["id"], "fixed in <sha>")
 hc.close()
 ```
 
@@ -198,6 +219,6 @@ fapony mcp
 ## Safety Rules
 
 1. All git commands go through `assertSafe()` — dangerous patterns blocked
-2. No source/diff/plan content in tool responses — only facts + verdict
+2. No source/diff/plan content in tool responses — only facts + mem rows
 3. Provenance: fapony-verified facts are `verified`, agent claims stay `unverified` until cross-referenced
 4. Schema is backward-compatible — new fields added, old fields never changed
