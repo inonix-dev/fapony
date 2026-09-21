@@ -44,6 +44,7 @@ const planSweepLine = () => {
 // a kickoff line points at the row (mem find has the full text), it must not
 // reprint it.
 const BUGS_LIMIT = 10;
+const BRANCH_LIMIT = 10;
 const RECENT_OPEN_LIMIT = 10;
 const RECENT_OPEN_TEXT = 160;
 
@@ -381,7 +382,14 @@ export const cmdKickoff = (a: string[]) => {
         );
     }
 
+    // next up BEFORE the branch/recency tiers so no row-list section can
+    // push it out — order is by actionability, never by "this tier is short".
+    printNextUp();
+
     // Tier 2: rows whose files[] overlap with git diff --name-only dev...HEAD
+    // — capped like every other row-list section (≤10 + overflow, pointer
+    // lines via shortText): the branch diff is unbounded and mem clusters on
+    // files every real branch touches, so uncapped this reprints the log.
     const bugIds = new Set(bugs.map((r) => r.id));
     const diffMatched = open.filter((r) => {
       if (bugIds.has(r.id)) return false;
@@ -390,11 +398,13 @@ export const cmdKickoff = (a: string[]) => {
     });
     if (diffMatched.length) {
       console.log(`\n## on this branch`);
-      for (const r of diffMatched) console.log(fmtRow(r, claims));
+      for (const r of diffMatched.slice(0, BRANCH_LIMIT))
+        console.log(fmtRow({ ...r, text: shortText(r.text) }, claims));
+      if (diffMatched.length > BRANCH_LIMIT)
+        console.log(
+          `… +${diffMatched.length - BRANCH_LIMIT} more — \`fapony mem find <word>\` for the rest`,
+        );
     }
-
-    // Print next up BEFORE the recency tier so it survives the 4KB cap
-    printNextUp();
 
     // Tier 3: rest by recency (newest first) — tie-breaker only, capped like
     // ## recent (doneLines takes 10): decision/note can never close, so an
