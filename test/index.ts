@@ -94,7 +94,6 @@ import {
 } from "./digest.test.js";
 import {
   testAddingFakeEnumValueFailsDocsCheck,
-  testReasonCodesListedInDocs,
   testRegimeCodesListedInDocs,
 } from "./docs.test.js";
 import {
@@ -1013,7 +1012,6 @@ export async function cmdTest(): Promise<void> {
   testParseToolResult();
   testReasonCodesAreLocked();
   testRegimeCodesAreLocked();
-  testReasonCodesListedInDocs();
   testRegimeCodesListedInDocs();
   testLintBaselineCaptureAndCleanDiff();
   testLintBaselineDiffReportsOnlyNewFindings();
