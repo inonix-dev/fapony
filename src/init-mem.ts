@@ -74,6 +74,14 @@ export function cmdInitMem(args: string[]): void {
   };
   walk(root);
 
+  // Legacy filenames that may live alongside live logs inside .fapony/.memory/
+  const LEGACY_MEM_FILENAMES = [
+    "mem.ts",
+    "store.ts",
+    "selectors.ts",
+    "render.ts",
+  ];
+
   if (memoryDirs.length === 0) {
     console.log("no legacy .memory/ directories found — already clean");
   } else {
@@ -89,6 +97,39 @@ export function cmdInitMem(args: string[]): void {
         );
       } catch {
         // unreadable dir — fall through and remove
+      }
+      // Inside .fapony/.memory/: remove known legacy .ts files while keeping
+      // live logs. The keep-if-logs guard would preserve the whole directory,
+      // but legacy scaffolding (mem.ts, store.ts, ...) is dead code that
+      // should not linger beside the active log.
+      const isFaponyMemory =
+        d.endsWith(`/${FAPONY_DIR}/.memory`) || d === `${FAPONY_DIR}/.memory`;
+      if (isFaponyMemory && logs.length > 0) {
+        let legacyRemoved = 0;
+        let commandsRemoved = 0;
+        for (const name of LEGACY_MEM_FILENAMES) {
+          const fp = join(d, name);
+          if (existsSync(fp)) {
+            rmSync(fp);
+            legacyRemoved++;
+          }
+        }
+        const commandsDir = join(d, "commands");
+        if (existsSync(commandsDir)) {
+          rmSync(commandsDir, { recursive: true, force: true });
+          commandsRemoved++;
+        }
+        if (legacyRemoved || commandsRemoved) {
+          console.log(
+            `cleaned ${d} — removed ${legacyRemoved} legacy file(s)${
+              commandsRemoved ? " + commands/" : ""
+            } (kept ${logs.length} log file(s): ${logs.join(", ")})`,
+          );
+        } else {
+          console.log(`${d} — already clean (logs: ${logs.join(", ")})`);
+        }
+        kept++;
+        continue;
       }
       if (logs.length > 0 && !force) {
         console.log(
