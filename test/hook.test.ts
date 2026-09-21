@@ -1411,36 +1411,39 @@ export function testCommitHintMinCommitsConstant(): void {
 }
 
 export function testSessionStartPluginSource(): void {
-  // The generated OpenCode plugin must defer to cmdHookSessionStart — one
-  // guard and one cap shared with the Claude/Codex hooks, not a second copy —
-  // and inject through output.system, the only channel the event hook cannot
-  // offer. It used to spawn `mem kickoff` and push stdout, which injected the
+  // The generated OpenCode plugin must import the one sessionStartContext
+  // implementation from src/hook.ts — guard + kickoff spawn + cap shared with
+  // the Claude/Codex hooks, and updatable by `git pull` (not baked into the
+  // body). It used to bake `mem kickoff` and push stdout, which injected the
   // empty-repo "# <path> — 0 entries" header into every session (mub2ezhi).
   const src = sessionStartPluginSource("/install/root");
-  assert.ok(src.includes("/install/root/fapony.ts"), "bakes the install root");
+  assert.ok(
+    src.includes("/install/root/src/hook.ts"),
+    "imports the shared hook module",
+  );
+  assert.ok(src.includes("/install/root/fapony.ts"), "bakes the CLI path");
   assert.ok(
     src.includes("experimental.chat.system.transform"),
     "injects via system.transform, the documented channel",
   );
   assert.ok(
-    src.includes("hook-session-start"),
-    "spawns the shared hook, not mem kickoff",
+    src.includes("sessionStartContext"),
+    "calls the shared implementation, no baked logic",
   );
   assert.ok(
-    src.includes("hookSpecificOutput") && src.includes("additionalContext"),
-    "parses the hook's documented JSON shape back out",
+    !src.includes("spawnSync"),
+    "no baked spawn — sessionStartContext owns the guard and the cap",
   );
-  assert.ok(
-    !src.includes("capContext"),
-    "no second cap — the hook owns the guard and the cap",
-  );
+  assert.ok(!src.includes("capContext"), "no second cap");
   assert.ok(src.includes("output.system"), "pushes into system, never args");
   assert.ok(
     src.includes("sessionID") && src.includes("seen"),
     "dedupes once per session",
   );
   assert.ok(!src.includes("throw"), "must never break a session start");
-  console.log("  ✓ session start opencode plugin defers to the shared hook");
+  console.log(
+    "  ✓ session start opencode plugin defers to sessionStartContext",
+  );
 }
 
 export function testComputeHintImpact(): void {

@@ -445,8 +445,8 @@ export function testInstallOpencodeSessionStartPlugin(): void {
       "must inject via system.transform, the documented channel",
     );
     assert.ok(
-      src.includes("hook-session-start"),
-      "must defer to the shared hook, no second guard/cap implementation",
+      src.includes("sessionStartContext"),
+      "must import the shared implementation, no second guard/cap",
     );
     assert.ok(err.includes("session start"), `got: ${err}`);
 
@@ -461,6 +461,39 @@ export function testInstallOpencodeSessionStartPlugin(): void {
   });
   console.log(
     "  ✓ install opencode session start → plugin written once, both paths",
+  );
+}
+
+export function testInstallOpencodeSessionStartStaleWarns(): void {
+  withTempHome((home) => {
+    const pluginsDir = join(home, ".config", "opencode", "plugins");
+    mkdirSync(pluginsDir, { recursive: true });
+    const pluginPath = join(pluginsDir, "fapony-session-start.ts");
+    // Ours (carries the exported plugin name) but an older generation. The
+    // installer never overwrites its own file, so it must name it stale rather
+    // than report "already installed — no change" (that kept mub2ezhi alive).
+    const stale =
+      "// fapony session start\nexport const FaponySessionStart = async () => ({});\n";
+    writeFileSync(pluginPath, stale);
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.match(err, /stale fapony plugin/, `got: ${err}`);
+    assert.match(
+      err,
+      /delete .*fapony-session-start\.ts/,
+      "names the file to delete",
+    );
+    assert.equal(
+      readFileSync(pluginPath, "utf-8"),
+      stale,
+      "stale plugin must not be silently overwritten",
+    );
+  });
+  console.log(
+    "  ✓ install opencode session start → stale plugin warns, untouched",
   );
 }
 

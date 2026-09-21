@@ -262,6 +262,7 @@ import {
   testInstallOpencodeSessionStartDryRun,
   testInstallOpencodeSessionStartForeignFileUntouched,
   testInstallOpencodeSessionStartPlugin,
+  testInstallOpencodeSessionStartStaleWarns,
 } from "./install/opencode.test.js";
 import {
   testLinkSkillsCreatesSymlinks,
@@ -932,6 +933,7 @@ export async function cmdTest(): Promise<void> {
   testInstallOpencodeEditHintForeignFileUntouched();
   testInstallOpencodeEditHintDryRun();
   testInstallOpencodeSessionStartPlugin();
+  testInstallOpencodeSessionStartStaleWarns();
   testInstallOpencodeSessionStartForeignFileUntouched();
   testInstallOpencodeSessionStartDryRun();
   testInstallOpencodeAlreadyConfiguredNoOp();
