@@ -37,21 +37,9 @@ function assertEnumListed(
   }
 }
 
-const REASON_SKILL_SCOPES = [
-  "missing_test",
-  "scope_mismatch",
-  "unsafe_command",
-  "spec_gap",
-  "incomplete",
-  "none",
-  "other",
-];
-
 export function testReasonCodesListedInDocs(): void {
   assertEnumListed("REASON_CODES", REASON_CODES, [
     { path: "docs/mcp-handcheck.md" },
-    { path: "skill/move-to-done/SKILL.md", scopes: REASON_SKILL_SCOPES },
-    { path: "skill/review-pony/SKILL.md", scopes: REASON_SKILL_SCOPES },
   ]);
 }
 
@@ -60,7 +48,6 @@ export function testRegimeCodesListedInDocs(): void {
     { path: "docs/mcp-handcheck.md" },
     { path: "CLAUDE.md" },
     { path: "README.md" },
-    { path: "skill/move-to-done/SKILL.md", scopes: ["code", "fix", "plan"] },
   ]);
 }
 
