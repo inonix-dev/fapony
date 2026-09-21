@@ -8,8 +8,6 @@
 fapony/
   fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|test
   fapony.config.json  # runtime config (worktrees, review.maxRounds, memory, paths, safety) — optional, gitignored
-  statusline/
-    claude-statusline.sh  # Claude Code statusline integration script
   scripts/
     smoke-publish.sh      # npm publish smoke test
     test-one.ts           # run a single test file

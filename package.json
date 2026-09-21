@@ -24,8 +24,7 @@
     "fapony.ts",
     "src/",
     "templates/",
-    "skill/",
-    "images/"
+    "skill/"
   ],
   "scripts": {
     "lint": "biome check .",

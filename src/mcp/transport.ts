@@ -1,8 +1,5 @@
 // src/mcp/transport.ts — JSON-RPC dispatch + stdio entry point
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { getServerSha } from "./primitives.js";
 import {
@@ -33,27 +30,6 @@ When a unit of work is finished, call verdict_submit to grade it — pass-excell
 worktree must be the absolute path (git rev-parse --show-toplevel): every query scopes by it, so a bare name or none files the verdict where nothing reads it, and nothing errors to say so. Write the note standalone — what the work was and how it held up — it is read months later with no access to this conversation. Never leave a run non-terminal; an open run absorbs later unrelated verdicts for that worktree.
 
 Skip it and every tool still answers correctly, on a thinner history.`;
-
-// --- Statusline cache ---
-//
-// Written after every MCP tool call. The Claude Code statusline script reads
-// this file (< 1ms, no spawn, no db). Format: single line of text.
-// No remaining tool produces bytes_by_tool detail, so every call writes the
-// minimal "fapony" marker — cross-client spend lives on the CLI now
-// (`fapony usage-scan` + `fapony usage-web`), which the statusline cannot
-// spawn (it must stay < 1ms).
-
-const STATUSLINE_PATH = join(homedir(), ".config", "fapony", "statusline");
-
-function writeStatuslineCache(): void {
-  try {
-    const dir = join(homedir(), ".config", "fapony");
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(STATUSLINE_PATH, "fapony", "utf-8");
-  } catch {
-    // Cache write is best-effort — never block MCP on it.
-  }
-}
 
 // --- MCP protocol constants ---
 
@@ -113,8 +89,6 @@ function dispatchToolCall(params: {
     default:
       return errorResult(`unknown tool: ${params.name}`);
   }
-  // Write statusline cache after every tool call — best-effort, never blocks.
-  writeStatuslineCache();
   return result;
 }
 

@@ -2,14 +2,7 @@
 //
 // Shells out to `claude mcp add` (never parses/writes ~/.claude.json directly).
 
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { assertSafe } from "../safety.js";
@@ -151,9 +144,6 @@ export function cmdInstallClaude(
   const skillsDir = claudeSkillsDir(deps.homedir ?? homedir);
   reportSkills(linkSkills(skillsDir, dryRun), skillsDir, dryRun);
 
-  // Wire statusline: copy script + update settings.json.
-  installStatusline(dryRun, deps);
-
   // Wire the Stop hook that refuses to end a turn with ungraded commits,
   // and the Read/Edit hints that annotate reads of large files and edits to
   // files with importers (both annotate-only).
@@ -161,122 +151,11 @@ export function cmdInstallClaude(
 }
 
 /**
- * Copy the statusline script to ~/.claude/statusline.sh and add the
- * statusLine field to ~/.claude/settings.json. Best-effort — never fails
- * the install if settings.json is unreadable or has unexpected shape.
- */
-function installStatusline(dryRun: boolean, deps: InstallDeps): void {
-  const home = deps.homedir ? deps.homedir() : homedir();
-  const claudeDir = join(home, ".claude");
-  const scriptSrc = join(INSTALL_ROOT, "statusline", "claude-statusline.sh");
-  const scriptDest = join(claudeDir, "statusline.sh");
-  const settingsPath = join(claudeDir, "settings.json");
-
-  // 1. Copy the statusline script — never overwrite someone else's.
-  // Mirrors the mcp-entry policy above: an existing script that isn't ours
-  // is left alone (the settings guard below will also refuse to repoint it).
-  if (!existsSync(scriptSrc)) {
-    console.error(`  statusline: script not found at ${scriptSrc} — skipping`);
-    return;
-  }
-  if (existsSync(scriptDest)) {
-    let current = "";
-    try {
-      current = readFileSync(scriptDest, "utf-8");
-    } catch {
-      current = "";
-    }
-    if (!current.includes("fapony")) {
-      console.error(
-        `  statusline: ${scriptDest} exists but isn't fapony's — not overwriting.`,
-      );
-      console.error(
-        `  inspect it first, then remove it to let fapony install its own.`,
-      );
-      return;
-    }
-  }
-  try {
-    if (!existsSync(claudeDir)) mkdirSync(claudeDir, { recursive: true });
-    if (!dryRun) copyFileSync(scriptSrc, scriptDest);
-    // Claude Code execs this file — the copy must stay executable.
-    if (!dryRun) chmodSync(scriptDest, 0o755);
-    console.error(
-      `  statusline: ${dryRun ? "would copy" : "copied"} ${scriptDest}`,
-    );
-  } catch (e) {
-    console.error(
-      `  statusline: failed to copy script — ${(e as Error).message}`,
-    );
-    return;
-  }
-
-  // 2. Update settings.json with statusLine field.
-  let settings: Record<string, unknown> = {};
-  if (existsSync(settingsPath)) {
-    try {
-      settings = JSON.parse(readFileSync(settingsPath, "utf-8")) as Record<
-        string,
-        unknown
-      >;
-    } catch {
-      console.error(
-        `  statusline: ${settingsPath} is unreadable or malformed — skipping settings update`,
-      );
-      return;
-    }
-  }
-
-  // Don't overwrite if already configured (same command path). A foreign
-  // statusLine (someone else's command) is left alone — same policy as the
-  // mcp-entry "points elsewhere" refusal above. Match on our exact dest:
-  // any *statusline.sh substring (e.g. another plugin's script) is not ours.
-  const existing = settings.statusLine as Record<string, unknown> | undefined;
-  if (
-    existing &&
-    existing.type === "command" &&
-    typeof existing.command === "string" &&
-    existing.command === scriptDest
-  ) {
-    console.error(
-      `  statusline: already configured in settings.json — no change`,
-    );
-    return;
-  }
-  if (existing && typeof existing === "object") {
-    console.error(
-      `  statusline: settings.json already has a statusLine that isn't fapony's — not overwriting.`,
-    );
-    console.error(
-      `  inspect it first, then remove it to let fapony wire its own.`,
-    );
-    return;
-  }
-
-  settings.statusLine = {
-    type: "command",
-    command: scriptDest,
-  };
-
-  if (!dryRun) {
-    writeFileSync(
-      settingsPath,
-      `${JSON.stringify(settings, null, 2)}\n`,
-      "utf-8",
-    );
-  }
-  console.error(
-    `  statusline: ${dryRun ? "would write" : "wrote"} statusLine → ${settingsPath}`,
-  );
-}
-
-/**
  * Shared append-to-settings.json hook installer. Both fapony hooks live
  * here now (Stop since PLAN-mem-mcp, PreToolUse read hint since the
  * large-file annotate feature) — the read/write/idempotence/append shape
  * is one implementation with two callers, not a scaffold.
- * Same policy as installStatusline: never touch a hook someone else
- * registered, never fail the install over it.
+ * Never touch a hook someone else registered, never fail the install over it.
  */
 function ensureClaudeHook(
   dryRun: boolean,

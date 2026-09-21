@@ -205,11 +205,8 @@ import {
   testInstallClaudeDifferentCommandRefusesOverwrite,
   testInstallClaudeDryRunNeverAdds,
   testInstallClaudeEditHintAppendsOnce,
-  testInstallClaudeForeignScriptRefusesOverwrite,
-  testInstallClaudeForeignStatuslineRefusesOverwrite,
   testInstallClaudeMissingBinary,
   testInstallClaudeReadHintAppendsOnce,
-  testInstallClaudeStatuslineWiresSettings,
   testInstallClaudeStopHookAppendsOnceAndKeepsForeign,
 } from "./install/claude.test.js";
 import {
@@ -915,12 +912,9 @@ export async function cmdTest(): Promise<void> {
   testInstallClaudeAlreadyConfiguredNoOp();
   testInstallClaudeAlreadyConfiguredStillInstallsHooks();
   testInstallClaudeDifferentCommandRefusesOverwrite();
-  testInstallClaudeForeignStatuslineRefusesOverwrite();
   testInstallClaudeStopHookAppendsOnceAndKeepsForeign();
   testInstallClaudeReadHintAppendsOnce();
   testInstallClaudeEditHintAppendsOnce();
-  testInstallClaudeForeignScriptRefusesOverwrite();
-  testInstallClaudeStatuslineWiresSettings();
   testInstallClaudeDryRunNeverAdds();
   testInstallClaudeMissingBinary();
   testInstallClaudeAddFailureHintsHelp();

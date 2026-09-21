@@ -509,7 +509,9 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 ("เมื่อวานเผาไปเท่าไหร่") ไม่ใช่ agent กลางเทิร์น · ทุก client แสดง token ของตัวเองอยู่แล้ว เหลือข้ออ้าง
 เดียวคือ cross-client ruler ซึ่ง CLI `usage-scan`/`usage-web` ตอบได้เหมือนกันด้วยค่าเช่าศูนย์ ·
 ลบ `src/mcp/tools/usage.ts` + test ทิ้ง, engine `src/session/` + `src/usage/` อยู่ครบเพราะ CLI ใช้ ·
-statusline เหลือแค่ marker — มันอ่าน cache อย่างเดียว spawn CLI ไม่ได้) ·
+statusline integration ถอดออกทั้งฟีเจอร์ 2026-09-21 — caller ศูนย์บนเครื่องเจ้าของ (ponytail
+plugin's statusline ชนะไปแล้ว) และ cache write (`writeStatuslineCache` ใน transport.ts) ไม่มีใคร
+อ่านต่อ ตามกฎ 12) ·
 `plan_list` (2026-09-20 — `fapony mem kickoff` ตอบ
 "เหลืออะไร" จาก plan file ชุดเดียวกัน · ลบ `src/mcp/tools/plans.ts` + `getLastVerdictByPlan`
 ทิ้งด้วยเพราะไม่มี caller เหลือ ตามกฎ 12) · **สิ่งที่หายไปจริงวัดแล้วว่าเล็ก** (กฎ 2): ใน plan
