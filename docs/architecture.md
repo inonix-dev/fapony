@@ -8,6 +8,14 @@
 fapony/
   fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|test
   fapony.config.json  # runtime config (worktrees, review.maxRounds, memory, paths, safety) — optional, gitignored
+  statusline/
+    claude-statusline.sh  # Claude Code statusline integration script
+  scripts/
+    smoke-publish.sh      # npm publish smoke test
+    test-one.ts           # run a single test file
+  images/
+    logo.png / logo.webp / logo@400.webp  # project logos
+    sample.webp / summary.webp            # README screenshots
   skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
                                 # each SKILL.md is self-contained — the symlink ships only
                                 # skill/<name>/, so a link out of that dir is dead on install
@@ -31,6 +39,7 @@ fapony/
       index.ts        # re-export
     gates.ts          # per-round gate enrichment — model + session tokens per gate; carries `sessionId` so callers can dedupe
     parse.ts          # parseGateVerdict() + qualityScore()
+    gate.ts           # gateOnce() — core review-verdict logic (round-cap, memory claim/release), called by MCP verdict_submit
     memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY
     safety.ts         # assertSafe() deny-list (checked before any config-sourced shell cmd runs)
     session/           # passive usage readers — OpenCode (SQLite), ZCode (SQLite), Claude Code (JSONL), Codex (JSONL)
@@ -47,10 +56,16 @@ fapony/
       index.ts         # barrel re-export
     analyze.ts         # fapony analyze — buildGraph()/blastRadius()/diagnose() (hub/orphan/cycle/changed-untested), live import graph via Bun.Transpiler.scan(), never persisted
     map.ts              # extractExports() — on-demand source index, library only; the `fapony map` command was deleted once plan-seed/review-seed were its only callers (see PLAN-code-map)
+    detect.ts           # runtime test runner detection (bun/npm/pnpm/yarn) from package.json + lockfile — used by hook.ts and install.ts
+    conventions-seed.ts # init-time wrapper detector → writes .fapony/conventions.json — reads snapshot only, never touches history
     seed/               # seed commands — plan-seed + review-seed + shared primitives
       primitives.ts     # shared git helpers (execGit/gitOk/gitValue), capLines, SIG_MAX, SeedError
       plan-seed.ts      # fapony plan-seed <name> [--spec] [--scope <path>]... — writes PLAN(+SPEC): frontmatter, 8 empty sections, §8 prior art, Context (fapony); SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200
       review-seed.ts    # fapony review-seed [--staged|--commit|--range|--files|--plan] — read-only scope facts for a review (changed/importers/untested/signatures/cross-check)
+    price/              # model pricing data — fetch + resolve
+      fetch.ts          # fetchPricing() — HTTP fetch from upstream price table
+      resolve.ts        # resolvePrice() — lookup per-model cost from cached data
+      index.ts          # barrel re-export
     debt/               # fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย": live convention scan, never persisted; caller: hook read-hint
       types.ts          # DebtReport/Convention/Promotion + caps (DEBT_FILE_CAP, PROMOTION_THRESHOLD, ZONE_*)
       load.ts           # resolveConventionsPath + loadConventions
@@ -111,5 +126,9 @@ fapony/
     mcp/                   # MCP tool tests
     install/               # install provider tests (one file per src/install module)
     telemetry/             # telemetry tests
+  docs/
+    architecture.md        # this file — file-by-file layout
+    edge-cases.md          # edge cases ที่จัดการแล้ว — lookup ตอนเจอพฤติกรรมแปลก
+    mcp-handcheck.md       # MCP protocol, adapter examples, safety rules
 ```
 
