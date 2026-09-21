@@ -1,4 +1,4 @@
-// src/plan-seed.ts — `fapony plan-seed <name> [--spec] [--scope <path>]...`
+// src/seed/plan-seed.ts — `fapony plan-seed <name> [--spec] [--scope <path>]...`
 //
 // Writes PLAN + SPEC straight into planDir/specDir. What it pre-fills is the
 // structure (frontmatter, the 8 sections, prior art, ledger context) — the
@@ -25,7 +25,6 @@
 //
 // Composes existing producers — no new parsing, no new table, no MCP tool.
 
-import { execSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -35,15 +34,16 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
-import { collectSourceFiles, isSkippedDir, SCAN_EXTS } from "./analyze.js";
-import { computeModelFit } from "./context/projectHealth.js";
-import { doneDir, planDir, specDir } from "./db/getters.js";
-import { CONFIG_FILENAME } from "./db/index.js";
-import { loadConfig } from "./db/load.js";
-import type { Config } from "./db/types.js";
-import { extractExports } from "./map.js";
-import { readRecentMemDecisions } from "./memory.js";
-import { getStatsData } from "./stats/data.js";
+import { collectSourceFiles, isSkippedDir, SCAN_EXTS } from "../analyze.js";
+import { computeModelFit } from "../context/projectHealth.js";
+import { doneDir, planDir, specDir } from "../db/getters.js";
+import { CONFIG_FILENAME } from "../db/index.js";
+import { loadConfig } from "../db/load.js";
+import type { Config } from "../db/types.js";
+import { extractExports } from "../map.js";
+import { readRecentMemDecisions } from "../memory.js";
+import { getStatsData } from "../stats/data.js";
+import { capLines, execGit, SIG_MAX } from "./primitives.js";
 
 // One chunk = one module's signatures — past ~40 lines a module is its own
 // reading task, and the whole-SPEC cap below does the final trim.
@@ -56,7 +56,6 @@ const SCOPE_WARN_FILES = 300;
 // Shipped plans/specs that already touched this scope. Capped low on purpose:
 // this is a "go read that first" pointer, not a bibliography.
 const MAX_PRIOR_ART = 5;
-const SIG_MAX = 90;
 // Anchor-safe slug: lowercase, non-alphanumerics → dash.
 const slug = (s: string): string =>
   s
@@ -255,16 +254,6 @@ interface Chunk {
   slug: string;
   title: string;
   body: string;
-}
-
-// review-seed's cap shape: keep the head, always say how much was cut — a
-// silent cut is indistinguishable from "that was everything".
-function capLines(lines: string[], cap: number, what: string): string[] {
-  if (lines.length <= cap) return lines;
-  const rest = lines.length - (cap - 1);
-  const kept = lines.slice(0, cap - 1);
-  kept.push(`… +${rest} more ${what}`);
-  return kept;
 }
 
 function capChunk(c: Chunk): Chunk {
@@ -530,15 +519,8 @@ export function cmdPlanSeed(args: string[]): void {
   // state.db uses (git rev-parse --show-toplevel). Running from a subdir
   // would otherwise mismatch: stats return empty, Context (fapony) always
   // prints "(not enough graded history yet)".
-  let worktree: string;
-  try {
-    worktree = execSync("git rev-parse --show-toplevel", {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    worktree = cwd;
-  }
+  const root = execGit("git rev-parse --show-toplevel", cwd);
+  const worktree = root.ok ? root.output.split("\n")[0] : cwd;
 
   // Scope: explicit paths win; default is the cwd. Resolved absolutes,
   // deduped — the same path twice is one scope. Nested roots are pruned:

@@ -196,16 +196,6 @@ export function initProject(targetPath: string, config?: Config): void {
 
 const AGENT_RULE_FILES = ["CLAUDE.md", "AGENTS.md"];
 
-function ask(question: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(`${question} `, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}
-
 export async function cmdInit(args: string[]): Promise<void> {
   const targetPath = args[0];
   if (!targetPath) {
@@ -242,9 +232,16 @@ export async function cmdInit(args: string[]): Promise<void> {
   );
   if (found.length === 0) return;
 
-  const answer = await ask(
-    `\nAppend the memory-logging rules above to ${found.map((f) => relative(targetPath, f)).join(" and ")}? [y/N]`,
-  );
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise<string>((resolve) => {
+    rl.question(
+      `\nAppend the memory-logging rules above to ${found.map((f) => relative(targetPath, f)).join(" and ")}? [y/N] `,
+      (a) => {
+        rl.close();
+        resolve(a.trim());
+      },
+    );
+  });
   if (!isAffirmative(answer)) return;
 
   const snippet = `\n\n${RULES_SNIPPET()}\n`;
