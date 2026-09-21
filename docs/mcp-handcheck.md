@@ -27,7 +27,7 @@ and no skill ever called them, so they moved behind the CLI that already did the
 same job. The logic is unchanged.
 
 The server exposes 4 tools in total, all higher-level and taking plain arguments —
-see [README](../README.md#the-4-tools) for what each one answers:
+see [README](../README.md#the-3-tools) for what each one answers:
 
 | Tool | In one line |
 |------|-------------|

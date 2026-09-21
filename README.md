@@ -36,15 +36,16 @@ quietly counted as free.
 
 </details>
 
-That is day one. Past that, fapony measures what coding agents actually do — rounds, pass/fail,
-cost per grade — through 4 MCP tools any agent can call. If you juggle more than one agent, this is
-the point: the numbers come from the same yardstick everywhere, so "which model earns its keep on
-which kind of task" becomes a data question instead of a vibe. On top of measurement it checks
-claims against git facts: handoff conformance, allowlisted evidence, a 6-grade verdict — with
-everything the agent claimed but couldn't prove marked as such.
+That is day one. Past that, fapony keeps what coding agents actually did — the frozen
+ledger of graded runs (rounds, pass/fail, cost per grade, readable via CLI, no new grades)
+plus the live mem log — through 3 MCP tools any agent can call. If you juggle more than
+one agent, this is the point: the numbers come from the same yardstick everywhere, so
+"which model earns its keep on which kind of task" becomes a data question instead of a
+vibe. On top of history it checks claims against git facts: handoff conformance and
+allowlisted evidence — with everything the agent claimed but couldn't prove marked as such.
 
-**What that question looks like answered, from one project's own ledger — the top of the `n≥5`
-frontier (`fapony stats --mode verdict --regime code`):**
+**What that question looks like answered, from one project's own (frozen — reads history,
+no new grades) ledger — the top of the `n≥5` frontier (`fapony stats --mode verdict --regime code`):**
 
 | model | tokens/pass | quality | n |
 |---|---|---|---|
@@ -63,14 +64,15 @@ accumulates is pain.** An agent has no memory of pain across sessions: it writes
 hand-rolled `try/catch` as cheerfully as the first, because every session starts new. Wrappers and
 shared libraries get built by *people* who were hurt by the same thing often enough to remember.
 That is why a codebase written with agents from day one tends not to grow a shared layer — nobody
-in the room remembers. fapony is the part that remembers: graded verdicts and mem rows both carry
-`files[]`, so the zones that keep coming back in failed and re-done work are a query, not a hunch.
+in the room remembers. fapony is the part that remembers: mem rows carry
+`files[]`, so the zones that keep coming back in re-done work are a query, not a hunch
+(the frozen ledger's old graded rows carry them too).
 Paired with `fapony debt`, which tracks how far the codebase has actually moved to a convention you
 already decided on, that is the loop: notice the repeated cost, name the shared thing, watch the
 migration finish. Finding dead code and duplication is *not* part of it — knip and friends already
 do that better, and a convention with a `checker` is deliberately left to the checker.
 
-**The measurement layer underneath it:** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: which model earns its keep on which kind of work **in this project**, at what token cost, graded by whoever reviewed it. Every verdict carries a `regime` (`code` / `fix` / `review` / `plan` / `inquiry` / `test`), and runs split by whether there was a plan at all — so "does planning beat diving in, and for which model" is a table, not an argument.
+**The measurement layer underneath it:** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: which model earns its keep on which kind of work **in this project**, at what token cost. The frozen ledger still answers that from history — every old verdict carries a `regime` (`code` / `fix` / `review` / `plan` / `inquiry` / `test`), and runs split by whether there was a plan at all — so "does planning beat diving in, and for which model" stays a table, not an argument. New accumulation goes to the mem log instead: decisions, bugs and notes with `files[]`, written by the agents doing the work.
 
 Three tiers, deliberately: **measurement ships today** and needs no per-project setup — raw facts nobody can call unfair. **Verification is the sharper edge** but stays beta until its evidence layer is hardened; fapony doesn't control your agent's flow, so it never promises "verified" as a headline. **Knowledge accumulation is the compounding one** — it's worthless on run 1 and gets more useful every run after, which is exactly why it's the layer competitors can't clone by copying a feature list.
 
@@ -82,15 +84,16 @@ Stated up front, because the gap between these two things is where most tooling 
 
 - **It does not run your test suite.** The evidence collector runs an allowlist *you* write in
   `.fapony/evidence.json`, and never a command an agent proposes. No allowlist, no evidence.
-- **It does not judge your code.** `verdict_submit` *stores* a verdict; a human or a reviewing
-  agent supplies it. fapony is the ledger, not the judge.
+- **It does not judge your code.** Mem rows *record* decisions, bugs and notes; a human or
+  a working agent supplies them. fapony is the memory, not the judge. (The frozen
+  ledger's old grades work the same way — *stored*, never computed.)
 - **It checks conformance, not correctness.** What it can verify is that a claim lines up with git
   facts and that uncertainty was declared — not that the code works. Those are different
   guarantees and fapony only offers the first.
 - **Almost nothing blocks.** No CI failure, no gate on your own commands. The one exception is the
-  Stop hook, once per turn when a commit ends ungraded; the read/edit/commit hints only annotate.
+  Stop hook, once per turn when a commit lands with no new mem row; the read/edit/commit hints only annotate.
   Skip the install of all of them and you are back to exactly the workflow you had.
-- **Model attribution is inferred, not declared.** A gate is attributed to whichever client
+- **Model attribution is inferred, not declared.** A gate in the frozen ledger is attributed to whichever client
   session was live in that worktree at that moment. When one model writes the code and another
   reviews and files the verdict, the grade lands on the reviewer. Reports label it `inferred`;
   read it as such.
@@ -128,16 +131,16 @@ fapony init /path/to/your-worktree
 #    edit .fapony/evidence.json to your real test/typecheck commands, then commit it
 ```
 
-With `.fapony/evidence.json` in place, any graded run can be replayed as a report. This one is
-a CLI command, not an MCP tool — the schemas cost every session of every client and no skill
-called them (see [The 4 tools](#the-4-tools) below). Grade something first;
-`verdict_submit` is what creates the run:
+With `.fapony/evidence.json` in place, any graded run from the frozen ledger can be replayed
+as a report. This one is a CLI command, not an MCP tool — the schemas cost every session of
+every client and no skill called them (see [The 3 tools](#the-3-tools) below). No new runs
+can be created; run ids come from `fapony stats` reading history:
 
 ```bash
 fapony report <run-id>        # run ids come from `fapony stats`
 ```
 
-You get one report: git facts (files, commits, branch), handoff conformance (claims vs. reality), evidence from the allowlisted commands (pass/fail/timeout/unverified), a 6-grade verdict, and cost — with anything the agent claimed but couldn't prove marked as such.
+You get one report: git facts (files, commits, branch), handoff conformance (claims vs. reality), evidence from the allowlisted commands (pass/fail/timeout/unverified), the frozen 6-grade verdict, and cost — with anything the agent claimed but couldn't prove marked as such.
 
 Sections that have nothing to report say so (`not_run`, `unavailable`) rather than disappearing — a report with no evidence must not read like a report that passed.
 
@@ -170,9 +173,9 @@ losing a single number.
 
 | | The ledger | The work side |
 |---|---|---|
-| What it is | 4 MCP tools + a SQLite ledger | plans, skills, read-only seed commands |
+| What it is | 3 MCP tools (mem) + a frozen SQLite ledger (reads history) | plans, skills, read-only seed commands |
 | Needs | an MCP client | nothing — or your own tooling instead |
-| Writes | one graded row per unit of work | nothing |
+| Writes | one mem row per unit of work, into the project's log | nothing |
 | Skip it and | there is no fapony | fapony still answers every question |
 
 ### What runs where
@@ -184,12 +187,12 @@ is `tool.execute.after`. Nothing here is required: skip the hooks and every MCP 
 
 | | Claude Code | OpenCode | Cursor | ZCode | Codex |
 |---|---|---|---|---|---|
-| MCP tools — `mem_find` `mem_add` `mem_close` `verdict_submit` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Stop hook — refuse to end a turn with ungraded commits | ✅ | — | ✅ | — | ✅ after trust |
+| MCP tools — `mem_find` `mem_add` `mem_close` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Stop hook — refuse to end a turn with commits but no new mem row | ✅ | — | ✅ | — | ✅ after trust |
 | Read hint — big-file pointer + debt/mem lines | ✅ before | ✅ after | — | — | — |
 | Re-read hint — unchanged repeat read | ✅ before | ✅ after | — | — | — |
 | Edit hint — importer count before a shape change | ✅ before | ✅ after | — | — | — |
-| Commit hint — `git commit` → ungraded-run nudge | — | ✅ after | — | — | — |
+| Commit hint — `git commit` → record-a-mem-row nudge | — | ✅ after | — | — | — |
 | Skills symlinked into `~/.claude/skills` | ✅ | ✅ | — | — | — |
 | Skills symlinked into `~/.agents/skills` | — | — | — | ✅ | ✅ |
 | `usage-scan` reads this client's session log | ✅ | ✅ | — | ✅ | ✅ |
@@ -202,10 +205,10 @@ without the agent deciding to call anything ([why](#when-to-call-what)).
 
 ## The ledger — this is the product
 
-One habit feeds it: grade a unit of work when it ends. Everything else on this page is
-optional around that. `verdict_submit` needs no plan file, no skill and no `.fapony/`
-directory — any agent that speaks MCP can call it, and calling it is what turns a pile of
-session logs into an answer.
+One habit feeds it: record a mem row when a unit of work ends. Everything else on this page is
+optional around that. `mem_add` needs no plan file and no skill — any agent that speaks MCP
+can call it, and calling it is what turns a pile of session logs into an answer the next
+session can find.
 
 ### One turn, end to end
 
@@ -214,32 +217,32 @@ sequenceDiagram
     autonumber
     participant A as Any MCP client
     participant F as fapony MCP
-    participant L as ~/.config/fapony/state.db
+    participant M as project mem log (.fapony/.memory)
 
-    Note over A,F: end a turn with a commit and no grade → the Stop hook blocks it once
-    A->>F: verdict_submit (grade + regime + reason_code + note)
-    F->>L: one graded unit of work, stamped with the model that did it
-    opt proof, not just a claim — CLI, once the run exists
+    Note over A,F: end a turn with a commit and no new mem row → the Stop hook blocks it once
+    A->>F: mem_add (kind + files + text)
+    F->>M: one mem row in the project's log, stamped with the model that did it
+    opt proof, not just a claim — CLI, for runs from the frozen ledger
         A->>F: fapony report <run-id>
         F-->>A: git facts + evidence from .fapony/evidence.json, stamped with server_sha
     end
-    Note over A,L: `fapony stats` reads it back — CLI, because you ask it, not the agent
+    Note over A,M: `fapony stats` reads the frozen ledger back — CLI, because you ask it, not the agent
 ```
 
-The Stop hook is the only thing fapony *blocks* — once per turn, when a commit ends ungraded.
-It never picks the grade; it cannot see whether the work held up. The hints only annotate and never
+The Stop hook is the only thing fapony *blocks* — once per turn, when a commit lands with
+no new mem row. It never judges what deserves recording; it cannot see whether the work
+held up. The hints only annotate and never
 block: the **Read** hook adds one factual line when a read is large enough to be cheaper as
 `review-seed`, or when the same file is read again in a session and its mtime has not moved
 (`FAPONY_NO_REREAD_HINT=1` turns the re-read line off); the **Edit** hook names a file's importer
 count, once per session, before you change its shape; OpenCode's **commit** hook nudges after a
-`git commit` that left the run ungraded. Claude Code receives read/edit *before* the call, OpenCode
+`git commit` that left no new mem row. Claude Code receives read/edit *before* the call, OpenCode
 *after* it — [What runs where](#what-runs-where) has the full client matrix.
 
-### The 4 tools
+### The 3 tools
 
 | Tool | Tier | Purpose |
 |------|------|---------|
-| `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) with a required `regime` — the task shape the grade applies to |
 | `mem_find` | recall | Search the project's mem log read-only — decisions/bugs/notes matched on the row's `files[]` (text substring for rows written without it), `text`, `kind` (no default filter), `since`. "What was ever decided about this file?" in one call before editing |
 | `mem_add` | recall | Append a mem row (decision/bug/note/next/hold) with `files[]` required and rejected when empty — the write half of `mem_find`, so the row is findable when you next touch that file |
 | `mem_close` | recall | Close a mem row by id with a tombstone message — a separate tool (not `kind:"close"`) because a close row carries no `files[]`, so sharing `mem_add`'s schema would make required fields depend on another field's value |
@@ -250,14 +253,16 @@ every client whether or not it is used, while a CLI command costs nothing until 
 why the handoff/report family is CLI-only, and why `fapony_stats`, `project_health_context`,
 `plan_list` and `fapony_usage` left the MCP surface in 2026-09 (`fapony stats` answers the first, `fapony mem
 kickoff` the third, `fapony usage-web` the fourth; the second had no caller).
-Cutting is not the goal — spending where it pays back is: `mem_find` and `verdict_submit` keep
-their schemas because nobody is going to type them at the right moment. `fapony report <run-id>` prints the full report for a run (facts + handoff conformance + evidence + verdict); `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
+Cutting is not the goal — spending where it pays back is: the three mem tools keep
+their schemas because nobody is going to type them at the right moment. `fapony report <run-id>` prints the full report for a frozen-ledger run (facts + handoff conformance + evidence + verdict); `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
 
 Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](https://github.com/kire21b/fapony/blob/main/docs/mcp-handcheck.md).
 
-### Verdict grades
+### Verdict grades (frozen ledger)
 
-Verification produces a quality grade, not just pass/fail:
+No new grades are recorded — the tool that filed them left the MCP surface in 2026-09.
+The old rows stay readable via `fapony stats` and `fapony report`, and this is the scale
+they were filed on. Verification produced a quality grade, not just pass/fail:
 
 | Grade | Meaning |
 |-------|---------|
@@ -271,8 +276,8 @@ Verification produces a quality grade, not just pass/fail:
 ### Why measure from the outside
 
 - **Raw facts are hard to argue with.** Cost, rounds, diff sizes, pass rates — collected from git and session logs, not self-reported. A vendor can dispute a verdict as unfair; they can't dispute their own token count.
-- **Agent platforms grading their own homework is a conflict of interest.** fapony is a separate layer that measures any agent the same way, which is what makes "model X vs. model Y" or "workflow A vs. workflow B" answerable with real data instead of vibes.
-- **Verification stays honest about its limits.** The collector runs only commands listed in `.fapony/evidence.json`; commands proposed by the agent outside the allowlist are reported as *proposed — not executed*, never run. And because fapony doesn't control your agent's flow, verdicts are labeled as one signal — not promised as truth.
+- **Agent platforms grading their own homework is a conflict of interest.** fapony is a separate layer that measured any agent the same way, which is what made "model X vs. model Y" or "workflow A vs. workflow B" answerable with real data instead of vibes. That history is still queryable; new accumulation is mem rows, not grades.
+- **Verification stays honest about its limits.** The collector runs only commands listed in `.fapony/evidence.json`; commands proposed by the agent outside the allowlist are reported as *proposed — not executed*, never run. And because fapony doesn't control your agent's flow, old verdicts are labeled as one signal — not promised as truth.
 
 ## The work side — conveniences, not the contract
 
@@ -309,7 +314,7 @@ Code expects, so a client can symlink the directory rather than copy the file:
 | Skill | Purpose | Trigger |
 |-------|---------|---------|
 | `skill/plan-with-pony/` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-pony` |
-| `skill/review-pony/` | Review as verification, wired to fapony: scope facts before (`review-seed`), verdict after | `/review-pony` |
+| `skill/review-pony/` | Review as verification, wired to fapony: scope facts before (`review-seed`), a mem row after when findings survive | `/review-pony` |
 | `skill/lookup-before-edit/` | Look up unfamiliar files (`review-seed --files` + mem + debt) before reading/editing them | `/lookup-before-edit` |
 | `skill/define-convention/` | Turn a not-yet-migrated pattern into a tracked convention (interview + dry-run `debt`) | `/define-convention` |
 | `skill/move-to-done/` | Archive a shipped PLAN into .fapony/done/ | `/move-to-done` |
@@ -330,10 +335,10 @@ flowchart TD
     R -->|findings| W
     R -->|clean| S["/git-ship"]
     S -->|"there was a PLAN.md"| D["/move-to-done"]
-    D -.-> H[(fapony ledger)]
+    D -.-> H[(mem log + frozen ledger)]
     R -.-> H
-    C -.->|"Stop hook: a commit needs a verdict"| H
-    H -.->|"which model for this shape"| Q
+    C -.->|"Stop hook: a commit needs a mem row"| H
+    H -.->|"pain zones + past model×shape"| Q
 
     style H fill:#2d333b,stroke:#768390,color:#adbac7
 ```
@@ -343,19 +348,20 @@ to pick up. Wiring, refactors and UI passes finish in one sitting and the PLAN.m
 unread — so `/plan-with-pony` declines those itself and hands over the two seed commands instead.
 Both arms meet at the same review and the same ledger.
 
-**The dotted edges are the whole point.** Verdicts carry `regime` and `reason_code`, so the
-ledger can answer the one question no single client can: *in this project, which model is worth
-paying for this shape of work.* That is what flows back to the fork — not "this file broke once",
-which fapony measured at a 1–9% base rate and demoted.
+**The dotted edges are the whole point.** Mem rows carry `files[]` and standalone text, so
+the zones that keep hurting are a query, not a hunch — and the frozen ledger still carries
+`regime` on its old rows, so *in this project, which model was worth paying for this shape
+of work* stays answerable from history. That is what flows back to the fork — not "this file
+broke once", which fapony measured at a 1–9% base rate and demoted.
 
 | Moment | Call | What fapony gets out of it |
 |---|---|---|
 | Starting anything | `/plan-with-pony` | decides plan-vs-seed, then reads back how this shape has gone |
 | Before editing an unfamiliar file | `fapony review-seed --files` | nothing; it saves you reading the file |
 | Before committing | `/git-commit` | nothing; it just keeps commits reviewable |
-| Before merging | `/review-pony` | writes a verdict + `reason_code` + `regime` + note |
+| Before merging | `/review-pony` | writes a mem row when findings survive (bug/decision + files) |
 | Merging | `/git-ship` (`pr` / `land` on a team) | nothing; pure git plumbing |
-| After it ships | `/move-to-done` | writes the ship verdict, closes the loop |
+| After it ships | `/move-to-done` | writes a mem note when the ship taught something, closes the loop |
 | Proving a finished run | `fapony report <run-id>` (CLI, not MCP) | git facts + allowlisted evidence, one page |
 
 **Team flow.** `/git-ship pr` stops once the PR is open and hands you the URL; the reviewer does
@@ -448,7 +454,7 @@ archived one: [examples/](https://github.com/kire21b/fapony/tree/main/examples).
 
 ```bash
 # Verification & reporting
-fapony mcp                               # MCP server (stdio JSON-RPC — 4 tools)
+fapony mcp                               # MCP server (stdio JSON-RPC — 3 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
@@ -511,11 +517,11 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 ## Scope
 
 **Supported:**
-- MCP server — 4 tools via stdio JSON-RPC, works with any MCP client
-- Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
-- Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
-- Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file
-- Verification (beta): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json`); reports stamped with the producing build's `server_sha`
+- MCP server — 3 mem tools via stdio JSON-RPC, works with any MCP client
+- Measurement: cross-run KPIs by model/grade/value from the frozen ledger, per-file pain zones from mem rows (`files[]`) + passive usage (tokens, cost)
+- Model attribution across clients — resolved from the session log that was live when the old verdict landed, so a frozen row carries a model without the caller having declared one
+- Zero setup beyond install: the mem habit ships in the MCP `initialize` response, not in your rules file
+- Verification reports (frozen): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json`); reports stamped with the producing build's `server_sha` — replayable, no new graded runs
 - Vendor-neutral executor/reviewer roles — anything that reads stdin
 - Memory integration via shell adapter, per project (configurable or default-wired)
 - Opt-in telemetry, off by default ([TELEMETRY.md](https://github.com/kire21b/fapony/blob/main/TELEMETRY.md) lists exactly what leaves the machine)

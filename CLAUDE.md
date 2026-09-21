@@ -128,12 +128,12 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 
 | | claude | opencode | cursor | zcode | codex |
 | --- | --- | --- | --- | --- | --- |
-| MCP 4 tools | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Stop hook (ไม่จบเทิร์นที่มี commit ไม่มี verdict) | ✅ | — | ✅ | — | ✅ after trust |
+| MCP 3 tools | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Stop hook (ไม่จบเทิร์นที่มี commit แต่ไม่มี mem row ใหม่) | ✅ | — | ✅ | — | ✅ after trust |
 | Read hint (ไฟล์ใหญ่ + debt/mem) | ✅ ก่อน | ✅ หลัง | — | — | — |
 | Re-read hint (อ่านซ้ำไฟล์เดิม mtime ไม่ขยับ) | ✅ ก่อน | ✅ หลัง | — | — | — |
 | Edit hint (จำนวน importer ก่อนแก้ shape) | ✅ ก่อน | ✅ หลัง (edit+write) | — | — | — |
-| Commit hint (`git commit` → เตือน verdict) | — | ✅ หลัง | — | — | — |
+| Commit hint (`git commit` → เตือน mem row) | — | ✅ หลัง | — | — | — |
 | SessionStart (ยิง `mem kickoff` เป็น context) | ✅ | ✅ ครั้งแรกที่ dispatch | — | — | ✅ after trust |
 | Skill symlink → `~/.claude/skills` | ✅ | ✅ | — | — | — |
 | Skill symlink → `~/.agents/skills` | — | — | — | ✅ | ✅ |
@@ -142,7 +142,7 @@ test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · t
 `—` = ยังไม่ต่อ ไม่ใช่ทำไม่ได้ (Cursor ไม่มี PreToolUse · ZCode/Codex ไม่มี in-process hook surface
 สำหรับ read/edit hints — Codex `apply_patch` ส่ง patch text ไม่ใช่ file path) · **ทำไม hint อยู่บน hook ไม่ใช่
 MCP** — มันต้องยิงกลางเทิร์นเองโดย agent ไม่ต้องนึก ตรงเกณฑ์ MCP-vs-CLI (กฎ 13) เป๊ะ · **commit hint
-มีแต่ OpenCode** เพราะ Claude ใช้ Stop hook รายงาน commit ที่ยังไม่ grade แทน · Codex hooks ต้อง
+มีแต่ OpenCode** เพราะ Claude ใช้ Stop hook รายงาน commit ที่ยังไม่มี mem row แทน · Codex hooks ต้อง
 trust ผ่าน `/hooks` ก่อน run — `fapony install` บอกเมื่อต้องทำ · **SessionStart บน OpenCode มาตอน
 dispatch ครั้งแรก** (`experimental.chat.system.transform` ครั้งเดียวต่อ session — ช่อง inject เดียวที่
 `event` hook ไม่มี) ไม่ใช่ตอนสร้าง session · ตัวติดตั้ง **ไม่เคยเขียนทับ plugin ของตัวเอง**
@@ -454,8 +454,8 @@ fapony analyze [path]                # hub/orphan/cycle/changed-untested — liv
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym]
 fapony plan-seed <name> [--spec] [--scope <path>]...
 # ── ledger (แช่แข็ง — แก้เฉพาะบั๊ก) ──
-fapony mcp                           # MCP server — stdio JSON-RPC, 4 tools
-fapony hook-stop                     # Stop hook — block เทิร์นที่มี commit แต่ไม่มี verdict
+fapony mcp                           # MCP server — stdio JSON-RPC, 3 tools
+fapony hook-stop                     # Stop hook — block เทิร์นที่มี commit แต่ไม่มี mem row ใหม่
 fapony hook-read-hint                # annotate 2 แบบ: อ่านไฟล์ใหญ่ทั้งไฟล์ → review-seed ·
                                      # re-read ไฟล์เดิมใน session เดียวกันที่ mtime ไม่ขยับ → grep
 fapony hook-edit-hint                # PreToolUse Edit — บอกจำนวน importer ของไฟล์ที่กำลังแก้ (Claude)
@@ -491,7 +491,7 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 
 ## MCP Tools: fapony
 
-`fapony mcp` — stdio JSON-RPC, **4 tools** (`mem_add` เข้ามาพร้อม PLAN-agent-one-call ·
+`fapony mcp` — stdio JSON-RPC, **3 tools** (`mem_add` เข้ามาพร้อม PLAN-agent-one-call ·
 `plan_list` ออกไป 2026-09-20 · `fapony_usage` ออกไป 2026-09-20 เหลือ CLI · `mem_close`
 เข้ามา 2026-09-21 เป็น tool แยกเพราะ close row ไม่มี `files[]` — ดูกฎ 12/13):
 
