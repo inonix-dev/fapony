@@ -1245,7 +1245,10 @@ export async function cmdHookReadHint(): Promise<void> {
 
 /** Claude Code PreToolUse (matcher Edit): stdin JSON in, additionalContext out.
  *  No permissionDecision ever — the edit always proceeds. Fires once per
- *  (session, file); the dedupe lives inside editHintFor. */
+ *  (session, file); the dedupe lives inside editHintFor.
+ *
+ *  Also attaches mem/debt context lines (same as read hint) — the moment
+ *  paying down debt is worth tokens is when the file is already open. */
 export async function cmdHookEditHint(): Promise<void> {
   try {
     const raw = JSON.parse(await Bun.stdin.text()) as {
@@ -1260,13 +1263,22 @@ export async function cmdHookEditHint(): Promise<void> {
     const filePath = raw.tool_input?.file_path;
     // One edit log per session — same identity as the read hint.
     const session = raw.transcript_path ?? raw.session_id;
+    const parts: string[] = [];
     const hint = editHintFor({ filePath, cwd, session });
-    if (hint) {
+    if (hint) parts.push(hint);
+    // Attach mem/debt context (same as read hint — annotate only, cap 5 lines)
+    const ctx = readContextData(filePath, cwd);
+    if (ctx) {
+      for (const line of [...ctx.debtLines, ...ctx.memLines]) {
+        parts.push(line);
+      }
+    }
+    if (parts.length > 0) {
       console.log(
         JSON.stringify({
           hookSpecificOutput: {
             hookEventName: "PreToolUse",
-            additionalContext: hint,
+            additionalContext: parts.join("\n"),
           },
         }),
       );
