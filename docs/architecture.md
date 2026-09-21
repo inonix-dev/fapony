@@ -37,7 +37,7 @@ fapony/
       index.ts        # re-export
     gates.ts          # per-round gate enrichment — model + session tokens per gate; carries `sessionId` so callers can dedupe
     parse.ts          # parseGateVerdict() + qualityScore()
-    gate.ts           # gateOnce() — core review-verdict logic (round-cap, memory claim/release), called by MCP verdict_submit
+    gate.ts           # gateOnce() — frozen review-verdict engine (no live callers since verdict_submit left MCP 2026-09)
     memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY
     safety.ts         # assertSafe() deny-list (checked before any config-sourced shell cmd runs)
     session/           # passive usage readers — OpenCode (SQLite), ZCode (SQLite), Claude Code (JSONL), Codex (JSONL)
@@ -107,14 +107,13 @@ fapony/
       utils.ts          # shared JSON(C) helpers
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative / minutesBetween / avg
-    mcp/                   # MCP server — stdio JSON-RPC, 4 tools on the surface (collect/check/report are engines only — their tools were removed from the registry, see CLAUDE.md)
+    mcp/                   # MCP server — stdio JSON-RPC, 3 mem tools on the surface (collect/check/report are engines only — their tools were removed from the registry, see CLAUDE.md)
       index.ts             # MCP entry point + tool registration
-      transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn the grading habit without editing their own rules file
+      transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn the mem habit without editing their own rules file
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
       types.ts             # MCP type definitions
       tools/
         mem.ts             # mem_find / mem_add / mem_close — the core triple: read the mem log, append a row with files[] required, close a row by id (separate tool: close rows carry no files[])
-        verdict.ts         # verdict_submit — 6-grade verdict storage
         collect.ts         # git facts — engine only, handoff_collect was removed from the registry
         check.ts           # conformance — engine only, handoff_check was removed
         report.ts          # facts + checks + evidence + verdict — engine only, verification_report was removed
