@@ -4,32 +4,10 @@
 // Now fapony owns the mem code (src/mem/) and calls it directly via `fapony mem`.
 // This command's new job: delete legacy .memory/ dirs + warn about package.json refs.
 
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-} from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_MEM_DIR, FAPONY_DIR, loadConfig } from "./db/index.js";
-
-export function copyDir(src: string, dest: string): string[] {
-  mkdirSync(dest, { recursive: true });
-  const copied: string[] = [];
-  for (const entry of readdirSync(src, { withFileTypes: true })) {
-    const s = join(src, entry.name);
-    const d = join(dest, entry.name);
-    if (entry.isDirectory()) {
-      copied.push(...copyDir(s, d));
-    } else {
-      copyFileSync(s, d);
-      copied.push(d);
-    }
-  }
-  return copied;
-}
+import { walkDir } from "./util.js";
 
 export function cmdInitMem(args: string[]): void {
   const force = args.includes("--force");
@@ -52,27 +30,18 @@ export function cmdInitMem(args: string[]): void {
   const root = gitRoot || worktree;
 
   // 1) Find and delete .memory/ directories (legacy layout)
-  const memoryDirs: string[] = [];
-  const walk = (dir: string, depth = 0) => {
-    if (depth > 4) return;
-    if (existsSync(`${dir}/.memory`)) {
-      memoryDirs.push(`${dir}/.memory`);
-    }
-    try {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (
-          entry.isDirectory() &&
-          entry.name !== "node_modules" &&
-          (!entry.name.startsWith(".") || entry.name === FAPONY_DIR)
-        ) {
-          walk(join(dir, entry.name), depth + 1);
-        }
-      }
-    } catch {
-      // ignore
-    }
-  };
-  walk(root);
+  const memoryDirs = walkDir(root, {
+    includeDotDirs: [FAPONY_DIR],
+    predicate: (dir) => existsSync(join(dir, ".memory")),
+  }).map((dir) => join(dir, ".memory"));
+
+  // Legacy filenames that may live alongside live logs inside .fapony/.memory/
+  const LEGACY_MEM_FILENAMES = [
+    "mem.ts",
+    "store.ts",
+    "selectors.ts",
+    "render.ts",
+  ];
 
   if (memoryDirs.length === 0) {
     console.log("no legacy .memory/ directories found — already clean");
@@ -89,6 +58,39 @@ export function cmdInitMem(args: string[]): void {
         );
       } catch {
         // unreadable dir — fall through and remove
+      }
+      // Inside .fapony/.memory/: remove known legacy .ts files while keeping
+      // live logs. The keep-if-logs guard would preserve the whole directory,
+      // but legacy scaffolding (mem.ts, store.ts, ...) is dead code that
+      // should not linger beside the active log.
+      const isFaponyMemory =
+        d.endsWith(`/${FAPONY_DIR}/.memory`) || d === `${FAPONY_DIR}/.memory`;
+      if (isFaponyMemory && logs.length > 0) {
+        let legacyRemoved = 0;
+        let commandsRemoved = 0;
+        for (const name of LEGACY_MEM_FILENAMES) {
+          const fp = join(d, name);
+          if (existsSync(fp)) {
+            rmSync(fp);
+            legacyRemoved++;
+          }
+        }
+        const commandsDir = join(d, "commands");
+        if (existsSync(commandsDir)) {
+          rmSync(commandsDir, { recursive: true, force: true });
+          commandsRemoved++;
+        }
+        if (legacyRemoved || commandsRemoved) {
+          console.log(
+            `cleaned ${d} — removed ${legacyRemoved} legacy file(s)${
+              commandsRemoved ? " + commands/" : ""
+            } (kept ${logs.length} log file(s): ${logs.join(", ")})`,
+          );
+        } else {
+          console.log(`${d} — already clean (logs: ${logs.join(", ")})`);
+        }
+        kept++;
+        continue;
       }
       if (logs.length > 0 && !force) {
         console.log(
@@ -116,37 +118,21 @@ export function cmdInitMem(args: string[]): void {
   }
 
   // 2) Warn about package.json call sites still referencing .memory/mem.ts
-  const warnAboutCallSites = (dir: string, depth = 0) => {
-    if (depth > 4) return;
+  for (const dir of walkDir(root)) {
     const pkg = join(dir, "package.json");
-    if (existsSync(pkg)) {
-      try {
-        const raw = readFileSync(pkg, "utf8");
-        if (raw.includes(".memory/mem.ts")) {
-          console.log(`\n⚠ ${pkg} still references .memory/mem.ts`);
-          console.log(
-            `  update to: "fapony mem <sub>" (e.g. "fapony mem add", "fapony mem close")`,
-          );
-        }
-      } catch {
-        // ignore
-      }
-    }
+    if (!existsSync(pkg)) continue;
     try {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (
-          entry.isDirectory() &&
-          !entry.name.startsWith(".") &&
-          entry.name !== "node_modules"
-        ) {
-          warnAboutCallSites(join(dir, entry.name), depth + 1);
-        }
+      const raw = readFileSync(pkg, "utf8");
+      if (raw.includes(".memory/mem.ts")) {
+        console.log(`\n⚠ ${pkg} still references .memory/mem.ts`);
+        console.log(
+          `  update to: "fapony mem <sub>" (e.g. "fapony mem add", "fapony mem close")`,
+        );
       }
     } catch {
       // ignore
     }
-  };
-  warnAboutCallSites(root);
+  }
 
   console.log("\nmem commands are now built into fapony:");
   console.log('  fapony mem add <kind> "<text>" --files <files>');

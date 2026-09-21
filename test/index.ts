@@ -157,6 +157,7 @@ import {
   testEditHintPluginSource,
   testEditHintSilentZeroImporters,
   testEditHintSkipsNonSourceAndMissing,
+  testHookSessionStartSilentWithoutMemLog,
   testReadContextBasenameAmbiguityStaysSilent,
   testReadContextCombinedCapAndOutsideRepo,
   testReadContextMemRowsByFilesAndPath,
@@ -261,6 +262,7 @@ import {
   testInstallOpencodeSessionStartDryRun,
   testInstallOpencodeSessionStartForeignFileUntouched,
   testInstallOpencodeSessionStartPlugin,
+  testInstallOpencodeSessionStartStaleWarns,
 } from "./install/opencode.test.js";
 import {
   testLinkSkillsCreatesSymlinks,
@@ -697,6 +699,7 @@ export async function cmdTest(): Promise<void> {
   testDecideStopNamesOutOfScopeMemLog();
   testStopBlocksOncePerSessionPerWorktree();
   testSessionStartContextIsCapped();
+  testHookSessionStartSilentWithoutMemLog();
   testSessionStartPluginSource();
   testStopHookSourceHasNoRepoSpecificCommands();
   testReadHintAnnotatesLargeFullRead();
@@ -930,6 +933,7 @@ export async function cmdTest(): Promise<void> {
   testInstallOpencodeEditHintForeignFileUntouched();
   testInstallOpencodeEditHintDryRun();
   testInstallOpencodeSessionStartPlugin();
+  testInstallOpencodeSessionStartStaleWarns();
   testInstallOpencodeSessionStartForeignFileUntouched();
   testInstallOpencodeSessionStartDryRun();
   testInstallOpencodeAlreadyConfiguredNoOp();

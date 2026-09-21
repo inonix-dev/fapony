@@ -17,8 +17,8 @@ import {
   type Run,
 } from "./db/index.js";
 import { enrichGateWindows } from "./gates.js";
-import { avg, minutesBetween } from "./math.js";
 import { readPassiveUsage } from "./session/index.js";
+import { avg, minutesBetween } from "./util.js";
 
 // ─── Schema version ────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-// src/review-seed.ts — `fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]`
+// src/seed/review-seed.ts — `fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]`
 //
 // Seeds a code review with the deterministic facts of the scope the agent
 // asked about: which files changed (per the exact git expression, echoed),
@@ -19,7 +19,6 @@
 // extractExports (map.ts) for signatures. One flag = one declared git call;
 // no magic parsing.
 
-import { execSync } from "node:child_process";
 import type { Stats } from "node:fs";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -30,9 +29,10 @@ import {
   isTestedThroughBarrels,
   isTestFile,
   SCAN_EXTS,
-} from "./analyze.js";
-import { extractBody, extractExports } from "./map.js";
-import { assertSafe } from "./safety.js";
+} from "../analyze.js";
+import { extractBody, extractExports } from "../map.js";
+import { assertSafe } from "../safety.js";
+import { execGit, gitOk, gitValue, SeedError, SIG_MAX } from "./primitives.js";
 
 const WRAP_WIDTH = 88;
 // The changed list is the review's scope boundary, not context: a file hidden
@@ -58,7 +58,6 @@ const LOOKUP_OUTPUT_CAP = 120;
 // files is already past "this component area" into "the whole tree" — cut
 // there and say so, a folder-shaped wall is not an answer either.
 // Signature text cap per symbol (same trim as map.ts's file view).
-const SIG_MAX = 90;
 const DISCLAIMER =
   "static graph only — seed is where to enter, not what is verified";
 const USAGE =
@@ -69,52 +68,6 @@ const USAGE =
 const MAX_BODY_LINES = 80;
 const MAX_CALLER_FILES = 12;
 const MAX_CALLER_HITS = 20;
-
-export class SeedError extends Error {}
-
-// --- Git helpers (same shape as collect.ts execGitSafe) ---
-
-function execGit(
-  cmd: string,
-  cwd: string,
-): { ok: boolean; output: string; error?: string } {
-  try {
-    const output = execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-      timeout: 15_000,
-    });
-    return { ok: true, output: output.trim() };
-  } catch (e: unknown) {
-    const err = e as { stderr?: string; message?: string };
-    return {
-      ok: false,
-      output: "",
-      error: (err.stderr ?? err.message ?? "").trim(),
-    };
-  }
-}
-
-// A scope's primary git call failing must never masquerade as "nothing
-// changed" — surface it. merge-base failures are tolerated (label fallback).
-function gitOk(r: { ok: boolean; error?: string }, cmd: string): void {
-  if (!r.ok)
-    throw new SeedError(
-      `review-seed: git failed: ${cmd}\n${r.error ?? "unknown error"}`,
-    );
-}
-
-// Values interpolated into a git command line must be plain refs/paths —
-// blocks shell metacharacters before execSync ever sees them.
-const GIT_VALUE_RE = /^[A-Za-z0-9._/{}^~+-]+$/;
-
-function gitValue(kind: string, value: string): string {
-  if (!GIT_VALUE_RE.test(value)) {
-    throw new SeedError(`review-seed: invalid ${kind}: ${value}`);
-  }
-  return value;
-}
 
 // --- Scope flags: exactly one source of scope ---
 
@@ -233,7 +186,7 @@ function parseScope(args: string[]): Scope {
 
 // --- Scope resolution: one flag = one declared git call ---
 
-interface FileEntry {
+export interface FileEntry {
   path: string;
   ins: number | null;
   del: number | null;

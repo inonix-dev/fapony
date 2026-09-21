@@ -468,7 +468,21 @@ fapony mem where                           # show the resolved mem dir and which
 fapony mem now | done | stale              # views
 fapony debt [--id <convention>] [--where <path>]   # ไฟล์ไหนยังไม่ย้ายไป convention ที่ประกาศไว้ (live, read-only)
 fapony lint-baseline [--cmd ...] [--diff]  # separate "already red" from "I made it red"
+```
 
+*When* to call `mem add` is your project's call, not fapony's — write it in your own
+`AGENTS.md`/`CLAUDE.md`, not here. A starting point:
+
+```markdown
+## Memory
+- Found a bug while working (not just user-reported)? Log it before fixing:
+  `mem_add { kind: "bug", worktree: "<absolute app dir>", files: [...], text: "..." }`
+- `text` must stand alone — read months later with no chat context: what/where/repro/status.
+- Report the row id back in chat.
+- Don't fold the fix into the same chunk — log first, fix as its own next/chunk if you do.
+```
+
+```bash
 # Setup & maintenance
 fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/evidence)
 fapony init-mem                          # delete .memory/ + warn call sites still referencing it

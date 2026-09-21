@@ -562,6 +562,12 @@ export async function cmdHookStop(): Promise<void> {
 // (rule 13). A SessionStart hook is neither: zero rent, and it fires whether
 // or not anyone remembers.
 //
+// sessionStartContext is the one copy of that: guard (no mem log = null), the
+// kickoff spawn, and the cap. cmdHookSessionStart wraps it in the Claude/Codex
+// JSON, and the generated OpenCode plugin imports it directly — so the logic
+// lives here and `git pull` updates all three clients, instead of being baked
+// into the plugin file where a pull could not reach it (mub2ezhi).
+//
 // Runs the CLI in a subprocess rather than calling cmdKickoff: kickoff prints
 // to stdout and exits on bad input, both of which would be this hook's stdout.
 
@@ -598,25 +604,45 @@ export function capContext(
   return `${headLines(text, max)}\n${TRUNCATED}`;
 }
 
-/** SessionStart hook: inject `fapony mem kickoff` output as context. */
+/**
+ * Kickoff output for `cwd`'s mem log, capped — or null when there is no log in
+ * scope, the command fails, or it prints nothing. The single implementation
+ * behind both cmdHookSessionStart (Claude/Codex) and the generated OpenCode
+ * plugin, so a pull of INSTALL_ROOT updates all three.
+ *
+ * `faponyTs` is where the CLI lives. The hook defaults to `Bun.main` (itself,
+ * when run as `bun <root>/fapony.ts hook-session-start`); the OpenCode plugin
+ * must pass its baked path because `Bun.main` inside OpenCode is OpenCode's own
+ * entry, not fapony's.
+ */
+export function sessionStartContext(
+  cwd: string,
+  faponyTs: string = Bun.main,
+): string | null {
+  // No mem log in scope = nothing to say. Silence beats "no rows yet".
+  if (!whereMemDir(cwd).dir) return null;
+  const p = Bun.spawnSync([process.execPath, faponyTs, "mem", "kickoff"], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const out = p.stdout.toString().trim();
+  if (p.exitCode !== 0 || !out) return null;
+  return capContext(out);
+}
+
+/** SessionStart hook: emit sessionStartContext as Claude/Codex JSON. */
 export async function cmdHookSessionStart(): Promise<void> {
   try {
     const raw = JSON.parse(await Bun.stdin.text()) as { cwd?: string };
     const cwd = raw.cwd ?? process.cwd();
-    // No mem log in scope = nothing to say. Silence beats "no rows yet".
-    if (!whereMemDir(cwd).dir) return;
-    const p = Bun.spawnSync([process.execPath, Bun.main, "mem", "kickoff"], {
-      cwd,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const out = p.stdout.toString().trim();
-    if (p.exitCode !== 0 || !out) return;
+    const ctx = sessionStartContext(cwd);
+    if (!ctx) return;
     console.log(
       JSON.stringify({
         hookSpecificOutput: {
           hookEventName: "SessionStart",
-          additionalContext: capContext(out),
+          additionalContext: ctx,
         },
       }),
     );
