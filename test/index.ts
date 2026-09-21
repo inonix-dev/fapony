@@ -170,6 +170,7 @@ import {
   testRereadHintKillSwitch,
   testRereadHintSilentAfterEdit,
   testSessionStartContextIsCapped,
+  testSessionStartPluginSource,
   testStopBlocksOncePerSessionPerWorktree,
   testStopHookSourceHasNoRepoSpecificCommands,
   testStopOutputShapesPerClient,
@@ -214,6 +215,7 @@ import {
   testInstallCodexHooksMergePreservesForeign,
   testInstallCodexLinksSkills,
   testInstallCodexNoConfigFails,
+  testInstallCodexSessionStartUpgradeAppends,
   testInstallCodexSkillsConflictUntouched,
 } from "./install/codex.test.js";
 import {
@@ -256,6 +258,9 @@ import {
   testInstallOpencodeParseErrorFails,
   testInstallOpencodeReadHintForeignFileUntouched,
   testInstallOpencodeReadHintPlugin,
+  testInstallOpencodeSessionStartDryRun,
+  testInstallOpencodeSessionStartForeignFileUntouched,
+  testInstallOpencodeSessionStartPlugin,
 } from "./install/opencode.test.js";
 import {
   testLinkSkillsCreatesSymlinks,
@@ -692,6 +697,7 @@ export async function cmdTest(): Promise<void> {
   testDecideStopNamesOutOfScopeMemLog();
   testStopBlocksOncePerSessionPerWorktree();
   testSessionStartContextIsCapped();
+  testSessionStartPluginSource();
   testStopHookSourceHasNoRepoSpecificCommands();
   testReadHintAnnotatesLargeFullRead();
   testReadHintSkipsCheapReads();
@@ -923,6 +929,9 @@ export async function cmdTest(): Promise<void> {
   testInstallOpencodeEditHintPlugin();
   testInstallOpencodeEditHintForeignFileUntouched();
   testInstallOpencodeEditHintDryRun();
+  testInstallOpencodeSessionStartPlugin();
+  testInstallOpencodeSessionStartForeignFileUntouched();
+  testInstallOpencodeSessionStartDryRun();
   testInstallOpencodeAlreadyConfiguredNoOp();
   testInstallOpencodeAlreadyConfiguredLinksSkills();
   testInstallOpencodeDryRunNoWrite();
@@ -936,6 +945,7 @@ export async function cmdTest(): Promise<void> {
   testInstallCodexCreatesHooksJson();
   testInstallCodexHooksMergePreservesForeign();
   testInstallCodexHooksAlreadyConfiguredNoOp();
+  testInstallCodexSessionStartUpgradeAppends();
   testInstallCodexHooksMalformedSkipsGracefully();
   testInstallCodexDryRunHooksNoWrite();
   testInstallCodexLinksSkills();

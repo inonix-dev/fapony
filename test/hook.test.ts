@@ -38,6 +38,7 @@ import {
   commitHintPluginSource,
   editHintPluginSource,
   readHintPluginSource,
+  sessionStartPluginSource,
 } from "../src/install/opencode.js";
 
 const base = {
@@ -1351,6 +1352,36 @@ export function testEditHintPluginSource(): void {
 export function testCommitHintMinCommitsConstant(): void {
   assert.strictEqual(COMMIT_HINT_MIN_COMMITS, 1);
   console.log("  ✓ commit hint min commits constant is 1");
+}
+
+export function testSessionStartPluginSource(): void {
+  // The generated OpenCode plugin must reuse the shared capContext (no
+  // second implementation), inject through output.system — the only channel
+  // the event hook cannot offer — and fire once per session.
+  const src = sessionStartPluginSource("/install/root");
+  assert.ok(
+    src.includes("/install/root/src/hook.ts"),
+    "bakes the install root",
+  );
+  assert.ok(
+    src.includes("experimental.chat.system.transform"),
+    "injects via system.transform, the documented channel",
+  );
+  assert.ok(
+    src.includes("capContext"),
+    "must import capContext from the shared module",
+  );
+  assert.ok(src.includes("mem"), "must run the kickoff command");
+  assert.ok(src.includes("kickoff"), "must run the kickoff command");
+  assert.ok(src.includes("output.system"), "pushes into system, never args");
+  assert.ok(
+    src.includes("sessionID") && src.includes("seen"),
+    "dedupes once per session",
+  );
+  assert.ok(!src.includes("throw"), "must never break a session start");
+  console.log(
+    "  ✓ session start opencode plugin imports shared logic, annotate-only",
+  );
 }
 
 export function testComputeHintImpact(): void {
