@@ -6,6 +6,7 @@
 // from this path.
 
 export {
+  BUG_MARKERS,
   bugSignalFromTranscript,
   COMMIT_HINT_MIN_COMMITS,
   type CommitHintInput,
@@ -36,9 +37,11 @@ export {
   gitAutonomyStatus,
   type HintFireRow,
   type HintImpact,
+  hasBugMarker,
   hintLogDir,
   hintLogPath,
   hookTsMs,
+  isBugfixCommit,
   isCodexPayload,
   isCursorPayload,
   mvGuardDecision,

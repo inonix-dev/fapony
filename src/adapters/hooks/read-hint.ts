@@ -18,6 +18,7 @@ import { recordHintFire } from "../../core/hint-log.js";
 import { sessionKey } from "../../core/hook-helpers.js";
 import { readMemLog } from "../../memory.js";
 import { renderSeed } from "../../seed/review-seed.js";
+import { hasBugMarker, isBugfixCommit } from "./bug-markers.js";
 import { readContextData } from "./context-data.js";
 
 // --- Read hint (size) ---
@@ -260,6 +261,13 @@ export function commitHintFor(opts: CommitHintInput): string | null {
     const commitList = log ? log.split("\n").filter(Boolean) : [];
     if (commitList.length < COMMIT_HINT_MIN_COMMITS) return null;
 
+    // %h %s — strip the short hash to test the subject alone.
+    const subjectOf = (c: string) => c.replace(/^\S+\s+/, "");
+    const bugCommits = commitList.filter(
+      (c) =>
+        isBugfixCommit(subjectOf(c)) || hasBugMarker(subjectOf(c)) !== null,
+    );
+
     const lines: string[] = [
       `${commitList.length} commit(s) since last mem row (${memLastTs.slice(0, 10)}) — record a mem row for this work.`,
     ];
@@ -268,6 +276,12 @@ export function commitHintFor(opts: CommitHintInput): string | null {
     lines.push(
       `fapony mem add <decision|bug|note> "what happened" --files <files> ${worktree}/.fapony/plan/PLAN.md`,
     );
+    if (bugCommits.length > 0) {
+      lines.push(
+        `${bugCommits.length} of these read as a bug (fix-type commit or found-a-bug wording) — use kind:bug so it surfaces later, not note:`,
+      );
+      lines.push(`  fapony mem add bug "what broke" --files <files>`);
+    }
 
     const prefixed = lines.map((l) => `fapony: ${l}`).join("\n");
     return prefixed;

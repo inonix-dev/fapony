@@ -130,6 +130,74 @@ test("testCommitHintSilentWhenMemRowCoversCommits", () => {
   console.log("  ✓ commit hint → silent when the mem row covers all commits");
 });
 
+test("testCommitHintNudgesBugRowForFixCommit", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
+  try {
+    execSync("git init", { cwd: dir, stdio: "ignore" });
+    execSync("git config user.email 'test@test.com'", {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    execSync("git config user.name 'Test'", { cwd: dir, stdio: "ignore" });
+    writeFileSync(join(dir, "README.md"), "# test\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "init"', { cwd: dir, stdio: "ignore" });
+    writeTempMemRow(dir, "2020-01-01T00:00:00.000Z");
+    writeFileSync(join(dir, "fix.ts"), "export const x = 1;\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "fix(ui): correct totals"', {
+      cwd: dir,
+      stdio: "ignore",
+    });
+
+    const hint = commitHintFor({
+      command: "git commit -m 'x'",
+      cwd: dir,
+    });
+    assert.ok(hint, "must nudge for commits newer than the last mem row");
+    assert.ok(hint.includes("kind:bug"), "a fix commit must nudge kind:bug");
+    assert.ok(hint.includes("mem add bug"), "must name the bug command");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ commit hint → nudges kind:bug for a fix-type commit");
+});
+
+test("testCommitHintNoBugNudgeForNonFixCommit", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
+  try {
+    execSync("git init", { cwd: dir, stdio: "ignore" });
+    execSync("git config user.email 'test@test.com'", {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    execSync("git config user.name 'Test'", { cwd: dir, stdio: "ignore" });
+    writeFileSync(join(dir, "README.md"), "# test\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "init"', { cwd: dir, stdio: "ignore" });
+    writeTempMemRow(dir, "2020-01-01T00:00:00.000Z");
+    writeFileSync(join(dir, "feature.ts"), "export const y = 2;\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "feat: add feature"', {
+      cwd: dir,
+      stdio: "ignore",
+    });
+
+    const hint = commitHintFor({
+      command: "git commit -m 'x'",
+      cwd: dir,
+    });
+    assert.ok(hint, "generic mem nudge still fires");
+    assert.ok(
+      !hint.includes("kind:bug"),
+      "a non-fix commit must not push kind:bug",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ commit hint → silent on kind:bug for a non-fix commit");
+});
+
 test("testCommitHintMinCommitsConstant", () => {
   assert.strictEqual(COMMIT_HINT_MIN_COMMITS, 1);
   console.log("  ✓ commit hint min commits constant is 1");

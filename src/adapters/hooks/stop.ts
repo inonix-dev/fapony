@@ -15,6 +15,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { hookTsMs, sessionKey, utcStamp } from "../../core/hook-helpers.js";
 import { readMemLog, whereMemDir } from "../../memory.js";
+import { hasBugMarker } from "./bug-markers.js";
 
 // --- Types ---
 
@@ -252,9 +253,6 @@ export function stopBlockedBefore(
 
 // --- Bug-signal detection ---
 
-/** Announcement words that indicate the agent found a bug — not symptom words. */
-const BUG_MARKERS: RegExp[] = [/เจอบั๊ก/];
-
 /**
  * Scan assistant text from a Claude transcript for bug markers. Reads only
  * the tail of the file (last 200KB) to avoid parsing the full transcript.
@@ -314,12 +312,8 @@ export function bugSignalFromTranscript(
       }
       for (const b of m.content) {
         if (b.type !== "text" || typeof b.text !== "string") continue;
-        for (const re of BUG_MARKERS) {
-          if (re.test(b.text)) {
-            const match = b.text.match(re);
-            return match?.[0] ?? null;
-          }
-        }
+        const hit = hasBugMarker(b.text);
+        if (hit) return hit;
       }
     }
   } catch {
