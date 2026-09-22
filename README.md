@@ -476,6 +476,13 @@ fapony mem where                           # show the resolved mem dir and which
 fapony mem done | stale              # views
 fapony debt [--id <convention>] [--where <path>]   # ไฟล์ไหนยังไม่ย้ายไป convention ที่ประกาศไว้ (live, read-only)
 fapony lint-baseline [--cmd ...] [--diff]  # separate "already red" from "I made it red"
+
+# Hooks (wired by `fapony install`, not run by hand)
+fapony hook-stop                        # Stop hook: block turns with commits but no mem row
+fapony hook-read-hint                   # read/re-read annotations
+fapony hook-edit-hint                   # importer count before editing shape
+fapony hook-mv-guard                    # deny raw git mv of plan files into done/
+fapony hook-session-start               # SessionStart: kickoff into context
 ```
 
 *When* to call `mem add` is your project's call, not fapony's — write it in your own

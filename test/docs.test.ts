@@ -11,6 +11,7 @@ import assert from "node:assert";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { REGIME_CODES } from "../src/adapters/mcp/types.js";
+import { COMMANDS } from "../src/commands.js";
 
 const root = join(import.meta.dir, "..");
 
@@ -57,4 +58,39 @@ test("testAddingFakeEnumValueFailsDocsCheck", () => {
   const content = read("README.md");
   const missing = fake.filter((v) => !content.includes(v));
   assert.deepStrictEqual(missing, ["not_a_real_regime"]);
+});
+
+/**
+ * Every top-level command name in src/commands.ts must appear in the docs
+ * that enumerate the CLI, so adding a command fails the suite until the
+ * prose lists it (Done criteria 2, PLAN-seed-and-surface chunk 3). Names
+ * only, never prose — a test that checks wording goes red on every rephrase
+ * and gets deleted.
+ */
+function assertCommandsListed(): void {
+  assert.ok(COMMANDS.length > 0, "COMMANDS must be non-empty");
+  const claude = read("CLAUDE.md");
+  const readme = read("README.md");
+  for (const c of COMMANDS) {
+    assert.ok(
+      claude.includes(c.name),
+      `COMMANDS drift: CLAUDE.md §CLI Commands is missing "${c.name}" — list every command there (chunk 3)`,
+    );
+    assert.ok(
+      readme.includes(c.name),
+      `COMMANDS drift: README.md §CLI is missing "${c.name}" — list every command there (chunk 3)`,
+    );
+  }
+}
+
+test("testCommandsListedInDocs", () => {
+  assertCommandsListed();
+});
+
+test("testAddingFakeCommandFailsDocsCheck", () => {
+  // The mechanism itself: a command name no doc mentions is exactly what the
+  // guard above catches (simulate one).
+  const fake = "not_a_real_command";
+  assert.ok(!read("CLAUDE.md").includes(fake));
+  assert.ok(!read("README.md").includes(fake));
 });

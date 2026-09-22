@@ -466,6 +466,7 @@ fapony hook-stop                     # Stop hook — block เทิร์นท
 fapony hook-read-hint                # annotate 2 แบบ: อ่านไฟล์ใหญ่ทั้งไฟล์ → review-seed ·
                                      # re-read ไฟล์เดิมใน session เดียวกันที่ mtime ไม่ขยับ → grep
 fapony hook-edit-hint                # PreToolUse Edit — บอกจำนวน importer ของไฟล์ที่กำลังแก้ (Claude)
+fapony hook-mv-guard                   # PreToolUse Bash — deny `git mv` ของ plan file เข้า done/ ให้ใช้ `plan-sweep --apply` แทน (Claude)
 fapony hook-session-start            # SessionStart — ยิง `mem kickoff` เข้า context (เงียบถ้าไม่มี mem log)
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]
 fapony report <run-id>  ·  fapony report-web [file]
