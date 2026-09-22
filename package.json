@@ -1,6 +1,6 @@
 {
   "name": "fapony",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Token usage across Claude Code, OpenCode, Codex & ZCode on one yardstick — plus a project mem log and convention-debt tracker agents query via 3 MCP tools. No server, your data stays local",
   "license": "MIT",
   "author": "delamind (https://github.com/kire21b)",
