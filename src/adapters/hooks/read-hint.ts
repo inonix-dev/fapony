@@ -244,7 +244,9 @@ export function commitHintFor(opts: CommitHintInput): string | null {
 
     let memLastTs: string | null = null;
     try {
-      memLastTs = readMemLog(worktree).rows[0]?.ts ?? null;
+      // Anchor at the dir the commit ran in, not the repo root: the log is
+      // app-scoped in a monorepo, and root resolution misses it (bug muc9q47r).
+      memLastTs = readMemLog(opts.cwd).rows[0]?.ts ?? null;
     } catch {
       memLastTs = null;
     }

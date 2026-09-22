@@ -69,12 +69,23 @@ export function sessionStartContext(
   cwd: string,
   faponyTs: string = Bun.main,
 ): string | null {
-  if (!whereMemDir(cwd).dir) return null;
-  const p = Bun.spawnSync([process.execPath, faponyTs, "mem", "kickoff"], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  // Resolution shares one function with every reader. A bare monorepo root has
+  // no log at/above cwd, so the resolver reports the app-scoped log only as an
+  // out-of-scope candidate (SPEC §1). For a *read* at session start that is
+  // still recoverable: if the whole repo holds exactly one log, it is the
+  // project's memory — point kickoff at it with --mem-dir. Two or more is
+  // genuinely ambiguous (which app?), so refuse exactly as the resolver does.
+  const resolved = whereMemDir(cwd);
+  const memArgs: string[] = [];
+  if (!resolved.dir) {
+    const candidates = resolved.candidates ?? [];
+    if (candidates.length !== 1) return null;
+    memArgs.push("--mem-dir", candidates[0]);
+  }
+  const p = Bun.spawnSync(
+    [process.execPath, faponyTs, "mem", ...memArgs, "kickoff"],
+    { cwd, stdout: "pipe", stderr: "pipe" },
+  );
   const out = p.stdout.toString().trim();
   if (p.exitCode !== 0 || !out) return null;
   return capContext(out);

@@ -99,6 +99,90 @@ test("testHookSessionStartSilentWithoutMemLog", () => {
   console.log("  ✓ hook-session-start: silent with no mem log, JSON with one");
 });
 
+// Item 3 (bug muc9q47r): opening at a monorepo root used to go silent because
+// nothing sits at/above cwd. When the whole repo holds exactly ONE log, that
+// log is the project's memory — point kickoff at it instead of guessing nothing.
+test("testSessionStartUsesSoleAppScopedLog", () => {
+  withTempRepo((repo) => {
+    mkdirSync(join(repo, "apps/vela/.fapony/.memory"), { recursive: true });
+    writeFileSync(
+      join(repo, "apps/vela/.fapony/.memory/log.t.jsonl"),
+      `${JSON.stringify({
+        ts: "2026-09-17T00:00:00Z",
+        agent: "t",
+        kind: "note",
+        text: "vela memory",
+        files: ["README.md"],
+      })}\n`,
+    );
+    const p = Bun.spawnSync(
+      [
+        "bun",
+        join(import.meta.dir, "..", "..", "fapony.ts"),
+        "hook-session-start",
+      ],
+      {
+        cwd: repo,
+        stdin: Buffer.from(JSON.stringify({ cwd: repo })),
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, FAPONY_STATE_DIR: join(repo, ".state") },
+      },
+    );
+    assert.equal(p.exitCode, 0);
+    const out = JSON.parse(p.stdout.toString()) as {
+      hookSpecificOutput: Record<string, string>;
+    };
+    assert.equal(out.hookSpecificOutput.hookEventName, "SessionStart");
+    assert.ok(
+      out.hookSpecificOutput.additionalContext.length > 0,
+      "the repo's sole log is the project's memory",
+    );
+  });
+  console.log("  ✓ session-start uses the repo's sole app-scoped log");
+});
+
+test("testSessionStartSilentWithTwoAppScopedLogs", () => {
+  withTempRepo((repo) => {
+    for (const app of ["vela", "mdl"]) {
+      const dir = join(repo, "apps", app, ".fapony", ".memory");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, "log.t.jsonl"),
+        `${JSON.stringify({
+          ts: "2026-09-17T00:00:00Z",
+          agent: "t",
+          kind: "note",
+          text: `${app} memory`,
+        })}\n`,
+      );
+    }
+    const p = Bun.spawnSync(
+      [
+        "bun",
+        join(import.meta.dir, "..", "..", "fapony.ts"),
+        "hook-session-start",
+      ],
+      {
+        cwd: repo,
+        stdin: Buffer.from(JSON.stringify({ cwd: repo })),
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, FAPONY_STATE_DIR: join(repo, ".state") },
+      },
+    );
+    assert.equal(p.exitCode, 0);
+    assert.equal(
+      p.stdout.toString().trim(),
+      "",
+      "two app logs is genuinely ambiguous — never guess",
+    );
+  });
+  console.log(
+    "  ✓ session-start stays silent when two app logs make it ambiguous",
+  );
+});
+
 test("testSessionStartPluginSource", () => {
   const src = sessionStartPluginSource("/install/root");
   assert.ok(

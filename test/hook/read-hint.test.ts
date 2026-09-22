@@ -329,6 +329,45 @@ test("testReadContextCombinedCapAndOutsideRepo", () => {
   console.log("  ✓ read context → ≤5 lines, silent outside a repo");
 });
 
+// Regression 2026-09-22 (bug muc9q47r): the hint resolved the mem log from the
+// repo root, so in a monorepo whose log is app-scoped it saw only an
+// out-of-scope candidate and went silent for files sitting right under that log.
+test("testReadContextFindsAppScopedLogInMonorepo", () => {
+  withTempRepo((repo) => {
+    mkdirSync(join(repo, "apps/web/src"), { recursive: true });
+    mkdirSync(join(repo, "apps/api/src"), { recursive: true });
+    mkdirSync(join(repo, "apps/web/.fapony/.memory"), { recursive: true });
+    writeFileSync(join(repo, "apps/web/src/bill.tsx"), "x");
+    writeFileSync(join(repo, "apps/api/src/bill.tsx"), "x");
+    writeFileSync(
+      join(repo, "apps/web/.fapony/.memory/log.t.jsonl"),
+      `${JSON.stringify({
+        ts: "2026-09-17T00:00:00Z",
+        agent: "t",
+        kind: "bug",
+        text: "web bill drifted",
+        files: ["apps/web/src/bill.tsx"],
+      })}\n`,
+    );
+
+    // cwd = repo root (the agent opened at the top), file inside the app
+    const hit = readContextLines(join(repo, "apps/web/src/bill.tsx"), repo);
+    assert.equal(
+      hit.length,
+      1,
+      "app-scoped log must be found from the file's dir, not the root",
+    );
+    assert.match(hit[0], /fapony mem: 2026-09-17 bug/);
+
+    // a same-named file in a sibling app must not pick up the other app's row
+    const other = readContextLines(join(repo, "apps/api/src/bill.tsx"), repo);
+    assert.deepEqual(other, [], "no cross-app leak");
+  });
+  console.log(
+    "  ✓ read context resolves the app-scoped log from the file's dir",
+  );
+});
+
 // --- Hint impact ---
 
 test("testComputeHintImpact", () => {

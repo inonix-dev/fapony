@@ -4,7 +4,7 @@
 // edit-hint adapters to attach debt/mem lines when a file is open.
 
 import { realpathSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { collectSourceFiles, SCAN_EXTS } from "../../analyze.js";
 import { debtForFile, loadConventions } from "../../debt/index.js";
 import { readMemLog } from "../../memory.js";
@@ -57,8 +57,11 @@ export function readContextData(
       }
     }
 
-    // mem rows that are about this file
-    const mem = readMemLog(worktree);
+    // mem rows that are about this file — resolve the log from the file's own
+    // directory, not the repo root. In a monorepo the log is app-scoped, so
+    // anchoring at the root sees only an out-of-scope candidate and goes silent
+    // even though the file being touched sits right under its log (bug muc9q47r).
+    const mem = readMemLog(dirname(abs));
     if (mem.rows.length > 0) {
       const base = basename(rel);
       const direct: typeof mem.rows = [];
