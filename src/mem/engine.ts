@@ -122,3 +122,107 @@ export function engineClose(a: EngineCloseArgs): EngineCloseResult {
 
   return { ref: a.id, text: a.text, ts };
 }
+
+// --- find ---
+//
+// The single query engine for mem find. Both entry points call it with rows
+// they already read — CLI (commands/read.ts cmdFind, via allRows() which
+// includes rotated archives) and MCP (adapters/mcp/tools/mem.ts memFind, via
+// readMemLog whose loose log*.jsonl regex includes log.YYYY-MM-DD.jsonl too).
+// Archive scope is therefore identical on both sides with no parameter for it
+// (PLAN-unify-mem-engine chunk 2 §4.1: the "MCP reads live only" premise was
+// wrong — both see archives, base rate 0 archive files vs 211 live rows).
+//
+// The engine is pure: it takes rows + typed params, never touches argv
+// strings or the store. Wrappers own their surface — CLI parses
+// --kind/--files/--since/--limit at the argv layer, MCP validates its JSON
+// shape — and each passes its own kind default (PLAN §5 escape):
+// MCP passes no exclude (contract: "every kind, no default filter", locked by
+// test), CLI passes the bookkeeping exclude to keep its legacy output.
+
+export const FIND_DEFAULT_LIMIT = 20;
+
+/** Bookkeeping rows the CLI hides unless explicitly asked via --kind. */
+export const CLI_FIND_EXCLUDE = ["close", "synced", "claim", "release"];
+
+export interface EngineFindArgs {
+  /** Substring over text/spec/ref, case-insensitive. Omit = no text filter. */
+  text?: string;
+  /** Repo-relative paths — stored files[] first, text/spec/ref fallback. */
+  files?: string[];
+  /** Include filter — when non-empty, wins over excludeKind. */
+  kind?: string[];
+  /** Exclude filter — applied only when kind is empty. */
+  excludeKind?: string[];
+  /** ISO timestamp — only rows at or after this time (inclusive). */
+  sinceIso?: string;
+  /** Max rows returned (total still counts all matches). Default 20. */
+  limit?: number;
+}
+
+export interface EngineFindResult<T> {
+  rows: T[];
+  total: number;
+}
+
+export type FindableRow = {
+  kind: string;
+  text?: string;
+  spec?: string;
+  ref?: string;
+  files?: string[];
+  ts: string;
+};
+
+export function engineFind<T extends FindableRow>(
+  all: T[],
+  a: EngineFindArgs,
+): EngineFindResult<T> {
+  let out = [...all];
+
+  if (a.sinceIso) {
+    const since = a.sinceIso;
+    out = out.filter((r) => !(r.ts < since));
+  }
+
+  if (a.kind && a.kind.length > 0) {
+    const keep = new Set(a.kind);
+    out = out.filter((r) => keep.has(r.kind));
+  } else if (a.excludeKind && a.excludeKind.length > 0) {
+    const drop = new Set(a.excludeKind);
+    out = out.filter((r) => !drop.has(r.kind));
+  }
+
+  if (a.text?.trim()) {
+    const needle = a.text.toLowerCase();
+    out = out.filter((r) =>
+      `${r.text ?? ""}\n${r.spec ?? ""}\n${r.ref ?? ""}`
+        .toLowerCase()
+        .includes(needle),
+    );
+  }
+
+  if (a.files && a.files.length > 0) {
+    // Rows written by `mem add --files` carry files[] — match that first.
+    // Older rows (and any row whose author skipped --files) have none, so the
+    // text/spec/ref substring stays as the fallback: low recall by nature,
+    // a limit of the data rather than of the query.
+    const paths = a.files.map((f) => f.toLowerCase());
+    out = out.filter((r) => {
+      const stored = (r.files ?? []).map((f) => f.toLowerCase());
+      if (stored.some((f) => paths.some((p) => f === p || f.endsWith(`/${p}`))))
+        return true;
+      const hay =
+        `${r.text ?? ""}\n${r.spec ?? ""}\n${r.ref ?? ""}`.toLowerCase();
+      return paths.some((p) => hay.includes(p));
+    });
+  }
+
+  // Newest first — the canonical order. The CLI wrapper reprints oldest-first
+  // to keep its legacy output byte-identical (same set, legacy order).
+  out.sort((x, y) => y.ts.localeCompare(x.ts));
+
+  const total = out.length;
+  const limit = Math.max(0, a.limit ?? FIND_DEFAULT_LIMIT);
+  return { rows: out.slice(0, limit), total };
+}

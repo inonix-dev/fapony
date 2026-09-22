@@ -11,6 +11,7 @@ import {
   type EngineCloseResult,
   engineAdd,
   engineClose,
+  engineFind,
 } from "../../../mem/engine.js";
 import { initStore, KINDS, type WorkKind } from "../../../mem/store.js";
 import { type MemRow, readMemLog, resolveMemDir } from "../../../memory.js";
@@ -32,36 +33,21 @@ export function memFind(args: {
   since?: string;
   limit?: number;
 }): MemFindResult {
-  const read = readMemLog(args.worktree, args.since);
-
-  let rows = read.rows;
-  if (args.kind && args.kind.length > 0) {
-    const kinds = new Set(args.kind);
-    rows = rows.filter((r) => kinds.has(r.kind));
-  }
-  if (args.text) {
-    const needle = args.text.toLowerCase();
-    rows = rows.filter((r) => r.text.toLowerCase().includes(needle));
-  }
-  if (args.files && args.files.length > 0) {
-    // Rows written by `mem add --files` carry files[] — match that first.
-    // Older rows (and any row whose author skipped --files) have none, so the
-    // text/spec/ref substring stays as the fallback: low recall by nature,
-    // a limit of the data rather than of the query (spec §5.4).
-    const paths = args.files.map((f) => f.toLowerCase());
-    rows = rows.filter((r) => {
-      const stored = (r.files ?? []).map((f) => f.toLowerCase());
-      if (stored.some((f) => paths.some((p) => f === p || f.endsWith(`/${p}`))))
-        return true;
-      const hay = `${r.text}\n${r.spec ?? ""}\n${r.ref ?? ""}`.toLowerCase();
-      return paths.some((p) => hay.includes(p));
-    });
-  }
-
-  const total = rows.length;
-  const limit = Math.max(0, args.limit ?? 20);
+  // Query logic lives in the shared engine (src/mem/engine.ts) — this wrapper
+  // owns only the read (readMemLog sees live + rotated archives via its loose
+  // log*.jsonl regex) and the result shape. No kind default here by contract:
+  // omitting kind returns every kind (locked by test). CLI cmdFind calls the
+  // same engine with its own bookkeeping exclude.
+  const read = readMemLog(args.worktree);
+  const { rows: matched, total } = engineFind(read.rows, {
+    text: args.text,
+    files: args.files,
+    kind: args.kind,
+    sinceIso: args.since,
+    limit: args.limit,
+  });
   return {
-    rows: rows.slice(0, limit),
+    rows: matched,
     total,
     filesFound: read.filesFound,
     skipped: read.skipped,

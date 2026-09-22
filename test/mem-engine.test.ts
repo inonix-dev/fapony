@@ -10,8 +10,10 @@ import { join } from "node:path";
 import {
   CAP_NEXT,
   CapError,
+  CLI_FIND_EXCLUDE,
   engineAdd,
   engineClose,
+  engineFind,
 } from "../src/mem/engine.js";
 import { initStore } from "../src/mem/store.js";
 
@@ -70,4 +72,69 @@ test("testEngineCapThrowsBareCapError", () => {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ engine caps throw bare CapError; empty close text rejected");
+});
+
+test("testEngineFindExcludeKindAndIncludeWins", () => {
+  // PLAN-unify-mem-engine chunk 2 §4.2: the engine takes excludeKind, each
+  // side passes its own default — MCP passes none (contract: every kind, no
+  // default filter), CLI passes the bookkeeping list. An explicit kind
+  // include wins over the exclude (so `find --kind close` can see closes).
+  const rows = [
+    { ts: "2026-01-01T00:00:00.000Z", kind: "decision", text: "a" },
+    { ts: "2026-01-02T00:00:00.000Z", kind: "close", text: "b", ref: "x" },
+    { ts: "2026-01-03T00:00:00.000Z", kind: "claim", ref: "y" },
+    { ts: "2026-01-04T00:00:00.000Z", kind: "bug", text: "c" },
+  ];
+  const cli = engineFind(rows, { excludeKind: CLI_FIND_EXCLUDE });
+  assert.equal(
+    cli.total,
+    2,
+    "CLI default hides close/claim (synced/release too)",
+  );
+  assert.ok(cli.rows.every((r) => r.kind === "decision" || r.kind === "bug"));
+
+  const mcp = engineFind(rows, {});
+  assert.equal(mcp.total, 4, "MCP default: no filter");
+
+  const explicit = engineFind(rows, {
+    kind: ["close"],
+    excludeKind: CLI_FIND_EXCLUDE,
+  });
+  assert.equal(explicit.total, 1, "explicit kind wins over the exclude");
+  assert.equal(explicit.rows[0].kind, "close");
+  console.log("  ✓ engineFind kind default per side; explicit kind wins");
+});
+
+test("testEngineFindTextFilesSinceLimit", () => {
+  const rows = [
+    {
+      ts: "2026-01-01T00:00:00.000Z",
+      kind: "decision",
+      text: "wrapper lives in service",
+      files: ["src/deep/zone/handler.ts"],
+    },
+    {
+      ts: "2026-06-01T00:00:00.000Z",
+      kind: "bug",
+      text: "unrelated",
+      spec: "apps/vela/SPEC-x.md",
+    },
+    { ts: "2026-06-02T00:00:00.000Z", kind: "note", text: "newest row" },
+  ];
+  // text matches spec too (CLI HELP promises text/spec/ref)
+  assert.equal(engineFind(rows, { text: "spec-x" }).total, 1);
+  // stored files[] first, suffix still matches
+  assert.equal(engineFind(rows, { files: ["handler.ts"] }).total, 1);
+  assert.equal(engineFind(rows, { files: ["src/other.ts"] }).total, 0);
+  // since is inclusive
+  assert.equal(
+    engineFind(rows, { sinceIso: "2026-06-01T00:00:00.000Z" }).total,
+    2,
+  );
+  // total counts before limit; order is newest first
+  const lim = engineFind(rows, { limit: 2 });
+  assert.equal(lim.total, 3);
+  assert.equal(lim.rows.length, 2);
+  assert.equal(lim.rows[0].ts, "2026-06-02T00:00:00.000Z");
+  console.log("  ✓ engineFind text/files/since/limit");
 });

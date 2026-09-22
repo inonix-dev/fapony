@@ -311,6 +311,33 @@ test("testMemAddRejectsMissingFilesAndBadKind", () => {
   console.log("  ✓ mem_add rejects no files / bad kind / hold without spec");
 });
 
+// PLAN-unify-mem-engine chunk 2 §4.1: memFind sees rotated archives —
+// log.YYYY-MM-DD.jsonl matches the loose log*.jsonl regex, so recall survives
+// rotate. This locks the accident as contract: tightening the regex later must
+// not silently drop recall (readMemLog-level cover already exists; this is the
+// memFind-level one).
+test("testMemFindSeesRotatedArchive", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memfind-arch-"));
+  try {
+    const memDir = join(dir, ".fapony", ".memory");
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(
+      join(memDir, "log.jsonl"),
+      `${JSON.stringify({ ts: "2026-09-19T00:00:00.000Z", agent: "a", kind: "note", text: "live row" })}\n`,
+    );
+    writeFileSync(
+      join(memDir, "log.2026-03-01.jsonl"),
+      `${JSON.stringify({ ts: "2026-03-01T00:00:00.000Z", agent: "a", kind: "bug", text: "archived row" })}\n`,
+    );
+    const r = memFind({ worktree: dir, text: "archived row" });
+    assert.equal(r.total, 1, "rotated archive must be visible to mem_find");
+    assert.equal(r.rows[0].kind, "bug");
+    assert.equal(r.filesFound, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_find sees rotated archives (contract, not accident)");
+});
 // Regression 2026-09-19: agent/person both fell back to the literal "unknown",
 // and a generic OS account (admin/user/owner — what a fresh install offers) was
 // taken at face value, so two different people wrote one indistinguishable
