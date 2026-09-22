@@ -88,9 +88,13 @@ fapony plan-seed <feature> --spec --scope <path>
 One command, no MCP round trip. It writes `<planDir>/PLAN-<feature>.md` +
 `<specDir>/SPEC-<feature>.md` — the frontmatter, the 8 empty sections, a `## 8. References` list
 of shipped plans that already touched this scope, and a `## Context (fapony)` block under the
-TL;DR (recent mem decisions plus which model holds up per task shape here). SPEC chunks carry
+TL;DR (recent mem decisions plus what is already in scope — one line per scope file with its
+exports; needs `--scope` to list anything). No ledger-ranking line: the ledger is frozen and
+cross-model ranking claims are off the table, so the seed does not point at them. SPEC chunks carry
 verbatim signatures, hard-capped (PLAN ≤ ~60 / SPEC ≤ 200 lines), and capped lines say what was
-cut. The CLI resolves plan-dir/spec-dir and refuses to overwrite (pick `-v2` — see Phase 2).
+cut. Stdout ends with the existing plan list (active first, then shipped) — the seed that lands
+next to a shipped decision without knowing it is the expensive mistake, and the file guard in §8
+is not where the glance lands. The CLI resolves plan-dir/spec-dir and refuses to overwrite (pick `-v2` — see Phase 2).
 
 **§2/§5 arrive empty on purpose (2026-09-18).** They used to hold a repetition scan and analyze
 findings; measured over every plan that ever used them, §5 printed "no findings" 3 times out of 3
