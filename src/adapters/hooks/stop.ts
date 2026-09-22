@@ -291,7 +291,15 @@ export function bugSignalFromTranscript(
 
     for (const line of lines) {
       if (!line) continue;
-      let o: any;
+      // Transcript tail: untyped JSONL — the structural type below names only
+      // the fields this scan reads (biome noExplicitAny: no `any` annotation).
+      let o: {
+        message?: {
+          role?: string;
+          content?: Array<{ type?: string; text?: string }>;
+          created_at?: string;
+        };
+      };
       try {
         o = JSON.parse(line);
       } catch {
@@ -305,7 +313,7 @@ export function bugSignalFromTranscript(
         if (!Number.isNaN(msgMs) && msgMs < sinceMs) continue;
       }
       for (const b of m.content) {
-        if (b.type !== "text") continue;
+        if (b.type !== "text" || typeof b.text !== "string") continue;
         for (const re of BUG_MARKERS) {
           if (re.test(b.text)) {
             const match = b.text.match(re);
