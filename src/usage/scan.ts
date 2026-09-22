@@ -5,7 +5,8 @@
 // Per-worktree + global aggregate — the cache now carries a worktree dimension.
 // Progress bar on TTY, plain lines on pipe/CI.
 
-import { loadConfig, openDb } from "../db/index.js";
+import { loadConfig } from "../core/config.js";
+import { openDb } from "../db/store.js";
 import { CLIENTS } from "../session/index.js";
 import type { PassiveUsageResult } from "../session/types.js";
 import {

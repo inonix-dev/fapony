@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
-import { faponyDir } from "./load.js";
-import type { Config, Event, Run, RunStatus } from "./types.js";
+import type { Config, Event, Run, RunStatus } from "../core/config.js";
+import { faponyDir } from "../core/config.js";
 
 /**
  * Schema version for state.db — tracked via `PRAGMA user_version`.

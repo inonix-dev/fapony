@@ -2,7 +2,7 @@
 // The shared mem-log reader now lives in src/core/mem-log.ts (PLAN-lib-layer chunk 2b).
 
 import { execSync } from "node:child_process";
-import type { Config } from "./db/index.js";
+import type { Config } from "./core/config.js";
 import { assertSafe } from "./safety.js";
 import { templateArgs } from "./util.js";
 

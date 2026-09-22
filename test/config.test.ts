@@ -10,7 +10,7 @@ import {
   planDir,
   safetyDeny,
   specDir,
-} from "../src/db/index.js";
+} from "../src/core/config.js";
 import { assertSafe } from "../src/safety.js";
 import { fillPrompt, templateArgs } from "../src/util.js";
 

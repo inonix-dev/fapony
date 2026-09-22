@@ -12,8 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { faponyDir } from "../db/load.js";
-import type { Config } from "../db/types.js";
+import { type Config, faponyDir } from "../core/config.js";
 
 const CACHE_FILENAME = "usage-cache.jsonl";
 

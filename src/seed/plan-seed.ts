@@ -36,10 +36,14 @@ import {
 import { basename, join, relative, resolve, sep } from "node:path";
 import { collectSourceFiles, isSkippedDir, SCAN_EXTS } from "../analyze.js";
 import { computeModelFit } from "../context/projectHealth.js";
-import { doneDir, planDir, specDir } from "../db/getters.js";
-import { CONFIG_FILENAME } from "../db/index.js";
-import { loadConfig } from "../db/load.js";
-import type { Config } from "../db/types.js";
+import {
+  CONFIG_FILENAME,
+  type Config,
+  doneDir,
+  loadConfig,
+  planDir,
+  specDir,
+} from "../core/config.js";
 import { extractExports } from "../map.js";
 import { readRecentMemDecisions } from "../memory.js";
 import { getStatsData } from "../stats/data.js";

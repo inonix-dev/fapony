@@ -6,7 +6,7 @@
 
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_MEM_DIR, FAPONY_DIR, loadConfig } from "./db/index.js";
+import { DEFAULT_MEM_DIR, FAPONY_DIR, loadConfig } from "./core/config.js";
 import { walkDir } from "./util.js";
 
 export function cmdInitMem(args: string[]): void {

@@ -6,7 +6,7 @@ import { existsSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { seedConventionsFile } from "./conventions-seed.js";
-import { CONFIG_FILENAME, FAPONY_DIR } from "./db/index.js";
+import { CONFIG_FILENAME, FAPONY_DIR } from "./core/config.js";
 import { initProject } from "./init.js";
 import { isAffirmative } from "./util.js";
 

@@ -5,16 +5,16 @@
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type HintImpact, hintLogPath } from "../core/hint-log.js";
 import {
   CONFIG_FILENAME,
   doneDir,
   type Event,
   loadConfig,
-  openDb,
   planDir,
   type Run,
-} from "../db/index.js";
+} from "../core/config.js";
+import { type HintImpact, hintLogPath } from "../core/hint-log.js";
+import { openDb } from "../db/store.js";
 import { computeHintImpact } from "../hook.js";
 import { type MemRow, readMemLog } from "../memory.js";
 import { isPassFamily, VERDICT_GRADES } from "../parse.js";

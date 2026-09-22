@@ -4,7 +4,7 @@
 
 import { existsSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { CONVENTIONS_FILE } from "../db/defaults.js";
+import { CONVENTIONS_FILE } from "../core/config.js";
 import { formatDebt } from "./format.js";
 import { loadConventions } from "./load.js";
 import { findPromotions, formatPromotions } from "./promotion.js";

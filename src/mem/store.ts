@@ -15,7 +15,11 @@ import {
 } from "node:fs";
 import { hostname, networkInterfaces } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
-import { CONFIG_FILENAME, DEFAULT_MEM_DIR, FAPONY_DIR } from "../db/index.js";
+import {
+  CONFIG_FILENAME,
+  DEFAULT_MEM_DIR,
+  FAPONY_DIR,
+} from "../core/config.js";
 import { whereMemDir } from "../memory.js";
 
 // --- types ---

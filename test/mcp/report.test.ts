@@ -3,7 +3,7 @@
 import assert from "node:assert";
 import { toolVerificationReport } from "../../src/adapters/mcp/tools/report.js";
 import { parseToolResult } from "../../src/adapters/mcp/types.js";
-import { newRun, openDb } from "../../src/db/index.js";
+import { newRun, openDb } from "../../src/db/store.js";
 import { gateOnce } from "../../src/gate.js";
 import { withTmpDb } from "../helpers.js";
 

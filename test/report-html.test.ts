@@ -9,14 +9,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  addEvent,
-  type Config,
-  loadConfig,
-  newRun,
-  openDb,
-  setStatus,
-} from "../src/db/index.js";
+import { type Config, loadConfig } from "../src/core/config.js";
+import { addEvent, newRun, openDb, setStatus } from "../src/db/store.js";
 import { cmdReportWeb, wouldBeCommitted } from "../src/report/cli.js";
 import { renderReportHtml } from "../src/report/index.js";
 import { getStatsData } from "../src/stats/index.js";

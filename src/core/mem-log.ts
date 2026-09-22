@@ -9,8 +9,8 @@ import {
   CONFIG_FILENAME,
   DEFAULT_MEM_DIR,
   FAPONY_DIR,
-} from "../db/defaults.js";
-import { loadConfig } from "../db/load.js";
+  loadConfig,
+} from "./config.js";
 
 export interface MemRow {
   ts: string;

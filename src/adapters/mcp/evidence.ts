@@ -23,7 +23,7 @@ import {
   evidenceFile,
   FAPONY_DIR,
   safetyDeny,
-} from "../../db/index.js";
+} from "../../core/config.js";
 import { assertSafe } from "../../safety.js";
 import type { EvidenceItem, EvidenceStatus } from "./primitives.js";
 

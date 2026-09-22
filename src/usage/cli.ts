@@ -3,7 +3,7 @@
 // Reads from usage-cache.jsonl (written by `fapony usage-scan`).
 // No live session scanning — serves static HTML.
 
-import { loadConfig } from "../db/index.js";
+import { loadConfig } from "../core/config.js";
 import type { PassiveUsageResult } from "../session/types.js";
 import { type CacheEntry, cacheMeta, readCache } from "./cache.js";
 import { renderUsageHtml } from "./render.js";

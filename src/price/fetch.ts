@@ -13,9 +13,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { type Config, faponyDir } from "../core/config.js";
 import type { ModelRates, PriceTable } from "../core/types.js";
-import { faponyDir } from "../db/load.js";
-import type { Config } from "../db/types.js";
 
 export type { ModelRates, PriceTable } from "../core/types.js";
 

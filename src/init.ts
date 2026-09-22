@@ -21,7 +21,7 @@ import {
   memoryDir,
   planDir,
   specDir,
-} from "./db/index.js";
+} from "./core/config.js";
 import { isAffirmative } from "./util.js";
 
 const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)

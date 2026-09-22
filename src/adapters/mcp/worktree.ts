@@ -1,6 +1,6 @@
 // src/mcp/worktree.ts — resolve worktree argument to absolute path
 
-import { loadConfig } from "../../db/load.js";
+import { loadConfig } from "../../core/config.js";
 
 const SENTINEL_MCP_EXTERNAL = "mcp-external";
 

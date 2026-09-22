@@ -26,7 +26,7 @@ import {
   normalize as posixNormalize,
 } from "node:path/posix";
 
-import { faponyDir } from "./db/load.js";
+import { faponyDir } from "./core/config.js";
 import { extractExports } from "./map.js";
 
 // --- Types (mirror SPEC-analyze-checkup.md) ---

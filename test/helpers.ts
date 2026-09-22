@@ -5,8 +5,8 @@ import { execSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Config } from "../src/db/index.js";
-import { openDb } from "../src/db/index.js";
+import type { Config } from "../src/core/config.js";
+import { openDb } from "../src/db/store.js";
 
 /**
  * Creates a temp git repo with an initial commit, runs fn with its path,
