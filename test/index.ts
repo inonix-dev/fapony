@@ -159,6 +159,9 @@ import {
   testEditHintSilentZeroImporters,
   testEditHintSkipsNonSourceAndMissing,
   testHookSessionStartSilentWithoutMemLog,
+  testMvGuardAllowsEverythingElse,
+  testMvGuardClaudeOutputShape,
+  testMvGuardDeniesPlanIntoDone,
   testReadContextBasenameAmbiguityStaysSilent,
   testReadContextCombinedCapAndOutsideRepo,
   testReadContextMemRowsByFilesAndPath,
@@ -710,6 +713,9 @@ export async function cmdTest(): Promise<void> {
   testEditHintFiresWithoutSession();
   testEditHintClaudeOutputShape();
   testEditHintPluginSource();
+  testMvGuardDeniesPlanIntoDone();
+  testMvGuardAllowsEverythingElse();
+  testMvGuardClaudeOutputShape();
   testCommitHintMinCommitsConstant();
   testCommitHintNullForNonCommit();
   testCommitHintNullOutsideGitRepo();

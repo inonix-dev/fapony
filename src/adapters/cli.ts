@@ -25,6 +25,7 @@ import { cmdUpdate } from "../update.js";
 import { cmdUsageScan, cmdUsageWeb } from "../usage/index.js";
 import {
   cmdHookEditHint,
+  cmdHookMvGuard,
   cmdHookReadHint,
   cmdHookSessionStart,
   cmdHookStop,
@@ -93,6 +94,8 @@ export async function cliMain(): Promise<void> {
     await cmdHookReadHint();
   } else if (cmd === "hook-edit-hint") {
     await cmdHookEditHint();
+  } else if (cmd === "hook-mv-guard") {
+    await cmdHookMvGuard();
   } else if (cmd === "hook-session-start") {
     await cmdHookSessionStart();
   } else if (cmd === "mcp") {
@@ -113,7 +116,7 @@ export async function cliMain(): Promise<void> {
   } else {
     console.error(`fapony: unknown command "${cmd ?? ""}"`);
     console.error(
-      "usage: fapony <setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|hook-edit-hint|hook-session-start|test> [args]",
+      "usage: fapony <setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|hook-edit-hint|hook-mv-guard|hook-session-start|test> [args]",
     );
     process.exit(1);
   }

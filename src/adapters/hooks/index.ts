@@ -28,6 +28,7 @@ export {
   editHintFor,
   editTrackPath,
 } from "./edit-hint.js";
+export { cmdHookMvGuard, mvGuardDecision } from "./mv-guard.js";
 export {
   COMMIT_HINT_MIN_COMMITS,
   type CommitHintInput,
