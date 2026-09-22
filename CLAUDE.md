@@ -253,7 +253,8 @@ events คือ audit trail ที่เป็นข้อเท็จจริ
 - `memory: null` = ปิดทั้งชั้น ไม่ error
 - `telemetry` — opt-in only (omit หรือ `null` = ปิด) ดู [TELEMETRY.md](TELEMETRY.md)
 - env override: `FAPONY_CONFIG` · `FAPONY_STATE_DIR` (ชนะ `paths.stateDir`) ·
-  `FAPONY_NO_REREAD_HINT=1` (kill switch ของ re-read hint — ไม่ยิงและไม่เขียน log)
+  `FAPONY_NO_REREAD_HINT=1` (kill switch ของ re-read hint — ไม่ยิงและไม่เขียน log) ·
+  `FAPONY_NO_BUG_BLOCK=1` (kill switch ของ bug-signal block — ไม่บังคับ `kind:bug` row)
 - getters รวมศูนย์ใน `src/core/config.ts` — ห้าม hardcode default ซ้ำที่ call site
 - **ห้ามเพิ่ม config field ใหม่ถ้า derive จากโครงสร้างได้** (`plan/done` กับ `.memory` ทำแบบนี้แล้ว)
 
@@ -290,7 +291,7 @@ plan/spec templates, และ skill ทั้งหมด
 3. **push ได้เฉพาะ branch ที่ทำงานอยู่ — ห้ามแตะ `main` ห้าม `--force`/`--force-with-lease`**
    agent เปิด PR ได้ กด merge เองไม่ได้
 4. **Commit แยก concern** — one commit per feature/area · **งานที่จบแล้ว commit เลย ห้ามถามก่อน**
-   · **จบ = typecheck ผ่าน + `bun fapony.ts test` ผ่าน** ถ้ายังไม่ผ่านคือยังไม่จบ อย่า commit ทับ
+   · **จบ = typecheck ผ่าน + `bun run test` ผ่าน** (script = `--parallel` + `--timeout 20000` กัน flake บนเครื่องช้า — อย่าใช้ `bun test` เปล่า ๆ เป็น gate) · ระหว่างแก้ใช้ `bun run test:changed` (รันเฉพาะไฟล์ที่ diff กระทบ) ถ้ายังไม่ผ่านคือยังไม่จบ อย่า commit ทับ
 5. **assertSafe() ต้องเรียกกับทุก shell command** ที่ spawn จาก config (memory/evidence/install)
    รวมถึงที่มาจาก template
 6. **fapony เขียนไฟล์ในเวิร์กทรีเป้าหมายได้ ถ้าเจ้าของสั่ง** — แทนด้วยสามข้อที่เช็คได้:
@@ -305,10 +306,12 @@ plan/spec templates, และ skill ทั้งหมด
    ในฐานะ habit หลัก · เขียน `decision` ตอนตัดสินใจอะไรที่ session หน้าจะงง, `bug` ตอนเจอของพัง,
    `note` ตอนจบ chunk · แถวที่ไม่มี `--files` ตกพื้นตอน cluster = เขียนไปเท่ากับไม่ได้เขียน
 8. **Stop hook บังคับ mem row** ([src/hook.ts](src/hook.ts) — shim, logic อยู่ `src/adapters/hooks/`): จบเทิร์นที่มี commit แต่
-   ไม่มี mem row ใหม่ = ถูก block หนึ่งครั้ง · ไม่มี mem log เลย = ไม่ block ·
+   ไม่มี mem row ใหม่ = ถูก block หนึ่งครั้ง · **จบเทิร์นที่ประกาศว่าเจอบั๊ก (คำ marker) แต่ไม่มี
+   `kind:bug` row = ถูก block หนึ่งครั้งต่อ session** · ไม่มี mem log เลย = ไม่ block ·
    `verdict_submit` ถอดออกจาก MCP แล้ว (PLAN-verdict-to-mem) — engine อยู่ใน git
    ฟื้นเป็น CLI ได้ · hook ไม่ตัดสินเกรดแทน — แยก "ใครตัดสิน" ออกจาก
-   "ใครบังคับให้บันทึก" อันหลังเท่านั้นที่ automate ได้
+   "ใครบังคับให้บันทึก" อันหลังเท่านั้นที่ automate ได้ · kill switch:
+   `FAPONY_NO_BUG_BLOCK=1`
 9. **การ *ขอ* ไม่ได้ผล การ *บังคับ* ได้ผล** — วัดแล้วมีสองอย่างที่เปลี่ยนพฤติกรรมจริง:
    required + enum + reject (`regime`) กับ Stop hook · ทุกอย่างที่เขียนว่า "ควรทำ" ในไฟล์กฎ
    ไม่มีผลวัดได้ · **ฉะนั้นฟีเจอร์ที่พึ่ง "agent จะจำไปทำเอง" = ยังไม่เสร็จ**
@@ -463,12 +466,13 @@ fapony hook-stop                     # Stop hook — block เทิร์นท
 fapony hook-read-hint                # annotate 2 แบบ: อ่านไฟล์ใหญ่ทั้งไฟล์ → review-seed ·
                                      # re-read ไฟล์เดิมใน session เดียวกันที่ mtime ไม่ขยับ → grep
 fapony hook-edit-hint                # PreToolUse Edit — บอกจำนวน importer ของไฟล์ที่กำลังแก้ (Claude)
+fapony hook-mv-guard                   # PreToolUse Bash — deny `git mv` ของ plan file เข้า done/ ให้ใช้ `plan-sweep --apply` แทน (Claude)
 fapony hook-session-start            # SessionStart — ยิง `mem kickoff` เข้า context (เงียบถ้าไม่มี mem log)
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]
 fapony report <run-id>  ·  fapony report-web [file]
 # ── setup ──
 fapony init <path>  ·  fapony install [--all|--platform <name>|--dry-run]  ·  fapony setup
-fapony update  ·  fapony telemetry show|send  ·  fapony test
+fapony update  ·  fapony telemetry show|send
 ```
 
 **`review-seed --files` คือ lookup ตอน *execute* ไม่ใช่แค่ "Before" ของ review-pony** — โชว์

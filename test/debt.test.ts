@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/debt.test.ts — PLAN-convention-debt chunk 1 (detector) + chunk 5 (promotion).
 //
 // The conventions.json lives in the measured repo — every fixture writes one.
@@ -37,7 +38,7 @@ function seed(
   }
 }
 
-export function testDebtSilentWithoutConventions(): void {
+test("testDebtSilentWithoutConventions", () => {
   withTempRepo((repo) => {
     const loaded = loadConventions(repo);
     assert.equal(loaded.path, null);
@@ -47,9 +48,9 @@ export function testDebtSilentWithoutConventions(): void {
     assert.match(formatDebt(report), /0 convention/);
   });
   console.log("  ✓ debt → no conventions.json stays silent, never errors");
-}
+});
 
-export function testDebtDerivesListAndDropsWithTheFile(): void {
+test("testDebtDerivesListAndDropsWithTheFile", () => {
   withTempRepo((repo) => {
     seed(
       repo,
@@ -90,9 +91,9 @@ export function testDebtDerivesListAndDropsWithTheFile(): void {
     assert.equal(after.entries[0].files.length, 0);
   });
   console.log("  ✓ debt → derives from the repo, drops when a file migrates");
-}
+});
 
-export function testDebtCheckerRowsStaySilent(): void {
+test("testDebtCheckerRowsStaySilent", () => {
   withTempRepo((repo) => {
     seed(
       repo,
@@ -131,9 +132,9 @@ export function testDebtCheckerRowsStaySilent(): void {
     assert.ok(report.dropped[1].reason.includes("does not exist"));
   });
   console.log("  ✓ debt → checker silent, declared surfaced, drops are loud");
-}
+});
 
-export function testDebtTooBroadRegexDropped(): void {
+test("testDebtTooBroadRegexDropped", () => {
   withTempRepo((repo) => {
     const files: Record<string, string> = {};
     // > DEBT_FILE_CAP (250) files matching a single letter — a repo-wide
@@ -148,9 +149,9 @@ export function testDebtTooBroadRegexDropped(): void {
   console.log(
     "  ✓ debt → a regex that matches the repo is dropped, not reported",
   );
-}
+});
 
-export function testDebtForFileAndMonorepoResolution(): void {
+test("testDebtForFileAndMonorepoResolution", () => {
   withTempRepo((repo) => {
     // monorepo shape: conventions live at <app>/.fapony/conventions.json —
     // the walk-up resolver finds <app>/.fapony/.memory/ from within the app
@@ -209,9 +210,9 @@ export function testDebtForFileAndMonorepoResolution(): void {
   console.log(
     "  ✓ debt → app-level conventions.json wins via walk-up resolver",
   );
-}
+});
 
-export function testDebtPromotionAsksAtThresholdOnly(): void {
+test("testDebtPromotionAsksAtThresholdOnly", () => {
   withTempRepo((repo) => {
     seed(
       repo,
@@ -272,9 +273,9 @@ export function testDebtPromotionAsksAtThresholdOnly(): void {
   console.log(
     `  ✓ debt → promotion asks at ${PROMOTION_THRESHOLD}×, decided:no-checker stays silent`,
   );
-}
+});
 
-export function testDebtPromotionCountsLedgerFails(): void {
+test("testDebtPromotionCountsLedgerFails", () => {
   withTempRepo((repo) => {
     seed(
       repo,
@@ -330,9 +331,9 @@ export function testDebtPromotionCountsLedgerFails(): void {
     });
   });
   console.log("  ✓ debt → fail verdicts on the same files count as recurrence");
-}
+});
 
-export function testDebtConventionsPathResolution(): void {
+test("testDebtConventionsPathResolution", () => {
   withTempRepo((repo) => {
     assert.equal(resolveConventionsPath(repo), null);
     mkdirSync(join(repo, ".fapony"), { recursive: true });
@@ -342,7 +343,7 @@ export function testDebtConventionsPathResolution(): void {
     );
   });
   console.log("  ✓ debt → conventions.json resolves at the repo root fallback");
-}
+});
 
 /**
  * The monorepo root has no conventions.json and two apps have one each. Before
@@ -350,7 +351,7 @@ export function testDebtConventionsPathResolution(): void {
  * ignored the path it was given, so `fapony debt apps/shop` measured the root,
  * the mem resolver went ambiguous, and it reported "nothing tracked yet".
  */
-export function testDebtWorktreeFollowsThePathNotGitRoot(): void {
+test("testDebtWorktreeFollowsThePathNotGitRoot", () => {
   withTempRepo((repo) => {
     mkdirSync(join(repo, "apps/shop/.fapony"), { recursive: true });
     mkdirSync(join(repo, "apps/shop/src"), { recursive: true });
@@ -375,4 +376,4 @@ export function testDebtWorktreeFollowsThePathNotGitRoot(): void {
     assert.equal(loadConventions(worktreeOf(repo)).path, null);
   });
   console.log("  ✓ debt → worktree follows the given path, not the git root");
-}
+});

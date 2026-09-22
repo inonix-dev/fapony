@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/telemetry/aggregates.test.ts — telemetry aggregates from real runs
 
 import assert from "node:assert";
@@ -5,7 +6,7 @@ import { addEvent, newRun, setStatus } from "../../src/db/store.js";
 import { buildPayload } from "../../src/telemetry.js";
 import { withTmpDb } from "./helpers.js";
 
-export function testTelemetryAggregatesFromRuns(): void {
+test("testTelemetryAggregatesFromRuns", () => {
   withTmpDb((db) => {
     // Create 2 runs: one passed, one stalled
     const run1 = newRun(db, "/Users/test/project", null, null, "abc123");
@@ -63,9 +64,9 @@ export function testTelemetryAggregatesFromRuns(): void {
   });
 
   console.log("  ✓ telemetry aggregates from real runs");
-}
+});
 
-export function testTelemetryWorktreeRedacted(): void {
+test("testTelemetryWorktreeRedacted", () => {
   withTmpDb((db) => {
     const run = newRun(db, "/very/long/path/to/my/project", null, null, "abc");
     setStatus(db, run, "passed");
@@ -79,9 +80,9 @@ export function testTelemetryWorktreeRedacted(): void {
   });
 
   console.log("  ✓ telemetry redacts worktree paths to basename");
-}
+});
 
-export function testTelemetryPerRoundModelMultiRound(): void {
+test("testTelemetryPerRoundModelMultiRound", () => {
   // Regression: gate windows must be per-round (disjoint), never cumulative.
   // Each gate sees only its own round's spawn.
   withTmpDb((db) => {
@@ -102,4 +103,4 @@ export function testTelemetryPerRoundModelMultiRound(): void {
   });
 
   console.log("  ✓ telemetry per-round (not cumulative) model attribution");
-}
+});

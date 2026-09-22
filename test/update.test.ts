@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import assert from "node:assert";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,7 +16,7 @@ import {
 // Tripwire for the ROOT=src/ regression (scrutiny finding #1): the fake-git
 // seam never runs real execSync, so only a direct fs check catches a wrong
 // repo root — version display and the bun.lock pathspec both depend on it.
-export function testUpdateRootIsRepoRoot(): void {
+test("testUpdateRootIsRepoRoot", () => {
   assert.ok(
     existsSync(join(ROOT, "package.json")),
     `ROOT must be the repo root (has package.json), got: ${ROOT}`,
@@ -29,12 +30,12 @@ export function testUpdateRootIsRepoRoot(): void {
     `ROOT must not be src/ (src/package.json exists), got: ${ROOT}`,
   );
   console.log("  ✓ update ROOT is repo root");
-}
+});
 
 // The banner "Updated <version>@<sha>" must carry the real version — proof
 // readVersion resolves ROOT/package.json (the old ROOT=src/ bug always said
 // "unknown"). Kept separate from the ROOT tripwire because it pins behavior.
-export function testUpdateReadVersionResolves(): void {
+test("testUpdateReadVersionResolves", () => {
   const v = readVersion();
   assert.notEqual(v, "unknown", "readVersion must resolve ROOT/package.json");
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")) as {
@@ -42,9 +43,9 @@ export function testUpdateReadVersionResolves(): void {
   };
   assert.equal(v, pkg.version, `got ${v}, want ${pkg.version}`);
   console.log("  ✓ update readVersion resolves package.json");
-}
+});
 
-export function testParseDirtyLines(): void {
+test("testParseDirtyLines", () => {
   assert.deepStrictEqual(parseDirtyLines(""), []);
   assert.deepStrictEqual(parseDirtyLines(" M src/a.ts"), [" M src/a.ts"]);
   assert.deepStrictEqual(parseDirtyLines(" M a.ts\n?? b.ts\n"), [
@@ -54,15 +55,15 @@ export function testParseDirtyLines(): void {
   // blank lines never count as dirty
   assert.deepStrictEqual(parseDirtyLines("\n\n"), []);
   console.log("  ✓ parseDirtyLines");
-}
+});
 
-export function testFormatDirtyBlock(): void {
+test("testFormatDirtyBlock", () => {
   assert.equal(formatDirtyBlock(""), "");
   assert.equal(formatDirtyBlock(" M a.ts\n?? b.ts"), "    M a.ts\n   ?? b.ts");
   console.log("  ✓ formatDirtyBlock");
-}
+});
 
-export function testShouldProceedAfterDirty(): void {
+test("testShouldProceedAfterDirty", () => {
   assert.equal(shouldProceedAfterDirty("y"), true);
   assert.equal(shouldProceedAfterDirty("yes"), true);
   assert.equal(shouldProceedAfterDirty("Y"), true);
@@ -70,14 +71,14 @@ export function testShouldProceedAfterDirty(): void {
   assert.equal(shouldProceedAfterDirty("no"), false);
   assert.equal(shouldProceedAfterDirty(""), false);
   console.log("  ✓ shouldProceedAfterDirty");
-}
+});
 
-export function testIsUpToDate(): void {
+test("testIsUpToDate", () => {
   assert.equal(isUpToDate("abc123", "abc123"), true);
   assert.equal(isUpToDate("abc123", "def456"), false);
   assert.equal(isUpToDate("unknown", "unknown"), true);
   console.log("  ✓ isUpToDate");
-}
+});
 
 // --- cmdUpdate orchestration (seam-based, no real git/stdin/process) ---
 
@@ -144,7 +145,7 @@ async function captureOutput(fn: () => Promise<void>): Promise<{
   return { out, err };
 }
 
-export async function testCmdUpdateNotARepo(): Promise<void> {
+test("testCmdUpdateNotARepo", async () => {
   const { git } = mapGit({ "rev-parse --is-inside-work-tree": "false" });
   let code: number | null = null;
   const { err } = await captureOutput(async () => {
@@ -157,9 +158,9 @@ export async function testCmdUpdateNotARepo(): Promise<void> {
   assert.equal(code, 1);
   assert.ok(err.includes("not a git repo"), `got: ${err}`);
   console.log("  ✓ cmdUpdate not-a-repo exit");
-}
+});
 
-export async function testCmdUpdateDirtyDeclined(): Promise<void> {
+test("testCmdUpdateDirtyDeclined", async () => {
   const { git, calls } = mapGit({
     "rev-parse --is-inside-work-tree": "true",
     "status --porcelain": " M a.ts",
@@ -179,9 +180,9 @@ export async function testCmdUpdateDirtyDeclined(): Promise<void> {
   assert.ok(out.includes("Update cancelled"), `got: ${out}`);
   assert.ok(!calls.some((c) => c.startsWith("pull")), "pull must not run");
   console.log("  ✓ cmdUpdate dirty declined cancels");
-}
+});
 
-export async function testCmdUpdateDirtyPullOk(): Promise<void> {
+test("testCmdUpdateDirtyPullOk", async () => {
   const { git } = mapGit(
     {
       "rev-parse --is-inside-work-tree": "true",
@@ -209,9 +210,9 @@ export async function testCmdUpdateDirtyPullOk(): Promise<void> {
   assert.ok(out.includes("Restored your stashed changes"), `got: ${out}`);
   assert.ok(out.includes("aaa111") && out.includes("bbb111"), `got: ${out}`);
   console.log("  ✓ cmdUpdate dirty pull-ok restores stash");
-}
+});
 
-export async function testCmdUpdatePullFailPopOk(): Promise<void> {
+test("testCmdUpdatePullFailPopOk", async () => {
   const { git } = mapGit(
     {
       "rev-parse --is-inside-work-tree": "true",
@@ -233,9 +234,9 @@ export async function testCmdUpdatePullFailPopOk(): Promise<void> {
   assert.equal(code, 1);
   assert.ok(err.includes("restored"), `got: ${err}`);
   console.log("  ✓ cmdUpdate pull-fail pop-ok restores stash");
-}
+});
 
-export async function testCmdUpdatePullFailPopFail(): Promise<void> {
+test("testCmdUpdatePullFailPopFail", async () => {
   // Regression guard for c3a45a5 — pop failure must NOT be swallowed.
   const { git } = mapGit(
     {
@@ -259,9 +260,9 @@ export async function testCmdUpdatePullFailPopFail(): Promise<void> {
   assert.ok(err.includes("still stashed"), `got: ${err}`);
   assert.ok(err.includes("do NOT `git stash drop`"), `got: ${err}`);
   console.log("  ✓ cmdUpdate pull-fail pop-fail warns (regression)");
-}
+});
 
-export async function testCmdUpdateAlreadyUpToDate(): Promise<void> {
+test("testCmdUpdateAlreadyUpToDate", async () => {
   const { git } = mapGit(
     {
       "rev-parse --is-inside-work-tree": "true",
@@ -285,9 +286,9 @@ export async function testCmdUpdateAlreadyUpToDate(): Promise<void> {
   assert.equal(prompted, 0);
   assert.ok(out.includes("Already up to date"), `got: ${out}`);
   console.log("  ✓ cmdUpdate already up to date");
-}
+});
 
-export async function testCmdUpdateLockfileTriggersInstall(): Promise<void> {
+test("testCmdUpdateLockfileTriggersInstall", async () => {
   const { git } = mapGit(
     {
       "rev-parse --is-inside-work-tree": "true",
@@ -314,9 +315,9 @@ export async function testCmdUpdateLockfileTriggersInstall(): Promise<void> {
   assert.ok(out.includes("bbb111 new feature"), `got: ${out}`);
   assert.ok(out.includes("Dependencies updated"), `got: ${out}`);
   console.log("  ✓ cmdUpdate lockfile change runs install");
-}
+});
 
-export async function testCmdUpdateInstallFailureWarns(): Promise<void> {
+test("testCmdUpdateInstallFailureWarns", async () => {
   const { git } = mapGit(
     {
       "rev-parse --is-inside-work-tree": "true",
@@ -339,4 +340,4 @@ export async function testCmdUpdateInstallFailureWarns(): Promise<void> {
   });
   assert.ok(out.includes("bun install failed"), `got: ${out}`);
   console.log("  ✓ cmdUpdate install failure warns");
-}
+});

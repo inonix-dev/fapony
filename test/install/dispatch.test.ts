@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/install/dispatch.test.ts — cmdInstall routing for the no-platform path
 // (detect → prompt / --all / non-TTY) and the unknown-platform guard.
 
@@ -14,7 +15,7 @@ import { join } from "node:path";
 import { cmdInstall, type InstallDeps } from "../../src/install.js";
 import { type TestExit, testExit } from "./helpers.js";
 
-export async function testCmdInstallRejectsUnknownPlatform(): Promise<void> {
+test("testCmdInstallRejectsUnknownPlatform", async () => {
   let code: number | null = null;
   const lines: string[] = [];
   const orig = console.error;
@@ -33,9 +34,9 @@ export async function testCmdInstallRejectsUnknownPlatform(): Promise<void> {
   assert.ok(err.includes("opencode|claude"), `got: ${err}`);
   assert.ok(err.includes("|cursor|"), `got: ${err}`);
   console.log("  ✓ install rejects unknown platform");
-}
+});
 
-export async function testCmdInstallNoPlatformPromptsDetected(): Promise<void> {
+test("testCmdInstallNoPlatformPromptsDetected", async () => {
   const home = mkdtempSync(join(tmpdir(), "fapony-install-prompt-"));
   try {
     // Set up opencode config so it's detected
@@ -92,9 +93,9 @@ export async function testCmdInstallNoPlatformPromptsDetected(): Promise<void> {
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
-}
+});
 
-export async function testCmdInstallNonTtyNoAllSkipsInstall(): Promise<void> {
+test("testCmdInstallNonTtyNoAllSkipsInstall", async () => {
   const home = mkdtempSync(join(tmpdir(), "fapony-install-nontty-"));
   try {
     const ocDir = join(home, ".config", "opencode");
@@ -143,9 +144,9 @@ export async function testCmdInstallNonTtyNoAllSkipsInstall(): Promise<void> {
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
-}
+});
 
-export async function testCmdInstallNoPlatformAllFlag(): Promise<void> {
+test("testCmdInstallNoPlatformAllFlag", async () => {
   const home = mkdtempSync(join(tmpdir(), "fapony-install-all-"));
   try {
     // Set up opencode config
@@ -183,9 +184,9 @@ export async function testCmdInstallNoPlatformAllFlag(): Promise<void> {
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
-}
+});
 
-export function testCmdInstallNoClientsFoundPrintsHelp(): void {
+test("testCmdInstallNoClientsFoundPrintsHelp", () => {
   const home = mkdtempSync(join(tmpdir(), "fapony-install-noclients-"));
   try {
     const lines: string[] = [];
@@ -216,9 +217,9 @@ export function testCmdInstallNoClientsFoundPrintsHelp(): void {
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
-}
+});
 
-export async function testCmdInstallNoPlatformDryRunNoWrite(): Promise<void> {
+test("testCmdInstallNoPlatformDryRunNoWrite", async () => {
   const home = mkdtempSync(join(tmpdir(), "fapony-install-dry-"));
   try {
     // Set up opencode config
@@ -253,4 +254,4 @@ export async function testCmdInstallNoPlatformDryRunNoWrite(): Promise<void> {
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
-}
+});

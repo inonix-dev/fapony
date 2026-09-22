@@ -323,7 +323,93 @@ export const cmdPlanSweep = (a: string[]) => {
 };
 
 // plan-check — list active PLANs + detect shipped-not-moved + broken links
+// + verify the commits ticked chunks cite (chunk 8, PLAN-seed-and-surface)
 // exit 0 = clean, 1 = issues found
+
+// A ticked chunk cites the commit that closed it — a sha git cannot find on
+// this HEAD means the "done" mark proves nothing. git is the judge, not the
+// regex: a 7-hex word that is no object at all (deadbee) is a plain word,
+// never an issue. A sha that IS an object but not a commit (blob/tree)
+// counts as missing — "no such commit" is literally true for it.
+// Standalone short shas only — lookarounds (not \b) so a 40-char sha never
+// matches on its tail: git resolves leading prefixes, a trailing slice would
+// false-positive as missing.
+export const SHA_RE = /(?<![0-9a-f])[0-9a-f]{7,12}(?![0-9a-f])/g;
+
+export const extractShas = (line: string): string[] => line.match(SHA_RE) ?? [];
+
+const gitOk = (args: string[], cwd: string): boolean => {
+  try {
+    return (
+      Bun.spawnSync(["git", ...args], {
+        cwd,
+        stdout: "ignore",
+        stderr: "ignore",
+      }).exitCode === 0
+    );
+  } catch {
+    return false;
+  }
+};
+
+export const isCommitObject = (sha: string, cwd: string): boolean =>
+  gitOk(["cat-file", "-e", `${sha}^{commit}`], cwd);
+
+const isAnyObject = (sha: string, cwd: string): boolean =>
+  gitOk(["cat-file", "-e", sha], cwd);
+
+export const isAncestorOfHead = (sha: string, cwd: string): boolean =>
+  gitOk(["merge-base", "--is-ancestor", sha, "HEAD"], cwd);
+
+// Per ticked line: which cited shas fail, plus how many shas the line cites
+// at all (cited). A hex word git never heard of is a plain word (deadbee,
+// the "feedbac" inside "feedback") — UNLESS it sits in a paren group with a
+// sha git knows, in which case the author cited it as a commit: the fixture
+// is (e898877 + e307fe6), where e898877 resolves to no object at all yet is
+// unmistakably a citation, not prose.
+export const checkTickedLine = (
+  line: string,
+  cwd: string,
+): { missing: string[]; diverged: string[]; cited: number } => {
+  const missing: string[] = [];
+  const diverged: string[] = [];
+  const status = new Map<string, "commit" | "object" | "word">();
+  for (const sha of extractShas(line)) {
+    if (!status.has(sha)) {
+      status.set(
+        sha,
+        isCommitObject(sha, cwd)
+          ? "commit"
+          : isAnyObject(sha, cwd)
+            ? "object"
+            : "word",
+      );
+    }
+  }
+  const known = new Set(
+    [...status].filter(([, s]) => s !== "word").map(([k]) => k),
+  );
+  const citedInGroup = new Set<string>();
+  for (const g of line.match(/\([^)]*\)/g) ?? []) {
+    const gs = extractShas(g);
+    if (gs.some((s) => known.has(s))) for (const s of gs) citedInGroup.add(s);
+  }
+  let cited = 0;
+  for (const [sha, st] of status) {
+    if (st === "commit") {
+      cited++;
+      if (!isAncestorOfHead(sha, cwd)) diverged.push(sha);
+    } else if (st === "object") {
+      cited++;
+      missing.push(sha);
+    } else if (citedInGroup.has(sha)) {
+      cited++;
+      missing.push(sha);
+    }
+    // else: a plain word that happens to be hex — skip
+  }
+  return { missing, diverged, cited };
+};
 export const cmdPlanCheck = (a: string[]) => {
   const quiet = a.includes("--quiet");
   const dir = planDir;
@@ -373,6 +459,47 @@ export const cmdPlanCheck = (a: string[]) => {
         );
       }
     }
+  }
+
+  // 4) Ticked-chunk sha check — a ticked chunk that cites a commit must cite
+  //    one git finds on this HEAD. Scans plan/ AND done/: done/ files are the
+  //    shipped record, and the known-stale shas all live there — active-only
+  //    would see zero. No sha = no check (chunks that close with "defer" have
+  //    no commit); the summary line reports the ratio instead of flagging.
+  let closed = 0;
+  let citing = 0;
+  let verified = 0;
+  const shaFiles = [
+    ...new Set([...active, ...(existsSync(doneDir) ? mdFiles(doneDir) : [])]),
+  ];
+  for (const f of shaFiles) {
+    const relPath = relative(planBase, f);
+    const lines = readFileSync(f, "utf8").split("\n");
+    lines.forEach((line, i) => {
+      if (!/^\s*-\s\[x\]/.test(line)) return;
+      closed++;
+      const { missing, diverged, cited } = checkTickedLine(line, root);
+      if (cited > 0) {
+        citing++;
+        if (!missing.length && !diverged.length) verified++;
+      }
+      for (const sha of missing) {
+        issues.push(
+          `${relPath}:${i + 1} — ticked chunk cites ${sha} but git has no such commit\n   fix: correct the sha or leave the chunk unticked`,
+        );
+      }
+      for (const sha of diverged) {
+        issues.push(
+          `${relPath}:${i + 1} — ticked chunk cites ${sha} which is not an ancestor of HEAD (rebased away?)\n   fix: point at the surviving commit or leave the chunk unticked`,
+        );
+      }
+    });
+  }
+
+  if (!quiet) {
+    console.log(
+      `closed chunks: ${closed} · citing a commit: ${citing} · verified: ${verified}`,
+    );
   }
 
   if (issues.length === 0) {

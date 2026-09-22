@@ -13,6 +13,7 @@ fapony.config.json
 scripts/*
 !scripts/smoke-publish.sh
 !scripts/test-one.ts
+!scripts/codemod-bun-test.ts
 
 # Added by code-review-graph
 .code-review-graph/
@@ -33,3 +34,4 @@ scripts/*
 .cursorrules
 .windsurfrules
 opencode.jsonc
+.fapony/plan/PLAN-bun-test-migration.md

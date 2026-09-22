@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/mcp/worktree.test.ts — tests for resolveWorktreeArg
 
 import assert from "node:assert";
@@ -28,24 +29,24 @@ function withConfig(worktrees: Record<string, string>, fn: () => void): void {
   }
 }
 
-export function testResolveWorktreeArgAbsolutePath(): void {
+test("testResolveWorktreeArgAbsolutePath", () => {
   withConfig({ vela: "/Users/dev/vela" }, () => {
     // Absolute path passes through unchanged
     assert.equal(resolveWorktreeArg("/Users/dev/vela"), "/Users/dev/vela");
     assert.equal(resolveWorktreeArg("/some/other/path"), "/some/other/path");
   });
   console.log("  ✓ resolveWorktreeArg passes through absolute paths");
-}
+});
 
-export function testResolveWorktreeArgKeyLookup(): void {
+test("testResolveWorktreeArgKeyLookup", () => {
   withConfig({ vela: "/Users/dev/vela", falsify: "/Users/dev/falsify" }, () => {
     assert.equal(resolveWorktreeArg("vela"), "/Users/dev/vela");
     assert.equal(resolveWorktreeArg("falsify"), "/Users/dev/falsify");
   });
   console.log("  ✓ resolveWorktreeArg resolves config keys to absolute paths");
-}
+});
 
-export function testResolveWorktreeArgKeyNotFound(): void {
+test("testResolveWorktreeArgKeyNotFound", () => {
   withConfig({ vela: "/Users/dev/vela" }, () => {
     assert.throws(
       () => resolveWorktreeArg("unknown"),
@@ -61,12 +62,12 @@ export function testResolveWorktreeArgKeyNotFound(): void {
   console.log(
     "  ✓ resolveWorktreeArg throws with available keys when key not found",
   );
-}
+});
 
-export function testResolveWorktreeArgSentinel(): void {
+test("testResolveWorktreeArgSentinel", () => {
   withConfig({}, () => {
     // "mcp-external" must pass through even with empty config
     assert.equal(resolveWorktreeArg("mcp-external"), "mcp-external");
   });
   console.log("  ✓ resolveWorktreeArg passes through mcp-external sentinel");
-}
+});

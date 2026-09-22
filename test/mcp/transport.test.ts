@@ -1,9 +1,10 @@
+import { test } from "bun:test";
 // test/mcp/transport.test.ts — tests for MCP JSON-RPC dispatch
 
 import assert from "node:assert";
 import { dispatch } from "../../src/adapters/mcp/transport.js";
 
-export function testMcpToolsList(): void {
+test("testMcpToolsList", () => {
   const result = dispatch("tools/list", {});
   assert.ok(result && typeof result === "object");
   const r = result as { tools: { name: string }[] };
@@ -12,9 +13,9 @@ export function testMcpToolsList(): void {
     ["mem_find", "mem_add", "mem_close"],
   );
   console.log("  ✓ mcp tools/list returns 3 tools");
-}
+});
 
-export function testMcpInitialize(): void {
+test("testMcpInitialize", () => {
   const result = dispatch("initialize", {});
   assert.ok(result && typeof result === "object");
   const r = result as {
@@ -34,22 +35,22 @@ export function testMcpInitialize(): void {
   assert.match(r.instructions ?? "", /mem add/);
   assert.doesNotMatch(r.instructions ?? "", /verdict_submit/);
   console.log("  ✓ mcp initialize returns protocol version + instructions");
-}
+});
 
-export function testMcpNotificationsIgnored(): void {
+test("testMcpNotificationsIgnored", () => {
   const result = dispatch("notifications/initialized", {});
   assert.equal(result, null);
   console.log("  ✓ mcp notifications/initialized returns null");
-}
+});
 
-export function testMcpUnknownMethod(): void {
+test("testMcpUnknownMethod", () => {
   const result = dispatch("foo/bar", {});
   assert.ok(result && typeof result === "object" && "code" in result);
   assert.equal((result as { code: number }).code, -32601);
   console.log("  ✓ mcp unknown method returns error");
-}
+});
 
-export function testMcpToolsCallUnknownTool(): void {
+test("testMcpToolsCallUnknownTool", () => {
   const result = dispatch("tools/call", {
     name: "nonexistent",
     arguments: {},
@@ -57,4 +58,4 @@ export function testMcpToolsCallUnknownTool(): void {
   assert.ok(result && "isError" in result);
   assert.equal((result as { isError: boolean }).isError, true);
   console.log("  ✓ mcp tools/call unknown tool returns error");
-}
+});

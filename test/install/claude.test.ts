@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/install/claude.test.ts — Claude Code install provider
 
 import assert from "node:assert";
@@ -60,7 +61,7 @@ const ADDED: ClaudeRunResult = {
   stderr: "",
 };
 
-export function testClaudeAddUsesAbsolutePath(): void {
+test("testClaudeAddUsesAbsolutePath", () => {
   const args = claudeAddArgs();
   assert.deepStrictEqual(args.slice(0, 7), [
     "claude",
@@ -76,15 +77,15 @@ export function testClaudeAddUsesAbsolutePath(): void {
   assert.equal(args[8], join(INSTALL_ROOT, "fapony.ts"));
   assert.equal(args[9], "mcp");
   console.log("  ✓ install claude add uses absolute path");
-}
+});
 
-export function testClaudeGetPointsToFapony(): void {
+test("testClaudeGetPointsToFapony", () => {
   assert.ok(claudeGetPointsToFapony(PRESENT.stdout));
   assert.ok(!claudeGetPointsToFapony("unrelated-server:\n  Command: node"));
   console.log("  ✓ install claude get ownership check");
-}
+});
 
-export function testInstallClaudeAbsentAdds(): void {
+test("testInstallClaudeAbsentAdds", () => {
   const ADD = claudeAddArgs().join(" ");
   const { run, calls } = mapRun({ [GET]: ABSENT, [ADD]: ADDED });
   // Tmp home: hook installers write settings.json — must never touch the
@@ -98,9 +99,9 @@ export function testInstallClaudeAbsentAdds(): void {
   assert.deepStrictEqual(calls, [GET, ADD]);
   assert.ok(err.includes("configured for Claude Code"), `got: ${err}`);
   console.log("  ✓ install claude absent → add");
-}
+});
 
-export function testInstallClaudeAlreadyConfiguredNoOp(): void {
+test("testInstallClaudeAlreadyConfiguredNoOp", () => {
   const { run, calls } = mapRun({ [GET]: PRESENT });
   // Tmp home: the no-op path still runs linkSkills — keep it off real ~/.claude.
   const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
@@ -112,9 +113,9 @@ export function testInstallClaudeAlreadyConfiguredNoOp(): void {
   assert.deepStrictEqual(calls, [GET]);
   assert.ok(err.includes("already configured"), `got: ${err}`);
   console.log("  ✓ install claude present → no-op");
-}
+});
 
-export function testInstallClaudeDifferentCommandRefusesOverwrite(): void {
+test("testInstallClaudeDifferentCommandRefusesOverwrite", () => {
   const SQUAT: ClaudeRunResult = {
     exitCode: 0,
     stdout: "fapony:\n  Command: node\n  Args: /tmp/evil.js",
@@ -135,9 +136,9 @@ export function testInstallClaudeDifferentCommandRefusesOverwrite(): void {
   assert.deepStrictEqual(calls, [GET]);
   assert.ok(err.includes("not overwriting"), `got: ${err}`);
   console.log("  ✓ install claude foreign entry → refuse overwrite");
-}
+});
 
-export function testInstallClaudeDryRunNeverAdds(): void {
+test("testInstallClaudeDryRunNeverAdds", () => {
   const { run, calls } = mapRun({ [GET]: ABSENT });
   const err = silentErrors(() =>
     captureErrors(() => cmdInstallClaude(true, { run, exit: testExit })),
@@ -145,9 +146,9 @@ export function testInstallClaudeDryRunNeverAdds(): void {
   assert.deepStrictEqual(calls, [GET]);
   assert.ok(err.includes("dry-run"), `got: ${err}`);
   console.log("  ✓ install claude dry-run never adds");
-}
+});
 
-export function testInstallClaudeMissingBinary(): void {
+test("testInstallClaudeMissingBinary", () => {
   const MISSING: ClaudeRunResult = {
     exitCode: 127,
     stdout: "",
@@ -167,9 +168,9 @@ export function testInstallClaudeMissingBinary(): void {
   assert.equal(code, 1);
   assert.ok(err.includes("claude CLI not found"), `got: ${err}`);
   console.log("  ✓ install claude missing binary → clear error");
-}
+});
 
-export function testInstallClaudeAddFailureHintsHelp(): void {
+test("testInstallClaudeAddFailureHintsHelp", () => {
   const ADD = claudeAddArgs().join(" ");
   const FAILED: ClaudeRunResult = {
     exitCode: 1,
@@ -190,9 +191,9 @@ export function testInstallClaudeAddFailureHintsHelp(): void {
   assert.equal(code, 1);
   assert.ok(err.includes("claude mcp add --help"), `got: ${err}`);
   console.log("  ✓ install claude add failure hints --help");
-}
+});
 
-export async function testCmdInstallDispatchesClaude(): Promise<void> {
+test("testCmdInstallDispatchesClaude", async () => {
   // cmdInstall routes --platform claude through the same seam (3rd case:
   // dispatch itself, alongside absent/present/different above).
   const ADD = claudeAddArgs().join(" ");
@@ -201,9 +202,9 @@ export async function testCmdInstallDispatchesClaude(): Promise<void> {
   await silentErrors(() => cmdInstall(["install", "claude"].slice(1), deps));
   assert.deepStrictEqual(calls, [GET, ADD]);
   console.log("  ✓ install dispatch routes --platform claude");
-}
+});
 
-export function testInstallClaudeStopHookAppendsOnceAndKeepsForeign(): void {
+test("testInstallClaudeStopHookAppendsOnceAndKeepsForeign", () => {
   const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
   const claudeDir = join(home, ".claude");
   mkdirSync(claudeDir, { recursive: true });
@@ -243,9 +244,9 @@ export function testInstallClaudeStopHookAppendsOnceAndKeepsForeign(): void {
     "fapony's Stop hook must be registered",
   );
   console.log("  ✓ install claude stop hook → appends once, keeps foreign");
-}
+});
 
-export function testInstallClaudeReadHintAppendsOnce(): void {
+test("testInstallClaudeReadHintAppendsOnce", () => {
   const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
   const claudeDir = join(home, ".claude");
   mkdirSync(claudeDir, { recursive: true });
@@ -285,9 +286,9 @@ export function testInstallClaudeReadHintAppendsOnce(): void {
   console.log(
     "  ✓ install claude read+edit+mv-guard hints → PreToolUse matchers Read/Edit/Bash, append once",
   );
-}
+});
 
-export function testInstallClaudeEditHintAppendsOnce(): void {
+test("testInstallClaudeEditHintAppendsOnce", () => {
   const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
   const claudeDir = join(home, ".claude");
   mkdirSync(claudeDir, { recursive: true });
@@ -346,9 +347,9 @@ export function testInstallClaudeEditHintAppendsOnce(): void {
   console.log(
     "  ✓ install claude edit+mv-guard hints → PreToolUse matchers Edit/Bash, appends once, keeps foreign",
   );
-}
+});
 
-export function testInstallClaudeAlreadyConfiguredStillInstallsHooks(): void {
+test("testInstallClaudeAlreadyConfiguredStillInstallsHooks", () => {
   const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
   const { run, calls } = mapRun({ [GET]: PRESENT });
   silentErrors(() =>
@@ -367,4 +368,4 @@ export function testInstallClaudeAlreadyConfiguredStillInstallsHooks(): void {
   assert.ok(matchers.includes("Edit"), "Edit hint must be written on upgrade");
   assert.ok(matchers.includes("Bash"), "mv-guard must be written on upgrade");
   console.log("  ✓ install claude already-configured → still wires hooks");
-}
+});

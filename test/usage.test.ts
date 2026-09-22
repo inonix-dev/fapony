@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/usage.test.ts — unit tests for src/usage/format.ts + render.ts + cache.ts
 
 import assert from "node:assert";
@@ -64,84 +65,84 @@ const fixturePrices: PriceTable = {
 
 // ─── fmtTokens ────────────────────────────────────────────────────────
 
-export function testFmtTokensZero(): void {
+test("testFmtTokensZero", () => {
   assert.equal(fmtTokens(0), "0");
   console.log("  ✓ fmtTokens(0) → '0'");
-}
+});
 
-export function testFmtTokensThousands(): void {
+test("testFmtTokensThousands", () => {
   assert.equal(fmtTokens(1234), "1K");
   assert.equal(fmtTokens(999), "999");
   assert.equal(fmtTokens(5000), "5K");
   console.log("  ✓ fmtTokens thousands → K suffix");
-}
+});
 
-export function testFmtTokensMillions(): void {
+test("testFmtTokensMillions", () => {
   assert.equal(fmtTokens(1_500_000), "1.5M");
   assert.equal(fmtTokens(10_000_000), "10.0M");
   assert.equal(fmtTokens(999_999), "1000K");
   console.log("  ✓ fmtTokens millions → M suffix");
-}
+});
 
 // ─── fmtCost ──────────────────────────────────────────────────────────
 
-export function testFmtCostNull(): void {
+test("testFmtCostNull", () => {
   assert.equal(fmtCost(null), "\u2014");
   console.log("  ✓ fmtCost(null) → '\u2014'");
-}
+});
 
-export function testFmtCostZero(): void {
+test("testFmtCostZero", () => {
   assert.equal(fmtCost(0), "\u2014");
   console.log("  ✓ fmtCost(0) → '\u2014'");
-}
+});
 
-export function testFmtCostPositive(): void {
+test("testFmtCostPositive", () => {
   assert.equal(fmtCost(0.0042), "~$0.0042");
   assert.equal(fmtCost(100), "~$100.0000");
   console.log("  ✓ fmtCost positive → ~$X.XXXX");
-}
+});
 
 // ─── fmtDelta ─────────────────────────────────────────────────────────
 
-export function testFmtDeltaZero(): void {
+test("testFmtDeltaZero", () => {
   assert.equal(fmtDelta(100, 100), "");
   console.log("  ✓ fmtDelta same → ''");
-}
+});
 
-export function testFmtDeltaPositive(): void {
+test("testFmtDeltaPositive", () => {
   assert.equal(fmtDelta(100, 150), "+50");
   console.log("  ✓ fmtDelta increase → '+N'");
-}
+});
 
-export function testFmtDeltaNegative(): void {
+test("testFmtDeltaNegative", () => {
   assert.equal(fmtDelta(150, 100), "-50");
   console.log("  ✓ fmtDelta decrease → '-N'");
-}
+});
 
 // ─── shortModel ───────────────────────────────────────────────────────
 
-export function testShortModelJsonId(): void {
+test("testShortModelJsonId", () => {
   const raw =
     '{"id":"mimo-v2.5","providerID":"opencode-go","variant":"default"}';
   assert.equal(shortModel(raw), "mimo-v2.5");
   console.log("  ✓ shortModel JSON with id → extracts id");
-}
+});
 
-export function testShortModelJsonNoId(): void {
+test("testShortModelJsonNoId", () => {
   const raw = '{"providerID":"opencode-go"}';
   assert.equal(shortModel(raw), raw);
   console.log("  ✓ shortModel JSON without id → raw");
-}
+});
 
-export function testShortModelPlainText(): void {
+test("testShortModelPlainText", () => {
   assert.equal(shortModel("claude-sonnet-5"), "claude-sonnet-5");
   console.log("  ✓ shortModel plain text → passthrough");
-}
+});
 
-export function testShortModelEmptyString(): void {
+test("testShortModelEmptyString", () => {
   assert.equal(shortModel(""), "");
   console.log("  ✓ shortModel empty → empty");
-}
+});
 
 // ─── cache helpers ────────────────────────────────────────────────────
 
@@ -164,7 +165,7 @@ function mkEntry(
   };
 }
 
-export function testMergeEntriesDedup(): void {
+test("testMergeEntriesDedup", () => {
   const existing = [
     mkEntry("opencode", 10, "2026-09-10T10:00:00Z"),
     mkEntry("zcode", 5, "2026-09-10T10:00:00Z"),
@@ -182,14 +183,14 @@ export function testMergeEntriesDedup(): void {
   const cc = merged.find((e) => e.client === "claude_code");
   assert.equal(cc?.session_count, 8, "claude_code added");
   console.log("  ✓ mergeEntries dedup by client, last wins");
-}
+});
 
-export function testCacheMetaEmpty(): void {
+test("testCacheMetaEmpty", () => {
   assert.equal(cacheMeta([]), null);
   console.log("  ✓ cacheMeta([]) → null");
-}
+});
 
-export function testCacheMetaCalculatesOldest(): void {
+test("testCacheMetaCalculatesOldest", () => {
   const entries = [
     mkEntry("opencode", 10, "2026-09-10T10:00:00Z"),
     mkEntry("zcode", 5, "2026-09-11T10:00:00Z"),
@@ -199,9 +200,9 @@ export function testCacheMetaCalculatesOldest(): void {
   assert.equal(meta.scanned_at, "2026-09-10T10:00:00Z");
   assert.equal(meta.total_sessions, 15);
   console.log("  ✓ cacheMeta → oldest scanned_at + total sessions");
-}
+});
 
-export function testCacheMetaProjectDimension(): void {
+test("testCacheMetaProjectDimension", () => {
   // Per-worktree rows are subsets of the global aggregate — totals must come
   // from the global rows, or the header double-counts (100 → 200).
   const global = mkEntry("opencode", 100, "2026-09-12T10:00:00Z");
@@ -225,9 +226,9 @@ export function testCacheMetaProjectDimension(): void {
   console.log(
     "  ✓ cacheMeta → totals from global rows, legacy caches unaffected",
   );
-}
+});
 
-export function testWriteCacheCreatesStateDir(): void {
+test("testWriteCacheCreatesStateDir", () => {
   const prev = process.env.FAPONY_STATE_DIR;
   const dir = join(tmpdir(), `fapony-scan-test-${Date.now()}`);
   try {
@@ -244,7 +245,7 @@ export function testWriteCacheCreatesStateDir(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ writeCache creates missing state dir");
-}
+});
 
 // ─── renderUsageHtml ──────────────────────────────────────────────────
 
@@ -282,7 +283,7 @@ const sampleData: PassiveUsageResult = {
   ],
 };
 
-export function testRenderHtmlStructure(): void {
+test("testRenderHtmlStructure", () => {
   const html = renderGlobal(sampleData);
   assert.ok(html.includes("<!DOCTYPE html>"), "has doctype");
   assert.ok(html.includes("OpenCode"), "has OpenCode title");
@@ -296,16 +297,16 @@ export function testRenderHtmlStructure(): void {
   assert.ok(!html.includes("setInterval"), "no setInterval (no polling)");
   assert.ok(!html.includes("fetch("), "no fetch() calls (no polling)");
   console.log("  ✓ renderUsageHtml → correct HTML structure (no polling)");
-}
+});
 
-export function testRenderHtmlModelNames(): void {
+test("testRenderHtmlModelNames", () => {
   const html = renderGlobal(sampleData);
   assert.ok(html.includes("mimo-v2.5"), "renders model name");
   assert.ok(html.includes("deepseek-v4-flash"), "renders model name");
   console.log("  ✓ renderUsageHtml → model names present");
-}
+});
 
-export function testRenderHtmlTokenValues(): void {
+test("testRenderHtmlTokenValues", () => {
   const html = renderGlobal(sampleData);
   assert.ok(html.includes("1K"), "renders input tokens (1000)");
   assert.ok(
@@ -314,15 +315,15 @@ export function testRenderHtmlTokenValues(): void {
   );
   assert.ok(html.includes("3"), "renders session count");
   console.log("  ✓ renderUsageHtml → token values present");
-}
+});
 
-export function testRenderHtmlNoData(): void {
+test("testRenderHtmlNoData", () => {
   const html = renderGlobal(EMPTY_RESULT);
   assert.ok(html.includes("no sessions"), "shows no sessions for empty data");
   console.log("  ✓ renderUsageHtml → handles empty data");
-}
+});
 
-export function testRenderHtmlSummaryCards(): void {
+test("testRenderHtmlSummaryCards", () => {
   const html = renderGlobal(sampleData, sampleData);
   assert.ok(html.includes("Cache Hit"), "has cache hit metric");
   assert.ok(html.includes("Reasoning"), "has reasoning metric");
@@ -331,9 +332,9 @@ export function testRenderHtmlSummaryCards(): void {
   assert.ok(html.includes("Avg/Session"), "has avg per session metric");
   assert.ok(html.includes("Cost"), "has cost metric");
   console.log("  ✓ renderUsageHtml → summary cards with all metrics");
-}
+});
 
-export function testRenderHtmlHidesEmptyCard(): void {
+test("testRenderHtmlHidesEmptyCard", () => {
   // เฉพาะ opencode มี session — zcode/claude/codex ไม่มีเลย การ์ดของมันต้องไม่โผล่
   // (ตารางยังโผล่เสมอต่างจากการ์ด — h2 ของตารางมีชื่อ client เหมือนกัน
   // เทียบแค่บล็อก <div class="cards">...</div> เพื่อไม่ชนกับ h2 ของตาราง)
@@ -352,39 +353,39 @@ export function testRenderHtmlHidesEmptyCard(): void {
     "Claude Code card hidden when it has zero sessions",
   );
   console.log("  ✓ renderUsageHtml → hides summary card with zero sessions");
-}
+});
 
-export function testRenderHtmlCostWide(): void {
+test("testRenderHtmlCostWide", () => {
   const html = renderGlobal(sampleData);
   assert.ok(html.includes("card-metric wide"), "cost metric has wide class");
   assert.ok(html.includes("card-metric.wide"), "wide CSS rule defined");
   console.log("  ✓ renderUsageHtml → Cost metric spans 2 columns");
-}
+});
 
-export function testRenderHtmlFreshnessBar(): void {
+test("testRenderHtmlFreshnessBar", () => {
   const html = renderGlobal(sampleData);
   assert.ok(html.includes("data as of"), "freshness bar shows data timestamp");
   assert.ok(html.includes("usage-scan"), "freshness bar mentions usage-scan");
   assert.ok(html.includes("status fresh"), "freshness bar has status dot");
   console.log("  ✓ renderUsageHtml → freshness bar present");
-}
+});
 
-export function testRenderHtmlNoPollInterval(): void {
+test("testRenderHtmlNoPollInterval", () => {
   const html = renderGlobal(sampleData);
   assert.ok(!html.includes("pollInterval"), "no pollInterval in HTML");
   assert.ok(!html.includes("polling"), "no 'polling' text in HTML");
   console.log("  ✓ renderUsageHtml → no poll interval references");
-}
+});
 
-export function testRenderHtmlShareSection(): void {
+test("testRenderHtmlShareSection", () => {
   const html = renderGlobal(sampleData);
   assert.ok(html.includes("context share (tokens)"), "share title present");
   assert.ok(html.includes("share-bar"), "share bar present");
   assert.ok(html.includes("share-legend"), "share legend present");
   console.log("  ✓ renderUsageHtml → context share section present");
-}
+});
 
-export function testRenderHtmlReadErrorBadge(): void {
+test("testRenderHtmlReadErrorBadge", () => {
   // Zero sessions because the log could not be read — must NOT look the same
   // as a client nobody used.
   const broken = { ...EMPTY_RESULT, error: "opencode_read_failed" };
@@ -399,9 +400,9 @@ export function testRenderHtmlReadErrorBadge(): void {
   console.log(
     "  ✓ renderUsageHtml → flags a client whose log could not be read",
   );
-}
+});
 
-export function testRenderHtmlImputedCost(): void {
+test("testRenderHtmlImputedCost", () => {
   const zeroCost: PassiveUsageResult = {
     ...sampleData,
     total_cost: 0,
@@ -420,9 +421,9 @@ export function testRenderHtmlImputedCost(): void {
   // รุ่นที่ map ไม่ได้ต้องโผล่ใน unpriced ไม่ใช่หายเข้า 0
   assert.ok(html.includes("unpriced"), "unpriced bucket visible");
   console.log("  ✓ renderUsageHtml → imputed cost + unpriced note");
-}
+});
 
-export function testRenderHtmlNoPricesHint(): void {
+test("testRenderHtmlNoPricesHint", () => {
   // pin STATE_DIR ว่าง + ส่ง null ชัดเจน = ไม่มีราคา → hint ให้ price-scan
   const html = renderGlobal(
     sampleData,
@@ -434,14 +435,14 @@ export function testRenderHtmlNoPricesHint(): void {
   );
   assert.ok(html.includes("fapony price-scan"), "hint to price-scan present");
   console.log("  ✓ renderUsageHtml → missing prices shows hint, not throw");
-}
+});
 
 /**
  * Totals row ต้องมีจำนวน <td> เท่ากับ <th> ของ header เสมอ ไม่งั้นตัวเลข
  * เลื่อนคอลัมน์ (เคยพัง: totals ขาด placeholder ของคอลัมน์ Provider ทำให้
  * In/Out/Cache/Sess/Cost ทั้งแถวเลื่อนซ้าย 1 ช่อง)
  */
-export function testRenderHtmlTotalsColumnCount(): void {
+test("testRenderHtmlTotalsColumnCount", () => {
   const html = renderGlobal(sampleData);
   const headerMatch = html.match(/<thead>[\s\S]*?<\/thead>/);
   const footerMatch = html.match(/<tfoot>[\s\S]*?<\/tfoot>/);
@@ -455,4 +456,4 @@ export function testRenderHtmlTotalsColumnCount(): void {
     `totals row has ${tdCount} cells, header has ${thCount} — columns would misalign`,
   );
   console.log("  ✓ renderUsageHtml → totals row column count matches header");
-}
+});

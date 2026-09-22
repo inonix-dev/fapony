@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/findModel.test.ts — tests for findSessionModel (session log model resolution)
 
 import { Database } from "bun:sqlite";
@@ -51,7 +52,7 @@ function withOpenCodeFixture(fn: (dbPath: string) => void): void {
   }
 }
 
-export function testFindSessionModelOpenCodeHit(): void {
+test("testFindSessionModelOpenCodeHit", () => {
   withOpenCodeFixture((dbPath) => {
     const prev = process.env.FAPONY_OPENCODE_DB;
     try {
@@ -68,9 +69,9 @@ export function testFindSessionModelOpenCodeHit(): void {
     }
   });
   console.log("  ✓ findSessionModel OpenCode hit");
-}
+});
 
-export function testFindSessionModelOpenCodeMiss(): void {
+test("testFindSessionModelOpenCodeMiss", () => {
   withOpenCodeFixture((dbPath) => {
     const prev = process.env.FAPONY_OPENCODE_DB;
     try {
@@ -83,7 +84,7 @@ export function testFindSessionModelOpenCodeMiss(): void {
     }
   });
   console.log("  ✓ findSessionModel OpenCode miss → null");
-}
+});
 
 // --- ZCode fixture ---
 
@@ -129,7 +130,7 @@ function withZcodeFixture(fn: (dbPath: string) => void): void {
   }
 }
 
-export function testFindSessionModelZcodeHit(): void {
+test("testFindSessionModelZcodeHit", () => {
   withZcodeFixture((dbPath) => {
     const prev = process.env.FAPONY_ZCODE_DB;
     try {
@@ -146,9 +147,9 @@ export function testFindSessionModelZcodeHit(): void {
     }
   });
   console.log("  ✓ findSessionModel ZCode hit");
-}
+});
 
-export function testFindSessionModelZcodeMiss(): void {
+test("testFindSessionModelZcodeMiss", () => {
   withZcodeFixture((dbPath) => {
     const prev = process.env.FAPONY_ZCODE_DB;
     try {
@@ -161,9 +162,9 @@ export function testFindSessionModelZcodeMiss(): void {
     }
   });
   console.log("  ✓ findSessionModel ZCode miss → null");
-}
+});
 
-export function testFindSessionModelZcodeRawProviderPassthrough(): void {
+test("testFindSessionModelZcodeRawProviderPassthrough", () => {
   // provider_id is sometimes a raw UUID — pass through as-is, never map it
   const dir = mkdtempSync(join(tmpdir(), "fapony-fm-zcode-uuid-"));
   const dbPath = join(dir, "db.sqlite");
@@ -205,9 +206,9 @@ export function testFindSessionModelZcodeRawProviderPassthrough(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ findSessionModel ZCode raw provider passes through");
-}
+});
 
-export function testFindSessionModelOpenCodePlainTextProviderUnknown(): void {
+test("testFindSessionModelOpenCodePlainTextProviderUnknown", () => {
   // Plain-text session.model carries no provider — "—", never ""
   const dir = mkdtempSync(join(tmpdir(), "fapony-fm-opencode-plain-"));
   const dbPath = join(dir, "opencode.db");
@@ -235,9 +236,9 @@ export function testFindSessionModelOpenCodePlainTextProviderUnknown(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ findSessionModel OpenCode plain-text provider → —");
-}
+});
 
-export function testFindSessionModelZcodeMultiModel(): void {
+test("testFindSessionModelZcodeMultiModel", () => {
   // 3 small rows of model-a vs 1 big row of model-b → max tokens wins
   const dir = mkdtempSync(join(tmpdir(), "fapony-fm-zcode-multi-"));
   const dbPath = join(dir, "db.sqlite");
@@ -278,9 +279,9 @@ export function testFindSessionModelZcodeMultiModel(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ findSessionModel ZCode multi-model → max tokens");
-}
+});
 
-export function testFindSessionModelZcodeSummedTokensWin(): void {
+test("testFindSessionModelZcodeSummedTokensWin", () => {
   // Model A: 3 small rows summing past B's single big row → A wins.
   // A lone max-row rule (no GROUP BY) would wrongly pick B.
   const dir = mkdtempSync(join(tmpdir(), "fapony-fm-zcode-sum-"));
@@ -320,7 +321,7 @@ export function testFindSessionModelZcodeSummedTokensWin(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ findSessionModel ZCode summed tokens beat lone max row");
-}
+});
 
 // --- Claude Code fixture ---
 
@@ -344,7 +345,7 @@ function withClaudeCodeFixture(fn: (filePath: string) => void): void {
   }
 }
 
-export function testFindSessionModelClaudeCodeHit(): void {
+test("testFindSessionModelClaudeCodeHit", () => {
   withClaudeCodeFixture((filePath) => {
     const result = findSessionModel(filePath);
     assert.ok(result, "should find session");
@@ -354,13 +355,13 @@ export function testFindSessionModelClaudeCodeHit(): void {
     assert.equal(result!.agent, null);
   });
   console.log("  ✓ findSessionModel Claude Code hit");
-}
+});
 
-export function testFindSessionModelClaudeCodeMiss(): void {
+test("testFindSessionModelClaudeCodeMiss", () => {
   const result = findSessionModel("/nonexistent/path/session.jsonl");
   assert.equal(result, null);
   console.log("  ✓ findSessionModel Claude Code miss → null");
-}
+});
 
 function writeClaudeLines(dir: string, name: string, models: string[]): string {
   const filePath = join(dir, name);
@@ -379,7 +380,7 @@ function writeClaudeLines(dir: string, name: string, models: string[]): string {
   return filePath;
 }
 
-export function testFindSessionModelClaudeCodeMajority(): void {
+test("testFindSessionModelClaudeCodeMajority", () => {
   // Opus diagnose (first, 2 turns) → Sonnet implements (5 turns): majority wins
   const dir = mkdtempSync(join(tmpdir(), "fapony-fm-claude-multi-"));
   try {
@@ -399,9 +400,9 @@ export function testFindSessionModelClaudeCodeMajority(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ findSessionModel Claude Code multi-model → majority");
-}
+});
 
-export function testFindSessionModelClaudeCodeTieGoesLast(): void {
+test("testFindSessionModelClaudeCodeTieGoesLast", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-fm-claude-tie-"));
   try {
     const filePath = writeClaudeLines(dir, "session-tie.jsonl", [
@@ -417,7 +418,7 @@ export function testFindSessionModelClaudeCodeTieGoesLast(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ findSessionModel Claude Code tie → last");
-}
+});
 
 // --- Codex fixture ---
 
@@ -452,7 +453,7 @@ function withCodexFixture(fn: (filePath: string) => void): void {
   }
 }
 
-export function testFindSessionModelCodexHit(): void {
+test("testFindSessionModelCodexHit", () => {
   withCodexFixture((filePath) => {
     const result = findSessionModel(filePath);
     assert.ok(result, "should find session");
@@ -462,13 +463,13 @@ export function testFindSessionModelCodexHit(): void {
     assert.equal(result!.agent, null);
   });
   console.log("  ✓ findSessionModel Codex hit");
-}
+});
 
-export function testFindSessionModelCodexMiss(): void {
+test("testFindSessionModelCodexMiss", () => {
   const result = findSessionModel("/nonexistent/path/rollout.jsonl");
   assert.equal(result, null);
   console.log("  ✓ findSessionModel Codex miss → null");
-}
+});
 
 function writeCodexMetas(dir: string, name: string, models: string[]): string {
   const filePath = join(dir, name);
@@ -490,7 +491,7 @@ function writeCodexMetas(dir: string, name: string, models: string[]): string {
   return filePath;
 }
 
-export function testFindSessionModelCodexMultiMeta(): void {
+test("testFindSessionModelCodexMultiMeta", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-fm-codex-multi-"));
   try {
     const filePath = writeCodexMetas(dir, "rollout-multi.jsonl", [
@@ -506,9 +507,9 @@ export function testFindSessionModelCodexMultiMeta(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ findSessionModel Codex multi session_meta → majority");
-}
+});
 
-export function testFindSessionModelCodexMultiMetaTieGoesLast(): void {
+test("testFindSessionModelCodexMultiMetaTieGoesLast", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-fm-codex-tie-"));
   try {
     const filePath = writeCodexMetas(dir, "rollout-tie.jsonl", [
@@ -522,17 +523,17 @@ export function testFindSessionModelCodexMultiMetaTieGoesLast(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ findSessionModel Codex multi session_meta tie → last");
-}
+});
 
 // --- Edge cases ---
 
-export function testFindSessionModelEmptyId(): void {
+test("testFindSessionModelEmptyId", () => {
   const result = findSessionModel("");
   assert.equal(result, null);
   console.log("  ✓ findSessionModel empty string → null");
-}
+});
 
-export function testFindSessionModelNoReadersAvailable(): void {
+test("testFindSessionModelNoReadersAvailable", () => {
   // Point all DBs to nonexistent paths — should return null, not throw
   const prevOC = process.env.FAPONY_OPENCODE_DB;
   const prevZC = process.env.FAPONY_ZCODE_DB;
@@ -548,4 +549,4 @@ export function testFindSessionModelNoReadersAvailable(): void {
     else process.env.FAPONY_ZCODE_DB = prevZC;
   }
   console.log("  ✓ findSessionModel no readers → null");
-}
+});

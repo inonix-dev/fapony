@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import assert from "node:assert";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -7,7 +8,7 @@ import {
   VERDICT_GRADES,
 } from "../src/parse.js";
 
-export function testParseGateEventData(): void {
+test("testParseGateEventData", () => {
   // Gate events store JSON {verdict, note, round} — not VERDICT: stdout.
   let v = parseGateEventData(
     JSON.stringify({ verdict: "pass-good", note: "solid", round: 1 }),
@@ -41,9 +42,9 @@ export function testParseGateEventData(): void {
   );
 
   console.log("  ✓ parseGateEventData");
-}
+});
 
-export function testFixtureGuard(): void {
+test("testFixtureGuard", () => {
   const fixtureDir = join(import.meta.dir, "fixtures");
   try {
     const files = readdirSync(fixtureDir).filter((f: string) =>
@@ -60,9 +61,9 @@ export function testFixtureGuard(): void {
   } catch {
     console.log("  ✓ fixture guard (no fixtures yet, skipped)");
   }
-}
+});
 
-export function testQualityScore(): void {
+test("testQualityScore", () => {
   // Locked values from SPEC-verdict-protocol — additive-only, never change
   assert.equal(VERDICT_GRADES.size, 6, "should have exactly 6 grades");
   const cases: Array<
@@ -93,4 +94,4 @@ export function testQualityScore(): void {
     );
   }
   console.log("  ✓ qualityScore returns correct values for all 6 grades");
-}
+});

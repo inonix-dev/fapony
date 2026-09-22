@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/plan-seed.test.ts — tests for `fapony plan-seed` (src/plan-seed.ts)
 
 import assert from "node:assert";
@@ -12,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cmdPlanSeed } from "../src/seed/plan-seed.js";
-import { captureErrors } from "./helpers.js";
+import { captureErrors, captureLogs } from "./helpers.js";
 
 // Fixture with one module dir + one root file. The mem/ledger reads inside
 // Context (fapony) tolerate any cwd (no log → empty block), so a plain temp
@@ -42,7 +43,7 @@ function withCwd(dir: string, fn: () => void): void {
   }
 }
 
-export function testPlanSeedWritesPlan(): void {
+test("testPlanSeedWritesPlan", () => {
   withFixture((dir) => {
     withCwd(dir, () => {
       cmdPlanSeed(["foo"]);
@@ -67,9 +68,9 @@ export function testPlanSeedWritesPlan(): void {
     });
   });
   console.log("  ✓ plan-seed writes PLAN with agent slots + ledger context");
-}
+});
 
-export function testPlanSeedNoOverwrite(): void {
+test("testPlanSeedNoOverwrite", () => {
   withFixture((dir) => {
     withCwd(dir, () => {
       cmdPlanSeed(["foo"]);
@@ -96,9 +97,9 @@ export function testPlanSeedNoOverwrite(): void {
     });
   });
   console.log("  ✓ plan-seed refuses to overwrite an existing plan");
-}
+});
 
-export function testPlanSeedSpecSignatures(): void {
+test("testPlanSeedSpecSignatures", () => {
   withFixture((dir) => {
     withCwd(dir, () => {
       cmdPlanSeed(["foo", "--spec"]);
@@ -127,9 +128,9 @@ export function testPlanSeedSpecSignatures(): void {
   console.log(
     "  ✓ plan-seed --spec writes chunked SPEC with verbatim signatures",
   );
-}
+});
 
-export function testPlanSeedScopeFilters(): void {
+test("testPlanSeedScopeFilters", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-scope-"));
   try {
     const comp = join(dir, "apps", "vela", "src", "components");
@@ -189,9 +190,9 @@ export function testPlanSeedScopeFilters(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ plan-seed --scope filters §8 and never eats the name");
-}
+});
 
-export function testPlanSeedCapsHold(): void {
+test("testPlanSeedCapsHold", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-caps-"));
   try {
     // 6 modules × 10 files × 4 exports — enough to trip the per-chunk cap,
@@ -243,9 +244,9 @@ export function testPlanSeedCapsHold(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ plan-seed caps hold: PLAN ≤ 60 / SPEC ≤ 200 with markers");
-}
+});
 
-export function testPlanSeedSingleFileScope(): void {
+test("testPlanSeedSingleFileScope", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-file-"));
   try {
     mkdirSync(join(dir, "src"), { recursive: true });
@@ -277,9 +278,9 @@ export function testPlanSeedSingleFileScope(): void {
   console.log(
     "  ✓ plan-seed --scope <file> produces SPEC chunk with signatures",
   );
-}
+});
 
-export function testPlanSeedOverlapScopeDedup(): void {
+test("testPlanSeedOverlapScopeDedup", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-overlap-"));
   try {
     mkdirSync(join(dir, "src", "utils"), { recursive: true });
@@ -312,9 +313,9 @@ export function testPlanSeedOverlapScopeDedup(): void {
   console.log(
     "  ✓ plan-seed prunes nested --scope roots to avoid double-count",
   );
-}
+});
 
-export function testPlanSeedConfigFallback(): void {
+test("testPlanSeedConfigFallback", () => {
   withFixture((dir) => {
     // planDir/specDir are hardcoded — not configurable (gitignored = private).
     // A broken config must fall back to defaults without throwing.
@@ -327,9 +328,9 @@ export function testPlanSeedConfigFallback(): void {
   console.log(
     "  ✓ plan-seed: broken config falls back to defaults (planDir is hardcoded)",
   );
-}
+});
 
-export function testPlanSeedStepCloseCarriesLiteralPlanPath(): void {
+test("testPlanSeedStepCloseCarriesLiteralPlanPath", () => {
   withFixture((dir) => {
     withCwd(dir, () => {
       cmdPlanSeed(["bar"]);
@@ -356,4 +357,172 @@ export function testPlanSeedStepCloseCarriesLiteralPlanPath(): void {
     });
   });
   console.log("  ✓ plan-seed: §6 close block carries the literal plan path");
-}
+});
+
+// Chunk 4 (PLAN-seed-and-surface): PLAN carries "Existing in scope" — one
+// line per scope file naming its exports — inside the ≤ ~60 budget.
+test("testPlanSeedExistingInScope", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-existing-"));
+  try {
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(
+      join(dir, "src", "a.ts"),
+      "export function alpha(): void {}\nexport const beta = 1;\n",
+    );
+    writeFileSync(join(dir, "src", "b.ts"), "export class Gamma {}\n");
+    writeFileSync(join(dir, "src", "empty.ts"), "const local = 1;\n");
+    withCwd(dir, () => {
+      captureLogs(() => cmdPlanSeed(["scoped", "--scope", "src"]));
+      const plan = readFileSync(
+        join(dir, ".fapony", "plan", "PLAN-scoped.md"),
+        "utf-8",
+      );
+      assert.match(plan, /### Existing in scope/);
+      // real export names, fn with parens, file with no exports skipped
+      assert.ok(plan.includes("src/a.ts — alpha() · beta"), "a.ts exports");
+      assert.ok(plan.includes("src/b.ts — Gamma"), "b.ts exports");
+      assert.ok(!plan.includes("empty.ts"), "export-less file skipped");
+      assert.ok(
+        plan.replace(/\n$/, "").split("\n").length <= 60,
+        "scoped PLAN still fits the ≤ 60 contract",
+      );
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ plan-seed --scope lists existing exports in the PLAN");
+});
+
+test("testPlanSeedExistingInScopePlaceholders", () => {
+  // No exports in scope → honest one-liner, not an empty heading.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-noexport-"));
+  try {
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src", "empty.ts"), "const local = 1;\n");
+    withCwd(dir, () => {
+      captureLogs(() => cmdPlanSeed(["noexp", "--scope", "src"]));
+      const plan = readFileSync(
+        join(dir, ".fapony", "plan", "PLAN-noexp.md"),
+        "utf-8",
+      );
+      assert.ok(plan.includes("_(no exports in scope)_"));
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  // No --scope → every file matches, so a list would point at nothing (§8
+  // prior art goes quiet for the same reason).
+  withFixture((dir) => {
+    withCwd(dir, () => {
+      captureLogs(() => cmdPlanSeed(["wide"]));
+      const plan = readFileSync(
+        join(dir, ".fapony", "plan", "PLAN-wide.md"),
+        "utf-8",
+      );
+      assert.ok(plan.includes("re-seed with --scope <dir> to list exports"));
+      assert.ok(
+        plan.replace(/\n$/, "").split("\n").length <= 60,
+        "unscoped PLAN fits the ≤ 60 contract",
+      );
+    });
+  });
+  console.log("  ✓ plan-seed Existing block degrades to a placeholder");
+});
+
+test("testPlanSeedExistingInScopeCap", () => {
+  // 20 files with exports: the block caps at 15 lines, says what was cut,
+  // and the whole file still fits ≤ 60.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-existing-cap-"));
+  try {
+    mkdirSync(join(dir, "src"), { recursive: true });
+    for (let f = 0; f < 20; f++) {
+      writeFileSync(
+        join(dir, "src", `f${String(f).padStart(2, "0")}.ts`),
+        `export function fn${f}(): void {}\n`,
+      );
+    }
+    withCwd(dir, () => {
+      captureLogs(() => cmdPlanSeed(["capped", "--scope", "src"]));
+      const plan = readFileSync(
+        join(dir, ".fapony", "plan", "PLAN-capped.md"),
+        "utf-8",
+      );
+      const block = plan.slice(
+        plan.indexOf("### Existing in scope"),
+        plan.indexOf("## 1. Goal"),
+      );
+      // Both caps hold under pressure: the block never exceeds its own 15
+      // (the ≤ 60 total may shrink it further via the budget backstop).
+      const blockLines = block
+        .split("\n")
+        .filter((l) => l.startsWith("- src/") || l.startsWith("… +"));
+      assert.ok(
+        blockLines.length <= 15,
+        `block capped (got ${blockLines.length})`,
+      );
+      assert.match(block, /… \+\d+ more files in scope/);
+      assert.ok(
+        plan.replace(/\n$/, "").split("\n").length <= 60,
+        "over-cap scope still fits the ≤ 60 contract",
+      );
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ plan-seed Existing block caps at 15 with a marker");
+});
+
+// Chunk 5 (PLAN-seed-and-surface): stdout ends with the plans that already
+// exist in planDir + doneDir (cap 10), minus the file just written.
+test("testPlanSeedListsExistingPlans", () => {
+  withFixture((dir) => {
+    mkdirSync(join(dir, ".fapony", "done"), { recursive: true });
+    writeFileSync(join(dir, ".fapony", "done", "PLAN-old.md"), "# PLAN-old\n");
+    withCwd(dir, () => {
+      const out = captureLogs(() => cmdPlanSeed(["fresh"]));
+      assert.match(out, /wrote .*PLAN-fresh\.md/);
+      assert.match(out, /Existing plans:/);
+      assert.ok(out.includes("PLAN-old.md (done)"), "shipped plan listed");
+      assert.ok(
+        !out.includes("- PLAN-fresh.md (plan)"),
+        "just-written file excluded from the list (not from the wrote line)",
+      );
+    });
+  });
+  console.log("  ✓ plan-seed stdout ends with existing plans");
+});
+
+test("testPlanSeedExistingPlansCap", () => {
+  // 12 pre-existing plans: 10 listed, the cut counted, active first.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-planlist-"));
+  try {
+    mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
+    mkdirSync(join(dir, ".fapony", "done"), { recursive: true });
+    for (let i = 0; i < 7; i++) {
+      writeFileSync(
+        join(dir, ".fapony", "plan", `PLAN-p${i}.md`),
+        `# PLAN-p${i}\n`,
+      );
+    }
+    for (let i = 0; i < 5; i++) {
+      writeFileSync(
+        join(dir, ".fapony", "done", `PLAN-d${i}.md`),
+        `# PLAN-d${i}\n`,
+      );
+    }
+    withCwd(dir, () => {
+      const out = captureLogs(() => cmdPlanSeed(["fresh2"]));
+      const listed = out.split("\n").filter((l) => l.startsWith("- PLAN-"));
+      // capLines keeps cap-1 + a marker that counts the cut (12 → 9 + marker).
+      assert.equal(listed.length, 9);
+      assert.match(out, /… \+3 more plans/);
+      assert.ok(
+        out.indexOf("PLAN-p0.md (plan)") < out.indexOf("PLAN-d0.md (done)"),
+        "active plans sort before shipped ones",
+      );
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ plan-seed plan list caps at 10, active first");
+});

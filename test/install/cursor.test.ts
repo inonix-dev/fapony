@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/install/cursor.test.ts — Cursor install provider
 
 import assert from "node:assert";
@@ -20,7 +21,7 @@ function hookCommand(): string {
   return `bun ${join(INSTALL_ROOT, "fapony.ts")} hook-stop`;
 }
 
-export function testInstallCursorNoDirFails(): void {
+test("testInstallCursorNoDirFails", () => {
   withTempHome((home) => {
     let code: number | null = null;
     const err = silentErrors(() =>
@@ -36,9 +37,9 @@ export function testInstallCursorNoDirFails(): void {
     assert.ok(err.includes("Cursor not found"), `got: ${err}`);
     console.log("  ✓ install cursor no ~/.cursor → clear error");
   });
-}
+});
 
-export function testInstallCursorFreshWritesMcpAndHooks(): void {
+test("testInstallCursorFreshWritesMcpAndHooks", () => {
   withTempHome((home) => {
     mkdirSync(join(home, ".cursor"));
     const err = silentErrors(() =>
@@ -65,9 +66,9 @@ export function testInstallCursorFreshWritesMcpAndHooks(): void {
     );
     console.log("  ✓ install cursor fresh → mcp.json + hooks.json written");
   });
-}
+});
 
-export function testInstallCursorMergesStopHookKeepsOthers(): void {
+test("testInstallCursorMergesStopHookKeepsOthers", () => {
   withTempHome((home) => {
     const dir = join(home, ".cursor");
     mkdirSync(dir);
@@ -110,9 +111,9 @@ export function testInstallCursorMergesStopHookKeepsOthers(): void {
     assert.equal(hooks.hooks.preToolUse.length, 1, "other events untouched");
     console.log("  ✓ install cursor existing hooks → merge, not overwrite");
   });
-}
+});
 
-export function testInstallCursorForeignMcpRefuses(): void {
+test("testInstallCursorForeignMcpRefuses", () => {
   withTempHome((home) => {
     const dir = join(home, ".cursor");
     mkdirSync(dir);
@@ -142,9 +143,9 @@ export function testInstallCursorForeignMcpRefuses(): void {
     assert.equal(readFileSync(mcpPath, "utf-8"), before);
     console.log("  ✓ install cursor foreign fapony entry → refuses");
   });
-}
+});
 
-export function testInstallCursorAlreadyConfiguredNoOp(): void {
+test("testInstallCursorAlreadyConfiguredNoOp", () => {
   withTempHome((home) => {
     const dir = join(home, ".cursor");
     mkdirSync(dir);
@@ -167,9 +168,9 @@ export function testInstallCursorAlreadyConfiguredNoOp(): void {
     assert.ok(err.includes("no change"), `got: ${err}`);
     console.log("  ✓ install cursor already configured → no-op");
   });
-}
+});
 
-export function testInstallCursorDryRunNoWrite(): void {
+test("testInstallCursorDryRunNoWrite", () => {
   withTempHome((home) => {
     mkdirSync(join(home, ".cursor"));
     const err = silentErrors(() =>
@@ -189,7 +190,7 @@ export function testInstallCursorDryRunNoWrite(): void {
     assert.ok(err.includes("would write"), `got: ${err}`);
     console.log("  ✓ install cursor dry-run → no write");
   });
-}
+});
 
 function readIfExists(path: string): string | null {
   try {
@@ -199,7 +200,7 @@ function readIfExists(path: string): string | null {
   }
 }
 
-export function testCmdInstallDispatchesCursor(): void {
+test("testCmdInstallDispatchesCursor", () => {
   withTempHome((home) => {
     mkdirSync(join(home, ".cursor"));
     silentErrors(() =>
@@ -211,4 +212,4 @@ export function testCmdInstallDispatchesCursor(): void {
     assert.ok(mcp.mcpServers?.fapony, "mcp.fapony should be written");
     console.log("  ✓ install dispatch routes --platform cursor");
   });
-}
+});

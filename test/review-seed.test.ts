@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/review-seed.test.ts — tests for `fapony review-seed` (src/review-seed.ts)
 
 import assert from "node:assert";
@@ -92,7 +93,7 @@ function treePaths(dir: string, base = dir, out: string[] = []): string[] {
   return out.sort();
 }
 
-export function testReviewSeedScopeFlags(): void {
+test("testReviewSeedScopeFlags", () => {
   withFixture((dir, rootSha, commit2) => {
     // default = diff HEAD + untracked (staged d.ts rides along in diff HEAD)
     const def = renderSeed([], dir);
@@ -140,9 +141,9 @@ export function testReviewSeedScopeFlags(): void {
   console.log(
     "  ✓ review-seed scope flags match their declared git expression",
   );
-}
+});
 
-export function testReviewSeedStructure(): void {
+test("testReviewSeedStructure", () => {
   withFixture((dir) => {
     const out = renderSeed(["--files", "src/a.ts,src/b.ts"], dir);
     // importers: a is imported by the test, b by nobody
@@ -167,9 +168,9 @@ export function testReviewSeedStructure(): void {
     );
   });
   console.log("  ✓ review-seed structure lines are facts-only and capped");
-}
+});
 
-export function testReviewSeedRenames(): void {
+test("testReviewSeedRenames", () => {
   // plain file rename — one annotated row, never a delete+add pair
   withFixture((dir) => {
     writeFileSync(join(dir, "src", "old.ts"), "export const old = 1;\n");
@@ -209,9 +210,9 @@ export function testReviewSeedRenames(): void {
   console.log(
     "  ✓ review-seed parses renames (-M) — one row, annotated, brace form expanded",
   );
-}
+});
 
-export function testReviewSeedDeterministicAndNoWrite(): void {
+test("testReviewSeedDeterministicAndNoWrite", () => {
   withFixture((dir) => {
     const before = treePaths(dir);
     const a = renderSeed([], dir);
@@ -220,9 +221,9 @@ export function testReviewSeedDeterministicAndNoWrite(): void {
     assert.deepEqual(treePaths(dir), before, "no file written outside stdout");
   });
   console.log("  ✓ review-seed is byte-deterministic and writes nothing");
-}
+});
 
-export function testReviewSeedPlanCrossCheck(): void {
+test("testReviewSeedPlanCrossCheck", () => {
   withFixture((dir) => {
     // plan whose files[] disagree with the default diff — both directions
     const planDir = join(dir, ".fapony", "plan");
@@ -272,9 +273,9 @@ export function testReviewSeedPlanCrossCheck(): void {
   console.log(
     "  ✓ review-seed --plan cross-checks both ways and stays honest when empty",
   );
-}
+});
 
-export function testReviewSeedNotARepo(): void {
+test("testReviewSeedNotARepo", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-review-seed-norepo-"));
   try {
     assert.throws(
@@ -289,9 +290,9 @@ export function testReviewSeedNotARepo(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ review-seed outside a repo → one clean error line");
-}
+});
 
-export function testReviewSeedStateDbUntouched(): void {
+test("testReviewSeedStateDbUntouched", () => {
   withFixture((dir) => {
     // The seed never opens state.db — point FAPONY_STATE_DIR at an empty temp
     // dir and assert nothing appears there.
@@ -311,9 +312,9 @@ export function testReviewSeedStateDbUntouched(): void {
     }
   });
   console.log("  ✓ review-seed never touches the fapony state db");
-}
+});
 
-export function testReviewSeedBarrelAndScopeList(): void {
+test("testReviewSeedBarrelAndScopeList", () => {
   withFixture((dir) => {
     // A barrel between the test and the module: src/core.ts is exercised by
     // test/a.test.ts through src/index.ts, so it must not read as untested.
@@ -355,7 +356,7 @@ export function testReviewSeedBarrelAndScopeList(): void {
   console.log(
     "  ✓ review-seed sees through barrels and lists every changed file",
   );
-}
+});
 
 /**
  * `--files` accepts directories: the caller thinks in zones, not file names.
@@ -363,7 +364,7 @@ export function testReviewSeedBarrelAndScopeList(): void {
  * importers/signatures still hit); an empty dir speaks; a wrong path is
  * reported, never silent; expansion past the cap says what was cut.
  */
-export function testReviewSeedFilesDirExpansion(): void {
+test("testReviewSeedFilesDirExpansion", () => {
   withFixture((dir) => {
     const out = renderSeed(["--files", "src/"], dir);
     assert.match(out, /--files \(dir-expanded\)/);
@@ -448,14 +449,14 @@ export function testReviewSeedFilesDirExpansion(): void {
   console.log(
     "  ✓ review-seed --files expands dirs (zone lookup), speaks on empty/wrong paths, counts cuts",
   );
-}
+});
 
 /**
  * `--files` is a lookup, not a review: the caller named the paths, so the caps
  * that keep a 40-file diff readable must not hide the answer. Same file seen
  * through a diff scope stays capped — that is the review budget, unchanged.
  */
-export function testReviewSeedFilesLookupUncapped(): void {
+test("testReviewSeedFilesLookupUncapped", () => {
   withFixture((dir) => {
     const names = Array.from({ length: 9 }, (_, i) => `many${i}`);
     writeFileSync(
@@ -486,14 +487,14 @@ export function testReviewSeedFilesLookupUncapped(): void {
     );
   });
   console.log("  ✓ review-seed --files shows every signature, diff scopes cap");
-}
+});
 
 /**
  * --body: one round trip instead of review-seed → Read. The slice runs from
  * the declaration to indent-out; --callers narrows file→file importers to
  * symbol→symbol textually (comments/strings count — documented, not hidden).
  */
-export function testReviewSeedBodyAndCallers(): void {
+test("testReviewSeedBodyAndCallers", () => {
   withFixture((dir) => {
     writeFileSync(
       join(dir, "src", "multi.ts"),
@@ -580,4 +581,4 @@ export function testReviewSeedBodyAndCallers(): void {
   console.log(
     "  ✓ review-seed --body slices declarations, --callers scans importers",
   );
-}
+});

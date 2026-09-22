@@ -1,10 +1,11 @@
+import { test } from "bun:test";
 // test/telemetry/self-reported.test.ts — telemetry self-reported metadata
 
 import assert from "node:assert";
 import { buildPayload } from "../../src/telemetry.js";
 import { withTempConfig, withTmpDb } from "./helpers.js";
 
-export function testTelemetrySelfReportedFromConfig(): void {
+test("testTelemetrySelfReportedFromConfig", () => {
   // Self-reported metadata comes from config.telemetry.metadata
   // We test the shape here; actual config wiring is in config.test
   const payload = buildPayload();
@@ -18,9 +19,9 @@ export function testTelemetrySelfReportedFromConfig(): void {
   }
 
   console.log("  ✓ telemetry self-reported metadata shape");
-}
+});
 
-export function testTelemetrySelfReportedRoundTrip(): void {
+test("testTelemetrySelfReportedRoundTrip", () => {
   // Metadata set in fapony.config.json must arrive verbatim in the payload.
   withTmpDb((_db) => {
     withTempConfig(
@@ -40,4 +41,4 @@ export function testTelemetrySelfReportedRoundTrip(): void {
   });
 
   console.log("  ✓ telemetry self-reported metadata round-trips from config");
-}
+});

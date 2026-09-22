@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/timing.test.ts — session timing extraction (PLAN-project-health-context step 3)
 //
 // Covers: parseTimeMs units, extractPartTiming field paths (spec §1),
@@ -22,7 +23,7 @@ import {
 
 // ─── parseTimeMs ─────────────────────────────────────────────────────
 
-export function testParseTimeMsUnits(): void {
+test("testParseTimeMsUnits", () => {
   assert.equal(parseTimeMs("2026-09-09T03:00:00.000Z"), 1788922800000);
   assert.equal(parseTimeMs(1788922800000), 1788922800000); // epoch-ms
   assert.equal(parseTimeMs(1788922800), 1788922800000); // epoch-s
@@ -31,11 +32,11 @@ export function testParseTimeMsUnits(): void {
   assert.equal(parseTimeMs(undefined), null);
   assert.equal(parseTimeMs(-5), null);
   console.log("  ✓ parseTimeMs handles ISO/ms/s/garbage");
-}
+});
 
 // ─── extractPartTiming ───────────────────────────────────────────────
 
-export function testExtractPartTimingToolPart(): void {
+test("testExtractPartTimingToolPart", () => {
   const t = extractPartTiming(
     JSON.stringify({
       type: "tool",
@@ -58,9 +59,9 @@ export function testExtractPartTimingToolPart(): void {
   assert.equal(t.toolLatencyMs, 400);
   assert.equal(t.stepInput, null);
   console.log("  ✓ extractPartTiming reads data.time + data.state.time");
-}
+});
 
-export function testExtractPartTimingStepFinish(): void {
+test("testExtractPartTimingStepFinish", () => {
   const t = extractPartTiming(
     JSON.stringify({
       type: "step-finish",
@@ -74,9 +75,9 @@ export function testExtractPartTimingStepFinish(): void {
   assert.equal(t.stepCost, 0.01);
   assert.equal(t.durationMs, null);
   console.log("  ✓ extractPartTiming reads step-finish tokens + cost");
-}
+});
 
-export function testExtractPartTimingMalformed(): void {
+test("testExtractPartTimingMalformed", () => {
   for (const bad of ["not json", "42", "null", '{"time":{"start":"x"}}']) {
     const t = extractPartTiming(bad);
     assert.equal(t.durationMs, null);
@@ -89,11 +90,11 @@ export function testExtractPartTimingMalformed(): void {
   );
   assert.equal(inv.durationMs, null);
   console.log("  ✓ extractPartTiming degrades to nulls on bad input");
-}
+});
 
 // ─── rowFallbackMs ───────────────────────────────────────────────────
 
-export function testRowFallbackMsVariants(): void {
+test("testRowFallbackMsVariants", () => {
   assert.equal(rowFallbackMs(1700000000, 1700000005), 5000); // seconds → ms
   assert.equal(rowFallbackMs(1700000000000, 1700000000500), 500); // ms passthrough
   assert.equal(rowFallbackMs(100, 100), 0);
@@ -101,11 +102,11 @@ export function testRowFallbackMsVariants(): void {
   assert.equal(rowFallbackMs(null, 100), null);
   assert.equal(rowFallbackMs(100, null), null);
   console.log("  ✓ rowFallbackMs handles seconds/ms/inverted/missing");
-}
+});
 
 // ─── summarizeTiming ─────────────────────────────────────────────────
 
-export function testSummarizeTimingAverages(): void {
+test("testSummarizeTimingAverages", () => {
   const s = summarizeTiming({
     durationsMs: [1000, 2000, null],
     stepTokens: [
@@ -132,9 +133,9 @@ export function testSummarizeTimingAverages(): void {
   assert(!blob.includes("3000"), "no summed input tokens");
   assert(!blob.includes("600"), "no summed output tokens");
   console.log("  ✓ summarizeTiming averages, never sums");
-}
+});
 
-export function testSummarizeTimingEmpty(): void {
+test("testSummarizeTimingEmpty", () => {
   const s = summarizeTiming({
     durationsMs: [],
     stepTokens: [],
@@ -146,7 +147,7 @@ export function testSummarizeTimingEmpty(): void {
   assert.equal(s.avgStepInput, null);
   assert.deepEqual(s.toolLatencyMsByType, {});
   console.log("  ✓ summarizeTiming empty → nulls, not NaN");
-}
+});
 
 // ─── OpenCode integration ────────────────────────────────────────────
 
@@ -252,7 +253,7 @@ function withEnvDb(dbPath: string, fn: () => void): void {
   }
 }
 
-export function testOpenCodeTimingFromEmbedded(): void {
+test("testOpenCodeTimingFromEmbedded", () => {
   withTimingDb((dbPath) =>
     withEnvDb(dbPath, () => {
       const r = readPassiveUsage(undefined, undefined, undefined, true);
@@ -270,9 +271,9 @@ export function testOpenCodeTimingFromEmbedded(): void {
     }),
   );
   console.log("  ✓ opencode detail.timing: embedded + row fallback + latency");
-}
+});
 
-export function testOpenCodeTimingNeverLeaksIO(): void {
+test("testOpenCodeTimingNeverLeaksIO", () => {
   withTimingDb((dbPath) =>
     withEnvDb(dbPath, () => {
       const r = readPassiveUsage(undefined, undefined, undefined, true);
@@ -281,9 +282,9 @@ export function testOpenCodeTimingNeverLeaksIO(): void {
     }),
   );
   console.log("  ✓ opencode timing exposes aggregates only, no raw fields");
-}
+});
 
-export function testCollectTimingStepCountMirrorsDetail(): void {
+test("testCollectTimingStepCountMirrorsDetail", () => {
   // A step-finish row without tokens still counts as a step.
   const input = collectTiming([
     { data: '{"type":"step-finish"}', time_created: 1, time_updated: 1 },
@@ -291,7 +292,7 @@ export function testCollectTimingStepCountMirrorsDetail(): void {
   assert.equal(input.steps, 1);
   assert.equal(input.stepTokens.length, 1);
   console.log("  ✓ collectTiming counts tokenless step-finish rows");
-}
+});
 
 // ─── ZCode integration (no time_updated column) ──────────────────────
 
@@ -365,7 +366,7 @@ function withZcodeTimingDb(fn: (dbPath: string) => void): void {
   }
 }
 
-export function testZcodeTimingEmbeddedOnly(): void {
+test("testZcodeTimingEmbeddedOnly", () => {
   withZcodeTimingDb((dbPath) => {
     const orig = process.env.FAPONY_ZCODE_DB;
     process.env.FAPONY_ZCODE_DB = dbPath;
@@ -386,7 +387,7 @@ export function testZcodeTimingEmbeddedOnly(): void {
     }
   });
   console.log("  ✓ zcode detail.timing works without time_updated column");
-}
+});
 
 // ─── Claude Code integration ─────────────────────────────────────────
 
@@ -426,7 +427,7 @@ function withClaudeTimingFixture(fn: (dir: string) => void): void {
   }
 }
 
-export function testClaudeCodeTimingDetail(): void {
+test("testClaudeCodeTimingDetail", () => {
   withClaudeTimingFixture((dir) => {
     const orig = process.env.FAPONY_CLAUDE_PROJECTS_DIR;
     process.env.FAPONY_CLAUDE_PROJECTS_DIR = join(dir, "projects");
@@ -460,4 +461,4 @@ export function testClaudeCodeTimingDetail(): void {
     }
   });
   console.log("  ✓ claude-code detail: turn gaps + tool_use latency + avgs");
-}
+});

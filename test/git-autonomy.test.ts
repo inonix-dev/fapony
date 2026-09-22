@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/git-autonomy.test.ts — git-autonomy rewrites (opt-in opencode plugin)
 
 import assert from "node:assert";
@@ -26,24 +27,24 @@ const ASK_FIRST =
 const BASH_LINE =
   "- Only commit, amend, push, or create PRs when explicitly requested.";
 
-export function testGitAutonomyRewritesAskFirst(): void {
+test("testGitAutonomyRewritesAskFirst", () => {
   const { text, matched } = rewriteGitAutonomySystem(`policy: ${ASK_FIRST}`);
   assert.ok(!text.includes("NEVER commit changes"), `got: ${text}`);
   assert.ok(text.includes(GIT_AUTONOMY_COMMIT_POLICY), `got: ${text}`);
   assert.ok(matched.includes("system-commit-full"), `got: ${matched}`);
   console.log("  ✓ git-autonomy rewrites the ask-first system rule");
-}
+});
 
-export function testGitAutonomyFallbackCatchesReword(): void {
+test("testGitAutonomyFallbackCatchesReword", () => {
   const { text, matched } = rewriteGitAutonomySystem(
     "NEVER commit changes to main without approval.",
   );
   assert.ok(text.includes(GIT_AUTONOMY_COMMIT_POLICY), `got: ${text}`);
   assert.ok(matched.includes("system-commit-fallback"), `got: ${matched}`);
   console.log("  ✓ git-autonomy fallback catches a reworded ban");
-}
+});
 
-export function testGitAutonomyRewritesBashDescBothSurfaces(): void {
+test("testGitAutonomyRewritesBashDescBothSurfaces", () => {
   const sys = rewriteGitAutonomySystem(`# Git and GitHub:\n${BASH_LINE}`);
   assert.ok(
     !sys.text.includes("when explicitly requested"),
@@ -64,9 +65,9 @@ export function testGitAutonomyRewritesBashDescBothSurfaces(): void {
   assert.equal(other.description, BASH_LINE);
   assert.deepStrictEqual(other.matched, []);
   console.log("  ✓ git-autonomy rewrites both surfaces, bash only");
-}
+});
 
-export function testGitAutonomyCutsToneExamples(): void {
+test("testGitAutonomyCutsToneExamples", () => {
   const src = [
     "# Tone and style",
     "Here are some examples to demonstrate appropriate verbosity:",
@@ -78,9 +79,9 @@ export function testGitAutonomyCutsToneExamples(): void {
   assert.ok(text.includes("# Git and GitHub"), "next heading must survive");
   assert.ok(matched.includes("system-tone-examples"), `got: ${matched}`);
   console.log("  ✓ git-autonomy cuts the tone few-shot block");
-}
+});
 
-export function testGitAutonomyStatusNamesStale(): void {
+test("testGitAutonomyStatusNamesStale", () => {
   const ok = gitAutonomyStatus(
     [`policy: ${ASK_FIRST}`, `# Git:\n${BASH_LINE}`],
     { bash: BASH_LINE },
@@ -97,9 +98,9 @@ export function testGitAutonomyStatusNamesStale(): void {
   assert.ok(stale.stale.includes("system-bash-desc"), `got: ${stale.stale}`);
   assert.ok(stale.stale.includes("tool-bash-commit"), `got: ${stale.stale}`);
   console.log("  ✓ git-autonomy status names stale patterns");
-}
+});
 
-export function testGitAutonomyPluginSourceDefersToShared(): void {
+test("testGitAutonomyPluginSourceDefersToShared", () => {
   const src = gitAutonomyPluginSource("/install/root");
   assert.ok(src.includes("/install/root/src/hook.ts"), "bakes install root");
   assert.ok(src.includes("rewriteGitAutonomySystem"), "no baked system regex");
@@ -115,13 +116,13 @@ export function testGitAutonomyPluginSourceDefersToShared(): void {
     "must never break a session or hide a tool",
   );
   console.log("  ✓ git-autonomy plugin defers to shared logic, both hooks");
-}
+});
 
 function autonomyPath(home: string): string {
   return join(home, ".config", "opencode", "plugins", "fapony-git-autonomy.ts");
 }
 
-export function testGitAutonomyDefaultInstallWritesNothing(): void {
+test("testGitAutonomyDefaultInstallWritesNothing", () => {
   withTempHome((home) => {
     silentErrors(() =>
       captureErrors(() =>
@@ -134,9 +135,9 @@ export function testGitAutonomyDefaultInstallWritesNothing(): void {
     );
     console.log("  ✓ git-autonomy default install writes nothing");
   });
-}
+});
 
-export function testGitAutonomyOptInWritesPlugin(): void {
+test("testGitAutonomyOptInWritesPlugin", () => {
   withTempHome((home) => {
     const err = silentErrors(() =>
       captureErrors(() =>
@@ -163,9 +164,9 @@ export function testGitAutonomyOptInWritesPlugin(): void {
     assert.equal(readFileSync(autonomyPath(home), "utf-8"), src);
     console.log("  ✓ git-autonomy opt-in writes the plugin once");
   });
-}
+});
 
-export function testGitAutonomyForeignFileUntouched(): void {
+test("testGitAutonomyForeignFileUntouched", () => {
   withTempHome((home) => {
     const p = autonomyPath(home);
     mkdirSync(join(home, ".config", "opencode", "plugins"), {
@@ -184,9 +185,9 @@ export function testGitAutonomyForeignFileUntouched(): void {
     assert.equal(readFileSync(p, "utf-8"), "// someone else's plugin\n");
     console.log("  ✓ git-autonomy leaves foreign files alone");
   });
-}
+});
 
-export function testGitAutonomyStaleWarns(): void {
+test("testGitAutonomyStaleWarns", () => {
   withTempHome((home) => {
     const p = autonomyPath(home);
     mkdirSync(join(home, ".config", "opencode", "plugins"), {
@@ -208,9 +209,9 @@ export function testGitAutonomyStaleWarns(): void {
     assert.equal(readFileSync(p, "utf-8"), stale);
     console.log("  ✓ git-autonomy stale plugin warns, untouched");
   });
-}
+});
 
-export function testGitAutonomyDryRunNoWrite(): void {
+test("testGitAutonomyDryRunNoWrite", () => {
   withTempHome((home) => {
     silentErrors(() =>
       captureErrors(() =>
@@ -224,9 +225,9 @@ export function testGitAutonomyDryRunNoWrite(): void {
     assert.ok(!existsSync(autonomyPath(home)), "dry-run must not write");
     console.log("  ✓ git-autonomy dry-run writes nothing");
   });
-}
+});
 
-export async function testGitAutonomyDispatchFlag(): Promise<void> {
+test("testGitAutonomyDispatchFlag", async () => {
   withTempHome((home) => {
     silentErrors(() =>
       captureErrors(() =>
@@ -242,4 +243,4 @@ export async function testGitAutonomyDispatchFlag(): Promise<void> {
     );
     console.log("  ✓ install opencode --git-autonomy dispatches the flag");
   });
-}
+});

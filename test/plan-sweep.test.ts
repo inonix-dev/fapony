@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/plan-sweep.test.ts — plan-sweep --apply link rewrite.
 //
 // Two fixed rounds of dangling links (mem mtjn3ldk, mtl15q4y):
@@ -36,7 +37,7 @@ function tmp(): string {
   return d;
 }
 
-export function testRewriteMovedFileLinksSiblingLayout(): void {
+test("testRewriteMovedFileLinksSiblingLayout", () => {
   const d = tmp();
   try {
     const oldDir = join(d, "plan");
@@ -66,9 +67,9 @@ export function testRewriteMovedFileLinksSiblingLayout(): void {
   console.log(
     "  ✓ rewriteMovedFileLinks re-relativizes sibling links, ignores the rest",
   );
-}
+});
 
-export function testRewriteMovedFileLinksNestedLayout(): void {
+test("testRewriteMovedFileLinksNestedLayout", () => {
   const d = tmp();
   try {
     // legacy layout: done/ one level under plan/
@@ -88,9 +89,9 @@ export function testRewriteMovedFileLinksNestedLayout(): void {
     rmSync(d, { recursive: true, force: true });
   }
   console.log("  ✓ rewriteMovedFileLinks handles the nested plan/done/ layout");
-}
+});
 
-export function testRewriteMarkdownLinksInbound(): void {
+test("testRewriteMarkdownLinksInbound", () => {
   const d = tmp();
   try {
     const oldAbs = join(d, "plan", "PLAN-a.md");
@@ -110,11 +111,11 @@ export function testRewriteMarkdownLinksInbound(): void {
     rmSync(d, { recursive: true, force: true });
   }
   console.log("  ✓ rewriteMarkdownLinks repoints inbound links, keeps anchors");
-}
+});
 
 // End to end through the real CLI: sibling layout, inbound from plan/ + done/ +
 // spec/, and a tracked doc outside .fapony/ that must be reported, not fixed.
-export function testPlanSweepApplyEndToEnd(): void {
+test("testPlanSweepApplyEndToEnd", () => {
   withTempRepo((dir) => {
     mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
     mkdirSync(join(dir, ".fapony", "done"), { recursive: true });
@@ -184,10 +185,10 @@ export function testPlanSweepApplyEndToEnd(): void {
   console.log(
     "  ✓ plan-sweep --apply fixes own + plan/done/spec inbound, reports the rest",
   );
-}
+});
 
 // The SKILL example passes the repo-relative path — it must resolve, not "not found".
-export function testPlanSweepAcceptsRepoRelativePath(): void {
+test("testPlanSweepAcceptsRepoRelativePath", () => {
   withTempRepo((dir) => {
     mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
     mkdirSync(join(dir, ".fapony", "done"), { recursive: true });
@@ -204,11 +205,11 @@ export function testPlanSweepAcceptsRepoRelativePath(): void {
     assert.match(out, /moved .*PLAN-a\.md → .*PLAN-a\.md/);
   });
   console.log("  ✓ plan-sweep --apply accepts the repo-relative path form");
-}
+});
 
 // The in-process entry (MCP mem path calls initStore + cmdPlanSweep the same
 // way) — guards the target-resolution fallback without spawning bun.
-export function testCmdPlanSweepInProcess(): void {
+test("testCmdPlanSweepInProcess", () => {
   withTempRepo((dir) => {
     mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
     mkdirSync(join(dir, ".fapony", "done"), { recursive: true });
@@ -232,4 +233,4 @@ export function testCmdPlanSweepInProcess(): void {
     );
   });
   console.log("  ✓ cmdPlanSweep moves the file in-process");
-}
+});

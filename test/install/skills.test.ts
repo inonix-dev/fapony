@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/install/skills.test.ts — linkSkills (skill symlinks shared by all clients)
 
 import assert from "node:assert";
@@ -16,7 +17,7 @@ import { join } from "node:path";
 import { INSTALL_ROOT, linkSkills } from "../../src/install.js";
 import { skillNames } from "./helpers.js";
 
-export function testLinkSkillsCreatesSymlinks(): void {
+test("testLinkSkillsCreatesSymlinks", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-skills-"));
   try {
     const results = linkSkills(dir, false);
@@ -41,9 +42,9 @@ export function testLinkSkillsCreatesSymlinks(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testLinkSkillsIdempotent(): void {
+test("testLinkSkillsIdempotent", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-skills-"));
   try {
     linkSkills(dir, false);
@@ -56,9 +57,9 @@ export function testLinkSkillsIdempotent(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testLinkSkillsRefusesOverwrite(): void {
+test("testLinkSkillsRefusesOverwrite", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-skills-"));
   try {
     const victim = skillNames()[0];
@@ -81,9 +82,9 @@ export function testLinkSkillsRefusesOverwrite(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testLinkSkillsDryRunNoWrite(): void {
+test("testLinkSkillsDryRunNoWrite", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-skills-"));
   try {
     const results = linkSkills(dir, true);
@@ -98,4 +99,4 @@ export function testLinkSkillsDryRunNoWrite(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});

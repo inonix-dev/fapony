@@ -1,9 +1,10 @@
+import { test } from "bun:test";
 import assert from "node:assert";
 import { getRun, newRun, setStatus } from "../src/db/store.js";
 import { gateOnce } from "../src/gate.js";
 import { withTmpDb } from "./helpers.js";
 
-export function testGateOncePass(): void {
+test("testGateOncePass", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
     setStatus(db, runId, "awaiting_review");
@@ -26,9 +27,9 @@ export function testGateOncePass(): void {
   });
 
   console.log("  ✓ gateOnce pass");
-}
+});
 
-export function testGateOnceFail(): void {
+test("testGateOnceFail", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
     setStatus(db, runId, "awaiting_review");
@@ -43,9 +44,9 @@ export function testGateOnceFail(): void {
   });
 
   console.log("  ✓ gateOnce fail");
-}
+});
 
-export function testGateOnceAlreadyPassed(): void {
+test("testGateOnceAlreadyPassed", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
     setStatus(db, runId, "passed");
@@ -56,9 +57,9 @@ export function testGateOnceAlreadyPassed(): void {
   });
 
   console.log("  ✓ gateOnce already passed");
-}
+});
 
-export function testGateOnceAlreadyStalled(): void {
+test("testGateOnceAlreadyStalled", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
     setStatus(db, runId, "stalled");
@@ -69,9 +70,9 @@ export function testGateOnceAlreadyStalled(): void {
   });
 
   console.log("  ✓ gateOnce already stalled");
-}
+});
 
-export function testGateOnceMaxRounds(): void {
+test("testGateOnceMaxRounds", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
     setStatus(db, runId, "awaiting_review");
@@ -105,9 +106,9 @@ export function testGateOnceMaxRounds(): void {
   });
 
   console.log("  ✓ gateOnce max rounds");
-}
+});
 
-export function testGateOncePassExcellent(): void {
+test("testGateOncePassExcellent", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
     setStatus(db, runId, "awaiting_review");
@@ -127,9 +128,9 @@ export function testGateOncePassExcellent(): void {
   });
 
   console.log("  ✓ gateOnce pass-excellent");
-}
+});
 
-export function testGateOncePassGood(): void {
+test("testGateOncePassGood", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
     setStatus(db, runId, "awaiting_review");
@@ -149,9 +150,9 @@ export function testGateOncePassGood(): void {
   });
 
   console.log("  ✓ gateOnce pass-good");
-}
+});
 
-export function testGateOncePassAdequate(): void {
+test("testGateOncePassAdequate", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
     setStatus(db, runId, "awaiting_review");
@@ -171,9 +172,9 @@ export function testGateOncePassAdequate(): void {
   });
 
   console.log("  ✓ gateOnce pass-adequate");
-}
+});
 
-export function testGateOnceUncertain(): void {
+test("testGateOnceUncertain", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
     setStatus(db, runId, "awaiting_review");
@@ -211,4 +212,4 @@ export function testGateOnceUncertain(): void {
   });
 
   console.log("  ✓ gateOnce uncertain");
-}
+});

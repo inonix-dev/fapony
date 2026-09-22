@@ -35,7 +35,6 @@ import {
 } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { collectSourceFiles, isSkippedDir, SCAN_EXTS } from "../analyze.js";
-import { computeModelFit } from "../context/projectHealth.js";
 import {
   CONFIG_FILENAME,
   type Config,
@@ -46,7 +45,6 @@ import {
 } from "../core/config.js";
 import { extractExports } from "../map.js";
 import { readRecentMemDecisions } from "../memory.js";
-import { getStatsData } from "../stats/data.js";
 import { capLines, execGit, SIG_MAX } from "./primitives.js";
 
 // One chunk = one module's signatures — past ~40 lines a module is its own
@@ -60,6 +58,14 @@ const SCOPE_WARN_FILES = 300;
 // Shipped plans/specs that already touched this scope. Capped low on purpose:
 // this is a "go read that first" pointer, not a bibliography.
 const MAX_PRIOR_ART = 5;
+// Chunk 4 (PLAN-seed-and-surface): the PLAN names what is already in scope —
+// one line per scope file with its export names. SPEC-only seeds never gave
+// PLAN-only readers this pointer, so agents re-derived what export-lines.ts
+// already knew. Capped low: a pointer, not a signature dump.
+const MAX_EXISTING_IN_SCOPE = 15;
+// The PLAN ≤ ~60 contract (§3.1) predates this block — the block yields to it,
+// never grows it. Effective block cap = min(block cap, remaining budget).
+const MAX_PLAN_LINES = 60;
 // Anchor-safe slug: lowercase, non-alphanumerics → dash.
 const slug = (s: string): string =>
   s
@@ -149,7 +155,84 @@ function renderPriorArt(cwd: string, config: Config, roots: string[]): string {
   return shown.join("\n");
 }
 
-// --- Context (fapony): mem decisions + model fit ---
+// Chunk 5 (PLAN-seed-and-surface): stdout ends with the plans that already
+// exist — the seed that lands next to a shipped decision without knowing it
+// is the expensive mistake (§8 prior art guards the file, this guards the
+// glance). Active plans first (the ones a new seed must not duplicate),
+// then shipped; capped like every other list here.
+const MAX_PLAN_LIST = 10;
+
+function listExistingPlans(
+  cwd: string,
+  config: Config,
+  exclude: string,
+): string[] {
+  const items: string[] = [];
+  for (const [dir, where] of [
+    [planDir(), "plan"],
+    [doneDir(config), "done"],
+  ] as const) {
+    let names: string[];
+    try {
+      names = readdirSync(join(cwd, dir))
+        .filter((n) => n.endsWith(".md"))
+        .sort();
+    } catch {
+      continue; // dir missing — nothing seeded yet
+    }
+    for (const n of names) {
+      if (n === exclude) continue; // the file just written, not "existing"
+      items.push(`- ${n} (${where})`);
+    }
+  }
+  if (items.length === 0) return ["- (none yet)"];
+  return capLines(items, MAX_PLAN_LIST, "plans");
+}
+
+// --- Context (fapony): mem decisions + existing in scope ---
+//
+// No ledger-ranking line here (PLAN-seed-and-surface chunk 6): the ledger is
+// frozen and Positioning rule 2 forbids cross-model ranking claims, so a
+// seeded pointer at it teaches the reader to cite what cannot be cited.
+// computeModelFit() itself stays — `fapony stats` reads it.
+
+// One line per scope file naming its exports — `src/debt/scan.ts —
+// scanDebt() · DebtHit`. Files with no exports (or unreadable) are skipped:
+// a pointer lists what is there, not what is not. Sorted for determinism.
+function renderExistingInScope(
+  roots: string[],
+  cwd: string,
+  scoped: boolean,
+  cap: number,
+): string[] {
+  // No --scope means every file in the repo matches — a list of everything
+  // points at nothing (§8 prior art goes quiet for the same reason).
+  if (!scoped)
+    return ["- _(no --scope — re-seed with --scope <dir> to list exports)_"];
+  const abs: string[] = [];
+  for (const r of roots) for (const f of scopeSourceFiles(r)) abs.push(f);
+  const rels = [...new Set(abs.map((f) => relative(cwd, f) || "."))].sort();
+  const lines: string[] = [];
+  for (const rel of rels) {
+    let source: string;
+    try {
+      source = readFileSync(join(cwd, rel), "utf-8");
+    } catch {
+      continue;
+    }
+    const scan = extractExports(source);
+    if (scan.error || scan.symbols.length === 0) continue;
+    // Re-export-only files scan as one `*` per line — dedupe to a single `*`.
+    const names = [
+      ...new Set(
+        scan.symbols.map((s) => (s.kind === "fn" ? `${s.name}()` : s.name)),
+      ),
+    ];
+    lines.push(`- ${rel} — ${names.join(" · ")}`);
+  }
+  if (lines.length === 0) return ["- _(no exports in scope)_"];
+  return capLines(lines, cap, "files in scope (narrow with --scope <path>)");
+}
 
 function renderContextFapony(worktree: string): string {
   const lines: string[] = [];
@@ -164,17 +247,6 @@ function renderContextFapony(worktree: string): string {
           .join(" · ")}`
       : "- Decisions on record (mem): _(none — no mem log or empty)_",
   );
-  const fits = computeModelFit(getStatsData().byRegime, worktree);
-  lines.push(
-    fits.length > 0
-      ? `- Model fit (ledger, min N=5): ${fits
-          .map(
-            (f) =>
-              `${f.regime} → ${f.model} (N=${f.gates}, fail ${(f.failRate * 100).toFixed(0)}%)`,
-          )
-          .join(" · ")}`
-      : "- Model fit: _(not enough graded history yet)_",
-  );
   return lines.join("\n");
 }
 
@@ -184,6 +256,7 @@ function planTemplate(
   name: string,
   priorArt: string,
   contextFapony: string,
+  existingScope: string[],
   specLink: string | null,
   planRel: string,
 ): string {
@@ -204,6 +277,8 @@ status: active
 
 ## Context (fapony)
 ${contextFapony}
+### Existing in scope
+${existingScope.join("\n")}
 
 ## 1. Goal (why)
 _(agent fills in)_
@@ -221,19 +296,11 @@ _(agent fills in)_
 _(agent fills in)_
 
 ## 6. Steps (what in which order)
-One step = one chunk = one session: finish it, close it, **stop** — starting the
-next step in the same session is what rule 9 forbids.
+One step = one chunk = one session: finish it, close it, **stop** — starting the next step in the same session is what rule 9 forbids.
 
 1. _(agent fills in — each step must be verifiable)_
 
-**Closing a step:** tick its TL;DR box with the sha · \`git commit\` this step's
-files only · then hand off:
-
-\`\`\`bash
-fapony mem add note "<what chunk N+1 must know>" --files <f1,f2> ${planRel}
-\`\`\`
-
-Next session opens with \`kickoff ${planRel}\` (or \`kickoff ${basename(planRel)}\` — kickoff resolves by filename too, so no need to retype the path).
+**Closing a step:** tick TL;DR with sha · \`git commit\` files only · \`fapony mem add note "<what chunk N+1 must know>" --files <f1,f2> ${planRel}\` · next opens with \`kickoff ${planRel}\` (or \`kickoff PLAN-${name}.md\` — kickoff resolves by filename too).
 
 ## 7. Examples
 ${
@@ -566,6 +633,14 @@ export function cmdPlanSeed(args: string[]): void {
 
   const priorArt = renderPriorArt(cwd, config, roots);
   const contextFapony = renderContextFapony(worktree);
+  const scoped = requested.length > 0;
+  // First pass at the block cap — the total-cap check below may shrink it.
+  let existingScope = renderExistingInScope(
+    roots,
+    cwd,
+    scoped,
+    MAX_EXISTING_IN_SCOPE,
+  );
 
   let specLink: string | null = null;
   if (withSpec) {
@@ -593,15 +668,30 @@ export function cmdPlanSeed(args: string[]): void {
   }
 
   mkdirSync(planDirAbs, { recursive: true });
-  writeFileSync(
-    planPath,
+  const buildPlan = (existing: string[]): string =>
     planTemplate(
       name,
       priorArt,
       contextFapony,
+      existing,
       specLink,
       `${planDir()}/PLAN-${name}.md`,
-    ),
-  );
+    );
+  let planBody = buildPlan(existingScope);
+  // The ≤ ~60 contract predates the §4 block — shrink the block (never the
+  // judgment sections) until the file fits. Each item is one line, so cutting
+  // `over` items fixes exactly; the re-render recounts the cut honestly.
+  const planLines = (b: string): number =>
+    b.replace(/\n$/, "").split("\n").length;
+  const over = planLines(planBody) - MAX_PLAN_LINES;
+  if (over > 0) {
+    const budget = Math.max(existingScope.length - over, 1);
+    existingScope = renderExistingInScope(roots, cwd, scoped, budget);
+    planBody = buildPlan(existingScope);
+  }
+  writeFileSync(planPath, planBody);
   console.log(`wrote ${planPath}${specLink ? ` + SPEC-${name}.md` : ""}`);
+  console.log("Existing plans:");
+  for (const l of listExistingPlans(cwd, config, `PLAN-${name}.md`))
+    console.log(l);
 }

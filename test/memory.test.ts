@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import assert from "node:assert";
 import { execSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -16,7 +17,7 @@ import {
 } from "../src/memory.js";
 import { baseConfig, withTempRepo } from "./helpers.js";
 
-export function testMemoryDefaultWiringWithDir(): void {
+test("testMemoryDefaultWiringWithDir", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
   try {
     // the mem dir alone is enough now — `fapony init` creates it empty and the
@@ -30,9 +31,9 @@ export function testMemoryDefaultWiringWithDir(): void {
   }
 
   console.log("  ✓ memory default-wiring with empty .fapony/.memory/");
-}
+});
 
-export function testMemoryDefaultWiringNoDir(): void {
+test("testMemoryDefaultWiringNoDir", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
   try {
     const result = resolveMemoryConfig(baseConfig(), dir);
@@ -42,9 +43,9 @@ export function testMemoryDefaultWiringNoDir(): void {
   }
 
   console.log("  ✓ memory default-wiring without any .fapony/.memory/");
-}
+});
 
-export function testMemoryExplicitConfigWins(): void {
+test("testMemoryExplicitConfigWins", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
   try {
     const memDir = join(dir, ".fapony", ".memory");
@@ -68,9 +69,9 @@ export function testMemoryExplicitConfigWins(): void {
   }
 
   console.log("  ✓ memory explicit config wins over default");
-}
+});
 
-export function testClaimMemoryFailGracefully(): void {
+test("testClaimMemoryFailGracefully", () => {
   // Config with a claim command that always fails ("false" exits 1)
   const failingConfig: Config = {
     ...baseConfig(),
@@ -89,11 +90,12 @@ export function testClaimMemoryFailGracefully(): void {
   assert.equal(noMemResult, false, "should return false when memory is null");
 
   console.log("  ✓ claimMemory fails gracefully");
-}
+});
 
 // Regression: execSync must have timeout so hanging scripts don't block the process.
-// "sleep 999" should complete in ~15s (timeout), not 999s (the sleep duration).
-export function testClaimMemoryTimeout(): void {
+// "sleep 999" should complete in ~1s (injected timeout), not 999s (the sleep duration).
+// Production default stays 15s — the param exists so this test doesn't pay it.
+test("testClaimMemoryTimeout", () => {
   const hangingConfig: Config = {
     ...baseConfig(),
     memory: {
@@ -104,21 +106,21 @@ export function testClaimMemoryTimeout(): void {
   };
 
   const start = Date.now();
-  const result = claimMemory(hangingConfig, "/tmp", "test-id");
+  const result = claimMemory(hangingConfig, "/tmp", "test-id", 1_000);
   const elapsed = Date.now() - start;
 
   assert.equal(result, false, "should return false for hanging command");
-  // Should complete in ~15s (timeout), not 999s (the sleep)
-  if (elapsed > 20_000) {
+  // Should complete in ~1s (timeout), not 999s (the sleep)
+  if (elapsed > 5_000) {
     throw new Error(
       `timeout test took too long: ${elapsed}ms — execSync may be hanging`,
     );
   }
 
   console.log("  ✓ claimMemory timeout prevents hang");
-}
+});
 
-export function testMemoryReadRecentDecisions(): void {
+test("testMemoryReadRecentDecisions", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-mem-log-"));
   try {
     const memDir = join(dir, ".fapony", ".memory");
@@ -172,9 +174,9 @@ export function testMemoryReadRecentDecisions(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ readRecentMemDecisions filters, ranks, and degrades");
-}
+});
 
-export function testMemoryReadRecentDecisionsMonorepo(): void {
+test("testMemoryReadRecentDecisionsMonorepo", () => {
   const root = mkdtempSync(join(tmpdir(), "fapony-mono-"));
   try {
     const memDir = join(root, "apps", "vela", ".fapony", ".memory");
@@ -205,12 +207,12 @@ export function testMemoryReadRecentDecisionsMonorepo(): void {
   console.log(
     "  ✓ readRecentMemDecisions finds the app-scoped log in a monorepo",
   );
-}
+});
 
 // Regression 2026-09-19: readMemLog skipped log.YYYY-MM-DD.jsonl, so the day a
 // repo crossed the rotate threshold mem_find forgot every archived row — the
 // closed ones, which is most of what recall is for.
-export function testReadMemLogIncludesRotatedArchives(): void {
+test("testReadMemLogIncludesRotatedArchives", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-memrotate-"));
   try {
     const memDir = join(dir, ".fapony", ".memory");
@@ -234,12 +236,12 @@ export function testReadMemLogIncludesRotatedArchives(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ readMemLog reads rotated archives, not just the live log");
-}
+});
 
 // Regression 2026-09-19 (review-pony): walk-up climbed past the git root, so a
 // repo nested under another checkout resolved to the parent's log and wrote the
 // row outside the repo. SPEC §1: step 3/4 stop at the repo root.
-export function testMemDirWalkStopsAtRepoRoot(): void {
+test("testMemDirWalkStopsAtRepoRoot", () => {
   const outer = mkdtempSync(join(tmpdir(), "fapony-outer-"));
   try {
     mkdirSync(join(outer, ".fapony", ".memory"), { recursive: true });
@@ -258,12 +260,12 @@ export function testMemDirWalkStopsAtRepoRoot(): void {
     rmSync(outer, { recursive: true, force: true });
   }
   console.log("  ✓ mem dir walk stops at the repo root");
-}
+});
 
 // Regression 2026-09-19 (review-pony): an empty .fapony/.memory/ (what
 // `fapony init` scaffolds) counted as a candidate and shadowed the ancestor
 // that held the real log. SPEC §1: a dir without a log*.jsonl is not a hit.
-export function testMemDirSkipsEmptyCandidate(): void {
+test("testMemDirSkipsEmptyCandidate", () => {
   withTempRepo((repo) => {
     mkdirSync(join(repo, ".fapony", ".memory"), { recursive: true });
     writeFileSync(join(repo, ".fapony", ".memory", "log.jsonl"), "");
@@ -277,12 +279,12 @@ export function testMemDirSkipsEmptyCandidate(): void {
     );
   });
   console.log("  ✓ mem dir skips an empty .fapony/.memory/ candidate");
-}
+});
 
 // Regression 2026-09-19 (review-pony): paths.memDir was read from
 // cwd/fapony.config.json and joined to cwd. SPEC §1: it lives at the repo root
 // and is relative to the repo root, so it must work from a subdirectory.
-export function testMemDirConfigIsRepoRootRelative(): void {
+test("testMemDirConfigIsRepoRootRelative", () => {
   withTempRepo((repo) => {
     mkdirSync(join(repo, "apps", "y"), { recursive: true });
     mkdirSync(join(repo, "shared", "mem"), { recursive: true });
@@ -298,7 +300,7 @@ export function testMemDirConfigIsRepoRootRelative(): void {
     );
   });
   console.log("  ✓ paths.memDir resolves relative to the repo root");
-}
+});
 
 // Regression 2026-09-19 (review-pony): `mem where` never saw --mem-dir (stripped
 // before dispatch) and the writer silently fell back to the default on a bad
@@ -307,7 +309,7 @@ export function testMemDirConfigIsRepoRootRelative(): void {
 // the repo root, the resolver returned "none" and the writer silently created a
 // third log at <root>/.fapony/.memory/ that no app-scoped reader would see.
 // SPEC §1 fail example: refuse with both paths.
-export function testMemDirAmbiguousRefusesWrite(): void {
+test("testMemDirAmbiguousRefusesWrite", () => {
   withTempRepo((repo) => {
     for (const app of ["vela", "mdl"]) {
       const dir = join(repo, "apps", app, ".fapony", ".memory");
@@ -327,14 +329,14 @@ export function testMemDirAmbiguousRefusesWrite(): void {
   console.log(
     "  ✓ two app-scoped mem dirs at the repo root → refuse, never guess",
   );
-}
+});
 
 // Regression 2026-09-21: with ONE app-scoped log and nothing at/above cwd the
 // resolver returned "none" with no trace of it, so the Stop hook told the agent
 // "nothing recorded in this project yet" while apps/vela/.fapony/.memory held
 // rows. Resolution is unchanged (one candidate is not ambiguous) — the
 // candidate just travels back so callers can say out-of-scope, not absent.
-export function testMemDirSingleOutOfScopeReportsCandidate(): void {
+test("testMemDirSingleOutOfScopeReportsCandidate", () => {
   withTempRepo((repo) => {
     const dir = join(repo, "apps", "vela", ".fapony", ".memory");
     mkdirSync(dir, { recursive: true });
@@ -345,9 +347,9 @@ export function testMemDirSingleOutOfScopeReportsCandidate(): void {
     assert.deepEqual(got.candidates, [dir], "the path must come back");
   });
   console.log("  ✓ one out-of-scope mem dir comes back as a candidate");
-}
+});
 
-export function testMemDirOverrideWinsAndRefusesMissing(): void {
+test("testMemDirOverrideWinsAndRefusesMissing", () => {
   withTempRepo((repo) => {
     mkdirSync(join(repo, ".fapony", ".memory"), { recursive: true });
     writeFileSync(join(repo, ".fapony", ".memory", "log.jsonl"), "");
@@ -368,4 +370,4 @@ export function testMemDirOverrideWinsAndRefusesMissing(): void {
     );
   });
   console.log("  ✓ --mem-dir wins and a missing path is refused, not ignored");
-}
+});

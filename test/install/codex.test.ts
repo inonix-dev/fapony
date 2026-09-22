@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/install/codex.test.ts — Codex install provider
 
 import assert from "node:assert";
@@ -36,7 +37,7 @@ function sessionStartCommand(): string {
 
 // --- MCP config tests ---
 
-export function testInstallCodexNoConfigFails(): void {
+test("testInstallCodexNoConfigFails", () => {
   withTempHome((home) => {
     let code: number | null = null;
     const err = silentErrors(() =>
@@ -52,9 +53,9 @@ export function testInstallCodexNoConfigFails(): void {
     assert.ok(err.includes("Codex config not found"), `got: ${err}`);
     console.log("  ✓ install codex no config → clear error");
   });
-}
+});
 
-export function testInstallCodexAppendsEntry(): void {
+test("testInstallCodexAppendsEntry", () => {
   withTempHome((home) => {
     const configDir = join(home, ".codex");
     mkdirSync(configDir, { recursive: true });
@@ -72,9 +73,9 @@ export function testInstallCodexAppendsEntry(): void {
     assert.ok(err.includes("added mcp_servers.fapony"), `got: ${err}`);
     console.log("  ✓ install codex existing config → appends entry");
   });
-}
+});
 
-export function testInstallCodexAlreadyConfiguredNoOp(): void {
+test("testInstallCodexAlreadyConfiguredNoOp", () => {
   withTempHome((home) => {
     const configDir = join(home, ".codex");
     mkdirSync(configDir, { recursive: true });
@@ -92,9 +93,9 @@ export function testInstallCodexAlreadyConfiguredNoOp(): void {
     assert.ok(err.includes("already configured"), `got: ${err}`);
     console.log("  ✓ install codex already configured → no-op");
   });
-}
+});
 
-export function testInstallCodexDryRunNoWrite(): void {
+test("testInstallCodexDryRunNoWrite", () => {
   withTempHome((home) => {
     const configDir = join(home, ".codex");
     mkdirSync(configDir, { recursive: true });
@@ -112,9 +113,9 @@ export function testInstallCodexDryRunNoWrite(): void {
     assert.ok(err.includes("dry-run"), `got: ${err}`);
     console.log("  ✓ install codex dry-run → no write");
   });
-}
+});
 
-export function testCmdInstallDispatchesCodex(): void {
+test("testCmdInstallDispatchesCodex", () => {
   withTempHome((home) => {
     const configDir = join(home, ".codex");
     mkdirSync(configDir, { recursive: true });
@@ -128,11 +129,11 @@ export function testCmdInstallDispatchesCodex(): void {
     assert.ok(after.includes("[mcp_servers.fapony]"), `got: ${after}`);
     console.log("  ✓ install dispatch routes --platform codex");
   });
-}
+});
 
 // --- Stop hook tests ---
 
-export function testInstallCodexCreatesHooksJson(): void {
+test("testInstallCodexCreatesHooksJson", () => {
   withTempHome((home) => {
     const configDir = join(home, ".codex");
     mkdirSync(configDir, { recursive: true });
@@ -172,9 +173,9 @@ export function testInstallCodexCreatesHooksJson(): void {
       "  ✓ install codex creates hooks.json with Stop + SessionStart hooks",
     );
   });
-}
+});
 
-export function testInstallCodexHooksMergePreservesForeign(): void {
+test("testInstallCodexHooksMergePreservesForeign", () => {
   withTempHome((home) => {
     const configDir = join(home, ".codex");
     mkdirSync(configDir, { recursive: true });
@@ -227,9 +228,9 @@ export function testInstallCodexHooksMergePreservesForeign(): void {
     );
     console.log("  ✓ install codex hooks.json merge preserves foreign entries");
   });
-}
+});
 
-export function testInstallCodexHooksAlreadyConfiguredNoOp(): void {
+test("testInstallCodexHooksAlreadyConfiguredNoOp", () => {
   withTempHome((home) => {
     const configDir = join(home, ".codex");
     mkdirSync(configDir, { recursive: true });
@@ -259,9 +260,9 @@ export function testInstallCodexHooksAlreadyConfiguredNoOp(): void {
     assert.ok(err.includes("already configured"), `got: ${err}`);
     console.log("  ✓ install codex hooks.json already configured → no-op");
   });
-}
+});
 
-export function testInstallCodexSessionStartUpgradeAppends(): void {
+test("testInstallCodexSessionStartUpgradeAppends", () => {
   // Every existing install has Stop but no SessionStart — the upgrade path
   // must append the new group and leave Stop byte-identical.
   withTempHome((home) => {
@@ -295,9 +296,9 @@ export function testInstallCodexSessionStartUpgradeAppends(): void {
     assert.equal(handlers[0].command, sessionStartCommand());
     console.log("  ✓ install codex Stop-only install → SessionStart appended");
   });
-}
+});
 
-export function testInstallCodexHooksMalformedSkipsGracefully(): void {
+test("testInstallCodexHooksMalformedSkipsGracefully", () => {
   withTempHome((home) => {
     const configDir = join(home, ".codex");
     mkdirSync(configDir, { recursive: true });
@@ -316,9 +317,9 @@ export function testInstallCodexHooksMalformedSkipsGracefully(): void {
     );
     console.log("  ✓ install codex hooks.json malformed → skip gracefully");
   });
-}
+});
 
-export function testInstallCodexDryRunHooksNoWrite(): void {
+test("testInstallCodexDryRunHooksNoWrite", () => {
   withTempHome((home) => {
     const configDir = join(home, ".codex");
     mkdirSync(configDir, { recursive: true });
@@ -333,11 +334,11 @@ export function testInstallCodexDryRunHooksNoWrite(): void {
     );
     console.log("  ✓ install codex dry-run → no hooks.json written");
   });
-}
+});
 
 // --- Skill linking tests ---
 
-export function testInstallCodexLinksSkills(): void {
+test("testInstallCodexLinksSkills", () => {
   withTempHome((home) => {
     const configDir = join(home, ".codex");
     mkdirSync(configDir, { recursive: true });
@@ -353,9 +354,9 @@ export function testInstallCodexLinksSkills(): void {
     }
     console.log("  ✓ install codex links skills to ~/.agents/skills");
   });
-}
+});
 
-export function testInstallCodexSkillsConflictUntouched(): void {
+test("testInstallCodexSkillsConflictUntouched", () => {
   withTempHome((home) => {
     const configDir = join(home, ".codex");
     mkdirSync(configDir, { recursive: true });
@@ -388,9 +389,9 @@ export function testInstallCodexSkillsConflictUntouched(): void {
     }
     console.log("  ✓ install codex skill conflict → preserve user content");
   });
-}
+});
 
-export function testInstallCodexFindHooksJson(): void {
+test("testInstallCodexFindHooksJson", () => {
   withTempHome((home) => {
     assert.equal(
       findCodexHooksJson(() => home),
@@ -408,4 +409,4 @@ export function testInstallCodexFindHooksJson(): void {
     );
     console.log("  ✓ findCodexHooksJson");
   });
-}
+});

@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/conventions-seed.test.ts — PLAN-convention-debt chunk 2 (init fill-signal).
 //
 // Two sources, by design (SPEC §2.2): eslint no-restricted-* entries (they carry
@@ -57,7 +58,7 @@ function readRows(repo: string): Row[] {
   return raw.conventions;
 }
 
-export function testSeedEslintEntriesCarryChecker(): void {
+test("testSeedEslintEntriesCarryChecker", () => {
   withTempRepoAsync(async (repo) => {
     mkdirSync(join(repo, "apps/vela"), { recursive: true });
     writeFileSync(
@@ -101,9 +102,9 @@ export default [
     assert.equal(ids.size, rows.length);
   });
   console.log("  ✓ seed → eslint entries become conventions with checker");
-}
+});
 
-export function testSeedEslintSupersetBlocksDedupe(): void {
+test("testSeedEslintSupersetBlocksDedupe", () => {
   withTempRepoAsync(async (repo) => {
     writeFileSync(
       join(repo, "eslint.config.js"),
@@ -125,9 +126,9 @@ export default [
     );
   });
   console.log("  ✓ seed → superset blocks dedupe to one row per message");
-}
+});
 
-export function testSeedWrapperDetectorFindsLiveMigrations(): void {
+test("testSeedWrapperDetectorFindsLiveMigrations", () => {
   withTempRepoAsync(async (repo) => {
     writeFileSync(
       join(repo, "id.ts"),
@@ -178,9 +179,9 @@ export function testSeedWrapperDetectorFindsLiveMigrations(): void {
   console.log(
     "  ✓ seed → wrapper detector seeds stale+ok pairs, one-offs stay out",
   );
-}
+});
 
-export function testSeedRepoWithoutAnythingGetsEmptyFile(): void {
+test("testSeedRepoWithoutAnythingGetsEmptyFile", () => {
   withTempRepoAsync(async (repo) => {
     const result = await seedConventionsFile(repo);
     assert.equal(result.eslintRows, 0);
@@ -189,9 +190,9 @@ export function testSeedRepoWithoutAnythingGetsEmptyFile(): void {
     assert.deepEqual(readRows(repo), []);
   });
   console.log("  ✓ seed → a repo with no signal gets an empty file, no error");
-}
+});
 
-export function testSeedNeverOverwritesExisting(): void {
+test("testSeedNeverOverwritesExisting", () => {
   withTempRepoAsync(async (repo) => {
     mkdirSync(join(repo, ".fapony"), { recursive: true });
     writeFileSync(
@@ -209,9 +210,9 @@ export function testSeedNeverOverwritesExisting(): void {
     assert.equal(rows[0].id, "mine");
   });
   console.log("  ✓ seed → existing conventions.json is never overwritten");
-}
+});
 
-export function testSeedBrokenConfigIsSkippedLoudly(): void {
+test("testSeedBrokenConfigIsSkippedLoudly", () => {
   withTempRepoAsync(async (repo) => {
     writeFileSync(
       join(repo, "eslint.config.js"),
@@ -223,4 +224,4 @@ export function testSeedBrokenConfigIsSkippedLoudly(): void {
     assert.ok(result.skipped[0].includes("import failed"));
   });
   console.log("  ✓ seed → an unimportable config is skipped, said out loud");
-}
+});

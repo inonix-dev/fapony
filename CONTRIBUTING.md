@@ -42,7 +42,8 @@ bun run check
 ## Running Tests
 
 ```bash
-bun fapony.ts test
+bun run test            # full suite (parallel, ~17s)
+bun run test:changed    # only test files affected by your diff — use while iterating
 ```
 
 ## Code Style

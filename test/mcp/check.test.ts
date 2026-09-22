@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/mcp/check.test.ts — tests for handoff_check tool + extractMultiField
 
 import assert from "node:assert";
@@ -12,7 +13,7 @@ import { parseToolResult } from "../../src/adapters/mcp/types.js";
 
 // --- handoff_check tests ---
 
-export function testHandoffCheckMissingBlock(): void {
+test("testHandoffCheckMissingBlock", () => {
   const result = toolHandoffCheck({ handoff: "no handoff here" });
   const data = parseToolResult(result) as {
     checks: { name: string; pass: boolean }[];
@@ -23,9 +24,9 @@ export function testHandoffCheckMissingBlock(): void {
   assert.equal(data.checks[0].pass, false);
   assert.equal(data.summary.failed, 1);
   console.log("  ✓ handoff_check detects missing block");
-}
+});
 
-export function testHandoffCheckGoodHandoff(): void {
+test("testHandoffCheckGoodHandoff", () => {
   const handoff = [
     "Some output",
     "## HANDOFF",
@@ -53,9 +54,9 @@ export function testHandoffCheckGoodHandoff(): void {
   assert.equal(data.summary.passed, 6);
   assert.equal(data.summary.failed, 0);
   console.log("  ✓ handoff_check passes for good handoff");
-}
+});
 
-export function testHandoffCheckUncertainFails(): void {
+test("testHandoffCheckUncertainFails", () => {
   const handoff = [
     "## HANDOFF",
     "claimed: abc123",
@@ -83,9 +84,9 @@ export function testHandoffCheckUncertainFails(): void {
   assert.equal(uncertainCheck?.pass, false);
   assert.equal(data.summary.failed, 1);
   console.log("  ✓ handoff_check fails when uncertainty reported");
-}
+});
 
-export function testHandoffCheckNotDoneFails(): void {
+test("testHandoffCheckNotDoneFails", () => {
   const handoff = [
     "## HANDOFF",
     "claimed: abc123",
@@ -109,9 +110,9 @@ export function testHandoffCheckNotDoneFails(): void {
   const notDoneCheck = data.checks.find((c) => c.name === "not_done_not_empty");
   assert.equal(notDoneCheck?.pass, false);
   console.log("  ✓ handoff_check fails when not_done reported");
-}
+});
 
-export function testHandoffCheckWithFactsCrossRef(): void {
+test("testHandoffCheckWithFactsCrossRef", () => {
   const handoff = [
     "## HANDOFF",
     "claimed: abc123",
@@ -135,9 +136,9 @@ export function testHandoffCheckWithFactsCrossRef(): void {
   const crossRef = data.checks.find((c) => c.name === "facts_cross_referenced");
   assert.equal(crossRef?.pass, true);
   console.log("  ✓ handoff_check cross-references facts");
-}
+});
 
-export function testHandoffCheckWithoutFacts(): void {
+test("testHandoffCheckWithoutFacts", () => {
   const handoff = [
     "## HANDOFF",
     "claimed: abc123",
@@ -160,9 +161,9 @@ export function testHandoffCheckWithoutFacts(): void {
   // When no facts provided, the check is skipped entirely (not in checks array)
   assert.equal(crossRef, undefined);
   console.log("  ✓ handoff_check skips facts_cross_referenced when no facts");
-}
+});
 
-export function testHandoffCheckAutoGenerate(): void {
+test("testHandoffCheckAutoGenerate", () => {
   const facts = { commits: ["abc123", "def456"] };
   // Agent provides uncertain/not_done/checks → used in handoff
   const result = toolHandoffCheck({
@@ -181,9 +182,9 @@ export function testHandoffCheckAutoGenerate(): void {
   console.log(
     "  ✓ handoff_check auto-generates claimed/commits, uses agent uncertain/not_done/checks",
   );
-}
+});
 
-export function testHandoffCheckAutoGenerateRequiresAgentReport(): void {
+test("testHandoffCheckAutoGenerateRequiresAgentReport", () => {
   const facts = { commits: ["abc123", "def456"] };
   // Agent does NOT provide uncertain/not_done/checks → all 3 fail
   const result = toolHandoffCheck({ auto_generate: true, facts });
@@ -199,9 +200,9 @@ export function testHandoffCheckAutoGenerateRequiresAgentReport(): void {
   console.log(
     "  ✓ handoff_check auto_generate without agent report fails all 3 checks",
   );
-}
+});
 
-export function testHandoffCheckAutoGenerateWithUncertainty(): void {
+test("testHandoffCheckAutoGenerateWithUncertainty", () => {
   const facts = { commits: ["abc123"] };
   // Agent reports uncertainty → uncertain_not_empty fails
   const result = toolHandoffCheck({
@@ -219,9 +220,9 @@ export function testHandoffCheckAutoGenerateWithUncertainty(): void {
   console.log(
     "  ✓ handoff_check auto_generate catches agent-reported uncertainty",
   );
-}
+});
 
-export function testHandoffCheckMultiLineUncertain(): void {
+test("testHandoffCheckMultiLineUncertain", () => {
   const handoff = [
     "## HANDOFF",
     "claimed: abc123",
@@ -248,23 +249,23 @@ export function testHandoffCheckMultiLineUncertain(): void {
   assert.ok(uncertainCheck?.note.includes("first issue"));
   assert.ok(uncertainCheck?.note.includes("also second issue"));
   console.log("  ✓ handoff_check handles multi-line uncertain");
-}
+});
 
 // --- extractMultiField tests ---
 
-export function testExtractMultiFieldNone(): void {
+test("testExtractMultiFieldNone", () => {
   const result = extractMultiField("uncertain: none", "uncertain");
   assert.deepEqual(result, []);
   console.log("  ✓ extractMultiField returns [] for 'none'");
-}
+});
 
-export function testExtractMultiFieldSingle(): void {
+test("testExtractMultiFieldSingle", () => {
   const result = extractMultiField("uncertain: maybe so", "uncertain");
   assert.deepEqual(result, ["maybe so"]);
   console.log("  ✓ extractMultiField single line");
-}
+});
 
-export function testExtractMultiFieldMultiLine(): void {
+test("testExtractMultiFieldMultiLine", () => {
   const text = [
     "## HANDOFF",
     "claimed: x",
@@ -276,22 +277,22 @@ export function testExtractMultiFieldMultiLine(): void {
   const result = extractMultiField(text, "uncertain");
   assert.deepEqual(result, ["first issue", "also second issue", "and third"]);
   console.log("  ✓ extractMultiField multi-line");
-}
+});
 
-export function testExtractMultiFieldEmptyLineEndsField(): void {
+test("testExtractMultiFieldEmptyLineEndsField", () => {
   const text = ["uncertain: first issue", "", "not_done: leftover"].join("\n");
   const result = extractMultiField(text, "uncertain");
   assert.deepEqual(result, ["first issue"]);
   console.log("  ✓ extractMultiField stops at empty line");
-}
+});
 
-export function testExtractMultiFieldNotFound(): void {
+test("testExtractMultiFieldNotFound", () => {
   const result = extractMultiField("claimed: x", "uncertain");
   assert.deepEqual(result, []);
   console.log("  ✓ extractMultiField returns [] when field missing");
-}
+});
 
-export function testHandoffCheckBlastRadiusWithWorktree(): void {
+test("testHandoffCheckBlastRadiusWithWorktree", () => {
   // Create a minimal TS project: hub imported by 3 non-test files
   const dir = mkdtempSync(join(tmpdir(), "fapony-check-"));
   try {
@@ -329,9 +330,9 @@ export function testHandoffCheckBlastRadiusWithWorktree(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ handoff_check computes blast_radius when worktree provided");
-}
+});
 
-export function testHandoffCheckNoBlastRadiusWithoutWorktree(): void {
+test("testHandoffCheckNoBlastRadiusWithoutWorktree", () => {
   const handoff = [
     "## HANDOFF",
     "claimed: none",
@@ -358,4 +359,4 @@ export function testHandoffCheckNoBlastRadiusWithoutWorktree(): void {
     "blast_radius must be absent without worktree",
   );
   console.log("  ✓ handoff_check omits blast_radius when worktree absent");
-}
+});

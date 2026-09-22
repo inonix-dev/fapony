@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/mcp/helpers.test.ts — tests for utility functions + e2e pipeline
 
 import assert from "node:assert";
@@ -18,28 +19,28 @@ import { withTempRepo } from "./helpers.js";
 
 // --- Utility function tests ---
 
-export function testJsonResult(): void {
+test("testJsonResult", () => {
   const r = jsonResult({ foo: 1 });
   assert.equal(r.content.length, 1);
   assert.equal(r.content[0].type, "text");
   assert.equal(JSON.parse(r.content[0].text).foo, 1);
   console.log("  ✓ jsonResult wraps data in content");
-}
+});
 
-export function testErrorResult(): void {
+test("testErrorResult", () => {
   const r = errorResult("oops");
   assert.equal(r.isError, true);
   assert.equal(JSON.parse(r.content[0].text).error, "oops");
   console.log("  ✓ errorResult marks isError");
-}
+});
 
-export function testParseToolResult(): void {
+test("testParseToolResult", () => {
   const r = jsonResult({ a: 1 });
   assert.deepEqual(parseToolResult(r), { a: 1 });
   console.log("  ✓ parseToolResult round-trips");
-}
+});
 
-export function testReasonCodesAreLocked(): void {
+test("testReasonCodesAreLocked", () => {
   assert.equal(REASON_CODES.length, 9);
   assert.ok(REASON_CODES.includes("missing_test"));
   assert.ok(REASON_CODES.includes("scope_mismatch"));
@@ -51,9 +52,9 @@ export function testReasonCodesAreLocked(): void {
   assert.ok(REASON_CODES.includes("none"));
   assert.ok(REASON_CODES.includes("other"));
   console.log("  ✓ REASON_CODES has 9 values (locked)");
-}
+});
 
-export function testRegimeCodesAreLocked(): void {
+test("testRegimeCodesAreLocked", () => {
   assert.equal(REGIME_CODES.length, 6);
   assert.ok(REGIME_CODES.includes("code"));
   assert.ok(REGIME_CODES.includes("fix"));
@@ -62,11 +63,11 @@ export function testRegimeCodesAreLocked(): void {
   assert.ok(REGIME_CODES.includes("inquiry"));
   assert.ok(REGIME_CODES.includes("test"));
   console.log("  ✓ REGIME_CODES has 6 values (locked)");
-}
+});
 
 // --- End-to-end pipeline test ---
 
-export function testEndToEndPipeline(): void {
+test("testEndToEndPipeline", () => {
   const oldEnv = process.env.FAPONY_STATE_DIR;
   const tmpDir = mkdtempSync(join(tmpdir(), "fapony-mcp-e2e-"));
   process.env.FAPONY_STATE_DIR = tmpDir;
@@ -125,4 +126,4 @@ export function testEndToEndPipeline(): void {
     }
   }
   console.log("  ✓ end-to-end pipeline: collect → check");
-}
+});

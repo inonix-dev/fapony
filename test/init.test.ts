@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import assert from "node:assert";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,7 +14,7 @@ function withTmpDir(fn: (dir: string) => void): void {
   }
 }
 
-export function testInitCreatesDirectories(): void {
+test("testInitCreatesDirectories", () => {
   withTmpDir((tmp) => {
     const target = join(tmp, "project");
     initProject(target);
@@ -47,9 +48,9 @@ export function testInitCreatesDirectories(): void {
   });
 
   console.log("  ✓ init creates directories");
-}
+});
 
-export function testInitIdempotent(): void {
+test("testInitIdempotent", () => {
   withTmpDir((tmp) => {
     const target = join(tmp, "project");
     initProject(target);
@@ -59,18 +60,18 @@ export function testInitIdempotent(): void {
   });
 
   console.log("  ✓ init idempotent (re-run errors)");
-}
+});
 
-export function testInitNoArgs(): void {
+test("testInitNoArgs", () => {
   // cmdInit handles the no-args case; test the function behavior
   // initProject requires a path, so empty string would fail at mkdirSync
   assert.throws(() => initProject(""), /ENOENT|enoent/i);
   console.log("  ✓ init no path errors");
-}
+});
 
 // The printed snippet is what the user pastes into their own rules file — it must
 // use `fapony mem` (built-in commands) instead of the old `bun <path>/mem.ts`.
-export function testInitSnippetPathMatchesScaffold(): void {
+test("testInitSnippetPathMatchesScaffold", () => {
   withTmpDir((tmp) => {
     const target = join(tmp, "project");
 
@@ -95,4 +96,4 @@ export function testInitSnippetPathMatchesScaffold(): void {
   });
 
   console.log("  ✓ init snippet uses fapony mem (built-in)");
-}
+});
