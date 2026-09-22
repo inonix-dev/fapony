@@ -1,11 +1,6 @@
 import type { Config } from "./types.js";
 
-export const DEFAULT_SAFETY_DENY = [
-  "reset\\s+--hard",
-  "clean\\s+-[a-z]*f",
-  "checkout\\s+--\\s",
-  "git\\s+stash",
-];
+export { DEFAULT_SAFETY_DENY } from "../core/defaults.js";
 // --- .fapony/ layout (single source of truth — do not hardcode ".fapony" elsewhere) ---
 // plan/spec live in .fapony/ — not configurable (gitignored = private).
 export const FAPONY_DIR = ".fapony";

@@ -13,25 +13,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import type { ModelRates, PriceTable } from "../core/types.js";
 import { faponyDir } from "../db/load.js";
 import type { Config } from "../db/types.js";
 
+export type { ModelRates, PriceTable } from "../core/types.js";
+
 const PRICES_FILENAME = "prices.json";
 const MODELS_URL = "https://openrouter.ai/api/v1/models";
-
-/** per-token rates (dollars) — every rate comes straight from OpenRouter, no guessing */
-export interface ModelRates {
-  input: number;
-  output: number;
-  cacheRead: number;
-  /** null = the table does not provide it → use the input rate instead (see calcCost) */
-  cacheWrite: number | null;
-}
-
-export interface PriceTable {
-  fetched_at: string;
-  models: Record<string, ModelRates>;
-}
 
 export function pricesPath(config?: Config): string {
   return join(faponyDir(config), PRICES_FILENAME);
