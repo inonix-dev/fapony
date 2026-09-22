@@ -109,7 +109,10 @@ export function withOpenCodeSession(
   const dir = mkdtempSync(join(tmpdir(), "fapony-stats-perpass-"));
   const { dbPath, close } = makeOpenCodeDb(dir);
   const db = new Database(dbPath);
-  db.run(`INSERT INTO project (id, worktree) VALUES (?, ?)`, "p1", "/tmp/wt1");
+  db.run(`INSERT INTO project (id, worktree) VALUES (?, ?)`, [
+    "p1",
+    "/tmp/wt1",
+  ]);
   db.prepare(
     `INSERT INTO session (id, project_id, model, time_created, tokens_input, tokens_output, tokens_cache_read, tokens_cache_write) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
