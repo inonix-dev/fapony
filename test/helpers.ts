@@ -103,6 +103,24 @@ export function baseConfig(): Config {
 }
 
 /**
+ * Run fn with console.log captured; returns the joined lines. Nothing is
+ * printed. Restores the original console.log even if fn throws.
+ */
+export function captureLogs(fn: () => void): string {
+  const lines: string[] = [];
+  const orig = console.log;
+  console.log = (...a: unknown[]) => {
+    lines.push(a.map(String).join(" "));
+  };
+  try {
+    fn();
+  } finally {
+    console.log = orig;
+  }
+  return lines.join("\n");
+}
+
+/**
  * Run fn with console.error suppressed.
  */
 export function silentErrors<T>(fn: () => T): T {
