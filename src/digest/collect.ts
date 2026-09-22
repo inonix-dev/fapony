@@ -5,6 +5,7 @@
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { type HintImpact, hintLogPath } from "../core/hint-log.js";
 import {
   CONFIG_FILENAME,
   doneDir,
@@ -14,7 +15,7 @@ import {
   planDir,
   type Run,
 } from "../db/index.js";
-import { computeHintImpact, type HintImpact, hintLogPath } from "../hook.js";
+import { computeHintImpact } from "../hook.js";
 import { type MemRow, readMemLog } from "../memory.js";
 import { isPassFamily, VERDICT_GRADES } from "../parse.js";
 import { imputeResult, loadPrices } from "../price/index.js";

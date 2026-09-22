@@ -32,80 +32,25 @@ import { debtForFile, loadConventions } from "./debt/index.js";
 import { readMemLog, whereMemDir } from "./memory.js";
 import { renderSeed } from "./seed/review-seed.js";
 
-// --- Hint-fire log (PLAN-feedback-surface chunk 1) ---
-//
-// Append-only JSONL under state dir (<faponyDir>/hint-log/<key>.jsonl),
-// one file per worktree. Best-effort: every error swallowed — a hook that
-// cannot log must still annotate. Called at caller only (cmdHookReadHint +
-// opencode plugins), never inside readHintFor/readContextLines/commitHintFor
-// (test pollution: those functions are called ~20x in test/hook.test.ts
-// without setting FAPONY_STATE_DIR).
+// Hint-fire log types + pure helpers now live in core/hint-log.ts.
+// Re-export for existing callers (hook.ts itself, opencode plugins).
+export {
+  type HintFireRow,
+  type HintImpact,
+  hintLogDir,
+  hintLogPath,
+  recordHintFire,
+  worktreeKey,
+} from "./core/hint-log.js";
 
-const HINT_LOG_DIR = "hint-log";
-
-/** Stable filename key from an absolute worktree path. */
-export function worktreeKey(worktree: string): string {
-  return worktree.replace(/^\/+/, "").replace(/\//g, "--");
-}
-
-/** Directory holding one hint-fire log file per worktree. */
-function hintLogDir(): string {
-  const base =
-    process.env.FAPONY_STATE_DIR || join(homedir(), ".config", "fapony");
-  return join(base, HINT_LOG_DIR);
-}
-
-/** Absolute path of a worktree's hint-fire log — may not exist. */
-export function hintLogPath(worktree: string): string {
-  return join(hintLogDir(), `${worktreeKey(worktree)}.jsonl`);
-}
-
-export interface HintFireRow {
-  ts: string;
-  worktree: string;
-  surface: "read" | "debt" | "mem" | "commit" | "edit";
-  file: string | null;
-  count: number;
-  ids?: string[];
-}
-
-/**
- * Append a hint-fire log row. Best-effort: never throws, never blocks.
- * Uses $FAPONY_STATE_DIR when set (tests, CI), otherwise ~/.config/fapony.
- */
-export function recordHintFire(row: HintFireRow): void {
-  try {
-    const dir = hintLogDir();
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    appendFileSync(
-      hintLogPath(row.worktree),
-      `${JSON.stringify(row)}\n`,
-      "utf-8",
-    );
-  } catch {
-    // best-effort — swallow
-  }
-}
-
-// --- Debt precision (PLAN-feedback-surface chunk 2) ---
-//
-// Reads the hint-fire log, re-runs debtForFile at HEAD for each file that
-// received debt hints, and counts which ids are no longer flagged. This is
-// deterministic (no proxy, no join with events) and answers: of the debt
-// lines fapony showed, how many is the repo now clean of?
-
-export interface HintImpact {
-  fired: number;
-  by_surface: {
-    read: number;
-    debt: number;
-    mem: number;
-    commit: number;
-    edit: number;
-  };
-  debt: { shown: number; resolved: number; unknown: number };
-  window: string | null;
-}
+// Internal imports used by computeHintImpact and recordHintFire calls below.
+import {
+  type HintFireRow,
+  type HintImpact,
+  hintLogDir,
+  recordHintFire,
+  worktreeKey,
+} from "./core/hint-log.js";
 
 /**
  * Compute hint-fire impact from the log. `since` is an ISO date string;
