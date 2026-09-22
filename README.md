@@ -45,15 +45,14 @@ vibe. On top of history it checks claims against git facts: handoff conformance 
 allowlisted evidence — with everything the agent claimed but couldn't prove marked as such.
 
 **What that question looks like answered, from one project's own (frozen — reads history,
-no new grades) ledger — the top of the `n≥5` frontier (`fapony stats --mode verdict --regime code`):**
+no new grades) ledger — two familiar names from the `n≥5` table (`fapony stats --mode verdict --regime code`):**
 
 | model | tokens/pass | quality | n |
 |---|---|---|---|
-| `mimo-v2.5` | 3.9M | 4.0 | 9 |
-| `deepseek-v4.1-flash` | 2.3M | 3.9 | 19 |
-| `z-ai/glm-5.3-flash` | 1.2M | 3.8 | 9 |
+| `claude-opus-5` | 6.5M | 3.7 | 22 |
+| `claude-sonnet-5` | 3.1M | 3.5 | 23 |
 
-Same quality band, a 3.3× token spread — the kind of answer a session log can't give (it has tokens,
+Same quality band, a 2.1× token spread — the kind of answer a session log can't give (it has tokens,
 no grades) and a benchmark can't give either (it has grades, not your codebase). One caveat that's
 on you to hold: work isn't randomly assigned to models, so a gap this size is a strong prior, not a
 controlled trial — you likely route easy tasks to the cheap model already. `n≥5` is fapony's own
