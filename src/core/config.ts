@@ -1,6 +1,6 @@
 // src/core/config.ts — pure config single source (PLAN-lib-layer chunk 4).
-// Merged from db/{defaults,types,getters,load}. Those files are now shims
-// re-exporting from here. db/ keeps only store.ts (bun:sqlite) + index barrel.
+// Merged from db/{defaults,types,getters,load} (shims removed — 0 importers).
+// db/ keeps only store.ts (bun:sqlite).
 // Pure = node builtins only, no imports back to features/adapters/db-store.
 
 export { DEFAULT_SAFETY_DENY } from "./defaults.js";
