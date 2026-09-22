@@ -6,7 +6,7 @@
 import { realpathSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { collectSourceFiles, SCAN_EXTS } from "../../analyze.js";
-import { debtForFile, loadConventions } from "../../debt/index.js";
+import { debtForFile, resolveDebtScope } from "../../debt/index.js";
 import { readMemLog } from "../../memory.js";
 
 const DEBT_HINT_MAX = 3;
@@ -44,14 +44,17 @@ export function readContextData(
     const debtLines: string[] = [];
     const memLines: string[] = [];
 
-    // convention debt — source files only, fresh from the repo
+    // convention debt — source files only, fresh from the repo. The scope
+    // pairs the git root (repo-relative `where`) with the nearest
+    // conventions file — anchoring the load at the root goes silent in a
+    // monorepo with app-scoped conventions (bug mucvfaxk).
     const dot = rel.lastIndexOf(".");
     if (dot >= 0 && SCAN_EXTS.has(rel.slice(dot))) {
-      for (const c of debtForFile(
-        worktree,
-        abs,
-        loadConventions(worktree),
-      ).slice(0, DEBT_HINT_MAX)) {
+      const scope = resolveDebtScope(dirname(abs));
+      for (const c of debtForFile(scope.scanRoot, abs, scope.loaded).slice(
+        0,
+        DEBT_HINT_MAX,
+      )) {
         debtIds.push(c.id);
         debtLines.push(`fapony debt: [${c.id}] ${c.rule}`);
       }

@@ -6,7 +6,7 @@ import { existsSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { CONVENTIONS_FILE } from "../core/config.js";
 import { formatDebt } from "./format.js";
-import { loadConventions } from "./load.js";
+import { resolveDebtScope } from "./load.js";
 import { findPromotions, formatPromotions } from "./promotion.js";
 import { debtForFile, debtScan } from "./scan.js";
 import { ZONE_CAP } from "./types.js";
@@ -119,12 +119,26 @@ export function cmdDebt(args: string[]): void {
     }
   }
 
-  const worktree = worktreeOf(path);
-  const loaded = loadConventions(worktree);
+  // Scan scope: the git root (convention `where` values are repo-relative)
+  // paired with the nearest conventions file — scanning from the app dir
+  // dropped repo-relative conventions and hid files outside the app
+  // (bug mucvfiv5). Evidence (mem/ledger) keeps the old neighborhood scope.
+  // Physical path (symlinks resolved) so --files resolution below compares
+  // like with like against scope.scanRoot (/var → /private/var on macOS).
+  let base = resolve(path ?? ".");
+  try {
+    base = realpathSync(base);
+  } catch {
+    // nonexistent — the not-found notes below handle it
+  }
+  const scope = resolveDebtScope(base);
+  const worktree = scope.scanRoot;
+  const loaded = scope.loaded;
+  const evidenceDir = worktreeOf(path);
 
   if (filesMode) {
     const out = filesMode.map((f) => {
-      const abs = isAbsolute(f) ? f : resolve(worktree, f);
+      const abs = isAbsolute(f) ? f : resolve(base, f);
       if (!existsSync(abs) || !statSync(abs).isFile()) {
         return { file: f, debt: [], note: "not found" as const };
       }
@@ -178,7 +192,7 @@ export function cmdDebt(args: string[]): void {
   if (json) {
     console.log(
       JSON.stringify(
-        { ...report, promotions: findPromotions(worktree, report) },
+        { ...report, promotions: findPromotions(evidenceDir, report) },
         null,
         2,
       ),
@@ -187,7 +201,7 @@ export function cmdDebt(args: string[]): void {
   }
   console.log(formatDebt(report, showAll));
   for (const w of loaded.warnings) console.log(`⚠ ${w}`);
-  for (const l of formatPromotions(findPromotions(worktree, report))) {
+  for (const l of formatPromotions(findPromotions(evidenceDir, report))) {
     console.log(l);
   }
 }
