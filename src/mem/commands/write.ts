@@ -1,8 +1,9 @@
 // commands/write.ts — mutating commands: add, close, claim, release, synced, hook
 
+import { CapError, engineAdd, engineClose } from "../engine.js";
 import { claimsOf, openRows } from "../selectors.js";
 import type { WorkKind } from "../store.js";
-import { KINDS, memCmd, nextId, put, root, rows } from "../store.js";
+import { KINDS, memCmd, put, root, rows } from "../store.js";
 
 export const cmdAdd = async (a: string[]) => {
   // mem add <next|bug|decision|note|hold> "<text>" --files f1,f2 [path/to/SPEC.md]
@@ -65,33 +66,23 @@ export const cmdAdd = async (a: string[]) => {
     }
     text = filtered.join(" ");
   }
-  // read once — cap check + id collision
-  const all = rows();
-  // ponytail: a cap on open next/hold stops endless accumulation — forces triage of the old before opening new
-  const CAP = 15;
-  const CAP_HOLD = 10;
-  if (a[0] === "next" && !process.env.MEM_FORCE) {
-    const openNext = openRows(all).filter((r) => r.kind === "next").length;
-    if (openNext >= CAP) {
-      console.error(
-        `open next ${openNext}/${CAP} is full — close an old one first (or MEM_FORCE=1 if you really must)`,
-      );
-      process.exit(1);
+  // Domain rules (caps, id) live in the shared engine — this wrapper owns
+  // only argv surface and the MEM_FORCE hint wording (PLAN-unify-mem-engine).
+  try {
+    const { id } = engineAdd({ kind: a[0], text, spec, files });
+    console.log(id);
+  } catch (e) {
+    if (e instanceof CapError) {
+      const hint =
+        e.cap === "next"
+          ? " (or MEM_FORCE=1 if you really must)"
+          : " (or MEM_FORCE=1)";
+      console.error(`${e.message}${hint}`);
+    } else {
+      console.error(e instanceof Error ? e.message : String(e));
     }
+    process.exit(1);
   }
-  if (a[0] === "hold" && !process.env.MEM_FORCE) {
-    const openHold = openRows(all).filter((r) => r.kind === "hold").length;
-    if (openHold >= CAP_HOLD) {
-      console.error(
-        `open hold ${openHold}/${CAP_HOLD} is full — close/release an old one first (or MEM_FORCE=1)`,
-      );
-      process.exit(1);
-    }
-  }
-  // ponytail: prevent id collisions — logic centralized in nextId (store.ts)
-  const id = nextId(all);
-  put({ id, kind: a[0] as WorkKind, text, spec, files });
-  console.log(id);
 };
 
 export const cmdClose = async (a: string[]) => {
@@ -99,10 +90,6 @@ export const cmdClose = async (a: string[]) => {
   // mem close <id> --stdin ← read text from stdin
   if (!a[0]) {
     console.error(`id is required — usage: ${memCmd} close <id> "<text>"`);
-    process.exit(1);
-  }
-  if (!rows().some((r) => "id" in r && r.id === a[0])) {
-    console.error(`no id "${a[0]}" in the log`);
     process.exit(1);
   }
   const rest = a.slice(1);
@@ -113,7 +100,15 @@ export const cmdClose = async (a: string[]) => {
   } else {
     text = rest.join(" ");
   }
-  put({ kind: "close", ref: a[0], text });
+  // Tombstone rules (id must exist, text required) live in the shared engine —
+  // note this tightens CLI: an empty-text close now errors instead of writing
+  // a textless tombstone (intentional, PLAN-unify-mem-engine §4).
+  try {
+    engineClose({ id: a[0], text });
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exit(1);
+  }
 };
 
 export const cmdClaim = (a: string[]) => {
