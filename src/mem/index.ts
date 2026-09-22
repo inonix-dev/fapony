@@ -3,6 +3,9 @@
 // Moved from templates/mem/mem.ts (2026-09-19) as part of PLAN-agent-one-call chunk 1.
 // Now an export function called by fapony.ts, not a standalone script.
 
+import { existsSync } from "node:fs";
+import { basename, join } from "node:path";
+import { levenshtein } from "../commands.js";
 import { cmdPlanCheck, cmdPlanSweep } from "./commands/plan.js";
 import { cmdDone, cmdFind, cmdKickoff, cmdStale } from "./commands/read.js";
 import { cmdRotate } from "./commands/rotate.js";
@@ -15,6 +18,7 @@ import {
   cmdRelease,
   cmdSynced,
 } from "./commands/write.js";
+import { doneDir, planDir } from "./store.js";
 
 const MEM_HELP = `usage: fapony mem [--mem-dir <path>] <sub> [args]
 
@@ -90,6 +94,38 @@ example: (installed hook only)`,
 // from HELP keys so the list cannot drift from the dispatch below.
 export const MEM_SUBCOMMANDS: string[] = Object.keys(HELP);
 
+// Chunk 7 (PLAN-seed-and-surface, bug muc85pml): `fapony mem now` used to fall
+// through to kickoff and print an overview ("N entries") instead of an error —
+// a typo that looks like success. Three rules, in order:
+//   1. a known subcommand → dispatch (unchanged)
+//   2. looks like a plan path (.md suffix, a slash, or a file with that name
+//      in planDir/doneDir) → kickoff — this is `fapony mem PLAN-x.md`, which
+//      must keep working without the `kickoff` word
+//   3. anything else → error, exit 1 (a typo is never a kickoff)
+//
+// `exists` is injectable so tests hit this directly without a store on disk —
+// production passes nothing and reads planDir/doneDir live.
+export function classifyMemArg(
+  arg: string,
+  exists?: (name: string) => boolean,
+): "subcommand" | "plan" | "unknown" {
+  // hasOwn, not `in` or indexing — prototype props ("toString") are not
+  // subcommands.
+  if (Object.hasOwn(HELP, arg)) return "subcommand";
+  if (arg.endsWith(".md") || arg.includes("/")) return "plan";
+  const has =
+    exists ??
+    ((name: string): boolean => {
+      const base = basename(name);
+      const candidates = [name, base, `${name}.md`, `${base}.md`];
+      return candidates.some(
+        (c) => existsSync(join(planDir, c)) || existsSync(join(doneDir, c)),
+      );
+    });
+  if (has(arg)) return "plan";
+  return "unknown";
+}
+
 export async function cmdMem(a: string[], memDir?: string): Promise<void> {
   const [cmd, ...rest] = a;
 
@@ -132,8 +168,27 @@ export async function cmdMem(a: string[], memDir?: string): Promise<void> {
     cmdPlanCheck(rest);
   } else if (cmd === "rotate") {
     cmdRotate(rest);
-  } else {
+  } else if (cmd === undefined) {
     // bare `fapony mem` → kickoff (ranked session overview)
     cmdKickoff(rest);
+  } else if (classifyMemArg(cmd) === "plan") {
+    // `fapony mem PLAN-x.md` — the plan arg rides along (the old else-branch
+    // dropped it and printed the no-arg overview instead).
+    cmdKickoff([cmd, ...rest]);
+  } else {
+    console.error(`fapony mem: unknown subcommand "${cmd}"`);
+    const scored = MEM_SUBCOMMANDS.map((s) => ({
+      s,
+      d: levenshtein(cmd, s),
+    }))
+      .filter((x) => x.d <= 2)
+      .sort((x, y) => x.d - y.d || (x.s < y.s ? -1 : 1))
+      .slice(0, 3)
+      .map((x) => `"fapony mem ${x.s}"`);
+    if (scored.length > 0) {
+      console.error(`did you mean ${scored.join(" or ")}?`);
+    }
+    console.error(`subcommands: ${MEM_SUBCOMMANDS.join(" ")}`);
+    process.exit(1);
   }
 }
