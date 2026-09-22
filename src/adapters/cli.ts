@@ -110,13 +110,10 @@ export async function cliMain(): Promise<void> {
     await cmdPriceScan(a);
   } else if (cmd === "usage-web") {
     cmdUsageWeb(a);
-  } else if (cmd === "test") {
-    const { cmdTest } = await import("../test.js");
-    await cmdTest();
   } else {
     console.error(`fapony: unknown command "${cmd ?? ""}"`);
     console.error(
-      "usage: fapony <setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|hook-edit-hint|hook-mv-guard|hook-session-start|test> [args]",
+      "usage: fapony <setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|hook-edit-hint|hook-mv-guard|hook-session-start> [args]",
     );
     process.exit(1);
   }
