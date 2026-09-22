@@ -39,7 +39,9 @@ export {
   editHintPluginSource,
   gitAutonomyPluginSource,
   type OpencodeInstallOpts,
+  opencodePluginFiles,
   readHintPluginSource,
+  sessionStartPluginSource,
 } from "./install/opencode.js";
 export {
   agentsSkillsDir,
@@ -64,6 +66,8 @@ export async function cmdInstall(
   // not a utility — never installed unless this flag rides along, including
   // via --all. Opencode-only; other platforms ignore it.
   const gitAutonomy = args.includes("--git-autonomy");
+  // Refresh-only seam for `fapony update`: plugin bodies, never opencode.json.
+  const pluginsOnly = args.includes("--plugins-only");
 
   // --- explicit platform: original behavior, unchanged ---
   if (platform === "antigravity") {
@@ -87,12 +91,12 @@ export async function cmdInstall(
     return;
   }
   if (platform === "opencode") {
-    cmdInstallOpencode(dryRun, deps, { gitAutonomy });
+    cmdInstallOpencode(dryRun, deps, { gitAutonomy, pluginsOnly });
     return;
   }
   if (platform !== undefined) {
     console.error(
-      `usage: fapony install --platform antigravity|opencode|claude|cursor|zcode|codex [--dry-run] [--git-autonomy]`,
+      `usage: fapony install --platform antigravity|opencode|claude|cursor|zcode|codex [--dry-run] [--git-autonomy] [--plugins-only]`,
     );
     console.error(
       `  supported platforms: antigravity, opencode, claude, cursor, zcode, codex`,
@@ -131,7 +135,10 @@ export async function cmdInstall(
   if (installAll) {
     console.error();
     for (const client of found) {
-      installPlatform(client.platform, dryRun, deps, { gitAutonomy });
+      installPlatform(client.platform, dryRun, deps, {
+        gitAutonomy,
+        pluginsOnly,
+      });
     }
     return;
   }
@@ -160,7 +167,10 @@ export async function cmdInstall(
     for (const client of found) {
       const answer = await askFn(`install into ${client.platform}?`, "Y");
       if (isAffirmative(answer)) {
-        installPlatform(client.platform, dryRun, deps, { gitAutonomy });
+        installPlatform(client.platform, dryRun, deps, {
+          gitAutonomy,
+          pluginsOnly,
+        });
       }
     }
   } finally {
@@ -172,7 +182,7 @@ function installPlatform(
   platform: string,
   dryRun: boolean,
   deps: InstallDeps,
-  opts: { gitAutonomy?: boolean } = {},
+  opts: { gitAutonomy?: boolean; pluginsOnly?: boolean } = {},
 ): void {
   switch (platform) {
     case "antigravity":

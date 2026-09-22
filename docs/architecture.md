@@ -116,7 +116,7 @@ fapony/
       skills.ts         # linkSkills() — symlinks skill/<name>/ into ~/.claude/skills, never overwrites
       types.ts          # InstallDeps / ClaudeRunResult / defaultExit
       utils.ts          # shared JSON(C) helpers
-    update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
+    update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT) + spawn a fresh install to refresh opencode's baked plugins
     util.ts               # templateArgs / fillPrompt / isAffirmative / minutesBetween / avg
     test.ts               # self-check ตัวเอง (thin wrapper → test/index.ts)
   test/

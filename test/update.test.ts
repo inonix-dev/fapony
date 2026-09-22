@@ -9,6 +9,7 @@ import {
   parseDirtyLines,
   ROOT,
   readVersion,
+  refreshArgv,
   shouldProceedAfterDirty,
   type UpdateDeps,
 } from "../src/update.js";
@@ -30,6 +31,30 @@ test("testUpdateRootIsRepoRoot", () => {
     `ROOT must not be src/ (src/package.json exists), got: ${ROOT}`,
   );
   console.log("  ✓ update ROOT is repo root");
+});
+
+// The spawned refresh must carry --plugins-only: without it the child does a
+// full install and rewrites the user's opencode.json (the finding this pins).
+test("testUpdateRefreshArgvPluginsOnly", () => {
+  const argv = refreshArgv(["fapony-read-hint.ts"]);
+  assert.equal(argv[0], join(ROOT, "fapony.ts"), "spawns the pulled checkout");
+  assert.deepEqual(
+    argv.slice(1, 5),
+    ["install", "--platform", "opencode", "--plugins-only"],
+    "refresh is plugins-only — never a full install",
+  );
+  assert.ok(
+    !argv.includes("--git-autonomy"),
+    "git-autonomy rides along only when the user opted in",
+  );
+  const withGa = refreshArgv(["fapony-read-hint.ts", "fapony-git-autonomy.ts"]);
+  assert.ok(
+    withGa.includes("--git-autonomy"),
+    "opt-in plugin present → refresh it too, never create it",
+  );
+  console.log(
+    "  ✓ update refresh argv is plugins-only, git-autonomy conditional",
+  );
 });
 
 // The banner "Updated <version>@<sha>" must carry the real version — proof
@@ -196,6 +221,7 @@ test("testCmdUpdateDirtyPullOk", async () => {
     { shas: ["aaa111", "bbb111"] },
   );
   let installCalls = 0;
+  let refreshCalls = 0;
   const { out } = await captureOutput(async () => {
     await cmdUpdate({
       git,
@@ -203,10 +229,14 @@ test("testCmdUpdateDirtyPullOk", async () => {
       install: () => {
         installCalls++;
       },
+      refresh: () => {
+        refreshCalls++;
+      },
       prompt: async () => "y",
     });
   });
   assert.equal(installCalls, 0);
+  assert.equal(refreshCalls, 1, "a successful pull must refresh plugins once");
   assert.ok(out.includes("Restored your stashed changes"), `got: ${out}`);
   assert.ok(out.includes("aaa111") && out.includes("bbb111"), `got: ${out}`);
   console.log("  ✓ cmdUpdate dirty pull-ok restores stash");
@@ -272,9 +302,13 @@ test("testCmdUpdateAlreadyUpToDate", async () => {
     { shas: ["aaa111", "aaa111"] },
   );
   let prompted = 0;
+  let refreshCalls = 0;
   const deps: UpdateDeps = {
     git,
     exit: testExit,
+    refresh: () => {
+      refreshCalls++;
+    },
     prompt: async () => {
       prompted++;
       return "y";
@@ -284,6 +318,11 @@ test("testCmdUpdateAlreadyUpToDate", async () => {
     await cmdUpdate(deps);
   });
   assert.equal(prompted, 0);
+  assert.equal(
+    refreshCalls,
+    1,
+    "already-up-to-date still refreshes — the repo being current says nothing about the baked plugin bodies",
+  );
   assert.ok(out.includes("Already up to date"), `got: ${out}`);
   console.log("  ✓ cmdUpdate already up to date");
 });
@@ -307,6 +346,7 @@ test("testCmdUpdateLockfileTriggersInstall", async () => {
       install: () => {
         installCalls++;
       },
+      refresh: () => {},
       prompt: async () => "y",
     });
   });
@@ -335,9 +375,38 @@ test("testCmdUpdateInstallFailureWarns", async () => {
       install: () => {
         throw new Error("network down");
       },
+      refresh: () => {},
       prompt: async () => "y",
     });
   });
   assert.ok(out.includes("bun install failed"), `got: ${out}`);
   console.log("  ✓ cmdUpdate install failure warns");
+});
+
+test("testCmdUpdateNoRefreshOnPullFail", async () => {
+  const { git } = mapGit(
+    {
+      "rev-parse --is-inside-work-tree": "true",
+      "status --porcelain": "",
+      "pull --ff-only": new Error("non-fast-forward"),
+    },
+    { shas: ["aaa111"] },
+  );
+  let refreshCalls = 0;
+  await captureOutput(async () => {
+    try {
+      await cmdUpdate({
+        git,
+        exit: testExit,
+        refresh: () => {
+          refreshCalls++;
+        },
+        prompt: async () => "y",
+      });
+    } catch {
+      // expected exit
+    }
+  });
+  assert.equal(refreshCalls, 0, "a failed pull must not refresh plugins");
+  console.log("  ✓ cmdUpdate pull-fail → no plugin refresh");
 });

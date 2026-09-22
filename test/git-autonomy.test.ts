@@ -14,6 +14,7 @@ import {
   cmdInstall,
   cmdInstallOpencode,
   gitAutonomyPluginSource,
+  INSTALL_ROOT,
 } from "../src/install.js";
 import {
   captureErrors,
@@ -187,7 +188,7 @@ test("testGitAutonomyForeignFileUntouched", () => {
   });
 });
 
-test("testGitAutonomyStaleWarns", () => {
+test("testGitAutonomyStaleRefreshed", () => {
   withTempHome((home) => {
     const p = autonomyPath(home);
     mkdirSync(join(home, ".config", "opencode", "plugins"), {
@@ -205,9 +206,13 @@ test("testGitAutonomyStaleWarns", () => {
         ),
       ),
     );
-    assert.match(err, /stale fapony plugin/, `got: ${err}`);
-    assert.equal(readFileSync(p, "utf-8"), stale);
-    console.log("  ✓ git-autonomy stale plugin warns, untouched");
+    assert.match(err, /git-autonomy: updated/, `got: ${err}`);
+    assert.equal(
+      readFileSync(p, "utf-8"),
+      gitAutonomyPluginSource(INSTALL_ROOT),
+      "our own stale plugin must be rewritten to the current template",
+    );
+    console.log("  ✓ git-autonomy stale plugin refreshed in place");
   });
 });
 

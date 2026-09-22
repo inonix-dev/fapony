@@ -2,10 +2,12 @@
 // ROOT must be the repo root: import.meta.dir is src/, one level below it.
 // Shows old → new version, recent commits, and warns if uncommitted changes.
 
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
+import { opencodePluginFiles } from "./install/opencode.js";
 import { isAffirmative } from "./util.js";
 
 /** Repo root (parent of src/) — where package.json and bun.lock live.
@@ -27,12 +29,59 @@ function defaultInstall(): void {
   execSync("bun install", { cwd: ROOT, stdio: "pipe", timeout: 300_000 });
 }
 
+/** argv for the spawned plugin refresh — exported so tests can pin the flags:
+ *  a wrong flag fails silently (the child would just do a full install and
+ *  rewrite opencode.json, the exact bug `--plugins-only` exists to prevent). */
+export function refreshArgv(files: string[]): string[] {
+  const argv = [
+    join(ROOT, "fapony.ts"),
+    "install",
+    "--platform",
+    "opencode",
+    // Plugins only: a refresh touches fapony-owned plugin files, never the
+    // user's opencode.json (rule 6c).
+    "--plugins-only",
+  ];
+  // Opt-in plugin: refresh it when the user installed it, never create it.
+  if (files.includes("fapony-git-autonomy.ts")) argv.push("--git-autonomy");
+  return argv;
+}
+
+/**
+ * Refresh OpenCode's generated plugin bodies after the pull.
+ *
+ * OpenCode is the only client whose hooks are baked files — every other client
+ * writes a `fapony hook-*` command resolved at run time, so a pull alone keeps
+ * them current. Spawning a *fresh* process is the whole point: this one already
+ * loaded the pre-pull templates, so calling the installer in-process would
+ * rewrite the old body — the exact bug this exists to fix. `process.execPath`
+ * is the bun running fapony, so no PATH dependency. Runs `--plugins-only`, so
+ * the refresh never reads or writes opencode.json or the skills symlink.
+ * Best-effort: a refresh must never fail an update.
+ */
+function defaultRefreshPlugins(): void {
+  const getHome = (): string => homedir();
+  const files = opencodePluginFiles(getHome);
+  if (files.length === 0) return;
+  console.log("\n  Refreshing OpenCode plugins...");
+  const r = spawnSync(process.execPath, refreshArgv(files), {
+    stdio: "pipe",
+    timeout: 30_000,
+  });
+  if (r.error || r.status !== 0) {
+    console.log(
+      "  ⚠  plugin refresh failed — run manually: fapony install --platform opencode --plugins-only",
+    );
+  }
+}
+
 /** Minimal seam for cmdUpdate — git runner (map args→result, throws on failure),
- *  prompt, exit, and bun-install. Every field is used by both the default
- *  (production) path and the test path. */
+ *  prompt, exit, bun-install, and the post-pull OpenCode plugin refresh. Every
+ *  field is used by both the default (production) path and the test path. */
 export interface UpdateDeps {
   git?: (args: string) => string;
   install?: () => void;
+  refresh?: () => void;
   prompt?: (question: string, defaultVal?: string) => Promise<string>;
   exit?: (code: number) => never;
 }
@@ -88,6 +137,7 @@ function defaultPrompt(question: string, defaultVal?: string): Promise<string> {
 export async function cmdUpdate(deps: UpdateDeps = {}): Promise<void> {
   const git = deps.git ?? defaultGit;
   const installFn = deps.install ?? defaultInstall;
+  const refreshFn = deps.refresh ?? defaultRefreshPlugins;
   const promptFn = deps.prompt ?? defaultPrompt;
   const exitFn = deps.exit ?? ((code: number): never => process.exit(code));
   const gitQuiet = (args: string): string | null => {
@@ -173,6 +223,10 @@ export async function cmdUpdate(deps: UpdateDeps = {}): Promise<void> {
   // --- show what changed ---
   if (isUpToDate(oldSha, newSha)) {
     console.log(`\n  ✓  Already up to date (${oldVersion} @ ${oldSha}).`);
+    // The repo being current says nothing about the generated plugin bodies —
+    // a user who pulled by hand, or installed before the template changed, is
+    // exactly who needs this. Refresh is a no-op when nothing is stale.
+    refreshFn();
     return;
   }
 
@@ -200,6 +254,9 @@ export async function cmdUpdate(deps: UpdateDeps = {}): Promise<void> {
       console.log("  ⚠  bun install failed — run manually: bun install");
     }
   }
+
+  // --- refresh generated plugin bodies (after deps — the fresh process needs them) ---
+  refreshFn();
 
   console.log(`
   ┌──────────────────────────────────────────┐
