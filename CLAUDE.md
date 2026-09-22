@@ -438,7 +438,9 @@ plan section 7 directly; link to the spec.
 (values always EN — an enum the tool reads), then a `## TL;DR` ≤15 lines that is the **only part allowed to
 change mid-flight**. · `fapony mem kickoff` counts checkboxes of the first `##` section only —
 **never create MASTER.md**; every line of it is derivable anyway, and a hand-kept file always rots. ·
-`status` / `blocked_by` / `blocks` / `superseded_by` may still be written but no tool reads them right now.
+`status` / `blocked_by` / `blocks` / `superseded_by` are read by `mem plan-check` (dangling refs,
+blocker shipped but dependent still blocked, waiter cycles, blocked with all chunks ticked) and by
+`mem plan-sweep` (blocked view + `🔓` unblock hint on `--apply`).
 
 **Ticked shas are verified, not trusted:** `mem plan-check` scans ticked lines in plan/ + done/ — a sha missing
 from git history or not an ancestor of HEAD becomes an issue (bare hex words git never heard of stay silent unless

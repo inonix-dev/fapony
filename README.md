@@ -434,9 +434,10 @@ years:
 - **There is no `MASTER.md`.** Every line above is derived from the plan files themselves, so it
   cannot drift; a hand-kept master file always does.
 
-`status` / `blocked_by` / `blocks` / `superseded_by` are read by people, not by a tool — the one
-that read them, `plan_list`, was removed in 2026-09 once `mem kickoff` answered the same
-question from the CLI, where a schema costs nothing until it runs.
+`status` / `blocked_by` / `blocks` / `superseded_by` are read by `fapony mem plan-check`
+(dangling refs, blocker shipped but dependent still blocked, waiter cycles, blocked with all
+chunks ticked) and by `fapony mem plan-sweep` (blocked view + a `🔓` unblock hint on `--apply`).
+Sentence values ("waiting on support email") carry no `PLAN-*.md` token and are never flagged.
 
 The layout, and why archiving is a plain `git mv`:
 

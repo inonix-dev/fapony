@@ -21,7 +21,7 @@ You are about to move a PLAN that has been shipped to the archive.
    Say in the summary that you stamped it, so a wrong HEAD is visible and correctable.
    STOP only if there's no git repo / no commits to hash from.
 
-1b. **A plan can also leave `plan/` without shipping** — it got absorbed into another plan, or the
+ 1b. **A plan can also leave `plan/` without shipping** — it got absorbed into another plan, or the
    redesign deleted the thing it planned. That is normal during a UI/UX sweep and is the main
    reason `plan/` grows forever: there is no state for "dead" so it just sits there. Archive it
    the same way, with two differences — header `> ⛔ **superseded by [PLAN-bar.md](PLAN-bar.md)**
@@ -37,12 +37,22 @@ You are about to move a PLAN that has been shipped to the archive.
    A plan that is merely *waiting* (on a person, a customer, a decision) is **not** dead and does
    not move — mark it `status: blocked` + `blocked_by: <what you are waiting for>` and leave it in
    `plan/` — the frontmatter is for the next person reading the folder, and the plan stays out
-   of `done/`, which is what `plan-sweep` and `kickoff` go by.
+   of `done/`, which is what `plan-sweep` and `kickoff` go by. Never `--apply` a blocked file;
+   a blocked file with all chunks ticked is deferred doc debt — ask the user: ship it or keep
+   waiting.
+
+ 1c. **Check the dep graph before moving** — `fapony mem plan-check` reads `blocked_by`/`blocks`
+    and says what a human would miss: a `blocked_by` pointing at a file that is not in `plan/`
+    or `done/`, a blocker already in `done/` while the dependent is still `status: blocked`,
+    a waiter cycle, and a blocked plan with all chunks ticked. Fix its issues first — a move
+    on top of a broken graph just relocates the confusion.
 
 2. **Run `plan-sweep --apply`** — this does the `git mv`, rewrites markdown links inside the
    file and inbound links from every `.md` under `.fapony/` (`plan/`, `done/`, `spec/`),
    warns about plain-text mentions and about tracked files outside `.fapony/` that still
-   name the file (both detect-only), and logs a decision row — all in one call:
+   name the file, prints a `🔓 <shipped> — <waiter> lists it as blocker` line when the ship
+   unblocks a waiting plan (copy that line into your summary — the waiter keeps
+   `status: blocked` until its owner clears it), and logs a decision row — all in one call:
    ```bash
    fapony mem plan-sweep <PLAN-foo.md> --apply
    ```
