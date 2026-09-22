@@ -38,28 +38,9 @@ quietly counted as free.
 
 That is day one. Past that, fapony keeps what coding agents actually did — the frozen
 ledger of graded runs (rounds, pass/fail, cost per grade, readable via CLI, no new grades)
-plus the live mem log — through 3 MCP tools any agent can call. If you juggle more than
-one agent, this is the point: the numbers come from the same yardstick everywhere, so
-"which model earns its keep on which kind of task" becomes a data question instead of a
-vibe. On top of history it checks claims against git facts: handoff conformance and
-allowlisted evidence — with everything the agent claimed but couldn't prove marked as such.
-
-**What that question looks like answered, from one project's own (frozen — reads history,
-no new grades) ledger — two names you know and the current `n≥5` frontier (`fapony stats --mode verdict --regime code`):**
-
-| model | tokens/pass | quality | n |
-|---|---|---|---|
-| `claude-opus-5` | 6.5M | 3.7 | 22 |
-| `claude-sonnet-5` | 3.1M | 3.5 | 23 |
-| `mimo-v2.5` | 3.9M | 4.0 | 9 |
-| `deepseek-v4.1-flash` | 2.3M | 3.9 | 19 |
-| `z-ai/glm-5.3-flash` | 1.2M | 3.8 | 9 |
-
-Same quality band, a 5.4× token spread — the kind of answer a session log can't give (it has tokens,
-no grades) and a benchmark can't give either (it has grades, not your codebase). One caveat that's
-on you to hold: work isn't randomly assigned to models, so a gap this size is a strong prior, not a
-controlled trial — you likely route easy tasks to the cheap model already. `n≥5` is fapony's own
-floor before a model counts toward the frontier at all; below that it's a data point, not a pick.
+plus the live mem log — through 3 MCP tools any agent can call. It checks claims against
+git facts: handoff conformance and allowlisted evidence — with everything the agent claimed
+but couldn't prove marked as such.
 
 **The reason to keep it running is the third layer: knowledge accumulation — and the thing it
 accumulates is pain.** An agent has no memory of pain across sessions: it writes the 37th
@@ -74,7 +55,7 @@ already decided on, that is the loop: notice the repeated cost, name the shared 
 migration finish. Finding dead code and duplication is *not* part of it — knip and friends already
 do that better, and a convention with a `checker` is deliberately left to the checker.
 
-**The measurement layer underneath it:** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: which model earns its keep on which kind of work **in this project**, at what token cost. The frozen ledger still answers that from history — every old verdict carries a `regime` (`code` / `fix` / `review` / `plan` / `inquiry` / `test`), and runs split by whether there was a plan at all — so "does planning beat diving in, and for which model" stays a table, not an argument. New accumulation goes to the mem log instead: decisions, bugs and notes with `files[]`, written by the agents doing the work.
+**The measurement layer underneath it:** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: what each model costs you, across clients, on one yardstick, in this project (`fapony usage-web`, above) — tokens and cost, nothing self-graded. The frozen ledger still has old verdict rows (`fapony stats`), but the tool that wrote them (`verdict_submit`) is gone from the MCP surface: no new rows, for anyone, ever again, so a count of old rows (`n`) means nothing without the grading that stopped. New accumulation goes to the mem log instead: decisions, bugs and notes with `files[]`, written by the agents doing the work.
 
 Three tiers, deliberately: **measurement ships today** and needs no per-project setup — raw facts nobody can call unfair. **Verification is the sharper edge** but stays beta until its evidence layer is hardened; fapony doesn't control your agent's flow, so it never promises "verified" as a headline. **Knowledge accumulation is the compounding one** — it's worthless on run 1 and gets more useful every run after, which is exactly why it's the layer competitors can't clone by copying a feature list.
 
