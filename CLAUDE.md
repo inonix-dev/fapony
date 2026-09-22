@@ -139,7 +139,7 @@ while OpenCode fires *after* (`tool.execute.after` — the only annotate channel
 | Read hint — big file + debt/mem lines | ✅ before | ✅ after | — | — | — |
 | Re-read hint — repeat read of the same file, mtime unmoved | ✅ before | ✅ after | — | — | — |
 | Edit hint — importer count before a shape change | ✅ before | ✅ after (edit+write) | — | — | — |
-| Commit hint — `git commit` → record-a-mem-row nudge | — | ✅ after | — | — | — |
+| Commit hint — `git commit` → record a mem row (and `kind:bug` on a fix-type commit) | — | ✅ after | — | — | — |
 | SessionStart — fire `mem kickoff` as context | ✅ | ✅ first dispatch only | — | — | ✅ after trust |
 | Skill symlink → `~/.claude/skills` | ✅ | ✅ | — | — | — |
 | Skill symlink → `~/.agents/skills` | — | — | — | ✅ | ✅ |
@@ -313,8 +313,14 @@ the plan/spec templates, and all the skills.
    `bug` when you find something broken, `note` when a chunk lands. · A row without `--files` falls through the
    floor at cluster time = writing it was writing nothing.
 8. **The Stop hook enforces a mem row** ([src/hook.ts](src/hook.ts) — shim; logic in `src/adapters/hooks/`):
-   ending a turn with commits but no new mem row = blocked once. · **Ending a turn that declares a bug (marker
-   words) with no `kind:bug` row = blocked once per session.** · No mem log at all = no block. ·
+   ending a turn with commits but no new mem row = blocked once. · **Ending a turn that declares a bug with no
+   `kind:bug` row = blocked once per session.** · What counts as "a bug" lives in one place —
+   [src/adapters/hooks/bug-markers.ts](src/adapters/hooks/bug-markers.ts): `BUG_MARKERS` (announcement phrases,
+   multi-language, open for extension) **or** a `fix:` / `bugfix:` / `hotfix:` commit type (language-independent
+   — only the type token is English). Free-text phrases can never be universal, so extend the list per language
+   instead of inventing a new row kind — and never add symptom words ("broken", "dies silently"), which would
+   fire on any turn that merely reads a bug report. · OpenCode has no stop hook, so its commit hint carries the
+   same `kind:bug` nudge instead (rule 13). · No mem log at all = no block. ·
    `verdict_submit` is off the MCP surface (PLAN-verdict-to-mem) — the engine is in git, revivable as a CLI. ·
    The hook never grades in anyone's place — "who judges" stays separate from "who enforces recording"; only the
    latter can be automated. · Kill switch: `FAPONY_NO_BUG_BLOCK=1`.
