@@ -6,13 +6,14 @@
 
 import { existsSync } from "node:fs";
 import { cmdAnalyze } from "../analyze.js";
+import { renderUsage, suggestCommand } from "../commands.js";
 import { cmdDebt } from "../debt/cli.js";
 import { cmdDigest } from "../digest/cli.js";
 import { cmdInit } from "../init.js";
 import { cmdInitMem } from "../init-mem.js";
 import { cmdInstall } from "../install.js";
 import { cmdLintBaseline } from "../lint-baseline.js";
-import { cmdMem } from "../mem/index.js";
+import { cmdMem, MEM_SUBCOMMANDS } from "../mem/index.js";
 import { initStore } from "../mem/store.js";
 import { cmdPriceScan } from "../price/index.js";
 import { cmdReport, cmdReportWeb } from "../report/index.js";
@@ -32,17 +33,11 @@ import {
 } from "./hooks/index.js";
 import { cmdMcp } from "./mcp/transport.js";
 
-export function printUsage(): void {
-  console.log(
-    "usage: fapony <setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|hook-edit-hint|hook-mv-guard|hook-session-start> [args]",
-  );
-}
-
 export async function cliMain(): Promise<void> {
   const [cmd, ...a] = process.argv.slice(2);
 
   if (!cmd || cmd === "--help" || cmd === "-h") {
-    printUsage();
+    console.log(renderUsage());
     return;
   }
 
@@ -123,9 +118,11 @@ export async function cliMain(): Promise<void> {
     cmdUsageWeb(a);
   } else {
     console.error(`fapony: unknown command "${cmd ?? ""}"`);
-    console.error(
-      "usage: fapony <setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|hook-edit-hint|hook-mv-guard|hook-session-start> [args]",
-    );
+    const hints = suggestCommand(cmd ?? "", MEM_SUBCOMMANDS);
+    if (hints.length > 0) {
+      console.error(`did you mean ${hints.map((h) => `"${h}"`).join(" or ")}?`);
+    }
+    console.error(`usage: fapony <command> [args] — see "fapony --help"`);
     process.exit(1);
   }
 }

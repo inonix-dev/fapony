@@ -86,6 +86,10 @@ reads the Stop-hook payload on stdin — installed by fapony, not run by hand
 example: (installed hook only)`,
 };
 
+// Subcommand names for top-level did-you-mean (src/commands.ts) — derived
+// from HELP keys so the list cannot drift from the dispatch below.
+export const MEM_SUBCOMMANDS: string[] = Object.keys(HELP);
+
 export async function cmdMem(a: string[], memDir?: string): Promise<void> {
   const [cmd, ...rest] = a;
 

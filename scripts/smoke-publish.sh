@@ -8,7 +8,7 @@
 # catch: an import that only resolves inside the repo (e.g. reaching into
 # test/, which `files` deliberately excludes) breaks every command, not just
 # the one that imported it. A clean run reaches the intentional
-# "usage: fapony ..." exit(1) — anything else (module-not-found, a crash) is
+# "usage: fapony ..." on stdout, exit 0 — anything else (module-not-found, a crash) is
 # what this blocks on.
 set -euo pipefail
 
