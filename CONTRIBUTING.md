@@ -42,7 +42,7 @@ bun run check
 ## Running Tests
 
 ```bash
-bun fapony.ts test
+bun run test
 ```
 
 ## Code Style
