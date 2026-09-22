@@ -135,7 +135,7 @@ export function engineClose(a: EngineCloseArgs): EngineCloseResult {
 //
 // The engine is pure: it takes rows + typed params, never touches argv
 // strings or the store. Wrappers own their surface — CLI parses
-// --kind/--files/--since/--limit at the argv layer, MCP validates its JSON
+// --kind/--files/--since/--limit/--open at the argv layer, MCP validates its JSON
 // shape — and each passes its own kind default (PLAN §5 escape):
 // MCP passes no exclude (contract: "every kind, no default filter", locked by
 // test), CLI passes the bookkeeping exclude to keep its legacy output.
@@ -158,6 +158,13 @@ export interface EngineFindArgs {
   sinceIso?: string;
   /** Max rows returned (total still counts all matches). Default 20. */
   limit?: number;
+  /**
+   * true = unresolved work only: drops bookkeeping kinds
+   * (close/claim/release/synced) plus work rows a close row points at.
+   * Mirrors selectors.openRows but stays generic (no store types) so MCP rows
+   * qualify. Default false — recall shows closed rows too.
+   */
+  open?: boolean;
 }
 
 export interface EngineFindResult<T> {
@@ -179,6 +186,20 @@ export function engineFind<T extends FindableRow>(
   a: EngineFindArgs,
 ): EngineFindResult<T> {
   let out = [...all];
+
+  if (a.open === true) {
+    const dead = new Set(
+      all
+        .filter((r) => r.kind === "close" && typeof r.ref === "string")
+        .map((r) => r.ref as string),
+    );
+    const BOOKKEEPING = new Set(["close", "claim", "release", "synced"]);
+    out = out.filter(
+      (r) =>
+        !BOOKKEEPING.has(r.kind) &&
+        !("id" in r && typeof r.id === "string" && dead.has(r.id)),
+    );
+  }
 
   if (a.sinceIso) {
     const since = a.sinceIso;

@@ -156,6 +156,61 @@ test("testMemFindToolValidation", () => {
   console.log("  ✓ mem_find rejects bare worktree names with a clear error");
 });
 
+// PLAN-unify-mem-engine chunk 4: open:true answers "what bugs remain" without
+// the caller correlating close tombstones by hand. Default stays unfiltered
+// (contract locked by testMemFindReturnsAllKindsNoDefaultFilter).
+test("testMemFindOpenFiltersClosedBugs", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memfind-"));
+  try {
+    writeLog(dir, [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "a",
+        kind: "bug",
+        id: "b1",
+        text: "open bug",
+      },
+      {
+        ts: "2026-01-02T00:00:00.000Z",
+        agent: "a",
+        kind: "bug",
+        id: "b2",
+        text: "fixed bug",
+      },
+      {
+        ts: "2026-01-03T00:00:00.000Z",
+        agent: "a",
+        kind: "close",
+        ref: "b2",
+        text: "fixed in abc",
+      },
+      {
+        ts: "2026-01-04T00:00:00.000Z",
+        agent: "a",
+        kind: "synced",
+        text: "s",
+      },
+    ]);
+    const all = memFind({ worktree: dir });
+    assert.equal(all.total, 4, "default: no filter");
+    const open = memFind({ worktree: dir, open: true, kind: ["bug"] });
+    assert.equal(open.total, 1);
+    assert.equal(open.rows[0].text, "open bug");
+    // the tool surface passes open through (non-boolean ignored → unfiltered)
+    const via = parseToolResult(
+      toolMemFind({ worktree: dir, open: true, kind: ["bug"] }),
+    ) as { total: number };
+    assert.equal(via.total, 1);
+    const unfiltered = parseToolResult(
+      toolMemFind({ worktree: dir, open: "yes", kind: ["bug"] }),
+    ) as { total: number };
+    assert.equal(unfiltered.total, 2, "non-boolean open is ignored");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_find open:true returns remaining bugs only");
+});
+
 // Rows written by `mem add --files` carry structured files[]; the query must
 // hit them without the path appearing in the prose (regression 2026-09-19 —
 // the field CLAUDE.md rule 7 calls mandatory was not searchable at all).

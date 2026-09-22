@@ -138,3 +138,30 @@ test("testEngineFindTextFilesSinceLimit", () => {
   assert.equal(lim.rows[0].ts, "2026-06-02T00:00:00.000Z");
   console.log("  ✓ engineFind text/files/since/limit");
 });
+
+test("testEngineFindOpenDropsClosedAndBookkeeping", () => {
+  // PLAN-unify-mem-engine chunk 4: open:true = unresolved work only — the
+  // answer to "what bugs remain" without correlating close tombstones by hand.
+  const rows = [
+    { ts: "2026-01-01T00:00:00.000Z", kind: "bug", text: "open bug", id: "b1" },
+    {
+      ts: "2026-01-02T00:00:00.000Z",
+      kind: "bug",
+      text: "fixed bug",
+      id: "b2",
+    },
+    { ts: "2026-01-03T00:00:00.000Z", kind: "close", text: "fixed", ref: "b2" },
+    { ts: "2026-01-04T00:00:00.000Z", kind: "note", text: "context", id: "n1" },
+    { ts: "2026-01-05T00:00:00.000Z", kind: "synced", text: "s" },
+    { ts: "2026-01-06T00:00:00.000Z", kind: "claim", text: "c", ref: "b1" },
+  ];
+  const all = engineFind(rows, {});
+  assert.equal(all.total, 6, "default false: recall shows closed rows too");
+  const open = engineFind(rows, { open: true });
+  assert.equal(open.total, 2, "drops the closed bug + close/claim/synced");
+  assert.ok(open.rows.every((r) => r.text !== "fixed bug"));
+  const openBugs = engineFind(rows, { open: true, kind: ["bug"] });
+  assert.equal(openBugs.total, 1);
+  assert.equal(openBugs.rows[0].text, "open bug");
+  console.log("  ✓ engineFind open:true drops closed + bookkeeping");
+});

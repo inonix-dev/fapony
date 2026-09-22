@@ -67,7 +67,7 @@ export const cmdStale = () => {
 };
 
 export const cmdFind = (a: string[]) => {
-  // mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n]
+  // mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]
   // Query logic lives in the shared engine (../engine.ts) — this wrapper owns
   // only argv parsing + the single-line print. MCP memFind calls the same
   // engine with no kind default (contract); CLI keeps its legacy default of
@@ -87,6 +87,7 @@ export const cmdFind = (a: string[]) => {
   let files: string[] | undefined;
   let sinceRaw: string | undefined;
   let limit: number | undefined;
+  let open = false;
   const positional: string[] = [];
 
   for (let i = 0; i < a.length; ) {
@@ -136,6 +137,9 @@ export const cmdFind = (a: string[]) => {
       }
       limit = n;
       i += consumed("--limit", i);
+    } else if (t === "--open") {
+      open = true;
+      i += 1;
     } else {
       positional.push(t);
       i += 1;
@@ -148,10 +152,11 @@ export const cmdFind = (a: string[]) => {
     !kind?.length &&
     !files?.length &&
     !sinceRaw &&
-    limit === undefined
+    limit === undefined &&
+    !open
   ) {
     console.error(
-      `usage: ${memCmd} find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n]`,
+      `usage: ${memCmd} find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]`,
     );
     process.exit(1);
   }
@@ -174,6 +179,7 @@ export const cmdFind = (a: string[]) => {
     excludeKind: kind?.length ? undefined : CLI_FIND_EXCLUDE,
     sinceIso,
     limit,
+    open: open || undefined,
   });
   // Legacy order: oldest first (engine returns newest first — same set, CLI print order unchanged)
   const hits = [...newest].reverse();
@@ -430,7 +436,7 @@ export const cmdKickoff = (a: string[]) => {
   const uniqueRecent = [...new Set(recentFiles)].slice(0, GROUP_CAP);
   if (uniqueRecent.length) {
     suggestions.push({
-      text: `แตะล่าสุด: ${uniqueRecent.join(", ")}`,
+      text: `Recently touched: ${uniqueRecent.join(", ")}`,
       run: `fapony review-seed --files ${uniqueRecent.join(",")}`,
     });
   }
@@ -439,7 +445,7 @@ export const cmdKickoff = (a: string[]) => {
   try {
     if (readEvidenceLintCmd(root) && !existsSync(baselinePath(root))) {
       suggestions.push({
-        text: "lint baseline ยังไม่ capture — แดงที่มีอยู่ก่อนจะถูกนับเป็นของคุณ",
+        text: "lint baseline not captured yet — pre-existing red will count as yours",
         run: "fapony lint-baseline --capture",
       });
     }

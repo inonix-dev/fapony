@@ -3,7 +3,7 @@
 // Every schema here is paid as input tokens in *every* session of *every*
 // client that connects, whether or not the tool is called. Adding one is
 // buying attention with a standing charge; earning it back means the tool
-// saves more than it costs (see CLAUDE.md "จ่าย token อย่างฉลาด"). Keep
+// saves more than it costs (see CLAUDE.md "Spend tokens smart"). Keep
 // descriptions imperative — say what to send, not why it matters.
 
 export { toolMemAdd, toolMemClose, toolMemFind } from "./mem.js";
@@ -58,6 +58,11 @@ export const TOOLS = [
           type: "number",
           description:
             "Max rows returned (default 20) — total still counts all matches",
+        },
+        open: {
+          type: "boolean",
+          description:
+            "true = unresolved work only: drops close/claim/release/synced rows and work rows already closed. Omit = every row. With kind:[bug] answers 'what bugs remain?'",
         },
       },
       required: ["worktree"],

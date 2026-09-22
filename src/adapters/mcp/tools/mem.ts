@@ -32,6 +32,7 @@ export function memFind(args: {
   kind?: string[];
   since?: string;
   limit?: number;
+  open?: boolean;
 }): MemFindResult {
   // Query logic lives in the shared engine (src/mem/engine.ts) — this wrapper
   // owns only the read (readMemLog sees live + rotated archives via its loose
@@ -45,6 +46,7 @@ export function memFind(args: {
     kind: args.kind,
     sinceIso: args.since,
     limit: args.limit,
+    open: args.open,
   });
   return {
     rows: matched,
@@ -85,8 +87,11 @@ export function toolMemFind(args: Record<string, unknown>): ToolResult {
   const text = typeof args.text === "string" ? args.text : undefined;
   const since = typeof args.since === "string" ? args.since : undefined;
   const limit = typeof args.limit === "number" ? args.limit : undefined;
+  const open = typeof args.open === "boolean" ? args.open : undefined;
 
-  return jsonResult(memFind({ worktree, files, text, kind, since, limit }));
+  return jsonResult(
+    memFind({ worktree, files, text, kind, since, limit, open }),
+  );
 }
 
 // --- mem_add ---
