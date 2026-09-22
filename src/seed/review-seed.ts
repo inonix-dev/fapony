@@ -21,7 +21,7 @@
 
 import type { Stats } from "node:fs";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import {
   buildGraph,
   collectSourceFiles,
@@ -357,9 +357,35 @@ function shortSha(cwd: string, ref: string): string | null {
   return r.ok ? r.output.split("\n")[0] : null;
 }
 
-function resolveScope(scope: Scope, cwd: string): ResolvedScope {
+// --plan paths arrive in three shapes: absolute, relative to the invocation
+// cwd (e.g. ../../.fapony/plan/X.md from a subdir), or relative to the
+// worktree root (e.g. .fapony/plan/X.md from anywhere). join(worktree, arg)
+// answers only the third — an absolute arg becomes worktree+abs garbage
+// (join, unlike resolve, does not reset on an absolute segment), and a
+// cwd-relative arg with .. escapes above the root. So: absolute as-is,
+// otherwise first-existing-wins between cwd and worktree (bug mucm1own).
+function resolvePlanPath(arg: string, cwd: string, worktree: string): string {
+  if (isAbsolute(arg)) {
+    if (existsSync(arg)) return arg;
+    throw new SeedError(`review-seed: plan file not found: ${arg}`);
+  }
+  const candidates = [resolve(cwd, arg), join(worktree, arg)];
+  for (const p of new Set(candidates)) {
+    if (existsSync(p)) return p;
+  }
+  throw new SeedError(`review-seed: plan file not found: ${arg}`);
+}
+
+function resolveScope(
+  scope: Scope,
+  cwd: string,
+  worktree: string,
+): ResolvedScope {
   if (scope.kind === "files") {
-    const { files, notes, dirExpanded } = expandFilesScope(scope.list, cwd);
+    const { files, notes, dirExpanded } = expandFilesScope(
+      scope.list,
+      worktree,
+    );
     return {
       label: dirExpanded ? "--files (dir-expanded)" : "--files (as given)",
       entries: files,
@@ -367,10 +393,7 @@ function resolveScope(scope: Scope, cwd: string): ResolvedScope {
     };
   }
   if (scope.kind === "plan") {
-    const planPath = join(cwd, scope.path);
-    if (!existsSync(planPath)) {
-      throw new SeedError(`review-seed: plan file not found: ${scope.path}`);
-    }
+    const planPath = resolvePlanPath(scope.path, cwd, worktree);
     const planFiles = planFrontFiles(readFileSync(planPath, "utf-8"));
     if (planFiles === null) {
       // No files[] to scope from — fall back to the default diff, say so.
@@ -567,6 +590,7 @@ function findCallers(
 function renderLookup(
   flags: LookupFlags,
   scope: Scope,
+  cwd: string,
   worktree: string,
 ): string {
   const lines: string[] = [];
@@ -574,7 +598,7 @@ function renderLookup(
 
   let resolved: ResolvedScope | null = null;
   if (flags.callers) {
-    resolved = resolveScope(scope, worktree);
+    resolved = resolveScope(scope, cwd, worktree);
   }
 
   const hasGraph = (f: string): boolean => {
@@ -686,10 +710,10 @@ export function renderSeed(args: string[], cwd: string): string {
   // the caller asked for one answer, not the review seed around it.
   const lookup = parseLookup(args);
   if (lookup.body.length > 0 || lookup.callers) {
-    return renderLookup(lookup, scope, worktree);
+    return renderLookup(lookup, scope, cwd, worktree);
   }
 
-  const resolved = resolveScope(scope, worktree);
+  const resolved = resolveScope(scope, cwd, worktree);
   const entries = [...resolved.entries].sort((a, b) =>
     a.path < b.path ? -1 : 1,
   );
