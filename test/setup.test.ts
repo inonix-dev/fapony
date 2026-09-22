@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import assert from "node:assert";
 import {
   existsSync,
@@ -15,7 +16,7 @@ import {
   validateWorktreePath,
 } from "../src/setup.js";
 
-export function testBuildSetupConfigNoMemory(): void {
+test("testBuildSetupConfigNoMemory", () => {
   const config = buildSetupConfig({
     worktreeName: "myapp",
     worktreePath: "/tmp/myapp",
@@ -25,9 +26,9 @@ export function testBuildSetupConfigNoMemory(): void {
   assert.deepStrictEqual(config.review, { maxRounds: 2 });
   assert.equal(config.memory, null);
   console.log("  ✓ buildSetupConfig without memory");
-}
+});
 
-export function testBuildSetupConfigWithMemory(): void {
+test("testBuildSetupConfigWithMemory", () => {
   const config = buildSetupConfig({
     worktreeName: "myapp",
     worktreePath: "/tmp/myapp",
@@ -45,9 +46,9 @@ export function testBuildSetupConfigWithMemory(): void {
   assert.deepStrictEqual(mem.add, ["fapony", "mem", "add", "{kind}", "{text}"]);
   assert.deepStrictEqual(mem.kickoff, ["fapony", "mem", "kickoff"]);
   console.log("  ✓ buildSetupConfig with memory");
-}
+});
 
-export function testValidateWorktreePath(): void {
+test("testValidateWorktreePath", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-setup-test-"));
   assert.equal(validateWorktreePath(dir), null);
   const missing = validateWorktreePath(join(dir, "nope"));
@@ -55,18 +56,18 @@ export function testValidateWorktreePath(): void {
   const empty = validateWorktreePath("");
   assert.ok(empty !== null, "empty path must fail validation");
   console.log("  ✓ validateWorktreePath");
-}
+});
 
-export function testValidateWorktreePathRejectsFile(): void {
+test("testValidateWorktreePathRejectsFile", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-setup-test-"));
   const file = join(dir, "not-a-dir");
   writeFileSync(file, "x\n");
   const err = validateWorktreePath(file);
   assert.ok(err?.includes("not a directory"), `got: ${err}`);
   console.log("  ✓ validateWorktreePath rejects file");
-}
+});
 
-export function testShouldOverwriteConfig(): void {
+test("testShouldOverwriteConfig", () => {
   assert.equal(shouldOverwriteConfig("y"), true);
   assert.equal(shouldOverwriteConfig("yes"), true);
   assert.equal(shouldOverwriteConfig("Y"), true);
@@ -75,7 +76,7 @@ export function testShouldOverwriteConfig(): void {
   assert.equal(shouldOverwriteConfig("no"), false);
   assert.equal(shouldOverwriteConfig(""), false);
   console.log("  ✓ shouldOverwriteConfig");
-}
+});
 
 // --- cmdSetup orchestration (seam-based; fs/cwd stay real on temp dirs) ---
 
@@ -156,7 +157,7 @@ const SETUP_ANSWERS = (worktreePath: string): string[] => [
   "n",
 ];
 
-export async function testCmdSetupGitMissing(): Promise<void> {
+test("testCmdSetupGitMissing", async () => {
   const { checkCmd } = mapCheckCmd({});
   const { ask } = queueAsk([]);
   let code: number | null = null;
@@ -170,9 +171,9 @@ export async function testCmdSetupGitMissing(): Promise<void> {
   assert.equal(code, 1);
   assert.ok(err.includes("git is required"), `got: ${err}`);
   console.log("  ✓ cmdSetup git missing exit");
-}
+});
 
-export async function testCmdSetupBunMissing(): Promise<void> {
+test("testCmdSetupBunMissing", async () => {
   const { checkCmd } = mapCheckCmd({ git: true });
   const { ask } = queueAsk([]);
   let code: number | null = null;
@@ -186,9 +187,9 @@ export async function testCmdSetupBunMissing(): Promise<void> {
   assert.equal(code, 1);
   assert.ok(err.includes("bun is required"), `got: ${err}`);
   console.log("  ✓ cmdSetup bun missing exit");
-}
+});
 
-export async function testCmdSetupInvalidPath(): Promise<void> {
+test("testCmdSetupInvalidPath", async () => {
   const { checkCmd } = mapCheckCmd({ git: true, bun: true });
   const { ask } = queueAsk([join(tmpdir(), "fapony-setup-nope-404")]);
   let code: number | null = null;
@@ -207,9 +208,9 @@ export async function testCmdSetupInvalidPath(): Promise<void> {
   assert.equal(code, 1);
   assert.ok(err.includes("does not exist"), `got: ${err}`);
   console.log("  ✓ cmdSetup invalid path exit");
-}
+});
 
-export async function testCmdSetupOverwriteNoKeepsFile(): Promise<void> {
+test("testCmdSetupOverwriteNoKeepsFile", async () => {
   await withTempCwd(async (cwd) => {
     const sentinel = JSON.stringify({ sentinel: true });
     writeFileSync(join(cwd, "fapony.config.json"), `${sentinel}\n`);
@@ -237,9 +238,9 @@ export async function testCmdSetupOverwriteNoKeepsFile(): Promise<void> {
     assert.equal(existsSync(join(worktree, ".fapony")), false);
   });
   console.log("  ✓ cmdSetup overwrite-n keeps file");
-}
+});
 
-export async function testCmdSetupOverwriteYesWritesThrough(): Promise<void> {
+test("testCmdSetupOverwriteYesWritesThrough", async () => {
   await withTempCwd(async (cwd) => {
     writeFileSync(join(cwd, "fapony.config.json"), '{"sentinel":true}\n');
     const worktree = mkdtempSync(join(tmpdir(), "fapony-setup-wt-"));
@@ -270,9 +271,9 @@ export async function testCmdSetupOverwriteYesWritesThrough(): Promise<void> {
     assert.equal(existsSync(join(worktree, ".fapony")), true);
   });
   console.log("  ✓ cmdSetup overwrite-y writes through");
-}
+});
 
-export async function testCmdSetupHappyPathScaffolds(): Promise<void> {
+test("testCmdSetupHappyPathScaffolds", async () => {
   await withTempCwd(async (cwd) => {
     const worktree = mkdtempSync(join(tmpdir(), "fapony-setup-wt-"));
     const { checkCmd } = mapCheckCmd({
@@ -303,9 +304,9 @@ export async function testCmdSetupHappyPathScaffolds(): Promise<void> {
     assert.ok(out.includes("Setup complete"), `got tail: ${out.slice(-200)}`);
   });
   console.log("  ✓ cmdSetup happy path scaffolds");
-}
+});
 
-export async function testCmdSetupScaffoldAlreadyExists(): Promise<void> {
+test("testCmdSetupScaffoldAlreadyExists", async () => {
   await withTempCwd(async (cwd) => {
     const worktree = mkdtempSync(join(tmpdir(), "fapony-setup-wt-"));
     mkdirSync(join(worktree, ".fapony"), { recursive: true });
@@ -323,4 +324,4 @@ export async function testCmdSetupScaffoldAlreadyExists(): Promise<void> {
     assert.equal(existsSync(join(cwd, "fapony.config.json")), true);
   });
   console.log("  ✓ cmdSetup scaffold already-exists");
-}
+});

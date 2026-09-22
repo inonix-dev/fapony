@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/session.test.ts — detail mode for readPassiveUsage (PLAN-usage-depth A1)
 
 import { Database } from "bun:sqlite";
@@ -115,7 +116,7 @@ function withEnvDb(dbPath: string, fn: () => void): void {
   }
 }
 
-export function testSessionDefaultHasNoDetail(): void {
+test("testSessionDefaultHasNoDetail", () => {
   withFixtureDb((dbPath) =>
     withEnvDb(dbPath, () => {
       const r = readPassiveUsage();
@@ -125,9 +126,9 @@ export function testSessionDefaultHasNoDetail(): void {
     }),
   );
   console.log("  ✓ readPassiveUsage default has no detail (additive)");
-}
+});
 
-export function testSessionWorktreeScopeUsesSessionDirectory(): void {
+test("testSessionWorktreeScopeUsesSessionDirectory", () => {
   withFixtureDb((dbPath) =>
     withEnvDb(dbPath, () => {
       // project.worktree is the repo root; the run happened in a worktree under
@@ -144,9 +145,9 @@ export function testSessionWorktreeScopeUsesSessionDirectory(): void {
   console.log(
     "  \u2713 readPassiveUsage scopes by session.directory, not project root",
   );
-}
+});
 
-export function testSessionDetailBreakdown(): void {
+test("testSessionDetailBreakdown", () => {
   withFixtureDb((dbPath) =>
     withEnvDb(dbPath, () => {
       const r = readPassiveUsage(undefined, undefined, undefined, true);
@@ -168,9 +169,9 @@ export function testSessionDetailBreakdown(): void {
   console.log(
     "  ✓ readPassiveUsage detail: tool breakdown + steps per session",
   );
-}
+});
 
-export function testSessionDetailBytesByTool(): void {
+test("testSessionDetailBytesByTool", () => {
   withFixtureDb((dbPath) =>
     withEnvDb(dbPath, () => {
       const r = readPassiveUsage(undefined, undefined, undefined, true);
@@ -183,9 +184,9 @@ export function testSessionDetailBytesByTool(): void {
       );
     }),
   );
-}
+});
 
-export function testSessionDetailSkipsUnknownType(): void {
+test("testSessionDetailSkipsUnknownType", () => {
   withFixtureDb((dbPath) =>
     withEnvDb(dbPath, () => {
       const r = readPassiveUsage(undefined, undefined, undefined, true);
@@ -202,9 +203,9 @@ export function testSessionDetailSkipsUnknownType(): void {
   console.log(
     "  ✓ readPassiveUsage detail skips unknown types, never stores I/O",
   );
-}
+});
 
-export function testSessionDetailStepTokensNotSummed(): void {
+test("testSessionDetailStepTokensNotSummed", () => {
   withFixtureDb((dbPath) =>
     withEnvDb(dbPath, () => {
       const r = readPassiveUsage(undefined, undefined, undefined, true);
@@ -218,9 +219,9 @@ export function testSessionDetailStepTokensNotSummed(): void {
   console.log(
     "  ✓ readPassiveUsage detail reports step counts, never token sums",
   );
-}
+});
 
-export function testSessionDetailMatchesRawSql(): void {
+test("testSessionDetailMatchesRawSql", () => {
   withFixtureDb((dbPath) =>
     withEnvDb(dbPath, () => {
       const raw = new Database(dbPath, { readonly: true });
@@ -250,7 +251,7 @@ export function testSessionDetailMatchesRawSql(): void {
     }),
   );
   console.log("  ✓ readPassiveUsage detail cross-checks against raw SQL");
-}
+});
 
 // --- zcode usage tests ---
 
@@ -308,7 +309,7 @@ function withZcodeFixtureDb(fn: (dbPath: string) => void): void {
   }
 }
 
-export function testReadZcodeUsageNoDb(): void {
+test("testReadZcodeUsageNoDb", () => {
   const orig = process.env.FAPONY_ZCODE_DB;
   try {
     // Point to a non-existent path so readZcodeUsage returns EMPTY_RESULT
@@ -321,9 +322,9 @@ export function testReadZcodeUsageNoDb(): void {
     if (orig === undefined) delete process.env.FAPONY_ZCODE_DB;
     else process.env.FAPONY_ZCODE_DB = orig;
   }
-}
+});
 
-export function testReadZcodeUsagePrimaryPath(): void {
+test("testReadZcodeUsagePrimaryPath", () => {
   withZcodeFixtureDb((dbPath) => {
     const orig = process.env.FAPONY_ZCODE_DB;
     try {
@@ -345,9 +346,9 @@ export function testReadZcodeUsagePrimaryPath(): void {
       else process.env.FAPONY_ZCODE_DB = orig;
     }
   });
-}
+});
 
-export function testReadZcodeUsageDetail(): void {
+test("testReadZcodeUsageDetail", () => {
   withZcodeFixtureDb((dbPath) => {
     process.env.FAPONY_ZCODE_DB = dbPath;
     const result = readZcodeUsage(undefined, undefined, undefined, true);
@@ -357,9 +358,9 @@ export function testReadZcodeUsageDetail(): void {
     console.log("  ✓ readZcodeUsage detail → tool_breakdown and steps");
     delete process.env.FAPONY_ZCODE_DB;
   });
-}
+});
 
-export function testReadZcodeUsageFilterByWorktree(): void {
+test("testReadZcodeUsageFilterByWorktree", () => {
   withZcodeFixtureDb((dbPath) => {
     process.env.FAPONY_ZCODE_DB = dbPath;
     // Both sessions are in /tmp/zcode-wt — filter should return them
@@ -371,7 +372,7 @@ export function testReadZcodeUsageFilterByWorktree(): void {
     console.log("  ✓ readZcodeUsage filter by worktree");
     delete process.env.FAPONY_ZCODE_DB;
   });
-}
+});
 
 // --- claude code usage tests ---
 
@@ -440,7 +441,7 @@ function withClaudeCodeFixture(fn: (dir: string) => void): void {
   }
 }
 
-export function testReadClaudeCodeUsageNoDir(): void {
+test("testReadClaudeCodeUsageNoDir", () => {
   const orig = process.env.FAPONY_CLAUDE_PROJECTS_DIR;
   try {
     process.env.FAPONY_CLAUDE_PROJECTS_DIR = "/nonexistent/claude/projects";
@@ -452,9 +453,9 @@ export function testReadClaudeCodeUsageNoDir(): void {
     if (orig === undefined) delete process.env.FAPONY_CLAUDE_PROJECTS_DIR;
     else process.env.FAPONY_CLAUDE_PROJECTS_DIR = orig;
   }
-}
+});
 
-export function testReadClaudeCodeUsagePrimaryPath(): void {
+test("testReadClaudeCodeUsagePrimaryPath", () => {
   withClaudeCodeFixture((dir) => {
     const orig = process.env.FAPONY_CLAUDE_PROJECTS_DIR;
     try {
@@ -481,9 +482,9 @@ export function testReadClaudeCodeUsagePrimaryPath(): void {
       else process.env.FAPONY_CLAUDE_PROJECTS_DIR = orig;
     }
   });
-}
+});
 
-export function testReadClaudeCodeUsageStaleReads(): void {
+test("testReadClaudeCodeUsageStaleReads", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-claude-code-stale-"));
   const projectDir = join(dir, "projects", "-tmp-test-worktree");
   const { mkdirSync } = require("node:fs");
@@ -581,9 +582,9 @@ export function testReadClaudeCodeUsageStaleReads(): void {
     else process.env.FAPONY_CLAUDE_PROJECTS_DIR = orig;
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testReadClaudeCodeUsageFilterByWorktree(): void {
+test("testReadClaudeCodeUsageFilterByWorktree", () => {
   withClaudeCodeFixture((dir) => {
     const orig = process.env.FAPONY_CLAUDE_PROJECTS_DIR;
     try {
@@ -600,9 +601,9 @@ export function testReadClaudeCodeUsageFilterByWorktree(): void {
       else process.env.FAPONY_CLAUDE_PROJECTS_DIR = orig;
     }
   });
-}
+});
 
-export function testReadClaudeCodeUsageSkipsMalformedLines(): void {
+test("testReadClaudeCodeUsageSkipsMalformedLines", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-claude-malformed-"));
   const projectDir = join(dir, "projects", "-tmp-test-worktree");
   const { mkdirSync } = require("node:fs");
@@ -636,7 +637,7 @@ export function testReadClaudeCodeUsageSkipsMalformedLines(): void {
     else process.env.FAPONY_CLAUDE_PROJECTS_DIR = orig;
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
 // --- codex usage tests ---
 
@@ -777,7 +778,7 @@ function withCodexFixture(fn: (dir: string) => void): void {
   }
 }
 
-export function testReadCodexUsageNoDir(): void {
+test("testReadCodexUsageNoDir", () => {
   const orig = process.env.FAPONY_CODEX_SESSIONS_DIR;
   try {
     process.env.FAPONY_CODEX_SESSIONS_DIR = "/nonexistent/codex/sessions";
@@ -789,9 +790,9 @@ export function testReadCodexUsageNoDir(): void {
     if (orig === undefined) delete process.env.FAPONY_CODEX_SESSIONS_DIR;
     else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;
   }
-}
+});
 
-export function testReadCodexUsagePrimaryPath(): void {
+test("testReadCodexUsagePrimaryPath", () => {
   withCodexFixture((dir) => {
     const orig = process.env.FAPONY_CODEX_SESSIONS_DIR;
     try {
@@ -818,9 +819,9 @@ export function testReadCodexUsagePrimaryPath(): void {
       else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;
     }
   });
-}
+});
 
-export function testReadCodexUsageDetailBytesByTool(): void {
+test("testReadCodexUsageDetailBytesByTool", () => {
   withCodexFixture((dir) => {
     const orig = process.env.FAPONY_CODEX_SESSIONS_DIR;
     try {
@@ -852,9 +853,9 @@ export function testReadCodexUsageDetailBytesByTool(): void {
       else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;
     }
   });
-}
+});
 
-export function testReadCodexUsageFilterByWorktree(): void {
+test("testReadCodexUsageFilterByWorktree", () => {
   withCodexFixture((dir) => {
     const orig = process.env.FAPONY_CODEX_SESSIONS_DIR;
     try {
@@ -871,9 +872,9 @@ export function testReadCodexUsageFilterByWorktree(): void {
       else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;
     }
   });
-}
+});
 
-export function testReadCodexUsageSkipsMalformedLines(): void {
+test("testReadCodexUsageSkipsMalformedLines", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-codex-malformed-"));
   const sessionsDir = join(dir, "2026", "09", "09");
   const { mkdirSync } = require("node:fs");
@@ -923,9 +924,9 @@ export function testReadCodexUsageSkipsMalformedLines(): void {
     else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testMergeBytesByToolSumsAcrossClients(): void {
+test("testMergeBytesByToolSumsAcrossClients", () => {
   const a = {
     tool_breakdown: {},
     steps: 0,
@@ -946,11 +947,11 @@ export function testMergeBytesByToolSumsAcrossClients(): void {
   });
   assert.deepStrictEqual(mergeBytesByTool(null, undefined), {});
   console.log("  ✓ mergeBytesByTool sums per-tool bytes across clients");
-}
+});
 
 // ─── Read failures are named, not silent (agent-me's KnowledgeLoadError idea) ──
 
-export function testSessionReadFailureReportsErrorCode(): void {
+test("testSessionReadFailureReportsErrorCode", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-baddb-"));
   const dbPath = join(dir, "opencode.db");
   // A file that exists but is not a SQLite DB — the same shape a schema change
@@ -979,9 +980,9 @@ export function testSessionReadFailureReportsErrorCode(): void {
     else process.env.FAPONY_OPENCODE_DB = orig;
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testBeginSnapshotOnlyUnderWal(): void {
+test("testBeginSnapshotOnlyUnderWal", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-snap-"));
   try {
     for (const [mode, expected] of [
@@ -1010,4 +1011,4 @@ export function testBeginSnapshotOnlyUnderWal(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});

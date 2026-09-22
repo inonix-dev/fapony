@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/plan-seed.test.ts — tests for `fapony plan-seed` (src/plan-seed.ts)
 
 import assert from "node:assert";
@@ -42,7 +43,7 @@ function withCwd(dir: string, fn: () => void): void {
   }
 }
 
-export function testPlanSeedWritesPlan(): void {
+test("testPlanSeedWritesPlan", () => {
   withFixture((dir) => {
     withCwd(dir, () => {
       cmdPlanSeed(["foo"]);
@@ -67,9 +68,9 @@ export function testPlanSeedWritesPlan(): void {
     });
   });
   console.log("  ✓ plan-seed writes PLAN with agent slots + ledger context");
-}
+});
 
-export function testPlanSeedNoOverwrite(): void {
+test("testPlanSeedNoOverwrite", () => {
   withFixture((dir) => {
     withCwd(dir, () => {
       cmdPlanSeed(["foo"]);
@@ -96,9 +97,9 @@ export function testPlanSeedNoOverwrite(): void {
     });
   });
   console.log("  ✓ plan-seed refuses to overwrite an existing plan");
-}
+});
 
-export function testPlanSeedSpecSignatures(): void {
+test("testPlanSeedSpecSignatures", () => {
   withFixture((dir) => {
     withCwd(dir, () => {
       cmdPlanSeed(["foo", "--spec"]);
@@ -127,9 +128,9 @@ export function testPlanSeedSpecSignatures(): void {
   console.log(
     "  ✓ plan-seed --spec writes chunked SPEC with verbatim signatures",
   );
-}
+});
 
-export function testPlanSeedScopeFilters(): void {
+test("testPlanSeedScopeFilters", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-scope-"));
   try {
     const comp = join(dir, "apps", "vela", "src", "components");
@@ -189,9 +190,9 @@ export function testPlanSeedScopeFilters(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ plan-seed --scope filters §8 and never eats the name");
-}
+});
 
-export function testPlanSeedCapsHold(): void {
+test("testPlanSeedCapsHold", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-caps-"));
   try {
     // 6 modules × 10 files × 4 exports — enough to trip the per-chunk cap,
@@ -243,9 +244,9 @@ export function testPlanSeedCapsHold(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ plan-seed caps hold: PLAN ≤ 60 / SPEC ≤ 200 with markers");
-}
+});
 
-export function testPlanSeedSingleFileScope(): void {
+test("testPlanSeedSingleFileScope", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-file-"));
   try {
     mkdirSync(join(dir, "src"), { recursive: true });
@@ -277,9 +278,9 @@ export function testPlanSeedSingleFileScope(): void {
   console.log(
     "  ✓ plan-seed --scope <file> produces SPEC chunk with signatures",
   );
-}
+});
 
-export function testPlanSeedOverlapScopeDedup(): void {
+test("testPlanSeedOverlapScopeDedup", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-overlap-"));
   try {
     mkdirSync(join(dir, "src", "utils"), { recursive: true });
@@ -312,9 +313,9 @@ export function testPlanSeedOverlapScopeDedup(): void {
   console.log(
     "  ✓ plan-seed prunes nested --scope roots to avoid double-count",
   );
-}
+});
 
-export function testPlanSeedConfigFallback(): void {
+test("testPlanSeedConfigFallback", () => {
   withFixture((dir) => {
     // planDir/specDir are hardcoded — not configurable (gitignored = private).
     // A broken config must fall back to defaults without throwing.
@@ -327,9 +328,9 @@ export function testPlanSeedConfigFallback(): void {
   console.log(
     "  ✓ plan-seed: broken config falls back to defaults (planDir is hardcoded)",
   );
-}
+});
 
-export function testPlanSeedStepCloseCarriesLiteralPlanPath(): void {
+test("testPlanSeedStepCloseCarriesLiteralPlanPath", () => {
   withFixture((dir) => {
     withCwd(dir, () => {
       cmdPlanSeed(["bar"]);
@@ -356,4 +357,4 @@ export function testPlanSeedStepCloseCarriesLiteralPlanPath(): void {
     });
   });
   console.log("  ✓ plan-seed: §6 close block carries the literal plan path");
-}
+});

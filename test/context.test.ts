@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/context.test.ts — project-health context block (PLAN-project-health-context step 4)
 
 import assert from "node:assert";
@@ -50,7 +51,7 @@ function statsFixture(): StatsData {
   };
 }
 
-export function testContextBlockSnapshot(): void {
+test("testContextBlockSnapshot", () => {
   const block = buildProjectHealthContext(statsFixture());
   assert.equal(
     block,
@@ -62,9 +63,9 @@ export function testContextBlockSnapshot(): void {
     ].join("\n"),
   );
   console.log("  ✓ context block matches spec §3 shape");
-}
+});
 
-export function testContextBlockLowHistory(): void {
+test("testContextBlockLowHistory", () => {
   const data = statsFixture();
   data.runs.total = 2;
   data.byWorktree = [
@@ -74,18 +75,18 @@ export function testContextBlockLowHistory(): void {
   assert.ok(block.includes("Not enough history yet (2 runs, need 5+)"));
   assert.ok(!block.includes("scope_mismatch"), "no reason noise on n=2");
   console.log("  ✓ context block guards low sample size");
-}
+});
 
-export function testContextBlockWorktreeScope(): void {
+test("testContextBlockWorktreeScope", () => {
   const data = statsFixture();
   const block = buildProjectHealthContext(data, { worktree: "wt-empty" });
   // Unknown worktree → 0 runs → low-history line, never another tree's trends.
   assert.ok(block.includes("N=0 runs, wt-empty"));
   assert.ok(!block.includes("scope_mismatch"));
   console.log("  ✓ context block scopes to worktree");
-}
+});
 
-export function testContextBlockNoPatterns(): void {
+test("testContextBlockNoPatterns", () => {
   const data = statsFixture();
   data.byReasonCode = [];
   data.escalatedRuns = [];
@@ -93,9 +94,9 @@ export function testContextBlockNoPatterns(): void {
   const block = buildProjectHealthContext(data);
   assert.ok(block.includes("No recurring failure or escalation patterns"));
   console.log("  ✓ context block handles clean history");
-}
+});
 
-export function testContextBlockLineCap(): void {
+test("testContextBlockLineCap", () => {
   const data = statsFixture();
   data.byReasonCode = Array.from({ length: 30 }, (_, i) => ({
     worktree: "wt1",
@@ -106,9 +107,9 @@ export function testContextBlockLineCap(): void {
   assert.ok(block.split("\n").length <= 15, "capped at ~15 lines");
   assert.ok(!block.includes("reason_3"), "top-3 reasons only");
   console.log("  ✓ context block caps reasons and total lines");
-}
+});
 
-export function testContextBlockRecentNotes(): void {
+test("testContextBlockRecentNotes", () => {
   const data = statsFixture();
   data.recentVerdictNotes = [
     {
@@ -123,9 +124,9 @@ export function testContextBlockRecentNotes(): void {
     block.includes("Recent verdict notes: [scope_mismatch] used old API shape"),
   );
   console.log("  ✓ context block surfaces recent verdict note text");
-}
+});
 
-export function testContextBlockLowHistoryStillShowsNotes(): void {
+test("testContextBlockLowHistoryStillShowsNotes", () => {
   const data = statsFixture();
   data.runs.total = 1;
   data.byWorktree = [
@@ -146,9 +147,9 @@ export function testContextBlockLowHistoryStillShowsNotes(): void {
     "note text surfaces even below minRuns — signal from N=1",
   );
   console.log("  ✓ context block shows notes even below minRuns threshold");
-}
+});
 
-export function testContextBlockMergesReasonsAcrossWorktrees(): void {
+test("testContextBlockMergesReasonsAcrossWorktrees", () => {
   const data = statsFixture();
   // Rows are per-worktree — the same reason appears once per worktree. The
   // unscoped block must merge counts by reason BEFORE slicing (measured
@@ -169,9 +170,9 @@ export function testContextBlockMergesReasonsAcrossWorktrees(): void {
     "no duplicate reasons in one line",
   );
   console.log("  ✓ context block merges byReasonCode across worktrees");
-}
+});
 
-export function testContextBlockNoteCapAndNoneTag(): void {
+test("testContextBlockNoteCapAndNoneTag", () => {
   const data = statsFixture();
   data.recentVerdictNotes = [
     {
@@ -203,9 +204,9 @@ export function testContextBlockNoteCapAndNoneTag(): void {
     `notes are capped, not a wall (got ${line.length} chars)`,
   );
   console.log("  ✓ context block caps note length and drops [none] tags");
-}
+});
 
-export function testContextBlockFilesFilterBeyondTop3(): void {
+test("testContextBlockFilesFilterBeyondTop3", () => {
   const data = statsFixture();
   data.recentVerdictNotes = [
     { worktree: "wt1", reason: "other", note: "unrelated one", ts: "" },
@@ -231,9 +232,9 @@ export function testContextBlockFilesFilterBeyondTop3(): void {
     "non-matching notes stay filtered out",
   );
   console.log("  ✓ context block files filter applies before the top-3 slice");
-}
+});
 
-export function testComputeModelFit(): void {
+test("testComputeModelFit", () => {
   const byRegime: StatsData["byRegime"] = [
     {
       worktree: "wt1",
@@ -335,9 +336,9 @@ export function testComputeModelFit(): void {
   console.log(
     "  ✓ computeModelFit ranks on the frontier with min-N + worktree guards",
   );
-}
+});
 
-export function testContextBlockMemDecisions(): void {
+test("testContextBlockMemDecisions", () => {
   const data = statsFixture();
   const block = buildProjectHealthContext(data, {
     memDecisions: [
@@ -352,9 +353,9 @@ export function testContextBlockMemDecisions(): void {
     "mem decisions lead the block",
   );
   console.log("  ✓ context block surfaces mem decisions");
-}
+});
 
-export function testContextBlockModelFitLine(): void {
+test("testContextBlockModelFitLine", () => {
   const data = statsFixture();
   data.byRegime = [
     {
@@ -379,9 +380,9 @@ export function testContextBlockModelFitLine(): void {
     "model right-sizing renders from real buckets",
   );
   console.log("  ✓ context block surfaces model right-sizing");
-}
+});
 
-export function testContextBlockHubLine(): void {
+test("testContextBlockHubLine", () => {
   const data = statsFixture();
   const block = buildProjectHealthContext(data, {
     hubs: [{ file: "src/stats/data.ts", dependents: 9, tested: false }],
@@ -427,9 +428,9 @@ export function testContextBlockHubLine(): void {
     "transitive count omitted when equal to direct (no new info)",
   );
   console.log("  ✓ context block surfaces structural hubs");
-}
+});
 
-export function testContextBlockHubLowHistory(): void {
+test("testContextBlockHubLowHistory", () => {
   const data = statsFixture();
   data.runs.total = 2;
   data.byWorktree = [
@@ -444,9 +445,9 @@ export function testContextBlockHubLowHistory(): void {
     "hub is structural, not history — fires even at N=0",
   );
   console.log("  ✓ context block shows hub line even below minRuns");
-}
+});
 
-export function testContextBlockHubSilentBelowThreshold(): void {
+test("testContextBlockHubSilentBelowThreshold", () => {
   const data = statsFixture();
   const block = buildProjectHealthContext(data, { hubs: [] });
   assert.ok(
@@ -454,9 +455,9 @@ export function testContextBlockHubSilentBelowThreshold(): void {
     "no hub entries → no hub line (reflex guard, PLAN-hub-signal rule 8)",
   );
   console.log("  ✓ context block stays silent without hubs");
-}
+});
 
-export function testContextBlockHubCapHolds(): void {
+test("testContextBlockHubCapHolds", () => {
   const data = statsFixture();
   data.byReasonCode = Array.from({ length: 30 }, (_, i) => ({
     worktree: "wt1",
@@ -482,4 +483,4 @@ export function testContextBlockHubCapHolds(): void {
     "beyond top-3 entries truncated (PLAN §5 escape hatch)",
   );
   console.log("  ✓ context block hub line respects the 15-line cap");
-}
+});

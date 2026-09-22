@@ -1,7 +1,8 @@
+import { test } from "bun:test";
 import assert from "node:assert";
 import { assertSafe } from "../src/safety.js";
 
-export function testAssertSafe(): void {
+test("testAssertSafe", () => {
   const dangerous = [
     ["git", "reset", "--hard", "HEAD~1"],
     ["git", "clean", "-fd"],
@@ -34,4 +35,4 @@ export function testAssertSafe(): void {
   }
 
   console.log("  ✓ assertSafe");
-}
+});

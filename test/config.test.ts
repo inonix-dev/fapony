@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import assert from "node:assert";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,7 +19,7 @@ function baseConfig(): Config {
   return loadConfig("/nonexistent-path/fapony.config.json");
 }
 
-export function testConfigDefaults(): void {
+test("testConfigDefaults", () => {
   const config = baseConfig();
   // planDir/specDir are hardcoded — not configurable (gitignored = private).
   assert.equal(planDir(), ".fapony/plan");
@@ -28,9 +29,9 @@ export function testConfigDefaults(): void {
   assert.equal(safetyDeny(config).length, 4);
 
   console.log("  ✓ config defaults = old hardcodes");
-}
+});
 
-export function testConfigFileOverrides(): void {
+test("testConfigFileOverrides", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-cfg-"));
   try {
     const file = join(dir, "fapony.config.json");
@@ -56,9 +57,9 @@ export function testConfigFileOverrides(): void {
   }
 
   console.log("  ✓ config file overrides");
-}
+});
 
-export function testConfigUnknownKeysRideAlong(): void {
+test("testConfigUnknownKeysRideAlong", () => {
   // Loop-era keys in the wild are never read — loadConfig must not throw,
   // and the live fields must still resolve.
   const dir = mkdtempSync(join(tmpdir(), "fapony-cfg-"));
@@ -85,9 +86,9 @@ export function testConfigUnknownKeysRideAlong(): void {
   }
 
   console.log("  ✓ config unknown (loop-era) keys ride along harmlessly");
-}
+});
 
-export function testCustomSafetyDeny(): void {
+test("testCustomSafetyDeny", () => {
   // custom list replaces the default: default-dangerous now allowed…
   assertSafe(["git", "reset", "--hard"], ["my-own-ban"]);
   // …and the custom pattern blocks
@@ -101,9 +102,9 @@ export function testCustomSafetyDeny(): void {
   assert.throws(() => assertSafe(["anything"], ["([invalid"]), /./);
 
   console.log("  ✓ custom safety deny");
-}
+});
 
-export function testTemplateArgsReplaceAll(): void {
+test("testTemplateArgsReplaceAll", () => {
   const out = templateArgs(["claude", "-p", "{model}", "{PROMPT}", "{model}"], {
     model: "opus",
     PROMPT: "hi",
@@ -125,4 +126,4 @@ export function testTemplateArgsReplaceAll(): void {
   assert.equal(trickyFilled, "PLAN:\ncosts $100 and $& more");
 
   console.log("  ✓ templateArgs replaceAll + fillPrompt");
-}
+});

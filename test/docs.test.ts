@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/docs.test.ts — enum drift guard: every value in REGIME_CODES must
 // appear in the docs that enumerate it, so an append to the enum fails the
 // suite until the prose lists it.
@@ -42,18 +43,18 @@ function assertEnumListed(
   }
 }
 
-export function testRegimeCodesListedInDocs(): void {
+test("testRegimeCodesListedInDocs", () => {
   assertEnumListed("REGIME_CODES", REGIME_CODES, [
     { path: "CLAUDE.md" },
     { path: "README.md" },
   ]);
-}
+});
 
-export function testAddingFakeEnumValueFailsDocsCheck(): void {
+test("testAddingFakeEnumValueFailsDocsCheck", () => {
   // The mechanism itself: an enum value no doc mentions is exactly what the
   // guard above catches (Done criteria 3 — simulate one).
   const fake = ["code", "not_a_real_regime"];
   const content = read("README.md");
   const missing = fake.filter((v) => !content.includes(v));
   assert.deepStrictEqual(missing, ["not_a_real_regime"]);
-}
+});

@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/detect.test.ts — detectTestRunner (repo's package manager + test command)
 
 import assert from "node:assert";
@@ -23,7 +24,7 @@ function repoWith(
   return dir;
 }
 
-export function testDetectBunViaPackageManager(): void {
+test("testDetectBunViaPackageManager", () => {
   const dir = repoWith("bun-pm", { packageManager: "bun@1.2.0" }, []);
   try {
     const r = detectTestRunner(dir);
@@ -37,9 +38,9 @@ export function testDetectBunViaPackageManager(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ detect bun (packageManager field)");
-}
+});
 
-export function testDetectBunViaPackageManagerWithTypecheckScript(): void {
+test("testDetectBunViaPackageManagerWithTypecheckScript", () => {
   const dir = repoWith(
     "bun-tsc",
     { packageManager: "bun@1.2.0", scripts: { typecheck: "tsc --noEmit" } },
@@ -53,9 +54,9 @@ export function testDetectBunViaPackageManagerWithTypecheckScript(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ detect bun typecheck script → bun run typecheck");
-}
+});
 
-export function testDetectNpmViaLockfile(): void {
+test("testDetectNpmViaLockfile", () => {
   const dir = repoWith("npm", {}, ["package-lock.json"]);
   try {
     const r = detectTestRunner(dir);
@@ -69,9 +70,9 @@ export function testDetectNpmViaLockfile(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ detect npm (package-lock.json)");
-}
+});
 
-export function testDetectPnpmViaLockfile(): void {
+test("testDetectPnpmViaLockfile", () => {
   const dir = repoWith("pnpm", {}, ["pnpm-lock.yaml"]);
   try {
     const r = detectTestRunner(dir);
@@ -82,9 +83,9 @@ export function testDetectPnpmViaLockfile(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ detect pnpm (pnpm-lock.yaml)");
-}
+});
 
-export function testDetectYarnViaLockfile(): void {
+test("testDetectYarnViaLockfile", () => {
   const dir = repoWith("yarn", {}, ["yarn.lock"]);
   try {
     const r = detectTestRunner(dir);
@@ -94,9 +95,9 @@ export function testDetectYarnViaLockfile(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ detect yarn (yarn.lock)");
-}
+});
 
-export function testDetectNullWhenNoPackageJson(): void {
+test("testDetectNullWhenNoPackageJson", () => {
   const dir = mkdtempSync(join(tmpdir(), `fapony-detect-empty-`));
   try {
     assert.equal(detectTestRunner(dir), null);
@@ -104,9 +105,9 @@ export function testDetectNullWhenNoPackageJson(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ detect null when no package.json");
-}
+});
 
-export function testDetectNullWhenPackageJsonHasNoSignal(): void {
+test("testDetectNullWhenPackageJsonHasNoSignal", () => {
   // package.json exists but no packageManager field and no lockfile → foreign.
   const dir = repoWith("foreign", { name: "x" }, []);
   try {
@@ -115,9 +116,9 @@ export function testDetectNullWhenPackageJsonHasNoSignal(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ detect null when package.json has no runner signal");
-}
+});
 
-export function testDetectSkipsUnrecognizedPackageManager(): void {
+test("testDetectSkipsUnrecognizedPackageManager", () => {
   const dir = repoWith("deno", { packageManager: "deno@2.0" }, []);
   try {
     assert.equal(detectTestRunner(dir), null);
@@ -125,4 +126,4 @@ export function testDetectSkipsUnrecognizedPackageManager(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ detect null for unrecognized packageManager");
-}
+});

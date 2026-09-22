@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/analyze.test.ts — tests for `fapony analyze` (src/analyze.ts)
 
 import assert from "node:assert";
@@ -41,7 +42,7 @@ function withFixture(
   }
 }
 
-export function testAnalyzeHubOrphanCycle(): void {
+test("testAnalyzeHubOrphanCycle", () => {
   withFixture(
     {
       // hub: 3 non-test dependents, no test dependent
@@ -90,9 +91,9 @@ export function testAnalyzeHubOrphanCycle(): void {
     },
   );
   console.log("  ✓ analyze finds hub-untested, orphan, and cycle fixtures");
-}
+});
 
-export function testAnalyzeChangedUntested(): void {
+test("testAnalyzeChangedUntested", () => {
   withFixture(
     {
       "core.ts": "export const x = 1;\n",
@@ -109,9 +110,9 @@ export function testAnalyzeChangedUntested(): void {
     },
   );
   console.log("  ✓ analyze flags changed-untested only for known source files");
-}
+});
 
-export function testAnalyzeSkipsUnresolvableAndBroken(): void {
+test("testAnalyzeSkipsUnresolvableAndBroken", () => {
   withFixture(
     {
       "ok.ts":
@@ -128,9 +129,9 @@ export function testAnalyzeSkipsUnresolvableAndBroken(): void {
     },
   );
   console.log("  ✓ analyze counts unresolved instead of throwing");
-}
+});
 
-export function testAnalyzeEmptyDir(): void {
+test("testAnalyzeEmptyDir", () => {
   withFixture({}, (dir) => {
     const graph = buildGraph(dir);
     assert.equal(graph.files.length, 0);
@@ -139,9 +140,9 @@ export function testAnalyzeEmptyDir(): void {
     assert.ok(text.includes("no findings"));
   });
   console.log("  ✓ analyze on empty dir reports no findings");
-}
+});
 
-export function testAnalyzeBlastRadius(): void {
+test("testAnalyzeBlastRadius", () => {
   withFixture(
     {
       "core.ts": "export const x = 1;\n",
@@ -158,9 +159,9 @@ export function testAnalyzeBlastRadius(): void {
     },
   );
   console.log("  ✓ analyze blastRadius counts dependents and test coverage");
-}
+});
 
-export function testAnalyzeBlastRadiusTransitive(): void {
+test("testAnalyzeBlastRadiusTransitive", () => {
   withFixture(
     {
       // core <- mid <- leaf : leaf is a transitive (not direct) dependent of core.
@@ -179,9 +180,9 @@ export function testAnalyzeBlastRadiusTransitive(): void {
   console.log(
     "  ✓ analyze blastRadius walks transitive dependents, cycle-safe",
   );
-}
+});
 
-export function testAnalyzeBlastRadiusTransitiveCycle(): void {
+test("testAnalyzeBlastRadiusTransitiveCycle", () => {
   withFixture(
     {
       "a.ts": 'import "./b.js";\n',
@@ -195,16 +196,16 @@ export function testAnalyzeBlastRadiusTransitiveCycle(): void {
     },
   );
   console.log("  ✓ analyze blastRadius transitive walk terminates on cycles");
-}
+});
 
-export function testAnalyzeIsTestFile(): void {
+test("testAnalyzeIsTestFile", () => {
   assert.equal(isTestFile("src/foo.test.ts"), true);
   assert.equal(isTestFile("test/bar.ts"), true);
   assert.equal(isTestFile("src/foo.ts"), false);
   console.log("  ✓ analyze isTestFile matches collect criteria");
-}
+});
 
-export function testAnalyzeSkipsNestedCheckouts(): void {
+test("testAnalyzeSkipsNestedCheckouts", () => {
   withFixture(
     {
       "core.ts": "export const a = 1;\n",
@@ -229,9 +230,9 @@ export function testAnalyzeSkipsNestedCheckouts(): void {
       );
     },
   );
-}
+});
 
-export function testAnalyzeBarrelHidesTests(): void {
+test("testAnalyzeBarrelHidesTests", () => {
   withFixture(
     {
       // Four modules behind a barrel, one test importing only the barrel —
@@ -276,11 +277,11 @@ export function testAnalyzeBarrelHidesTests(): void {
     },
   );
   console.log("  ✓ analyze sees tests that import through a barrel file");
-}
+});
 
 // Bun.Transpiler.scan() reports `export * from` as an import, never an export,
 // so a barrel reads as zero exports and a symbol behind one looks unused.
-export function testAnalyzeExportsThroughBarrels(): void {
+test("testAnalyzeExportsThroughBarrels", () => {
   withFixture(
     {
       "src/fail-with.ts": "export function failWith(): never { throw 1; }\n",
@@ -302,13 +303,13 @@ export function testAnalyzeExportsThroughBarrels(): void {
       );
     },
   );
-}
+});
 
 // The disk mirror exists so the Edit hint does not rebuild the graph on every
 // hook call (a Claude Code hook is a fresh process each time). It must write
 // through on build, be read on a later process, invalidate when a source file
 // changes (the fingerprint), and never throw on a corrupt cache.
-export function testGraphCacheWriteThroughInvalidateFallback(): void {
+test("testGraphCacheWriteThroughInvalidateFallback", () => {
   const state = mkdtempSync(join(tmpdir(), "fapony-graphcache-"));
   const orig = process.env.FAPONY_STATE_DIR;
   process.env.FAPONY_STATE_DIR = state;
@@ -371,12 +372,12 @@ export function testGraphCacheWriteThroughInvalidateFallback(): void {
   console.log(
     "  ✓ graph cache: write-through, read, invalidate, corrupt fallback",
   );
-}
+});
 
 // Same-process calls must not serve a stale graph: the in-process hit is
 // revalidated against the fingerprint, so an edit between two calls rebuilds
 // even without resetGraphCache() (which only simulates a fresh process).
-export function testGraphCacheInProcessInvalidation(): void {
+test("testGraphCacheInProcessInvalidation", () => {
   const state = mkdtempSync(join(tmpdir(), "fapony-graphcache-inproc-"));
   const orig = process.env.FAPONY_STATE_DIR;
   process.env.FAPONY_STATE_DIR = state;
@@ -411,4 +412,4 @@ export function testGraphCacheInProcessInvalidation(): void {
     rmSync(state, { recursive: true, force: true });
   }
   console.log("  ✓ graph cache: same-process call invalidates on edit");
-}
+});

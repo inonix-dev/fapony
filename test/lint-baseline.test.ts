@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/lint-baseline.test.ts — PLAN-convention-debt chunk 6.
 //
 // "แดงนี่ของใคร" — the baseline captures pre-existing `path:rule-id` pairs and
@@ -59,7 +60,7 @@ function stateBaseline(stateDir: string): string | null {
   return files.length > 0 ? join(d, files[0]) : null;
 }
 
-export function testLintBaselineCaptureAndCleanDiff(): void {
+test("testLintBaselineCaptureAndCleanDiff", () => {
   withTempRepo((dir) => {
     const stateDir = join(dir, ".state");
     writeFileSync(join(dir, "lint-out.ts"), JSON_LINTER);
@@ -94,9 +95,9 @@ export function testLintBaselineCaptureAndCleanDiff(): void {
   console.log(
     "  ✓ lint-baseline → capture stores pairs, clean diff sees 0 and discards",
   );
-}
+});
 
-export function testLintBaselineDiffReportsOnlyNewFindings(): void {
+test("testLintBaselineDiffReportsOnlyNewFindings", () => {
   withTempRepo((dir) => {
     const stateDir = join(dir, ".state");
     writeFileSync(join(dir, "lint-out.ts"), JSON_LINTER);
@@ -115,9 +116,9 @@ export function testLintBaselineDiffReportsOnlyNewFindings(): void {
     assert.match(diff.stdout, /fixed 1 pre-existing/);
   });
   console.log("  ✓ lint-baseline → diff reports only what this work added");
-}
+});
 
-export function testLintBaselineUnixFormatAndErrors(): void {
+test("testLintBaselineUnixFormatAndErrors", () => {
   withTempRepo((dir) => {
     const stateDir = join(dir, ".state");
     writeFileSync(
@@ -140,4 +141,4 @@ export function testLintBaselineUnixFormatAndErrors(): void {
   console.log(
     "  ✓ lint-baseline → unix-line parser works, diff without capture errors",
   );
-}
+});

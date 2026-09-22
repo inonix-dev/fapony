@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { test } from "bun:test";
 import assert from "node:assert";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,7 +15,7 @@ import {
 } from "../src/db/store.js";
 import { withTmpDb } from "./helpers.js";
 
-export function testDbLifecycle(): void {
+test("testDbLifecycle", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
 
@@ -43,7 +44,7 @@ export function testDbLifecycle(): void {
   });
 
   console.log("  ✓ db lifecycle");
-}
+});
 
 function userVersion(db: ReturnType<typeof openDb>): number {
   const row = db.prepare("PRAGMA user_version").get() as {
@@ -52,15 +53,15 @@ function userVersion(db: ReturnType<typeof openDb>): number {
   return row.user_version;
 }
 
-export function testSchemaVersionStamped(): void {
+test("testSchemaVersionStamped", () => {
   withTmpDb((db) => {
     assert.equal(userVersion(db), SCHEMA_VERSION);
   });
 
   console.log("  ✓ schema version stamped on fresh db");
-}
+});
 
-export function testLegacyDbStampedWithoutDataLoss(): void {
+test("testLegacyDbStampedWithoutDataLoss", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-test-"));
   const orig = process.env.FAPONY_STATE_DIR;
   process.env.FAPONY_STATE_DIR = dir;
@@ -97,13 +98,13 @@ export function testLegacyDbStampedWithoutDataLoss(): void {
   }
 
   console.log("  ✓ legacy db stamped without data loss");
-}
+});
 
-export function testMigrateDbRejectsNewerSchema(): void {
+test("testMigrateDbRejectsNewerSchema", () => {
   withTmpDb((db) => {
     db.run(`PRAGMA user_version = ${SCHEMA_VERSION + 1}`);
     assert.throws(() => migrateDb(db), /newer than supported/);
   });
 
   console.log("  ✓ migrateDb rejects newer schema");
-}
+});

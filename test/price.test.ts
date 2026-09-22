@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/price.test.ts — unit tests for src/price/ (fetch + resolve)
 //
 // ห้ามยิง network ระหว่างเทสต์: parse/merge/resolve/calc ใช้ fixture ล้วน
@@ -84,7 +85,7 @@ function breakdown(
 
 // ─── parsePricesResponse ────────────────────────────────────────────
 
-export function testParsePricesStripsTildeAndKeepsFreeIds(): void {
+test("testParsePricesStripsTildeAndKeepsFreeIds", () => {
   const parsed = parsePricesResponse({
     data: [
       {
@@ -107,11 +108,11 @@ export function testParsePricesStripsTildeAndKeepsFreeIds(): void {
   assert.ok(!("no-pricing" in parsed));
   assert.ok(!("bad-numbers" in parsed));
   console.log("  ✓ parsePricesResponse strips ~, keeps :free, skips bad rows");
-}
+});
 
 // ─── resolve: 5 รูปจากแผน §7 ───────────────────────────────────────
 
-export function testResolveDirectAndOpenrouterPrefix(): void {
+test("testResolveDirectAndOpenrouterPrefix", () => {
   const t = fixtureTable();
   // ตรงตัว (claude code)
   assert.equal(
@@ -124,9 +125,9 @@ export function testResolveDirectAndOpenrouterPrefix(): void {
     "priced",
   );
   console.log("  ✓ resolve direct + openrouter/ prefix");
-}
+});
 
-export function testResolveVendorPrefixAndFreeSuffix(): void {
+test("testResolveVendorPrefixAndFreeSuffix", () => {
   const t = fixtureTable();
   // opencode-go/mimo-v2.5 → ตัด prefix เหลือ slug → suffix match xiaomi/mimo-v2.5
   const r = resolvePrice("opencode-go", "mimo-v2.5", t);
@@ -148,18 +149,18 @@ export function testResolveVendorPrefixAndFreeSuffix(): void {
     "free",
   );
   console.log("  ✓ resolve vendor prefix + -free suffix");
-}
+});
 
-export function testResolveBareSlugAndLocal(): void {
+test("testResolveBareSlugAndLocal", () => {
   const t = fixtureTable();
   // zcode ไม่มี vendor: GLM-5.3-Flash → z-ai/glm-5.3-flash (case-insensitive)
   assert.equal(resolvePrice("", "GLM-5.3-Flash", t).status, "priced");
   // local = free จริง ไม่ใช่ unpriced
   assert.equal(resolvePrice("lmstudio_local", "qwen3.5-9b", t).status, "free");
   console.log("  ✓ resolve bare slug + local free");
-}
+});
 
-export function testResolveUnpricedIsNotZero(): void {
+test("testResolveUnpricedIsNotZero", () => {
   const t = fixtureTable();
   // opencode/big-pickle (147 sessions ไม่มี token) + mimo/(no model id)
   for (const [p, m] of [
@@ -171,11 +172,11 @@ export function testResolveUnpricedIsNotZero(): void {
     assert.equal(r.rates, null, `${p}/${m}`);
   }
   console.log("  ✓ resolve unpriced returns null rates, never zero-rate");
-}
+});
 
 // ─── calcCost: done criteria #5 ─────────────────────────────────────
 
-export function testCalcCostUsesCacheReadRate(): void {
+test("testCalcCostUsesCacheReadRate", () => {
   // cache-read ถูกกว่า input สด ~10× (claude-sonnet-5 จริง): ถ้า impl เอา
   // cacheRead ไปคูณเรต input เทสต์นี้ต้องแดง — ไม่งั้นตัวเลขบวม ~10×
   const rates = fixtureTable().models["anthropic/claude-sonnet-5"];
@@ -195,9 +196,9 @@ export function testCalcCostUsesCacheReadRate(): void {
   console.log(
     "  ✓ calcCost prices cache-read at its own rate (mutation guard)",
   );
-}
+});
 
-export function testCalcCostCacheWriteFallsBackToInput(): void {
+test("testCalcCostCacheWriteFallsBackToInput", () => {
   // xiaomi ไม่มี input_cache_write → ใช้เรต input
   const rates = fixtureTable().models["xiaomi/mimo-v2.5"];
   const got = calcCost(
@@ -206,11 +207,11 @@ export function testCalcCostCacheWriteFallsBackToInput(): void {
   );
   assert.equal(got, 1000 * 0.000000435);
   console.log("  ✓ calcCost cache-write falls back to input rate");
-}
+});
 
 // ─── merge: ไม่ลบของเก่า ───────────────────────────────────────────
 
-export function testMergeKeepsOldIds(): void {
+test("testMergeKeepsOldIds", () => {
   const old = fixtureTable();
   const merged = mergePriceTables(old, {
     "anthropic/claude-sonnet-5": {
@@ -225,11 +226,11 @@ export function testMergeKeepsOldIds(): void {
   // ตัวที่หลุดตารางรอบนี้ → ของเก่ายังอยู่
   assert.ok(merged.models["xiaomi/mimo-v2.5"]);
   console.log("  ✓ mergePriceTables never deletes old ids");
-}
+});
 
 // ─── load/write: หาย/พัง → null ────────────────────────────────────
 
-export function testLoadPricesMissingIsNull(): void {
+test("testLoadPricesMissingIsNull", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-price-"));
   const prev = process.env.FAPONY_STATE_DIR;
   process.env.FAPONY_STATE_DIR = join(dir, "no-such-subdir");
@@ -241,9 +242,9 @@ export function testLoadPricesMissingIsNull(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ loadPrices missing file → null (caller shows — + hint)");
-}
+});
 
-export function testWriteLoadRoundtrip(): void {
+test("testWriteLoadRoundtrip", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-price-"));
   const prev = process.env.FAPONY_STATE_DIR;
   process.env.FAPONY_STATE_DIR = dir;
@@ -258,11 +259,11 @@ export function testWriteLoadRoundtrip(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ writePrices/loadPrices roundtrip under FAPONY_STATE_DIR");
-}
+});
 
 // ─── fetch: stub fetcher (ไม่ยิงเน็ต) ───────────────────────────────
 
-export async function testFetchPriceTableStub(): Promise<void> {
+test("testFetchPriceTableStub", async () => {
   const stub = async (_url: string | URL | Request): Promise<Response> =>
     new Response(
       JSON.stringify({
@@ -278,11 +279,11 @@ export async function testFetchPriceTableStub(): Promise<void> {
   assert.equal(out["a/b"].input, 1);
   assert.equal(out["a/b"].cacheRead, 0.1);
   console.log("  ✓ fetchPriceTable works with stub fetcher (no network)");
-}
+});
 
 // ─── imputeResult: bucket แยก ───────────────────────────────────────
 
-export function testImputeBuckets(): void {
+test("testImputeBuckets", () => {
   const t = fixtureTable();
   const summary = imputeResult(
     usageWith([
@@ -300,4 +301,4 @@ export function testImputeBuckets(): void {
   assert.equal(big?.status, "unpriced");
   assert.equal(big?.imputed_cost, 0);
   console.log("  ✓ imputeResult splits priced/free/unpriced buckets");
-}
+});

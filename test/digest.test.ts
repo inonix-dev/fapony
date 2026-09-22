@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/digest.test.ts — tests for src/digest/
 //
 // Pin env vars to isolate from real machine data (SPEC §7):
@@ -73,7 +74,7 @@ function writePlanFile(dir: string, name: string, content: string): void {
 
 // --- tests ---
 
-export async function testDigestEmptyRepo(): Promise<void> {
+test("testDigestEmptyRepo", async () => {
   await withIsolatedEnv(async () => {
     const dir = mkdtempSync(join(tmpdir(), "fapony-empty-"));
     try {
@@ -94,9 +95,9 @@ export async function testDigestEmptyRepo(): Promise<void> {
     }
   });
   console.log("  ✓ empty repo — all sources ok:false");
-}
+});
 
-export async function testDigestSinceFilter(): Promise<void> {
+test("testDigestSinceFilter", async () => {
   await withIsolatedEnv(async () => {
     const dir = makeWorktree();
     try {
@@ -135,9 +136,9 @@ export async function testDigestSinceFilter(): Promise<void> {
   console.log(
     "  ✓ since filter — different ranges return different row counts",
   );
-}
+});
 
-export async function testDigestEscInjection(): Promise<void> {
+test("testDigestEscInjection", async () => {
   await withIsolatedEnv(async () => {
     const dir = makeWorktree();
     try {
@@ -169,9 +170,9 @@ export async function testDigestEscInjection(): Promise<void> {
   console.log(
     "  ✓ esc injection — <script> in mem note does not leak into HTML",
   );
-}
+});
 
-export async function testDigestMalformedLine(): Promise<void> {
+test("testDigestMalformedLine", async () => {
   await withIsolatedEnv(async () => {
     const dir = makeWorktree();
     try {
@@ -197,9 +198,9 @@ export async function testDigestMalformedLine(): Promise<void> {
     }
   });
   console.log("  ✓ malformed line — skipped count, other rows still read");
-}
+});
 
-export async function testDigestJsonSubsetOfText(): Promise<void> {
+test("testDigestJsonSubsetOfText", async () => {
   await withIsolatedEnv(async () => {
     const dir = makeWorktree();
     try {
@@ -284,9 +285,9 @@ export async function testDigestJsonSubsetOfText(): Promise<void> {
     }
   });
   console.log("  ✓ json ⊆ text — every payload field appears in text+html");
-}
+});
 
-export async function testDigestInvalidSince(): Promise<void> {
+test("testDigestInvalidSince", async () => {
   await withIsolatedEnv(async () => {
     let threw = false;
     try {
@@ -297,9 +298,9 @@ export async function testDigestInvalidSince(): Promise<void> {
     assert.ok(threw, "should throw on invalid --since format");
   });
   console.log("  ✓ invalid --since — throws error");
-}
+});
 
-export async function testDigestPlanProgress(): Promise<void> {
+test("testDigestPlanProgress", async () => {
   await withIsolatedEnv(async () => {
     const dir = makeWorktree();
     try {
@@ -328,9 +329,9 @@ status: active
     }
   });
   console.log("  ✓ plan with progress — checkbox counting works");
-}
+});
 
-export async function testDigestImpactSection(): Promise<void> {
+test("testDigestImpactSection", async () => {
   await withIsolatedEnv(async () => {
     const dir = makeWorktree();
     try {
@@ -373,9 +374,9 @@ export async function testDigestImpactSection(): Promise<void> {
     }
   });
   console.log("  ✓ impact section — log counters render + hint-log source ok");
-}
+});
 
-export async function testDigestImpactNoLog(): Promise<void> {
+test("testDigestImpactNoLog", async () => {
   await withIsolatedEnv(async () => {
     const dir = makeWorktree();
     try {
@@ -393,9 +394,9 @@ export async function testDigestImpactNoLog(): Promise<void> {
     }
   });
   console.log("  ✓ impact section — no log reads as no-data, not zero");
-}
+});
 
-export async function testDigestBugOpenClose(): Promise<void> {
+test("testDigestBugOpenClose", async () => {
   await withIsolatedEnv(async () => {
     const dir = makeWorktree();
     try {
@@ -433,4 +434,4 @@ export async function testDigestBugOpenClose(): Promise<void> {
     }
   });
   console.log("  ✓ bug open/close classification");
-}
+});

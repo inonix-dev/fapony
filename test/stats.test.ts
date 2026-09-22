@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/stats.test.ts — tests for getStatsData enrichment
 
 import { Database } from "bun:sqlite";
@@ -20,7 +21,7 @@ import {
 } from "../src/stats/index.js";
 import { withTmpDb } from "./helpers.js";
 
-export function testStatsEmptyDb(): void {
+test("testStatsEmptyDb", () => {
   withTmpDb(() => {
     const data = getStatsData();
     assert.equal(data.runs.total, 0);
@@ -29,9 +30,9 @@ export function testStatsEmptyDb(): void {
     assert.deepEqual(data.byWorktree, []);
   });
   console.log("  ✓ getStatsData returns empty for no runs");
-}
+});
 
-export function testStatsMultiRoundSeparateGates(): void {
+test("testStatsMultiRoundSeparateGates", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "wt1", null, null, "abc");
 
@@ -57,9 +58,9 @@ export function testStatsMultiRoundSeparateGates(): void {
     for (const m of data.byModel) assert.equal(m.gateCount, 1);
   });
   console.log("  ✓ getStatsData: per-round gate windows never overlap");
-}
+});
 
-export function testStatsLegacyPassMergedWithPassAdequate(): void {
+test("testStatsLegacyPassMergedWithPassAdequate", () => {
   withTmpDb((db) => {
     const runId1 = newRun(db, "wt1", null, null, "abc");
     const runId2 = newRun(db, "wt1", null, null, "abc");
@@ -86,9 +87,9 @@ export function testStatsLegacyPassMergedWithPassAdequate(): void {
     assert.equal(passAdequate.count, 1);
   });
   console.log("  ✓ getStatsData: legacy 'pass' separate from 'pass-adequate'");
-}
+});
 
-export function testStatsByWorktree(): void {
+test("testStatsByWorktree", () => {
   withTmpDb((db) => {
     const r1 = newRun(db, "wt-a", null, null, "abc");
     const r2 = newRun(db, "wt-a", null, null, "abc");
@@ -110,9 +111,9 @@ export function testStatsByWorktree(): void {
     assert.equal(b.passed, 1);
   });
   console.log("  ✓ getStatsData: byWorktree counts correct");
-}
+});
 
-export function testStatsModelFromExecutorSpawn(): void {
+test("testStatsModelFromExecutorSpawn", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "wt1", null, null, "abc");
 
@@ -130,9 +131,9 @@ export function testStatsModelFromExecutorSpawn(): void {
     assert.equal(data.byModel[0].model, "mimo-v2");
   });
   console.log("  ✓ getStatsData: model attribution from executor spawn");
-}
+});
 
-export function testStatsModelFromSessionIdWhenNoSpawn(): void {
+test("testStatsModelFromSessionIdWhenNoSpawn", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "wt1", null, null, "abc");
 
@@ -190,9 +191,9 @@ export function testStatsModelFromSessionIdWhenNoSpawn(): void {
   console.log(
     "  ✓ getStatsData: model from session_id when no spawn in window",
   );
-}
+});
 
-export function testStatsByModelGroupsByClientProviderAgent(): void {
+test("testStatsByModelGroupsByClientProviderAgent", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "wt1", null, null, "abc");
 
@@ -281,9 +282,9 @@ export function testStatsByModelGroupsByClientProviderAgent(): void {
     }
   });
   console.log("  ✓ getStatsData: byModel splits same model across providers");
-}
+});
 
-export function testStatsSpawnModelWinsOverSessionId(): void {
+test("testStatsSpawnModelWinsOverSessionId", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "wt1", null, null, "abc");
 
@@ -343,11 +344,11 @@ export function testStatsSpawnModelWinsOverSessionId(): void {
     }
   });
   console.log("  ✓ getStatsData: spawn model wins over session_id fallback");
-}
+});
 
 // --- Cross-run knowledge (PLAN-project-health-context §2) ---
 
-export function testStatsReasonCodeBreakdown(): void {
+test("testStatsReasonCodeBreakdown", () => {
   withTmpDb((db) => {
     const r1 = newRun(db, "wt1", "plan-a", null, "abc");
     const r2 = newRun(db, "wt1", "plan-a", null, "abc");
@@ -400,9 +401,9 @@ export function testStatsReasonCodeBreakdown(): void {
   console.log(
     "  ✓ getStatsData: byReasonCode counts non-pass gates per worktree",
   );
-}
+});
 
-export function testStatsEscalatedRuns(): void {
+test("testStatsEscalatedRuns", () => {
   withTmpDb((db) => {
     const r1 = newRun(db, "wt1", "plan-a", null, "abc");
     incrementRound(db, r1);
@@ -418,9 +419,9 @@ export function testStatsEscalatedRuns(): void {
     assert.equal(data.escalatedRuns[0].round, 3);
   });
   console.log("  ✓ getStatsData: escalatedRuns lists round > maxRounds");
-}
+});
 
-export function testStatsPlanBreakdown(): void {
+test("testStatsPlanBreakdown", () => {
   withTmpDb((db) => {
     const r1 = newRun(db, "wt1", "plan-a", null, "abc");
     newRun(db, "wt2", "plan-a", null, "abc");
@@ -441,9 +442,9 @@ export function testStatsPlanBreakdown(): void {
     assert.equal(b.escalated, 1);
   });
   console.log("  ✓ getStatsData: byPlan totals runs/passed/escalated");
-}
+});
 
-export function testStatsBestPassing(): void {
+test("testStatsBestPassing", () => {
   withTmpDb((db) => {
     const r1 = newRun(db, "wt1", "good-shape", null, "abc");
     addEvent(db, r1, "gate", { verdict: "pass-good", note: "", round: 0 });
@@ -463,9 +464,9 @@ export function testStatsBestPassing(): void {
     assert.equal(data.bestPassing[0].worktree, "wt1");
   });
   console.log("  ✓ getStatsData: bestPassing only round-1 passes with a plan");
-}
+});
 
-export function testCountPendingPlans(): void {
+test("testCountPendingPlans", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-pending-"));
   try {
     // No fapony.config.json → falls back to the .fapony/plan scaffold default.
@@ -484,7 +485,7 @@ export function testCountPendingPlans(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ countPendingPlans: done/ excluded, null when uncountable");
-}
+});
 
 /**
  * Tripwire: getStatsData must collect MORE notes than project_health_context
@@ -492,7 +493,7 @@ export function testCountPendingPlans(): void {
  * collection cap of 3 here silently hides every file-scoped match older than
  * the three newest gates in the whole DB.
  */
-export function testStatsVerdictNotesNotCappedAtDisplayLimit(): void {
+test("testStatsVerdictNotesNotCappedAtDisplayLimit", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "wt1", null, null, "abc");
     for (let i = 0; i < 5; i++) {
@@ -509,9 +510,9 @@ export function testStatsVerdictNotesNotCappedAtDisplayLimit(): void {
     assert.equal(notes[0].note, "note 4", "newest first, reason_code stripped");
   });
   console.log("  ✓ getStatsData: verdict notes collected past the display cap");
-}
+});
 
-export function testStatsByFileRisk(): void {
+test("testStatsByFileRisk", () => {
   withTmpDb((db) => {
     const r1 = newRun(db, "wt1", null, null, "abc");
     addEvent(db, r1, "gate", {
@@ -559,9 +560,9 @@ export function testStatsByFileRisk(): void {
     assert.ok(ui < authIdx || byFile[ui].fails >= byFile[authIdx].fails);
   });
   console.log("  ✓ getStatsData byFile counts graded touches vs fails");
-}
+});
 
-export function testStatsPassRateFromVerdicts(): void {
+test("testStatsPassRateFromVerdicts", () => {
   withTmpDb((db) => {
     // Abandoned with no verdict — never judged, must not count either way.
     newRun(db, "wt1", null, null, "abc");
@@ -579,9 +580,9 @@ export function testStatsPassRateFromVerdicts(): void {
     assert.equal(data.runs.passRate, 0.5);
   });
   console.log("  ✓ passRate counts graded runs only, by last verdict");
-}
+});
 
-export function testStatsUsageByModelIdentity(): void {
+test("testStatsUsageByModelIdentity", () => {
   // Regression: the same model id under two providers used to render as two
   // identical-looking lines, and an all-zero row looked like a parse failure.
   withTmpDb((db) => {
@@ -645,9 +646,9 @@ export function testStatsUsageByModelIdentity(): void {
     );
   });
   console.log("  ✓ stats usage by-model: provider + session count in the line");
-}
+});
 
-export function testStatsByPlanModeSplit(): void {
+test("testStatsByPlanModeSplit", () => {
   withTmpDb((db) => {
     const r1 = newRun(db, "wt1", "plan-a.md", null, "abc");
     addEvent(db, r1, "gate", {
@@ -686,9 +687,9 @@ export function testStatsByPlanModeSplit(): void {
     assert.equal(planned.fails, 0);
   });
   console.log("  ✓ getStatsData: byPlanMode splits planned vs no-plan");
-}
+});
 
-export function testStatsByRegimeSplit(): void {
+test("testStatsByRegimeSplit", () => {
   withTmpDb((db) => {
     const r1 = newRun(db, "wt1", null, null, "abc");
     addEvent(db, r1, "gate", {
@@ -740,9 +741,9 @@ export function testStatsByRegimeSplit(): void {
   console.log(
     "  ✓ getStatsData: byRegime old gates in — row, new gates in labelled rows",
   );
-}
+});
 
-export function testStatsTokensInByModel(): void {
+test("testStatsTokensInByModel", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "wt1", null, null, "abc");
     addEvent(db, runId, "gate", {
@@ -792,7 +793,7 @@ export function testStatsTokensInByModel(): void {
     }
   });
   console.log("  ✓ getStatsData: tokens carried through to byModel");
-}
+});
 
 // --- tokens/pass (PLAN-cost-per-pass) ---
 
@@ -848,7 +849,7 @@ function withOpenCodeSession(
   }
 }
 
-export function testStatsTokensPerPassChargesReworkOnce(): void {
+test("testStatsTokensPerPassChargesReworkOnce", () => {
   withTmpDb((db) => {
     // fail→pass in one run, one session: the retry is charged once and divided
     // by the single pass gate — the whole point of the metric.
@@ -896,9 +897,9 @@ export function testStatsTokensPerPassChargesReworkOnce(): void {
     );
   });
   console.log("  ✓ stats tokens/pass: session charged once, divided by passes");
-}
+});
 
-export function testStatsTokensPerPassNullWhenNoPass(): void {
+test("testStatsTokensPerPassNullWhenNoPass", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "wt1", null, null, "abc");
     // uncertain is not pass-family — a bucket of only non-passes has no divisor.
@@ -948,9 +949,9 @@ export function testStatsTokensPerPassNullWhenNoPass(): void {
     );
   });
   console.log("  ✓ stats tokens/pass: passes=0 → null (no divide-by-zero)");
-}
+});
 
-export function testStatsTokensPerPassNullWithoutTokens(): void {
+test("testStatsTokensPerPassNullWithoutTokens", () => {
   withTmpDb((db) => {
     // Spawn-attributed model: pass is known but no session tokens exist.
     const runId = newRun(db, "wt1", null, null, "abc");
@@ -968,9 +969,9 @@ export function testStatsTokensPerPassNullWithoutTokens(): void {
     );
   });
   console.log("  ✓ stats tokens/pass: no tokens → null (unmeasurable ≠ free)");
-}
+});
 
-export function testStatsTokensCountSessionOnce(): void {
+test("testStatsTokensCountSessionOnce", () => {
   withTmpDb((db) => {
     // Two gates, one session — the shape that is normal, not rare: 15 of the
     // 35 sessions behind this project's own gates carry more than one.
@@ -1037,13 +1038,13 @@ export function testStatsTokensCountSessionOnce(): void {
   console.log(
     "  ✓ getStatsData: a session's tokens are charged once, cache included",
   );
-}
+});
 
 // The real Claude Code shape: `input_tokens` holds only the uncached remainder,
 // so printing it alone showed 750k in / 64.6M out — a coding agent reading less
 // than it wrote, which cannot happen. Cache read/write are input and must be in
 // the total; they stay separate in the data because they bill at other rates.
-export function testStatsUsageCountsCacheAsInput(): void {
+test("testStatsUsageCountsCacheAsInput", () => {
   withTmpDb((db) => {
     const runId = newRun(db, "wt1", null, null, "abc");
     addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
@@ -1083,11 +1084,11 @@ export function testStatsUsageCountsCacheAsInput(): void {
     );
   });
   console.log("  ✓ stats usage counts cache read/write as input");
-}
+});
 
 // --- Verdict mode: Pareto frontier ---
 
-export function testVerdictDominatedRowNamesDominator(): void {
+test("testVerdictDominatedRowNamesDominator", () => {
   // Fixture: three models in "code" regime.
   // opus (q3.8, 14M) is dominated by ling (q3.8, 1.1M) — same quality, 12.7× token.
   // glm  (q3.8, 2.5M) is dominated by ling — same quality, 2.3× token.
@@ -1214,9 +1215,9 @@ export function testVerdictDominatedRowNamesDominator(): void {
     !dominatedSection.includes("muse-spark"),
     "muse should be on frontier, not dominated",
   );
-}
+});
 
-export function testVerdictSingleModelShowsDash(): void {
+test("testVerdictSingleModelShowsDash", () => {
   const data: import("../src/stats/data.js").StatsData = {
     scope: "test",
     runs: {
@@ -1273,9 +1274,9 @@ export function testVerdictSingleModelShowsDash(): void {
     text.includes("no comparison yet"),
     "single model should show no-comparison hint",
   );
-}
+});
 
-export function testVerdictThinNeverDominates(): void {
+test("testVerdictThinNeverDominates", () => {
   const data: import("../src/stats/data.js").StatsData = {
     scope: "test",
     runs: {
@@ -1355,9 +1356,9 @@ export function testVerdictThinNeverDominates(): void {
     "thin models belong in candidates",
   );
   assert.ok(!text.includes("dominates"), "a thin model must never dominate");
-}
+});
 
-export function testVerdictNoRegimeShowsOneLinerPerRegime(): void {
+test("testVerdictNoRegimeShowsOneLinerPerRegime", () => {
   const data: import("../src/stats/data.js").StatsData = {
     scope: "test",
     runs: {
@@ -1457,9 +1458,9 @@ export function testVerdictNoRegimeShowsOneLinerPerRegime(): void {
     /test\s+\(0\)\s+— no graded work/.test(text),
     "test regime shown as empty",
   );
-}
+});
 
-export function testStatsRegimeTokensSplitNotDuplicated(): void {
+test("testStatsRegimeTokensSplitNotDuplicated", () => {
   withTmpDb((db) => {
     // One session, two gates, two regimes. Until 2026-09-19 each regime bucket
     // was charged the session's whole total, so a model used across N regimes
@@ -1513,4 +1514,4 @@ export function testStatsRegimeTokensSplitNotDuplicated(): void {
   console.log(
     "  ✓ getStatsData: session tokens split across regimes, not duplicated",
   );
-}
+});

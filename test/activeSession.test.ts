@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/activeSession.test.ts — session-span inference (no I/O: pure selection)
 
 import assert from "node:assert";
@@ -14,7 +15,7 @@ function span(id: string, startMs: number, endMs: number): SessionSpan {
   };
 }
 
-export function testFindSessionAt(): void {
+test("testFindSessionAt", () => {
   const wide = span("wide", 0, 1000);
   const narrow = span("narrow", 400, 600);
   const past = span("past", 2000, 3000);
@@ -32,9 +33,9 @@ export function testFindSessionAt(): void {
   // before the client flushes its transcript.
   assert.equal(findSessionAt(spans, 1050, 100)?.sessionId, "wide");
   console.log("  ✓ findSessionAt picks the containing, narrowest span");
-}
+});
 
-export function testClaudeProjectSlug(): void {
+test("testClaudeProjectSlug", () => {
   assert.equal(
     claudeProjectSlug("/Users/me/Project/fapony/wt-fapony"),
     "-Users-me-Project-fapony-wt-fapony",
@@ -42,4 +43,4 @@ export function testClaudeProjectSlug(): void {
   // Dots and underscores are non-alphanumeric too — all become '-'.
   assert.equal(claudeProjectSlug("/a/b.c_d"), "-a-b-c-d");
   console.log("  ✓ claudeProjectSlug matches Claude Code's dir naming");
-}
+});

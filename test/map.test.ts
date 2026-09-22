@@ -1,9 +1,10 @@
+import { test } from "bun:test";
 // test/map.test.ts — tests for extractExports() (src/map.ts)
 
 import assert from "node:assert";
 import { type ExportScanner, extractExports } from "../src/map.js";
 
-export function testMapExtractExports(): void {
+test("testMapExtractExports", () => {
   const src = [
     "export const a = 1;", // 1
     "export function b() {}", // 2
@@ -54,16 +55,16 @@ export function testMapExtractExports(): void {
   assert.deepEqual(by("one"), { name: "one", line: 19, kind: "re-export" });
   assert.deepEqual(by("Two"), { name: "Two", line: 20, kind: "type" });
   console.log("  ✓ map extracts export name + line + kind (incl. types)");
-}
+});
 
-export function testMapExtractExportsParseError(): void {
+test("testMapExtractExportsParseError", () => {
   const { symbols, error } = extractExports("export const = ;");
   assert.ok(error, "broken source must surface an error");
   assert.equal(symbols.length, 0);
   console.log("  ✓ map reports parse error instead of guessing");
-}
+});
 
-export function testMapExtractIgnoresSampleText(): void {
+test("testMapExtractIgnoresSampleText", () => {
   const src = [
     "/*",
     "export const fake = 1;",
@@ -83,9 +84,9 @@ export function testMapExtractIgnoresSampleText(): void {
     { name: "real", line: 4, kind: "const" },
   );
   console.log("  ✓ map ignores exports inside comments and template text");
-}
+});
 
-export function testMapExtractMultilineTypeBlock(): void {
+test("testMapExtractMultilineTypeBlock", () => {
   const src = [
     "export type {",
     "  Alpha,",
@@ -99,9 +100,9 @@ export function testMapExtractMultilineTypeBlock(): void {
     { name: "Gamma", line: 3, kind: "type" },
   ]);
   console.log("  ✓ map keeps every name in a multi-line type block as type");
-}
+});
 
-export function testMapExtractVarDeclaratorLists(): void {
+test("testMapExtractVarDeclaratorLists", () => {
   const src = [
     "export const one = 1, two = 2;",
     "export const { a, b } = point();",
@@ -119,9 +120,9 @@ export function testMapExtractVarDeclaratorLists(): void {
   console.log(
     "  ✓ map binds every name in a declarator list, not just the first",
   );
-}
+});
 
-export function testMapExtractAcceptsInjectedScanner(): void {
+test("testMapExtractAcceptsInjectedScanner", () => {
   const fake: ExportScanner = {
     scan: () => ({ exports: ["injected"] }),
   };
@@ -138,4 +139,4 @@ export function testMapExtractAcceptsInjectedScanner(): void {
   assert.equal(failed.error, "boom");
   assert.equal(failed.symbols.length, 0);
   console.log("  ✓ map honors an injected scanner (incl. its parse error)");
-}
+});

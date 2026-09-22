@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import assert from "node:assert";
 import {
   existsSync,
@@ -72,7 +73,7 @@ const cursorPayload = {
   loop_count: 0,
 };
 
-export function testDecideStopBlocksUngradedCommits(): void {
+test("testDecideStopBlocksUngradedCommits", () => {
   const reason = decideStop(base);
   assert(reason, "commits with no new mem row must block");
   assert(reason.includes("/repo"), "reason must name the absolute worktree");
@@ -80,9 +81,9 @@ export function testDecideStopBlocksUngradedCommits(): void {
     reason.includes("mem add"),
     "reason must name the mem command the agent has to make",
   );
-}
+});
 
-export function testDecideStopReportsCommitsAndMem(): void {
+test("testDecideStopReportsCommitsAndMem", () => {
   // The block message carries the commit list and the mem status.
   const reason = decideStop({
     ...base,
@@ -114,12 +115,12 @@ export function testDecideStopReportsCommitsAndMem(): void {
   // No mem at all must NOT block (allow = null)
   const noMem = decideStop({ ...base, memLastTs: null });
   assert.strictEqual(noMem, null, "no mem log at all = allow");
-}
+});
 
 // Regression 2026-09-21: a monorepo whose only log lives in apps/<x> got
 // "no rows at all — nothing recorded in this project yet" on every block,
 // which is false. Out of scope and absent must read differently.
-export function testDecideStopNamesOutOfScopeMemLog(): void {
+test("testDecideStopNamesOutOfScopeMemLog", () => {
   const reason = decideStop({
     ...base,
     memLastTs: null,
@@ -135,11 +136,11 @@ export function testDecideStopNamesOutOfScopeMemLog(): void {
     "names where the log actually is",
   );
   console.log("  ✓ block message names an out-of-scope mem log");
-}
+});
 
 // The first block delivers the message; blocks 2-5 in the same session deliver
 // noise. stop_hook_active only covers the turn immediately after a block.
-export function testStopBlocksOncePerSessionPerWorktree(): void {
+test("testStopBlocksOncePerSessionPerWorktree", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-sb-"));
   const orig = process.env.FAPONY_STATE_DIR;
   process.env.FAPONY_STATE_DIR = dir;
@@ -177,11 +178,11 @@ export function testStopBlocksOncePerSessionPerWorktree(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ Stop blocks once per session + worktree");
-}
+});
 
 // SessionStart context is injected whole — a repo with a long open list must
 // not push the session's own prompt out of the way.
-export function testSessionStartContextIsCapped(): void {
+test("testSessionStartContextIsCapped", () => {
   const short = "one line";
   assert.equal(capContext(short), short, "short output passes through");
   const long = `${"x".repeat(50)}\n`.repeat(200);
@@ -206,9 +207,9 @@ export function testSessionStartContextIsCapped(): void {
     "keeping next up stays within budget",
   );
   console.log("  ✓ session-start context is capped with an honest marker");
-}
+});
 
-export function testHookSessionStartSilentWithoutMemLog(): void {
+test("testHookSessionStartSilentWithoutMemLog", () => {
   // Bug mub2ezhi: the no-mem-log guard is the whole reason the OpenCode plugin
   // now spawns this hook instead of `mem kickoff` — kickoff exits 0 and prints
   // "# <path> — 0 entries" in a repo with no log, and that header was landing
@@ -262,9 +263,9 @@ export function testHookSessionStartSilentWithoutMemLog(): void {
     );
   });
   console.log("  ✓ hook-session-start: silent with no mem log, JSON with one");
-}
+});
 
-export function testDecideStopMessageIsRepoNeutral(): void {
+test("testDecideStopMessageIsRepoNeutral", () => {
   // The block message installs globally and fires in every repo — a repo-specific
   // command in it teaches agents the message is untrustworthy.
   const reason = decideStop(base);
@@ -274,9 +275,9 @@ export function testDecideStopMessageIsRepoNeutral(): void {
     /bun fapony\.ts|fapony lint-baseline|npm (run|test|exec)|pnpm |npx |yarn /,
     "block message must not name repo-specific commands",
   );
-}
+});
 
-export function testDecideStopDerivesCommandFromWorktree(): void {
+test("testDecideStopDerivesCommandFromWorktree", () => {
   // When the worktree is real, the message names the repo's actual test
   // command — not a generic phrase, not a hardcoded fapony one. derive, don't
   // assume: this is the whole point of detectTestRunner.
@@ -323,12 +324,12 @@ export function testDecideStopDerivesCommandFromWorktree(): void {
   console.log(
     "  ✓ decideStop derives test command from worktree, falls back for foreign",
   );
-}
+});
 
 const REPO_SPECIFIC_CMDS =
   /bun fapony\.ts|npm (run test|test|exec)|pnpm test|yarn test/;
 
-export function testStopHookSourceHasNoRepoSpecificCommands(): void {
+test("testStopHookSourceHasNoRepoSpecificCommands", () => {
   // The Stop hook installs globally but fires in every repo. Its source must
   // not hardcode a verify command that only works in one repo —
   // detectTestRunner owns derivation now. Sweep the files that build the block
@@ -346,9 +347,9 @@ export function testStopHookSourceHasNoRepoSpecificCommands(): void {
   console.log(
     "  ✓ hook.ts / setup.ts source sweeps clean (no hardcoded repo verify commands)",
   );
-}
+});
 
-export function testDecideStopMemBlocksWhenStale(): void {
+test("testDecideStopMemBlocksWhenStale", () => {
   // PLAN-verdict-to-mem: mem rows ARE the block condition now. A stale mem row
   // (older than session start) means no mem was recorded for this session's work.
   const without = decideStop(base);
@@ -368,9 +369,9 @@ export function testDecideStopMemBlocksWhenStale(): void {
     null,
     "allows when mem row is newer than session",
   );
-}
+});
 
-export function testDecideStopComparesProductionTimestampShapes(): void {
+test("testDecideStopComparesProductionTimestampShapes", () => {
   // Production sends mixed shapes: since is utcStamp ('YYYY-MM-DD HH:MM:SS',
   // no TZ) while mem rows are ISO. String comparison reads 'T' > ' ' and lets
   // any same-date row pass as "newer" — the second session of the day would
@@ -395,9 +396,9 @@ export function testDecideStopComparesProductionTimestampShapes(): void {
     decideStop({ ...prod, memLastTs: "2026-09-20T23:00:00.000Z" }),
     "previous-day row must block",
   );
-}
+});
 
-export function testDecideStopAllowsEveryUnknown(): void {
+test("testDecideStopAllowsEveryUnknown", () => {
   // Each of these must resolve to allow — a hook that guesses wrong traps
   // the agent, so anything it cannot prove is treated as "nothing to record".
   const allowed: Array<[string, Parameters<typeof decideStop>[0]]> = [
@@ -410,17 +411,17 @@ export function testDecideStopAllowsEveryUnknown(): void {
   for (const [label, opts] of allowed) {
     assert.strictEqual(decideStop(opts), null, `should allow: ${label}`);
   }
-}
+});
 
-export function testUtcStampMatchesSqliteFormat(): void {
+test("testUtcStampMatchesSqliteFormat", () => {
   // events.ts is written by SQLite datetime('now') — UTC, no T, no ms.
   assert.strictEqual(
     utcStamp(new Date("2026-09-14T10:03:02.457Z")),
     "2026-09-14 10:03:02",
   );
-}
+});
 
-export function testStopPayloadsMapToSameDecision(): void {
+test("testStopPayloadsMapToSameDecision", () => {
   assert.ok(
     !isCursorPayload(claudePayload),
     "claude payload must not look cursor",
@@ -465,9 +466,9 @@ export function testStopPayloadsMapToSameDecision(): void {
     "commits with no new mem must block via the cursor payload",
   );
   assert.equal(claudeReason, cursorReason);
-}
+});
 
-export function testCursorPayloadEdges(): void {
+test("testCursorPayloadEdges", () => {
   // loop_count ≥ 1 = this hook already fired once → allow (stop_hook_active).
   const fired = normalizeStopInput(
     { ...cursorPayload, loop_count: 1 },
@@ -491,9 +492,9 @@ export function testCursorPayloadEdges(): void {
     cursorTranscriptPath("/home/u", "/Users/x/Proj/y", "c9"),
     "/home/u/.cursor/projects/Users-x-Proj-y/agent-transcripts/c9/c9.jsonl",
   );
-}
+});
 
-export function testStopOutputShapesPerClient(): void {
+test("testStopOutputShapesPerClient", () => {
   const reason = "record a mem row";
   const claude = JSON.parse(stopOutput("claude", reason)) as Record<
     string,
@@ -508,7 +509,7 @@ export function testStopOutputShapesPerClient(): void {
   assert.equal(cursor.followup_message, reason);
   assert.equal(claude.followup_message, undefined);
   assert.equal(cursor.decision, undefined);
-}
+});
 
 // --- Codex hook contract ---
 
@@ -523,7 +524,7 @@ const codexPayload = {
   permission_mode: "default",
 };
 
-export function testCodexPayloadDetection(): void {
+test("testCodexPayloadDetection", () => {
   assert.ok(isCodexPayload(codexPayload), "codex payload must be detected");
   assert.ok(
     !isCodexPayload(claudePayload),
@@ -546,9 +547,9 @@ export function testCodexPayloadDetection(): void {
     "model + workspace_roots = cursor, not codex",
   );
   console.log("  ✓ codex payload detection");
-}
+});
 
-export function testCodexNormalizeMapsToSameDecision(): void {
+test("testCodexNormalizeMapsToSameDecision", () => {
   const codex = normalizeStopInput(codexPayload, "/home/u");
   assert.equal(codex.client, "codex");
   assert.equal(codex.cwd, "/repo");
@@ -568,9 +569,9 @@ export function testCodexNormalizeMapsToSameDecision(): void {
   });
   assert.ok(reason, "commits with no new mem must block via the codex payload");
   assert.ok(reason.includes("/repo"));
-}
+});
 
-export function testCodexStopHookActiveAllows(): void {
+test("testCodexStopHookActiveAllows", () => {
   const fired = normalizeStopInput(
     { ...codexPayload, stop_hook_active: true },
     "/home/u",
@@ -581,9 +582,9 @@ export function testCodexStopHookActiveAllows(): void {
     null,
   );
   console.log("  ✓ codex stop_hook_active=true allows");
-}
+});
 
-export function testCodexStopOutputShape(): void {
+test("testCodexStopOutputShape", () => {
   const reason = "record a mem row";
   const out = JSON.parse(stopOutput("codex", reason)) as Record<
     string,
@@ -595,7 +596,7 @@ export function testCodexStopOutputShape(): void {
   assert.equal(out.stopReason, undefined, "codex must not use stopReason");
   assert.equal(out.followup_message, undefined, "codex must not use followup");
   console.log("  ✓ codex stop output = decision:block + reason");
-}
+});
 
 // --- Read hint (PreToolUse annotate) ---
 
@@ -614,7 +615,7 @@ function padFile(dir: string, name: string): string {
   return p;
 }
 
-export function testReadHintAnnotatesLargeFullRead(): void {
+test("testReadHintAnnotatesLargeFullRead", () => {
   withTempRepo((dir) => {
     const p = padFile(dir, "big.ts");
     const hint = readHintFor({ filePath: p, cwd: dir });
@@ -628,9 +629,9 @@ export function testReadHintAnnotatesLargeFullRead(): void {
     assert.match(hint ?? "", /\n.*entry:\d+/);
   });
   console.log("  ✓ read hint annotates large full-file read");
-}
+});
 
-export function testReadHintSkipsCheapReads(): void {
+test("testReadHintSkipsCheapReads", () => {
   withTempRepo((dir) => {
     const big = padFile(dir, "big.ts");
     // bounded read — the caller already kept it cheap
@@ -662,9 +663,9 @@ export function testReadHintSkipsCheapReads(): void {
   console.log(
     "  ✓ read hint skips bounded reads, small files, non-source, missing",
   );
-}
+});
 
-export function testReadHintNeedsGitRepo(): void {
+test("testReadHintNeedsGitRepo", () => {
   // Outside a repo the hint would point at a command that cannot run.
   const dir = mkdtempSync(join(tmpdir(), "fapony-rh-norepo-"));
   try {
@@ -674,11 +675,11 @@ export function testReadHintNeedsGitRepo(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ read hint stays silent outside a git repo");
-}
+});
 
 // --- Re-read hint (mtime heuristic — annotate only) ---
 
-export function testRereadHintFiresOnUnchangedRepeat(): void {
+test("testRereadHintFiresOnUnchangedRepeat", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-rr-"));
   const orig = process.env.FAPONY_STATE_DIR;
   process.env.FAPONY_STATE_DIR = dir;
@@ -731,9 +732,9 @@ export function testRereadHintFiresOnUnchangedRepeat(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ re-read hint fires on an unchanged repeat, per session");
-}
+});
 
-export function testRereadHintSilentAfterEdit(): void {
+test("testRereadHintSilentAfterEdit", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-rr-"));
   const orig = process.env.FAPONY_STATE_DIR;
   process.env.FAPONY_STATE_DIR = dir;
@@ -762,9 +763,9 @@ export function testRereadHintSilentAfterEdit(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ re-read hint stays silent after the file changes");
-}
+});
 
-export function testRereadHintKillSwitch(): void {
+test("testRereadHintKillSwitch", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-rr-"));
   const origState = process.env.FAPONY_STATE_DIR;
   const origKill = process.env.FAPONY_NO_REREAD_HINT;
@@ -792,7 +793,7 @@ export function testRereadHintKillSwitch(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ re-read hint kill switch silences and stops tracking");
-}
+});
 
 // --- Edit hint (importer count + once-per-session dedupe) ---
 
@@ -831,7 +832,7 @@ function withEditState(fn: () => void): void {
   }
 }
 
-export function testEditHintFiresWithImporters(): void {
+test("testEditHintFiresWithImporters", () => {
   withTempRepo((dir) => {
     withEditState(() => {
       const { lib } = editFixture(dir);
@@ -849,9 +850,9 @@ export function testEditHintFiresWithImporters(): void {
   console.log(
     "  ✓ edit hint names the importer count with review-seed pointer",
   );
-}
+});
 
-export function testEditHintSilentZeroImporters(): void {
+test("testEditHintSilentZeroImporters", () => {
   withTempRepo((dir) => {
     withEditState(() => {
       const { lone } = editFixture(dir);
@@ -868,9 +869,9 @@ export function testEditHintSilentZeroImporters(): void {
     });
   });
   console.log("  ✓ edit hint stays silent with 0 importers, writes nothing");
-}
+});
 
-export function testEditHintSkipsNonSourceAndMissing(): void {
+test("testEditHintSkipsNonSourceAndMissing", () => {
   withTempRepo((dir) => {
     withEditState(() => {
       editFixture(dir);
@@ -903,9 +904,9 @@ export function testEditHintSkipsNonSourceAndMissing(): void {
     });
   });
   console.log("  ✓ edit hint skips non-source, new, missing, outside files");
-}
+});
 
-export function testEditHintNeedsGitRepo(): void {
+test("testEditHintNeedsGitRepo", () => {
   // Outside a repo the hint would point at a command that cannot run.
   const dir = mkdtempSync(join(tmpdir(), "fapony-eh-norepo-"));
   try {
@@ -918,9 +919,9 @@ export function testEditHintNeedsGitRepo(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ edit hint stays silent outside a git repo");
-}
+});
 
-export function testEditHintDedupesPerSessionPerFile(): void {
+test("testEditHintDedupesPerSessionPerFile", () => {
   withTempRepo((dir) => {
     withEditState(() => {
       const { lib, top } = editFixture(dir);
@@ -951,9 +952,9 @@ export function testEditHintDedupesPerSessionPerFile(): void {
     });
   });
   console.log("  ✓ edit hint fires once per (session, file)");
-}
+});
 
-export function testEditHintFiresWithoutSession(): void {
+test("testEditHintFiresWithoutSession", () => {
   // No session identity = nothing to dedupe against, but the importer fact
   // still holds — the hint fires rather than guessing silence.
   withTempRepo((dir) => {
@@ -967,9 +968,9 @@ export function testEditHintFiresWithoutSession(): void {
     });
   });
   console.log("  ✓ edit hint fires (no dedupe) when the session is unknown");
-}
+});
 
-export function testReadHintClaudeOutputShape(): void {
+test("testReadHintClaudeOutputShape", () => {
   // cmdHookReadHint is a thin wrapper; assert the pure core feeds the
   // documented additionalContext shape via the real stdin/stdout path.
   withTempRepo((dir) => {
@@ -996,9 +997,9 @@ export function testReadHintClaudeOutputShape(): void {
     );
   });
   console.log("  ✓ read hint claude output = additionalContext, no decision");
-}
+});
 
-export function testEditHintClaudeOutputShape(): void {
+test("testEditHintClaudeOutputShape", () => {
   // cmdHookEditHint is a thin wrapper; assert the pure core feeds the
   // documented additionalContext shape via the real stdin/stdout path,
   // and that a fire logs one "edit" surface row.
@@ -1088,9 +1089,9 @@ export function testEditHintClaudeOutputShape(): void {
     );
   });
   console.log("  ✓ edit hint claude output = additionalContext + edit log row");
-}
+});
 
-export function testReadHintPluginSource(): void {
+test("testReadHintPluginSource", () => {
   // The generated OpenCode plugin must import the shared logic (no second
   // implementation), target the read tool, and mutate output only.
   const src = readHintPluginSource("/install/root");
@@ -1115,13 +1116,13 @@ export function testReadHintPluginSource(): void {
   console.log(
     "  ✓ read hint opencode plugin imports shared logic, annotate-only",
   );
-}
+});
 
 // --- Debt + mem context lines (PLAN-convention-debt chunk 4) ---
 
 import { readContextLines } from "../src/hook.js";
 
-export function testReadContextShowsDebtBeforeFix(): void {
+test("testReadContextShowsDebtBeforeFix", () => {
   withTempRepo((dir) => {
     mkdirSync(join(dir, ".fapony"), { recursive: true });
     writeFileSync(
@@ -1152,9 +1153,9 @@ export function testReadContextShowsDebtBeforeFix(): void {
   console.log(
     "  ✓ read context → debt line before the fix, silence on clean files",
   );
-}
+});
 
-export function testReadContextMemRowsByFilesAndPath(): void {
+test("testReadContextMemRowsByFilesAndPath", () => {
   withTempRepo((dir) => {
     mkdirSync(join(dir, ".fapony/.memory"), { recursive: true });
     mkdirSync(join(dir, "src"), { recursive: true });
@@ -1190,9 +1191,9 @@ export function testReadContextMemRowsByFilesAndPath(): void {
     assert.deepEqual(none, [], "unmentioned file stays silent");
   });
   console.log("  ✓ read context → mem rows surface by files[] or full path");
-}
+});
 
-export function testReadContextBasenameAmbiguityStaysSilent(): void {
+test("testReadContextBasenameAmbiguityStaysSilent", () => {
   withTempRepo((dir) => {
     mkdirSync(join(dir, "src/a"), { recursive: true });
     mkdirSync(join(dir, "src/b"), { recursive: true });
@@ -1213,9 +1214,9 @@ export function testReadContextBasenameAmbiguityStaysSilent(): void {
   console.log(
     "  ✓ read context → ambiguous basename stays silent, never guesses",
   );
-}
+});
 
-export function testReadContextCombinedCapAndOutsideRepo(): void {
+test("testReadContextCombinedCapAndOutsideRepo", () => {
   withTempRepo((dir) => {
     mkdirSync(join(dir, ".fapony"), { recursive: true });
     writeFileSync(
@@ -1247,13 +1248,13 @@ export function testReadContextCombinedCapAndOutsideRepo(): void {
     }
   });
   console.log("  ✓ read context → ≤5 lines, silent outside a repo");
-}
+});
 
 // --- Commit hint (tool.execute.after annotate-only) ---
 
 import { execSync } from "node:child_process";
 
-export function testCommitHintNullForNonCommit(): void {
+test("testCommitHintNullForNonCommit", () => {
   assert.strictEqual(
     commitHintFor({ command: "git push origin main", cwd: "/tmp" }),
     null,
@@ -1275,9 +1276,9 @@ export function testCommitHintNullForNonCommit(): void {
     "null command must not trigger the hint",
   );
   console.log("  ✓ commit hint → silent for non-commit bash commands");
-}
+});
 
-export function testCommitHintNullOutsideGitRepo(): void {
+test("testCommitHintNullOutsideGitRepo", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-ch-norepo-"));
   try {
     const hint = commitHintFor({
@@ -1289,9 +1290,9 @@ export function testCommitHintNullOutsideGitRepo(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ commit hint → silent outside a git repo");
-}
+});
 
-export function testCommitHintSilentWithoutMemLog(): void {
+test("testCommitHintSilentWithoutMemLog", () => {
   // No mem log = no window to measure — the hint stays silent instead of
   // listing the entire repo history (the frozen-verdict bug this replaced).
   const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
@@ -1315,7 +1316,7 @@ export function testCommitHintSilentWithoutMemLog(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ commit hint → silent with no mem log to window on");
-}
+});
 
 function writeTempMemRow(dir: string, ts: string): void {
   mkdirSync(join(dir, ".fapony/.memory"), { recursive: true });
@@ -1329,7 +1330,7 @@ function writeTempMemRow(dir: string, ts: string): void {
   writeFileSync(join(dir, ".fapony/.memory/log.t.jsonl"), `${row}\n`);
 }
 
-export function testCommitHintFiresForCommitsSinceMemRow(): void {
+test("testCommitHintFiresForCommitsSinceMemRow", () => {
   // A mem row older than the repo's commits windows the hint to just those.
   const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
   try {
@@ -1360,9 +1361,9 @@ export function testCommitHintFiresForCommitsSinceMemRow(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ commit hint → fires for commits newer than the mem row");
-}
+});
 
-export function testCommitHintSilentWhenMemRowCoversCommits(): void {
+test("testCommitHintSilentWhenMemRowCoversCommits", () => {
   // A mem row newer than every commit means nothing is unrecorded.
   const dir = mkdtempSync(join(tmpdir(), "fapony-ch-"));
   try {
@@ -1390,9 +1391,9 @@ export function testCommitHintSilentWhenMemRowCoversCommits(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ commit hint → silent when the mem row covers all commits");
-}
+});
 
-export function testCommitHintPluginSource(): void {
+test("testCommitHintPluginSource", () => {
   // The generated OpenCode plugin must import the shared commitHintFor
   // logic (no second implementation), target the bash tool, and mutate
   // output only.
@@ -1411,9 +1412,9 @@ export function testCommitHintPluginSource(): void {
   console.log(
     "  ✓ commit hint opencode plugin imports shared logic, annotate-only",
   );
-}
+});
 
-export function testEditHintPluginSource(): void {
+test("testEditHintPluginSource", () => {
   // The generated OpenCode plugin must import the shared editHintFor logic
   // (no second implementation), target the edit + write tools, mutate output
   // only, and log through the "edit" fire surface.
@@ -1452,14 +1453,14 @@ export function testEditHintPluginSource(): void {
   console.log(
     "  ✓ edit hint opencode plugin imports shared logic, annotate-only",
   );
-}
+});
 
-export function testCommitHintMinCommitsConstant(): void {
+test("testCommitHintMinCommitsConstant", () => {
   assert.strictEqual(COMMIT_HINT_MIN_COMMITS, 1);
   console.log("  ✓ commit hint min commits constant is 1");
-}
+});
 
-export function testSessionStartPluginSource(): void {
+test("testSessionStartPluginSource", () => {
   // The generated OpenCode plugin must import the one sessionStartContext
   // implementation from src/hook.ts — guard + kickoff spawn + cap shared with
   // the Claude/Codex hooks, and updatable by `git pull` (not baked into the
@@ -1493,9 +1494,9 @@ export function testSessionStartPluginSource(): void {
   console.log(
     "  ✓ session start opencode plugin defers to sessionStartContext",
   );
-}
+});
 
-export function testComputeHintImpact(): void {
+test("testComputeHintImpact", () => {
   withTempRepo((dir) => {
     // Set up conventions + a violating file.
     mkdirSync(join(dir, ".fapony"), { recursive: true });
@@ -1547,9 +1548,9 @@ export function testComputeHintImpact(): void {
     }
   });
   console.log("  ✓ computeHintImpact: debt precision counts resolved ids");
-}
+});
 
-export function testComputeHintImpactNoLog(): void {
+test("testComputeHintImpactNoLog", () => {
   process.env.FAPONY_STATE_DIR = mkdtempSync(join(tmpdir(), "fapony-no-log-"));
   try {
     const impact = computeHintImpact();
@@ -1559,9 +1560,9 @@ export function testComputeHintImpactNoLog(): void {
     delete process.env.FAPONY_STATE_DIR;
   }
   console.log("  ✓ computeHintImpact: no log → zero counts, no error");
-}
+});
 
-export function testMvGuardDeniesPlanIntoDone(): void {
+test("testMvGuardDeniesPlanIntoDone", () => {
   assert.ok(
     mvGuardDecision("git mv .fapony/plan/PLAN-alerts.md .fapony/plan/done/"),
     "nested plan/done/ mistake is denied",
@@ -1580,9 +1581,9 @@ export function testMvGuardDeniesPlanIntoDone(): void {
     /plan-sweep --apply \.fapony\/plan\/PLAN-alerts\.md/,
   );
   console.log("  ✓ mvGuardDecision denies raw git mv of a plan into done/");
-}
+});
 
-export function testMvGuardAllowsEverythingElse(): void {
+test("testMvGuardAllowsEverythingElse", () => {
   assert.equal(mvGuardDecision(undefined), null);
   assert.equal(mvGuardDecision(""), null);
   assert.equal(mvGuardDecision("ls .fapony/plan"), null);
@@ -1599,9 +1600,9 @@ export function testMvGuardAllowsEverythingElse(): void {
   console.log(
     "  ✓ mvGuardDecision allows every command outside its one pattern",
   );
-}
+});
 
-export function testMvGuardClaudeOutputShape(): void {
+test("testMvGuardClaudeOutputShape", () => {
   withTempRepo((dir) => {
     const proc = Bun.spawnSync(
       ["bun", join(import.meta.dir, "..", "fapony.ts"), "hook-mv-guard"],
@@ -1628,4 +1629,4 @@ export function testMvGuardClaudeOutputShape(): void {
     );
   });
   console.log("  ✓ mv guard claude output = permissionDecision deny");
-}
+});

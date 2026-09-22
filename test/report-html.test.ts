@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import assert from "node:assert";
 import {
   existsSync,
@@ -42,7 +43,7 @@ function seedTwoRounds(db: ReturnType<typeof openDb>): void {
   setStatus(db, run, "passed");
 }
 
-export function testReportHtmlCanonicalQuality(): void {
+test("testReportHtmlCanonicalQuality", () => {
   // pass-good = 4 via the shared helper — never a local score map.
   withTestDb((db) => {
     seedTwoRounds(db);
@@ -51,9 +52,9 @@ export function testReportHtmlCanonicalQuality(): void {
   });
 
   console.log("  ✓ report-html uses canonical quality scores");
-}
+});
 
-export function testReportHtmlFiltersAndMethodology(): void {
+test("testReportHtmlFiltersAndMethodology", () => {
   withTestDb((_db) => {
     const html = renderReportHtml(getStatsData(), new Date().toISOString());
     assert.ok(html.includes('id="f-model"'), "model filter present");
@@ -69,9 +70,9 @@ export function testReportHtmlFiltersAndMethodology(): void {
   });
 
   console.log("  ✓ report-html has filters, methodology, insufficient-data");
-}
+});
 
-export function testReportHtmlByModelHasAttributionColumns(): void {
+test("testReportHtmlByModelHasAttributionColumns", () => {
   // Spawn-based windows carry no client/provider/agent → "—", never blank.
   withTestDb((db) => {
     seedTwoRounds(db);
@@ -87,9 +88,9 @@ export function testReportHtmlByModelHasAttributionColumns(): void {
   });
 
   console.log("  ✓ report-html By Model shows client/provider/agent");
-}
+});
 
-export function testReportHtmlByModelProjectColumn(): void {
+test("testReportHtmlByModelProjectColumn", () => {
   // byModel groups by worktree, so a global report lists the same model once
   // per project — rows need a Project column, scoped reports must not repeat it.
   withTestDb((db) => {
@@ -116,9 +117,9 @@ export function testReportHtmlByModelProjectColumn(): void {
   });
 
   console.log("  ✓ report-html By Model Project column follows scope");
-}
+});
 
-export function testReportHtmlEscapesContent(): void {
+test("testReportHtmlEscapesContent", () => {
   // Worktree basenames are interpolated into HTML — must not break markup.
   withTestDb((db) => {
     newRun(db, "/x/<b>pwn", null, null, "abc");
@@ -128,9 +129,9 @@ export function testReportHtmlEscapesContent(): void {
   });
 
   console.log("  ✓ report-html escapes interpolated strings");
-}
+});
 
-export function testReportWebWarnsOnlyWhenCommittable(): void {
+test("testReportWebWarnsOnlyWhenCommittable", () => {
   withTempRepo((repo) => {
     writeFileSync(join(repo, ".gitignore"), "out/\n");
     // The probe runs git from dirname(path), so that dir has to exist — same
@@ -158,9 +159,9 @@ export function testReportWebWarnsOnlyWhenCommittable(): void {
   }
 
   console.log("  ✓ report-web warns only when the output would be committed");
-}
+});
 
-export function testReportWebRefusesWhenCommittable(): void {
+test("testReportWebRefusesWhenCommittable", () => {
   withTempRepo((repo) => {
     mkdirSync(join(repo, "out"));
     const target = join(repo, "report.html");
@@ -184,9 +185,9 @@ export function testReportWebRefusesWhenCommittable(): void {
   console.log(
     "  ✓ report-web refuses to write when wouldBeCommitted and no --force",
   );
-}
+});
 
-export function testReportWebForceOverrides(): void {
+test("testReportWebForceOverrides", () => {
   withTempRepo((repo) => {
     mkdirSync(join(repo, "out"));
     const target = join(repo, "report.html");
@@ -198,4 +199,4 @@ export function testReportWebForceOverrides(): void {
   });
 
   console.log("  ✓ report-web --force writes even when wouldBeCommitted");
-}
+});
