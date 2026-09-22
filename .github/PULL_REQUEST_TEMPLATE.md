@@ -1,17 +1,20 @@
-## What
+## What / Why
 
-Brief description of the change.
+Short summary of what changed and why. Delete the half you don't need.
 
-## Why
+## Verification
 
-Context or motivation for the change.
+Paste the tail of `bun run check` (or `gh pr checks` once CI runs) — evidence, not just a tick below.
 
-## How
-
-Implementation approach (if non-obvious).
+```
+(paste here)
+```
 
 ## Checklist
 
-- [ ] `bun run check` passes (lint + typecheck + test)
-- [ ] Commits follow conventional format
-- [ ] One concern per commit
+- [ ] `bun run check` passes (lint + typecheck + test) — output pasted above
+- [ ] One concern per PR — no unrelated changes bundled in
+- [ ] Title is conventional-commit style (`feat: …`, `fix: …`, …)
+- [ ] CI green before merge (`gh pr checks`)
+
+<!-- Merge with `gh pr merge --merge` only — never --squash/--rebase: both rewrite history and the next PR opens with a phantom conflict (see docs/edge-cases.md). -->
