@@ -1,33 +1,13 @@
-// src/mcp/types.ts — ReasonCode enum, ToolResult, helpers
+// src/mcp/types.ts — ToolResult, helpers
+// ReasonCode + RegimeCode enums now live in core/enums.ts (PLAN-lib-layer chunk 2c).
 
-// --- ReasonCode enum (locked in step 0, append-only) ---
-
-export const REASON_CODES = [
-  "missing_test",
-  "scope_mismatch",
-  "unsafe_command",
-  "spec_gap",
-  "timeout",
-  "blocked",
-  "incomplete",
-  "none",
-  "other",
-] as const;
-
-export type ReasonCode = (typeof REASON_CODES)[number];
-
-// --- RegimeCode enum (task-shape axis for model × project × regime × quality) ---
-
-export const REGIME_CODES = [
-  "code",
-  "fix",
-  "review",
-  "plan",
-  "inquiry",
-  "test",
-] as const;
-
-export type RegimeCode = (typeof REGIME_CODES)[number];
+// Re-export enums for existing callers.
+export {
+  REASON_CODES,
+  REGIME_CODES,
+  type ReasonCode,
+  type RegimeCode,
+} from "../core/enums.js";
 
 // --- Tool result types ---
 
