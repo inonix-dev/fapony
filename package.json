@@ -35,6 +35,7 @@
     "check": "bun run lint && bun run typecheck && bun test --timeout 20000 --parallel",
     "prepublishOnly": "bash scripts/smoke-publish.sh",
     "release": "git checkout main && git pull --ff-only && npm version patch -m 'release v%s' && git push origin main --follow-tags",
+    "release:minor": "git checkout main && git pull --ff-only && npm version minor -m 'release v%s' && git push origin main --follow-tags",
     "overview": "bun fapony.ts report-web /tmp/fapony-overview.html && open /tmp/fapony-overview.html"
   },
   "devDependencies": {
