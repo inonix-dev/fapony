@@ -7,7 +7,7 @@ import { doneLines, fmtClose, fmtRow } from "../render.js";
 import { claimsOf, openRows, staleReport } from "../selectors.js";
 import type { CloseRow, WorkRow } from "../store.js";
 import { allRows, app, memCmd, planDir, root, rows } from "../store.js";
-import { planSweepCmd, shippedNotMoved } from "./plan.js";
+import { checkTickedLine, planSweepCmd, shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
 
 /** Files changed on this branch vs dev — empty set when dev is missing or diff fails. */
@@ -93,28 +93,54 @@ export const cmdFind = (a: string[]) => {
   if (!hits.length) console.log("(no matches)");
 };
 
-/** Read a plan file and extract unchecked checkboxes from the TL;DR section. */
-const readPlanCheckboxes = (planPath: string): string[] => {
+/** Read a plan file and extract checked + unchecked items from the first ## section. */
+const readPlanSectionItems = (
+  planPath: string,
+): { checked: string[]; unchecked: string[] } => {
   try {
     const text = readFileSync(planPath, "utf8");
     // Skip frontmatter
     const body = text.replace(/^---\r?\n[\s\S]*?\r?\n---/, "");
     // Find the first ## section (TL;DR)
     const start = body.search(/^##\s+/m);
-    if (start < 0) return [];
+    if (start < 0) return { checked: [], unchecked: [] };
     const rest = body.slice(start);
     const next = rest.slice(3).search(/^##\s+/m);
     const block = next < 0 ? rest : rest.slice(0, next + 3);
-    // Extract unchecked checkboxes
-    const items: string[] = [];
+    // Extract checkboxes — ticked and unticked
+    const checked: string[] = [];
+    const unchecked: string[] = [];
     for (const line of block.split("\n")) {
-      const m = /^\s*[-*]\s+\[\s\]\s+(.+)$/.exec(line);
-      if (m) items.push(m[1].trim());
+      let m = /^\s*[-*]\s+\[\s\]\s+(.+)$/.exec(line);
+      if (m) {
+        unchecked.push(m[1].trim());
+        continue;
+      }
+      m = /^\s*[-*]\s+\[[xX]\]\s+(.+)$/.exec(line);
+      if (m) checked.push(m[1].trim());
     }
-    return items;
+    return { checked, unchecked };
   } catch {
-    return [];
+    return { checked: [], unchecked: [] };
   }
+};
+
+// Chunk 9 (PLAN-seed-and-surface): one line under the next-chunk display
+// saying whether the last ticked chunk actually closed. Verified shas stay
+// silent; only the newest ticked chunk is ever mentioned — one line per
+// kickoff, never a list (else vela's 64/72 sha-less chunks become noise).
+const closureHint = (checked: string[]): string | null => {
+  const last = checked[checked.length - 1];
+  if (!last) return null;
+  const { missing, diverged, cited } = checkTickedLine(last, root);
+  const label = /chunk\s+([^\s—–-]+)/i.exec(last)?.[1] ?? "latest";
+  if (missing.length)
+    return `⚠ chunk ${label} is ticked but ${missing[0]} is not in git — nothing proves it closed`;
+  if (diverged.length)
+    return `⚠ chunk ${label} is ticked but ${diverged[0]} is not on HEAD (rebased away?)`;
+  if (!cited)
+    return `⚠ chunk ${label} is ticked but cites no commit — nothing to verify it closed`;
+  return null;
 };
 
 /** Check if a plan has `priority: high` in its frontmatter. */
@@ -200,6 +226,7 @@ export const cmdKickoff = (a: string[]) => {
   // If no arg or arg didn't match an id/spec, check if it's a plan file
   let planFile: string | null = null;
   let planCheckboxes: string[] = [];
+  let planChecked: string[] = [];
 
   if (arg && !resolvedSpec && !target) {
     if (matches.length === 1) {
@@ -233,14 +260,18 @@ export const cmdKickoff = (a: string[]) => {
 
   // Read plan file if we found one (or if a .md arg matched a spec)
   if (planFile) {
-    planCheckboxes = readPlanCheckboxes(planFile);
+    const items = readPlanSectionItems(planFile);
+    planCheckboxes = items.unchecked;
+    planChecked = items.checked;
   } else if (arg && resolvedSpec && arg.endsWith(".md")) {
     // The spec resolved from the log might be a plan file — try to read it
     const dir = planDir;
     const byName = join(dir, basename(arg));
     if (existsSync(byName)) {
       planFile = byName;
-      planCheckboxes = readPlanCheckboxes(planFile);
+      const items = readPlanSectionItems(planFile);
+      planCheckboxes = items.unchecked;
+      planChecked = items.checked;
     }
   }
 
@@ -466,6 +497,12 @@ export const cmdKickoff = (a: string[]) => {
     if (!specRows.length && !specDecisions.length && !specCloses.length) {
       console.log("(no entries for this spec)");
     }
+    // The spec is also a plan file on disk — say whether the last ticked
+    // chunk actually closed (chunk 9). Silent when it verifies.
+    if (planFile) {
+      const hint = closureHint(planChecked);
+      if (hint) console.log(`\n${hint}`);
+    }
   } else if (target) {
     // id = a brief for that task
     const claims = claimsOf(all);
@@ -525,6 +562,10 @@ export const cmdKickoff = (a: string[]) => {
     } else {
       console.log(`\n(all chunks checked — ready to ship or archive)`);
     }
+    // Whether the last ticked chunk actually closed (chunk 9) — one line,
+    // silent when its sha verifies.
+    const hint = closureHint(planChecked);
+    if (hint) console.log(hint);
   } else if (arg) {
     console.error(`no id "${arg}" in the log`);
     process.exit(1);
