@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/install/opencode.test.ts — OpenCode install provider
 
 import assert from "node:assert";
@@ -35,7 +36,7 @@ function opencodeEntry(): Record<string, unknown> {
 /** Regression guard: OpenCode spawns MCP servers with cwd = the open project,
  *  so a relative `fapony.ts` only resolves when cwd is the fapony checkout.
  *  Installs for real and inspects the written command (tests production). */
-export function testInstallOpencodeMcpCommandIsAbsolute(): void {
+test("testInstallOpencodeMcpCommandIsAbsolute", () => {
   withTempHome((home) => {
     silentErrors(() =>
       captureErrors(() =>
@@ -56,9 +57,9 @@ export function testInstallOpencodeMcpCommandIsAbsolute(): void {
     assert.ok(script.endsWith("fapony.ts"), `got: ${script}`);
     console.log("  ✓ install opencode MCP command → absolute fapony.ts path");
   });
-}
+});
 
-export function testInstallOpencodeNewFile(): void {
+test("testInstallOpencodeNewFile", () => {
   withTempHome((home) => {
     const err = silentErrors(() =>
       captureErrors(() =>
@@ -78,9 +79,9 @@ export function testInstallOpencodeNewFile(): void {
     assert.ok(err.includes("created"), `got: ${err}`);
     console.log("  ✓ install opencode no config → creates opencode.json");
   });
-}
+});
 
-export function testInstallOpencodeAlreadyConfiguredNoOp(): void {
+test("testInstallOpencodeAlreadyConfiguredNoOp", () => {
   withTempHome((home) => {
     const configDir = join(home, ".config", "opencode");
     mkdirSync(configDir, { recursive: true });
@@ -98,9 +99,9 @@ export function testInstallOpencodeAlreadyConfiguredNoOp(): void {
     assert.ok(err.includes("already configured"), `got: ${err}`);
     console.log("  ✓ install opencode already configured → no-op");
   });
-}
+});
 
-export function testInstallOpencodeAlreadyConfiguredLinksSkills(): void {
+test("testInstallOpencodeAlreadyConfiguredLinksSkills", () => {
   withTempHome((home) => {
     const configDir = join(home, ".config", "opencode");
     mkdirSync(configDir, { recursive: true });
@@ -122,9 +123,9 @@ export function testInstallOpencodeAlreadyConfiguredLinksSkills(): void {
     }
     console.log("  ✓ install opencode already configured → still links skills");
   });
-}
+});
 
-export function testInstallOpencodeDryRunNoWrite(): void {
+test("testInstallOpencodeDryRunNoWrite", () => {
   withTempHome((home) => {
     const configDir = join(home, ".config", "opencode");
     mkdirSync(configDir, { recursive: true });
@@ -143,9 +144,9 @@ export function testInstallOpencodeDryRunNoWrite(): void {
     assert.ok(err.includes("mcp.fapony"), `got: ${err}`);
     console.log("  ✓ install opencode dry-run → no write");
   });
-}
+});
 
-export function testInstallOpencodeParseErrorFails(): void {
+test("testInstallOpencodeParseErrorFails", () => {
   withTempHome((home) => {
     const configDir = join(home, ".config", "opencode");
     mkdirSync(configDir, { recursive: true });
@@ -166,9 +167,9 @@ export function testInstallOpencodeParseErrorFails(): void {
     assert.ok(err.includes("failed to parse"), `got: ${err}`);
     console.log("  ✓ install opencode broken config → clear error");
   });
-}
+});
 
-export function testCmdInstallDispatchesOpencode(): void {
+test("testCmdInstallDispatchesOpencode", () => {
   withTempHome((home) => {
     silentErrors(() =>
       cmdInstall(["opencode"], { exit: testExit, homedir: () => home }),
@@ -184,9 +185,9 @@ export function testCmdInstallDispatchesOpencode(): void {
     );
     console.log("  ✓ install dispatch routes --platform opencode");
   });
-}
+});
 
-export function testInstallOpencodeReadHintPlugin(): void {
+test("testInstallOpencodeReadHintPlugin", () => {
   withTempHome((home) => {
     const pluginPath = join(
       home,
@@ -222,9 +223,9 @@ export function testInstallOpencodeReadHintPlugin(): void {
   console.log(
     "  ✓ install opencode read hint → plugin written once, both paths",
   );
-}
+});
 
-export function testInstallOpencodeReadHintForeignFileUntouched(): void {
+test("testInstallOpencodeReadHintForeignFileUntouched", () => {
   withTempHome((home) => {
     const pluginsDir = join(home, ".config", "opencode", "plugins");
     mkdirSync(pluginsDir, { recursive: true });
@@ -242,9 +243,9 @@ export function testInstallOpencodeReadHintForeignFileUntouched(): void {
     );
   });
   console.log("  ✓ install opencode read hint → foreign plugin untouched");
-}
+});
 
-export function testInstallOpencodeCommitHintPlugin(): void {
+test("testInstallOpencodeCommitHintPlugin", () => {
   withTempHome((home) => {
     const pluginPath = join(
       home,
@@ -269,9 +270,9 @@ export function testInstallOpencodeCommitHintPlugin(): void {
     assert.ok(err.includes("commit hint"), `got: ${err}`);
     console.log("  ✓ install opencode commit hint → plugin written");
   });
-}
+});
 
-export function testInstallOpencodeCommitHintIdempotent(): void {
+test("testInstallOpencodeCommitHintIdempotent", () => {
   withTempHome((home) => {
     const pluginPath = join(
       home,
@@ -295,9 +296,9 @@ export function testInstallOpencodeCommitHintIdempotent(): void {
     assert.equal(src, after, "second install must not rewrite the plugin");
     console.log("  ✓ install opencode commit hint → idempotent");
   });
-}
+});
 
-export function testInstallOpencodeCommitHintForeignFileUntouched(): void {
+test("testInstallOpencodeCommitHintForeignFileUntouched", () => {
   withTempHome((home) => {
     const pluginsDir = join(home, ".config", "opencode", "plugins");
     mkdirSync(pluginsDir, { recursive: true });
@@ -315,9 +316,9 @@ export function testInstallOpencodeCommitHintForeignFileUntouched(): void {
     );
     console.log("  ✓ install opencode commit hint → foreign plugin untouched");
   });
-}
+});
 
-export function testInstallOpencodeCommitHintDryRun(): void {
+test("testInstallOpencodeCommitHintDryRun", () => {
   withTempHome((home) => {
     const pluginPath = join(
       home,
@@ -337,9 +338,9 @@ export function testInstallOpencodeCommitHintDryRun(): void {
     );
     console.log("  ✓ install opencode commit hint → dry-run no write");
   });
-}
+});
 
-export function testInstallOpencodeEditHintPlugin(): void {
+test("testInstallOpencodeEditHintPlugin", () => {
   withTempHome((home) => {
     const pluginPath = join(
       home,
@@ -379,9 +380,9 @@ export function testInstallOpencodeEditHintPlugin(): void {
   console.log(
     "  ✓ install opencode edit hint → plugin written once, both paths",
   );
-}
+});
 
-export function testInstallOpencodeEditHintForeignFileUntouched(): void {
+test("testInstallOpencodeEditHintForeignFileUntouched", () => {
   withTempHome((home) => {
     const pluginsDir = join(home, ".config", "opencode", "plugins");
     mkdirSync(pluginsDir, { recursive: true });
@@ -399,9 +400,9 @@ export function testInstallOpencodeEditHintForeignFileUntouched(): void {
     );
   });
   console.log("  ✓ install opencode edit hint → foreign plugin untouched");
-}
+});
 
-export function testInstallOpencodeEditHintDryRun(): void {
+test("testInstallOpencodeEditHintDryRun", () => {
   withTempHome((home) => {
     const pluginPath = join(
       home,
@@ -421,9 +422,9 @@ export function testInstallOpencodeEditHintDryRun(): void {
     );
     console.log("  ✓ install opencode edit hint → dry-run no write");
   });
-}
+});
 
-export function testInstallOpencodeSessionStartPlugin(): void {
+test("testInstallOpencodeSessionStartPlugin", () => {
   withTempHome((home) => {
     const pluginPath = join(
       home,
@@ -462,9 +463,9 @@ export function testInstallOpencodeSessionStartPlugin(): void {
   console.log(
     "  ✓ install opencode session start → plugin written once, both paths",
   );
-}
+});
 
-export function testInstallOpencodeSessionStartStaleWarns(): void {
+test("testInstallOpencodeSessionStartStaleWarns", () => {
   withTempHome((home) => {
     const pluginsDir = join(home, ".config", "opencode", "plugins");
     mkdirSync(pluginsDir, { recursive: true });
@@ -495,9 +496,9 @@ export function testInstallOpencodeSessionStartStaleWarns(): void {
   console.log(
     "  ✓ install opencode session start → stale plugin warns, untouched",
   );
-}
+});
 
-export function testInstallOpencodeSessionStartForeignFileUntouched(): void {
+test("testInstallOpencodeSessionStartForeignFileUntouched", () => {
   withTempHome((home) => {
     const pluginsDir = join(home, ".config", "opencode", "plugins");
     mkdirSync(pluginsDir, { recursive: true });
@@ -515,9 +516,9 @@ export function testInstallOpencodeSessionStartForeignFileUntouched(): void {
     );
   });
   console.log("  ✓ install opencode session start → foreign plugin untouched");
-}
+});
 
-export function testInstallOpencodeSessionStartDryRun(): void {
+test("testInstallOpencodeSessionStartDryRun", () => {
   withTempHome((home) => {
     const pluginPath = join(
       home,
@@ -537,4 +538,4 @@ export function testInstallOpencodeSessionStartDryRun(): void {
     );
     console.log("  ✓ install opencode session start → dry-run no write");
   });
-}
+});

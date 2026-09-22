@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/mcp/evidence.test.ts — tests for evidence collector
 
 import assert from "node:assert";
@@ -24,7 +25,7 @@ function makeTmpWorktree(): string {
 
 // --- readEvidenceConfig ---
 
-export function testReadEvidenceConfigMissing(): void {
+test("testReadEvidenceConfigMissing", () => {
   const dir = makeTmpWorktree();
   try {
     const config = readEvidenceConfig(dir);
@@ -33,9 +34,9 @@ export function testReadEvidenceConfigMissing(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testReadEvidenceConfigInvalid(): void {
+test("testReadEvidenceConfigInvalid", () => {
   const dir = makeTmpWorktree();
   try {
     writeFileSync(join(dir, ".fapony/evidence.json"), "not json");
@@ -45,9 +46,9 @@ export function testReadEvidenceConfigInvalid(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testReadEvidenceConfigValid(): void {
+test("testReadEvidenceConfigValid", () => {
   const dir = makeTmpWorktree();
   try {
     writeFileSync(
@@ -65,9 +66,9 @@ export function testReadEvidenceConfigValid(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testReadEvidenceConfigCustomPath(): void {
+test("testReadEvidenceConfigCustomPath", () => {
   const dir = makeTmpWorktree();
   try {
     mkdirSync(join(dir, "config"), { recursive: true });
@@ -104,11 +105,11 @@ export function testReadEvidenceConfigCustomPath(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
 // --- collectEvidence ---
 
-export function testCollectEvidenceNoConfig(): void {
+test("testCollectEvidenceNoConfig", () => {
   const dir = makeTmpWorktree();
   try {
     const items = collectEvidence({ worktree: dir });
@@ -117,9 +118,9 @@ export function testCollectEvidenceNoConfig(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testCollectEvidencePassingCommand(): void {
+test("testCollectEvidencePassingCommand", () => {
   const dir = makeTmpWorktree();
   try {
     writeFileSync(
@@ -139,9 +140,9 @@ export function testCollectEvidencePassingCommand(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testCollectEvidenceFailingCommand(): void {
+test("testCollectEvidenceFailingCommand", () => {
   const dir = makeTmpWorktree();
   try {
     writeFileSync(
@@ -158,9 +159,9 @@ export function testCollectEvidenceFailingCommand(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testCollectEvidenceAgentCommands(): void {
+test("testCollectEvidenceAgentCommands", () => {
   const dir = makeTmpWorktree();
   try {
     // Agent-proposed commands are recorded as unverified claims — NEVER run.
@@ -189,9 +190,9 @@ export function testCollectEvidenceAgentCommands(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testCollectEvidenceAgentDuplicatesAllowlist(): void {
+test("testCollectEvidenceAgentDuplicatesAllowlist", () => {
   const dir = makeTmpWorktree();
   try {
     writeFileSync(
@@ -211,9 +212,9 @@ export function testCollectEvidenceAgentDuplicatesAllowlist(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testCollectEvidenceTimeout(): void {
+test("testCollectEvidenceTimeout", () => {
   const dir = makeTmpWorktree();
   try {
     writeFileSync(
@@ -236,9 +237,9 @@ export function testCollectEvidenceTimeout(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testCollectEvidenceRefusesDangerousCommand(): void {
+test("testCollectEvidenceRefusesDangerousCommand", () => {
   const dir = makeTmpWorktree();
   try {
     // Even allowlisted commands go through assertSafe (rule #4) — the file
@@ -263,9 +264,9 @@ export function testCollectEvidenceRefusesDangerousCommand(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testCollectEvidenceInvalidEntry(): void {
+test("testCollectEvidenceInvalidEntry", () => {
   const dir = makeTmpWorktree();
   try {
     writeFileSync(
@@ -285,7 +286,7 @@ export function testCollectEvidenceInvalidEntry(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
 // --- App-scoped resolution ---
 
@@ -312,7 +313,7 @@ function makeAppWorktree(): string {
   return dir;
 }
 
-export function testResolveEvidencePathAppScoped(): void {
+test("testResolveEvidencePathAppScoped", () => {
   const dir = makeAppWorktree();
   try {
     assert.equal(
@@ -323,9 +324,9 @@ export function testResolveEvidencePathAppScoped(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testResolveEvidencePathMixedFallsBackToRoot(): void {
+test("testResolveEvidencePathMixedFallsBackToRoot", () => {
   const dir = makeAppWorktree();
   try {
     assert.equal(
@@ -336,9 +337,9 @@ export function testResolveEvidencePathMixedFallsBackToRoot(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testResolveEvidencePathEmptyFallsBackToRoot(): void {
+test("testResolveEvidencePathEmptyFallsBackToRoot", () => {
   const dir = makeAppWorktree();
   try {
     assert.equal(
@@ -350,9 +351,9 @@ export function testResolveEvidencePathEmptyFallsBackToRoot(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testResolveEvidencePathMissingAppFileFallsBackToRoot(): void {
+test("testResolveEvidencePathMissingAppFileFallsBackToRoot", () => {
   const dir = makeAppWorktree();
   try {
     mkdirSync(join(dir, "apps/c/src"), { recursive: true });
@@ -366,9 +367,9 @@ export function testResolveEvidencePathMissingAppFileFallsBackToRoot(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testResolveEvidencePathCustomConfigWins(): void {
+test("testResolveEvidencePathCustomConfigWins", () => {
   const dir = makeAppWorktree();
   try {
     mkdirSync(join(dir, "config"), { recursive: true });
@@ -394,9 +395,9 @@ export function testResolveEvidencePathCustomConfigWins(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});
 
-export function testCollectEvidenceAppScoped(): void {
+test("testCollectEvidenceAppScoped", () => {
   const dir = makeAppWorktree();
   try {
     // Report touching only apps/b must run b's allowlist, not a's or root's.
@@ -419,4 +420,4 @@ export function testCollectEvidenceAppScoped(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+});

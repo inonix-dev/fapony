@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/install/antigravity.test.ts — Antigravity install provider
 
 import assert from "node:assert";
@@ -12,7 +13,7 @@ import {
   withTempHome,
 } from "./helpers.js";
 
-export function testInstallAntigravityNoDirFails(): void {
+test("testInstallAntigravityNoDirFails", () => {
   withTempHome((home) => {
     let code: number | null = null;
     const err = silentErrors(() =>
@@ -28,9 +29,9 @@ export function testInstallAntigravityNoDirFails(): void {
     assert.ok(err.includes("Antigravity not found"), `got: ${err}`);
     console.log("  ✓ install antigravity no ~/.gemini → clear error");
   });
-}
+});
 
-export function testInstallAntigravityFreshWritesMcpAndSkills(): void {
+test("testInstallAntigravityFreshWritesMcpAndSkills", () => {
   withTempHome((home) => {
     mkdirSync(join(home, ".gemini", "config"), { recursive: true });
     const err = silentErrors(() =>
@@ -48,9 +49,9 @@ export function testInstallAntigravityFreshWritesMcpAndSkills(): void {
       "  ✓ install antigravity fresh → mcp_config.json written + skills linked",
     );
   });
-}
+});
 
-export function testInstallAntigravityForeignMcpRefuses(): void {
+test("testInstallAntigravityForeignMcpRefuses", () => {
   withTempHome((home) => {
     const configDir = join(home, ".gemini", "config");
     mkdirSync(configDir, { recursive: true });
@@ -80,9 +81,9 @@ export function testInstallAntigravityForeignMcpRefuses(): void {
     assert.equal(readFileSync(mcpPath, "utf-8"), before);
     console.log("  ✓ install antigravity foreign fapony entry → refuses");
   });
-}
+});
 
-export function testInstallAntigravityAlreadyConfiguredNoOp(): void {
+test("testInstallAntigravityAlreadyConfiguredNoOp", () => {
   withTempHome((home) => {
     const configDir = join(home, ".gemini", "config");
     mkdirSync(configDir, { recursive: true });
@@ -106,9 +107,9 @@ export function testInstallAntigravityAlreadyConfiguredNoOp(): void {
     assert.ok(err.includes("no change"), `got: ${err}`);
     console.log("  ✓ install antigravity already configured → no-op");
   });
-}
+});
 
-export function testInstallAntigravityDryRunNoWrite(): void {
+test("testInstallAntigravityDryRunNoWrite", () => {
   withTempHome((home) => {
     mkdirSync(join(home, ".gemini", "config"), { recursive: true });
     const err = silentErrors(() =>
@@ -127,9 +128,9 @@ export function testInstallAntigravityDryRunNoWrite(): void {
     );
     console.log("  ✓ install antigravity dry-run → no write");
   });
-}
+});
 
-export function testInstallAntigravityMergesExistingServers(): void {
+test("testInstallAntigravityMergesExistingServers", () => {
   withTempHome((home) => {
     const configDir = join(home, ".gemini", "config");
     mkdirSync(configDir, { recursive: true });
@@ -162,9 +163,9 @@ export function testInstallAntigravityMergesExistingServers(): void {
       "  ✓ install antigravity existing mcpServers → merge, not overwrite",
     );
   });
-}
+});
 
-export function testCmdInstallDispatchesAntigravity(): void {
+test("testCmdInstallDispatchesAntigravity", () => {
   withTempHome((home) => {
     mkdirSync(join(home, ".gemini", "config"), { recursive: true });
     silentErrors(() =>
@@ -176,7 +177,7 @@ export function testCmdInstallDispatchesAntigravity(): void {
     assert.ok(mcp.mcpServers?.fapony, "mcp.fapony should be written");
     console.log("  ✓ install dispatch routes --platform antigravity");
   });
-}
+});
 
 function readIfExists(path: string): string | null {
   try {

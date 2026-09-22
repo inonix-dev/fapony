@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/install/detect.test.ts — detectClients (which MCP clients exist here)
 
 import assert from "node:assert";
@@ -6,7 +7,7 @@ import { join } from "node:path";
 import { detectClients, type InstallDeps } from "../../src/install.js";
 import { withTempHome } from "./helpers.js";
 
-export function testDetectClientsAllFound(): void {
+test("testDetectClientsAllFound", () => {
   withTempHome((home) => {
     // claude: checkCmd returns true
     // antigravity: ~/.gemini exists
@@ -38,9 +39,9 @@ export function testDetectClientsAllFound(): void {
     );
     console.log("  ✓ detect clients → all found");
   });
-}
+});
 
-export function testDetectClientsNoneFound(): void {
+test("testDetectClientsNoneFound", () => {
   withTempHome((home) => {
     const deps: InstallDeps = {
       homedir: () => home,
@@ -55,9 +56,9 @@ export function testDetectClientsNoneFound(): void {
     assert.ok(result.every((d) => d.platform.length > 0));
     console.log("  ✓ detect clients → none found");
   });
-}
+});
 
-export function testDetectClientsMixed(): void {
+test("testDetectClientsMixed", () => {
   withTempHome((home) => {
     // Only opencode config exists
     const ocDir = join(home, ".config", "opencode");
@@ -75,4 +76,4 @@ export function testDetectClientsMixed(): void {
     assert.ok(!claude?.installed, "claude should not be found");
     console.log("  ✓ detect clients → mixed");
   });
-}
+});

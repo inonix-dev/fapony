@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/mcp/primitives.test.ts — tests for shared verification primitives
 
 import assert from "node:assert";
@@ -13,7 +14,7 @@ import {
 
 // --- EVIDENCE_STATUSES ---
 
-export function testEvidenceStatusesAreLocked(): void {
+test("testEvidenceStatusesAreLocked", () => {
   assert.ok(EVIDENCE_STATUSES.has("passed"));
   assert.ok(EVIDENCE_STATUSES.has("failed"));
   assert.ok(EVIDENCE_STATUSES.has("not_run"));
@@ -21,19 +22,19 @@ export function testEvidenceStatusesAreLocked(): void {
   assert.ok(EVIDENCE_STATUSES.has("timeout"));
   assert.equal(EVIDENCE_STATUSES.size, 5);
   console.log("  ✓ EVIDENCE_STATUSES contains all 5 locked values");
-}
+});
 
 // --- computeEvidenceSummary ---
 
-export function testComputeEvidenceSummaryEmpty(): void {
+test("testComputeEvidenceSummaryEmpty", () => {
   const s = computeEvidenceSummary([]);
   assert.equal(s.total, 0);
   assert.equal(s.passed, 0);
   assert.equal(s.failed, 0);
   console.log("  ✓ computeEvidenceSummary empty array");
-}
+});
 
-export function testComputeEvidenceSummaryMixed(): void {
+test("testComputeEvidenceSummaryMixed", () => {
   const items: EvidenceItem[] = [
     {
       command: "bun test",
@@ -73,7 +74,7 @@ export function testComputeEvidenceSummaryMixed(): void {
   assert.equal(s.unverified, 0);
   assert.equal(s.timeout, 1);
   console.log("  ✓ computeEvidenceSummary counts mixed statuses");
-}
+});
 
 // --- renderReportText ---
 
@@ -106,7 +107,7 @@ function makeReport(
   };
 }
 
-export function testRenderReportTextMinimal(): void {
+test("testRenderReportTextMinimal", () => {
   const text = renderReportText(makeReport());
   assert.ok(text.includes("=== Verification Report ==="));
   assert.ok(text.includes("run: 42"));
@@ -115,9 +116,9 @@ export function testRenderReportTextMinimal(): void {
   assert.ok(text.includes("verdict: (not yet)"));
   assert.ok(text.includes("Submit a verdict to complete verification"));
   console.log("  ✓ renderReportText minimal report");
-}
+});
 
-export function testRenderReportTextWithPassedVerdict(): void {
+test("testRenderReportTextWithPassedVerdict", () => {
   const report = makeReport({
     verdict: { grade: "pass-good", note: "looks good" },
   });
@@ -125,9 +126,9 @@ export function testRenderReportTextWithPassedVerdict(): void {
   assert.ok(text.includes("verdict: pass-good"));
   assert.ok(text.includes("All checks passed"));
   console.log("  ✓ renderReportText with pass verdict shows next action");
-}
+});
 
-export function testRenderReportTextWithFailingEvidence(): void {
+test("testRenderReportTextWithFailingEvidence", () => {
   const evidence: EvidenceItem[] = [
     {
       command: "bun test",
@@ -146,9 +147,9 @@ export function testRenderReportTextWithFailingEvidence(): void {
   assert.ok(text.includes("✗ bun test"));
   assert.ok(text.includes("Fix failing evidence commands"));
   console.log("  ✓ renderReportText with failing evidence");
-}
+});
 
-export function testRenderReportTextWithHandoffChecks(): void {
+test("testRenderReportTextWithHandoffChecks", () => {
   const report = makeReport({
     handoff_checks: {
       checks: [
@@ -168,9 +169,9 @@ export function testRenderReportTextWithHandoffChecks(): void {
   assert.ok(text.includes("✗ claimed_matches_commits"));
   assert.ok(text.includes("Review handoff conformance failures"));
   console.log("  ✓ renderReportText with handoff checks");
-}
+});
 
-export function testRenderReportTextGitError(): void {
+test("testRenderReportTextGitError", () => {
   const report = makeReport({
     facts: {
       ...makeReport().facts,
@@ -180,4 +181,4 @@ export function testRenderReportTextGitError(): void {
   const text = renderReportText(report);
   assert.ok(text.includes("⚠ git diff failed: bad revision"));
   console.log("  ✓ renderReportText shows git error warning");
-}
+});

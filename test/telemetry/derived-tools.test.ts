@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/telemetry/derived-tools.test.ts — telemetry derived tool counts + content guard
 
 import { Database } from "bun:sqlite";
@@ -13,7 +14,7 @@ import {
   withTmpDb,
 } from "./helpers.js";
 
-export function testTelemetryDerivedToolCountsScopedToWorktrees(): void {
+test("testTelemetryDerivedToolCountsScopedToWorktrees", () => {
   const { dir, dbPath } = createEmptyOpencodeDb();
   const ocDb = new Database(dbPath);
   ocDb.run(`INSERT INTO project (id, worktree) VALUES ('p1', '/wt/proj')`);
@@ -79,9 +80,9 @@ export function testTelemetryDerivedToolCountsScopedToWorktrees(): void {
   }
 
   console.log("  ✓ telemetry tool counts scoped to fapony worktrees, no I/O");
-}
+});
 
-export function testTelemetryDerivedExcludedFromContentCheck(): void {
+test("testTelemetryDerivedExcludedFromContentCheck", () => {
   withEmptyOpencodeDb(() => {
     withTmpDb((db) => {
       makeRun(
@@ -103,4 +104,4 @@ export function testTelemetryDerivedExcludedFromContentCheck(): void {
   });
 
   console.log("  ✓ telemetry derived contains no content fields");
-}
+});

@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/mcp/report.test.ts — tests for verification_report tool
 
 import assert from "node:assert";
@@ -7,7 +8,7 @@ import { newRun, openDb } from "../../src/db/store.js";
 import { gateOnce } from "../../src/gate.js";
 import { withTmpDb } from "../helpers.js";
 
-export function testVerificationReportMissingArgs(): void {
+test("testVerificationReportMissingArgs", () => {
   const result = toolVerificationReport({});
   assert.ok(result.isError);
   assert.ok(
@@ -16,9 +17,9 @@ export function testVerificationReportMissingArgs(): void {
     ),
   );
   console.log("  ✓ verification_report requires run_id or worktree");
-}
+});
 
-export function testVerificationReportRunNotFound(): void {
+test("testVerificationReportRunNotFound", () => {
   withTmpDb(() => {
     const result = toolVerificationReport({ run_id: 999 });
     assert.ok(result.isError);
@@ -29,9 +30,9 @@ export function testVerificationReportRunNotFound(): void {
     );
     console.log("  ✓ verification_report returns error for missing run");
   });
-}
+});
 
-export function testVerificationReportTextFormat(): void {
+test("testVerificationReportTextFormat", () => {
   withTmpDb(() => {
     // worktree that doesn't exist as git repo — facts will have git_error
     const result = toolVerificationReport({
@@ -45,9 +46,9 @@ export function testVerificationReportTextFormat(): void {
     assert.ok(text.includes("verdict: (not yet)"));
     console.log("  ✓ verification_report text format renders sections");
   });
-}
+});
 
-export function testVerificationReportJsonFormat(): void {
+test("testVerificationReportJsonFormat", () => {
   withTmpDb(() => {
     const result = toolVerificationReport({
       worktree: "/tmp",
@@ -64,9 +65,9 @@ export function testVerificationReportJsonFormat(): void {
     assert.equal(data.meta.source, "fapony_mcp");
     console.log("  ✓ verification_report json format returns structured data");
   });
-}
+});
 
-export function testVerificationReportWorktreeOnlyCreatesNoRun(): void {
+test("testVerificationReportWorktreeOnlyCreatesNoRun", () => {
   // A report is a read, not a unit of work — no run row, no events.
   withTmpDb(() => {
     const result = toolVerificationReport({ worktree: "/tmp" });
@@ -86,9 +87,9 @@ export function testVerificationReportWorktreeOnlyCreatesNoRun(): void {
     assert.equal(data.meta.run_id, null);
   });
   console.log("  ✓ verification_report worktree-only run leaves no trace");
-}
+});
 
-export function testVerificationReportToolCount(): void {
+test("testVerificationReportToolCount", () => {
   // The handoff trio is CLI-only: the logic below still ships (fapony report
   // calls toolVerificationReport directly), but the MCP schemas cost every
   // session of every client and nothing called them. Guard the boundary.
@@ -117,9 +118,9 @@ export function testVerificationReportToolCount(): void {
   }
   assert.equal(TOOLS.length, 3);
   console.log("  ✓ retired tools stay off the MCP surface (3 tools total)");
-}
+});
 
-export function testVerificationReportVerdictFromGateEvent(): void {
+test("testVerificationReportVerdictFromGateEvent", () => {
   withTmpDb(() => {
     // Gate events store JSON {verdict, note, round} — the report must read
     // that shape, not parse a VERDICT: marker out of it.
@@ -140,9 +141,9 @@ export function testVerificationReportVerdictFromGateEvent(): void {
     assert.equal(data.verdict.note, "solid work");
     console.log("  ✓ verification_report reads verdict from gate JSON event");
   });
-}
+});
 
-export function testVerificationReportCheckParity(): void {
+test("testVerificationReportCheckParity", () => {
   withTmpDb(() => {
     // Same strictness as handoff_check on the same text: a handoff missing
     // the uncertain: line fails uncertain_not_empty (no vouching).
@@ -174,9 +175,9 @@ export function testVerificationReportCheckParity(): void {
     );
     console.log("  ✓ verification_report matches handoff_check strictness");
   });
-}
+});
 
-export function testVerificationReportSurfacesCollectError(): void {
+test("testVerificationReportSurfacesCollectError", () => {
   withTmpDb(() => {
     // /tmp is not a git repo and no SHAs given → collect errors; the report
     // must surface it in git_error, not silently show zeroed facts.
@@ -194,4 +195,4 @@ export function testVerificationReportSurfacesCollectError(): void {
     );
     console.log("  ✓ verification_report surfaces collect errors in git_error");
   });
-}
+});

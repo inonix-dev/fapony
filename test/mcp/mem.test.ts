@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/mcp/mem.test.ts — mem_find tool (PLAN-mem-mcp chunk 2, SPEC §1–§5)
 import assert from "node:assert";
 import {
@@ -29,7 +30,7 @@ function writeLog(dir: string, rows: object[]): string {
   return memDir;
 }
 
-export function testMemFindReturnsAllKindsNoDefaultFilter(): void {
+test("testMemFindReturnsAllKindsNoDefaultFilter", () => {
   // chunk 0 → A: every kind is live, so omitting kind must return
   // decision AND bookkeeping kinds (spec §5.2) — a default filter here
   // would enforce the retracted "deprecated" prose.
@@ -67,9 +68,9 @@ export function testMemFindReturnsAllKindsNoDefaultFilter(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_find returns every kind (no default filter)");
-}
+});
 
-export function testMemFindFiltersAndMatchesFiles(): void {
+test("testMemFindFiltersAndMatchesFiles", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-memfind-"));
   try {
     writeLog(dir, [
@@ -104,9 +105,9 @@ export function testMemFindFiltersAndMatchesFiles(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_find filters by kind, text, and files[]");
-}
+});
 
-export function testMemFindTotalVsLimitAndFailShapes(): void {
+test("testMemFindTotalVsLimitAndFailShapes", () => {
   // spec §4 fail examples: total-before-limit, memDir for existing mem,
   // skipped counts bad lines — never a silent empty.
   const dir = mkdtempSync(join(tmpdir(), "fapony-memfind-"));
@@ -138,9 +139,9 @@ export function testMemFindTotalVsLimitAndFailShapes(): void {
   console.log(
     "  ✓ mem_find distinguishes no-mem from no-match, counts skipped",
   );
-}
+});
 
-export function testMemFindToolValidation(): void {
+test("testMemFindToolValidation", () => {
   // spec §4: bare/non-absolute worktree = explicit error, never silent empty
   const err = toolMemFind({ worktree: "wt-vela" });
   assert.equal(err.isError, true);
@@ -153,12 +154,12 @@ export function testMemFindToolValidation(): void {
   };
   assert.equal(ok.memDir, null);
   console.log("  ✓ mem_find rejects bare worktree names with a clear error");
-}
+});
 
 // Rows written by `mem add --files` carry structured files[]; the query must
 // hit them without the path appearing in the prose (regression 2026-09-19 —
 // the field CLAUDE.md rule 7 calls mandatory was not searchable at all).
-export function testMemFindMatchesStoredFiles(): void {
+test("testMemFindMatchesStoredFiles", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-memfind-files-"));
   try {
     writeLog(dir, [
@@ -184,13 +185,13 @@ export function testMemFindMatchesStoredFiles(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_find matches rows by stored files[]");
-}
+});
 
 // mem_close mirrors CLI `mem close <id> "<msg>"` (commands/write.ts cmdClose):
 // the id must exist; the tombstone carries {ref, text} with no files[] —
 // which is exactly why it is a separate tool, not kind:"close" in mem_add.
 
-export function testMemCloseWritesTombstoneForExistingId(): void {
+test("testMemCloseWritesTombstoneForExistingId", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-memclose-"));
   try {
     const appDir = join(dir, "apps", "vela");
@@ -217,9 +218,9 @@ export function testMemCloseWritesTombstoneForExistingId(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_close writes a tombstone for an existing id");
-}
+});
 
-export function testMemCloseRejectsUnknownIdAndEmptyText(): void {
+test("testMemCloseRejectsUnknownIdAndEmptyText", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-memclose-"));
   try {
     writeLog(dir, [
@@ -248,14 +249,14 @@ export function testMemCloseRejectsUnknownIdAndEmptyText(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_close rejects unknown id, empty text, bad worktree");
-}
+});
 
 // Regression 2026-09-19 (review-pony): mem_add resolved its mem dir by walking
 // up from the worktree while mem_find guesses the app dir — in a monorepo the
 // row landed at the git root, where nothing reads it. Writer and reader must
 // use the same resolver. The walk-up finds apps/<app>/.fapony/.memory/ when
 // called from within that app.
-export function testMemAddWritesWhereMemFindReads(): void {
+test("testMemAddWritesWhereMemFindReads", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-memadd-"));
   try {
     writeLog(join(dir, "apps", "vela"), [
@@ -284,11 +285,11 @@ export function testMemAddWritesWhereMemFindReads(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_add writes where mem_find reads (app-scoped layout)");
-}
+});
 
 // files is the field the whole feature exists to populate, so the write path
 // must reject a row that omits it — the same required+reject gate as the schema.
-export function testMemAddRejectsMissingFilesAndBadKind(): void {
+test("testMemAddRejectsMissingFilesAndBadKind", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-memadd-"));
   try {
     assert.throws(
@@ -308,14 +309,14 @@ export function testMemAddRejectsMissingFilesAndBadKind(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_add rejects no files / bad kind / hold without spec");
-}
+});
 
 // Regression 2026-09-19: agent/person both fell back to the literal "unknown",
 // and a generic OS account (admin/user/owner — what a fresh install offers) was
 // taken at face value, so two different people wrote one indistinguishable
 // file. With no git identity available at all, the last resort must still be
 // unique per machine.
-export function testMemIdentityNeverCollapsesToUnknown(): void {
+test("testMemIdentityNeverCollapsesToUnknown", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-memid-"));
   const saved = {
     USER: process.env.USER,
@@ -361,4 +362,4 @@ export function testMemIdentityNeverCollapsesToUnknown(): void {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem identity falls back to a machine tag, never 'unknown'");
-}
+});

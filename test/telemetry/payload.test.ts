@@ -1,18 +1,19 @@
+import { test } from "bun:test";
 // test/telemetry/payload.test.ts — telemetry payload shape + invariants
 
 import assert from "node:assert";
 import { buildPayload, TELEMETRY_SCHEMA_VERSION } from "../../src/telemetry.js";
 import { withTmpDb } from "./helpers.js";
 
-export function testTelemetrySchemaVersion(): void {
+test("testTelemetrySchemaVersion", () => {
   const payload = buildPayload();
   assert.equal(payload.schema_version, TELEMETRY_SCHEMA_VERSION);
   assert.equal(payload.schema_version, 4);
 
   console.log("  ✓ telemetry schema version is 3");
-}
+});
 
-export function testTelemetryPayloadShape(): void {
+test("testTelemetryPayloadShape", () => {
   const payload = buildPayload();
 
   // Top-level keys
@@ -36,9 +37,9 @@ export function testTelemetryPayloadShape(): void {
   assert(Array.isArray(m.by_worktree));
 
   console.log("  ✓ telemetry payload shape (aggregate, no raw rows)");
-}
+});
 
-export function testTelemetryNoContentFields(): void {
+test("testTelemetryNoContentFields", () => {
   const payload = buildPayload();
   const blob = JSON.stringify(payload);
 
@@ -51,9 +52,9 @@ export function testTelemetryNoContentFields(): void {
   assert(!blob.includes('"mem_id"'), "no mem_id field");
 
   console.log("  ✓ telemetry excludes all content fields");
-}
+});
 
-export function testTelemetryEmptyDb(): void {
+test("testTelemetryEmptyDb", () => {
   withTmpDb((_db) => {
     const payload = buildPayload();
     assert.equal(payload.machine.total_runs, 0);
@@ -68,9 +69,9 @@ export function testTelemetryEmptyDb(): void {
   });
 
   console.log("  ✓ telemetry empty db produces zeroed aggregates");
-}
+});
 
-export function testTelemetrySentAtIso(): void {
+test("testTelemetrySentAtIso", () => {
   const payload = buildPayload();
   assert.ok(
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(payload.sent_at),
@@ -78,4 +79,4 @@ export function testTelemetrySentAtIso(): void {
   );
 
   console.log("  ✓ telemetry sent_at is ISO-8601");
-}
+});

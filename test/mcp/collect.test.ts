@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/mcp/collect.test.ts — tests for handoff_collect tool
 
 import assert from "node:assert";
@@ -8,16 +9,16 @@ import { toolHandoffCollect } from "../../src/adapters/mcp/tools/collect.js";
 import { parseToolResult } from "../../src/adapters/mcp/types.js";
 import { withTempRepo } from "./helpers.js";
 
-export function testHandoffCollectMissingArgs(): void {
+test("testHandoffCollectMissingArgs", () => {
   const result = toolHandoffCollect({});
   assert.ok(result.isError);
   assert.ok(
     (parseToolResult(result) as { error: string }).error.includes("worktree"),
   );
   console.log("  ✓ handoff_collect missing worktree returns error");
-}
+});
 
-export function testHandoffCollectAutoDetectRange(): void {
+test("testHandoffCollectAutoDetectRange", () => {
   withTempRepo((dir) => {
     // Create a second commit
     writeFileSync(join(dir, "b.txt"), "new content\n");
@@ -37,9 +38,9 @@ export function testHandoffCollectAutoDetectRange(): void {
   console.log(
     "  ✓ handoff_collect auto-detects commit range from recent commits",
   );
-}
+});
 
-export function testHandoffCollectValidRepo(): void {
+test("testHandoffCollectValidRepo", () => {
   withTempRepo((dir) => {
     // Create a second commit
     writeFileSync(join(dir, "b.txt"), "new content\n");
@@ -72,9 +73,9 @@ export function testHandoffCollectValidRepo(): void {
     assert.equal(data.provenance.source, "git_cli");
   });
   console.log("  ✓ handoff_collect returns verified facts from real repo");
-}
+});
 
-export function testHandoffCollectGitError(): void {
+test("testHandoffCollectGitError", () => {
   // Without base_sha/head_sha on a non-git-dir: auto-detect fails
   const result = toolHandoffCollect({ worktree: "/tmp" });
   assert.ok(result.isError);
@@ -86,9 +87,9 @@ export function testHandoffCollectGitError(): void {
   console.log(
     "  ✓ handoff_collect auto-detect fails gracefully on non-git dir",
   );
-}
+});
 
-export function testHandoffCollectExplicitRange(): void {
+test("testHandoffCollectExplicitRange", () => {
   withTempRepo((dir) => {
     // Create 3 commits
     writeFileSync(join(dir, "a.txt"), "a\n");
@@ -118,9 +119,9 @@ export function testHandoffCollectExplicitRange(): void {
     assert.equal(data.facts.commits.length, 1);
   });
   console.log("  ✓ handoff_collect with explicit range still works");
-}
+});
 
-export function testHandoffCollectReturnsFiles(): void {
+test("testHandoffCollectReturnsFiles", () => {
   withTempRepo((dir) => {
     writeFileSync(join(dir, "b.txt"), "new content\n");
     execSync("git add .", { cwd: dir, stdio: "ignore" });
@@ -135,9 +136,9 @@ export function testHandoffCollectReturnsFiles(): void {
     assert.ok(data.facts.files.includes("b.txt"));
   });
   console.log("  ✓ handoff_collect returns files[] for blast radius");
-}
+});
 
-export function testHandoffCollectAheadBehind(): void {
+test("testHandoffCollectAheadBehind", () => {
   withTempRepo((dir) => {
     // Pin a fake origin/main at the first commit, then diverge by one commit.
     const base = execSync("git rev-parse HEAD", {
@@ -162,4 +163,4 @@ export function testHandoffCollectAheadBehind(): void {
     });
   });
   console.log("  ✓ handoff_collect reports ahead/behind vs origin/main");
-}
+});

@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 // test/install/zcode.test.ts — ZCode install provider
 
 import assert from "node:assert";
@@ -27,7 +28,7 @@ function zcodeEntry(): Record<string, unknown> {
   };
 }
 
-export function testInstallZcodeNoConfigFails(): void {
+test("testInstallZcodeNoConfigFails", () => {
   withTempHome((home) => {
     let code: number | null = null;
     const err = silentErrors(() =>
@@ -43,9 +44,9 @@ export function testInstallZcodeNoConfigFails(): void {
     assert.ok(err.includes("ZCode config not found"), `got: ${err}`);
     console.log("  ✓ install zcode no config → clear error");
   });
-}
+});
 
-export function testInstallZcodePrimaryPath(): void {
+test("testInstallZcodePrimaryPath", () => {
   withTempHome((home) => {
     const configDir = join(home, ".zcode", "cli");
     mkdirSync(configDir, { recursive: true });
@@ -80,9 +81,9 @@ export function testInstallZcodePrimaryPath(): void {
       "  ✓ install zcode primary path → writes ~/.zcode/cli/config.json",
     );
   });
-}
+});
 
-export function testInstallZcodeFallbackPath(): void {
+test("testInstallZcodeFallbackPath", () => {
   withTempHome((home) => {
     const agentsDir = join(home, ".agents");
     mkdirSync(agentsDir, { recursive: true });
@@ -105,9 +106,9 @@ export function testInstallZcodeFallbackPath(): void {
     assert.ok(err.includes("fallback path: ~/.agents/mcp.json"), `got: ${err}`);
     console.log("  ✓ install zcode fallback path → writes ~/.agents/mcp.json");
   });
-}
+});
 
-export function testInstallZcodeAlreadyConfiguredNoOp(): void {
+test("testInstallZcodeAlreadyConfiguredNoOp", () => {
   withTempHome((home) => {
     const configDir = join(home, ".zcode", "cli");
     mkdirSync(configDir, { recursive: true });
@@ -125,9 +126,9 @@ export function testInstallZcodeAlreadyConfiguredNoOp(): void {
     assert.ok(err.includes("already configured"), `got: ${err}`);
     console.log("  ✓ install zcode already configured → no-op");
   });
-}
+});
 
-export function testInstallZcodeAlreadyConfiguredLinksSkills(): void {
+test("testInstallZcodeAlreadyConfiguredLinksSkills", () => {
   withTempHome((home) => {
     const configDir = join(home, ".zcode", "cli");
     mkdirSync(configDir, { recursive: true });
@@ -149,9 +150,9 @@ export function testInstallZcodeAlreadyConfiguredLinksSkills(): void {
     }
     console.log("  ✓ install zcode already configured → still links skills");
   });
-}
+});
 
-export function testInstallZcodeDryRunNoWrite(): void {
+test("testInstallZcodeDryRunNoWrite", () => {
   withTempHome((home) => {
     const configDir = join(home, ".zcode", "cli");
     mkdirSync(configDir, { recursive: true });
@@ -170,9 +171,9 @@ export function testInstallZcodeDryRunNoWrite(): void {
     assert.ok(err.includes("mcp.servers.fapony"), `got: ${err}`);
     console.log("  ✓ install zcode dry-run → no write");
   });
-}
+});
 
-export function testInstallZcodeLinksSkillsIntoAgentsDir(): void {
+test("testInstallZcodeLinksSkillsIntoAgentsDir", () => {
   withTempHome((home) => {
     const configDir = join(home, ".zcode", "cli");
     mkdirSync(configDir, { recursive: true });
@@ -195,9 +196,9 @@ export function testInstallZcodeLinksSkillsIntoAgentsDir(): void {
     }
     console.log("  ✓ install zcode → symlinks skills into ~/.agents/skills");
   });
-}
+});
 
-export function testCmdInstallDispatchesZcode(): void {
+test("testCmdInstallDispatchesZcode", () => {
   withTempHome((home) => {
     const configDir = join(home, ".zcode", "cli");
     mkdirSync(configDir, { recursive: true });
@@ -218,4 +219,4 @@ export function testCmdInstallDispatchesZcode(): void {
     assert.deepStrictEqual(servers.fapony, zcodeEntry());
     console.log("  ✓ install dispatch routes --platform zcode");
   });
-}
+});
