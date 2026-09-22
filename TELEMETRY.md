@@ -4,7 +4,7 @@ Off by default. Nothing leaves your machine unless you turn it on.
 
 ## Schema version
 
-Payloads include `schema_version` (currently `3`). Receivers must:
+Payloads include `schema_version` (currently `4`). Receivers must:
 - Accept payloads with a version they recognize
 - Reject payloads with an unknown version (forward-incompatible by design)
 - Tolerate unknown fields in the payload (additive-only changes)
@@ -42,7 +42,7 @@ Scope and basis rules:
   Only tool **names** + counts leave the machine; tool input/output is never
   selected.
 - No cost field leaves the machine at all: the declared-cost line (spawn
-  events, static pricing, ES/CPQ) was removed in schema v4 — nothing wrote
+  events, static pricing, ES/CPQ) was removed in schema v4 (current) — nothing wrote
   spawn events any more, so every one of those numbers was empty.
 
 ### `self_reported` (advisory, user-set in config)
