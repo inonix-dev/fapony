@@ -128,6 +128,20 @@ import {
   testGateOnceUncertain,
 } from "./gate.test.js";
 import {
+  testGitAutonomyCutsToneExamples,
+  testGitAutonomyDefaultInstallWritesNothing,
+  testGitAutonomyDispatchFlag,
+  testGitAutonomyDryRunNoWrite,
+  testGitAutonomyFallbackCatchesReword,
+  testGitAutonomyForeignFileUntouched,
+  testGitAutonomyOptInWritesPlugin,
+  testGitAutonomyPluginSourceDefersToShared,
+  testGitAutonomyRewritesAskFirst,
+  testGitAutonomyRewritesBashDescBothSurfaces,
+  testGitAutonomyStaleWarns,
+  testGitAutonomyStatusNamesStale,
+} from "./git-autonomy.test.js";
+import {
   testCodexNormalizeMapsToSameDecision,
   testCodexPayloadDetection,
   testCodexStopHookActiveAllows,
@@ -953,6 +967,18 @@ export async function cmdTest(): Promise<void> {
   testInstallOpencodeDryRunNoWrite();
   testInstallOpencodeParseErrorFails();
   testCmdInstallDispatchesOpencode();
+  testGitAutonomyRewritesAskFirst();
+  testGitAutonomyFallbackCatchesReword();
+  testGitAutonomyRewritesBashDescBothSurfaces();
+  testGitAutonomyCutsToneExamples();
+  testGitAutonomyStatusNamesStale();
+  testGitAutonomyPluginSourceDefersToShared();
+  testGitAutonomyDefaultInstallWritesNothing();
+  testGitAutonomyOptInWritesPlugin();
+  testGitAutonomyForeignFileUntouched();
+  testGitAutonomyStaleWarns();
+  testGitAutonomyDryRunNoWrite();
+  await testGitAutonomyDispatchFlag();
   testInstallCodexNoConfigFails();
   testInstallCodexAppendsEntry();
   testInstallCodexAlreadyConfiguredNoOp();
