@@ -1,7 +1,7 @@
 // test/mcp/transport.test.ts — tests for MCP JSON-RPC dispatch
 
 import assert from "node:assert";
-import { dispatch } from "../../src/mcp/transport.js";
+import { dispatch } from "../../src/adapters/mcp/transport.js";
 
 export function testMcpToolsList(): void {
   const result = dispatch("tools/list", {});

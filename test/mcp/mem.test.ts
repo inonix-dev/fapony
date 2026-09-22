@@ -16,8 +16,8 @@ import {
   memFind,
   toolMemClose,
   toolMemFind,
-} from "../../src/mcp/tools/mem.js";
-import { parseToolResult } from "../../src/mcp/types.js";
+} from "../../src/adapters/mcp/tools/mem.js";
+import { parseToolResult } from "../../src/adapters/mcp/types.js";
 
 function writeLog(dir: string, rows: object[]): string {
   const memDir = join(dir, ".fapony", ".memory");

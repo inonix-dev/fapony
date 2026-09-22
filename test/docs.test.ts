@@ -9,7 +9,7 @@
 import assert from "node:assert";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { REGIME_CODES } from "../src/mcp/types.js";
+import { REGIME_CODES } from "../src/adapters/mcp/types.js";
 
 const root = join(import.meta.dir, "..");
 

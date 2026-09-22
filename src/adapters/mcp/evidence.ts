@@ -23,8 +23,8 @@ import {
   evidenceFile,
   FAPONY_DIR,
   safetyDeny,
-} from "../db/index.js";
-import { assertSafe } from "../safety.js";
+} from "../../db/index.js";
+import { assertSafe } from "../../safety.js";
 import type { EvidenceItem, EvidenceStatus } from "./primitives.js";
 
 // --- Config shape (.fapony/evidence.json by default, paths.evidenceFile to move it) ---

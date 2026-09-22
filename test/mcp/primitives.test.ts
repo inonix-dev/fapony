@@ -4,12 +4,12 @@ import assert from "node:assert";
 import type {
   EvidenceItem,
   VerificationReport,
-} from "../../src/mcp/primitives.js";
+} from "../../src/adapters/mcp/primitives.js";
 import {
   computeEvidenceSummary,
   EVIDENCE_STATUSES,
   renderReportText,
-} from "../../src/mcp/primitives.js";
+} from "../../src/adapters/mcp/primitives.js";
 
 // --- EVIDENCE_STATUSES ---
 

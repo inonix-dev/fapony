@@ -5,15 +5,15 @@ import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { toolHandoffCheck } from "../../src/mcp/tools/check.js";
-import { toolHandoffCollect } from "../../src/mcp/tools/collect.js";
+import { toolHandoffCheck } from "../../src/adapters/mcp/tools/check.js";
+import { toolHandoffCollect } from "../../src/adapters/mcp/tools/collect.js";
 import {
   errorResult,
   jsonResult,
   parseToolResult,
   REASON_CODES,
   REGIME_CODES,
-} from "../../src/mcp/types.js";
+} from "../../src/adapters/mcp/types.js";
 import { withTempRepo } from "./helpers.js";
 
 // --- Utility function tests ---

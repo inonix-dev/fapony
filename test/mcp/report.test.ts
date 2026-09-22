@@ -1,10 +1,10 @@
 // test/mcp/report.test.ts — tests for verification_report tool
 
 import assert from "node:assert";
+import { toolVerificationReport } from "../../src/adapters/mcp/tools/report.js";
+import { parseToolResult } from "../../src/adapters/mcp/types.js";
 import { newRun, openDb } from "../../src/db/index.js";
 import { gateOnce } from "../../src/gate.js";
-import { toolVerificationReport } from "../../src/mcp/tools/report.js";
-import { parseToolResult } from "../../src/mcp/types.js";
 import { withTmpDb } from "../helpers.js";
 
 export function testVerificationReportMissingArgs(): void {
@@ -93,7 +93,7 @@ export function testVerificationReportToolCount(): void {
   // calls toolVerificationReport directly), but the MCP schemas cost every
   // session of every client and nothing called them. Guard the boundary.
   const { TOOLS } =
-    require("../../src/mcp/tools/index.js") as typeof import("../../src/mcp/tools/index.js");
+    require("../../src/adapters/mcp/tools/index.js") as typeof import("../../src/adapters/mcp/tools/index.js");
   const names = TOOLS.map((t: { name: string }) => t.name);
   for (const gone of [
     "verification_report",

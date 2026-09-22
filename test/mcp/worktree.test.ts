@@ -4,7 +4,7 @@ import assert from "node:assert";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveWorktreeArg } from "../../src/mcp/worktree.js";
+import { resolveWorktreeArg } from "../../src/adapters/mcp/worktree.js";
 
 function withConfig(worktrees: Record<string, string>, fn: () => void): void {
   const oldEnv = process.env.FAPONY_CONFIG;

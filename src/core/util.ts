@@ -43,6 +43,18 @@ export function isAffirmative(answer: string): boolean {
   return normalized === "y" || normalized === "yes";
 }
 
+// --- Output capping ---
+
+// Keep the head, always say how much was cut — a silent cut is
+// indistinguishable from "that was everything".
+export function capLines(lines: string[], cap: number, what: string): string[] {
+  if (lines.length <= cap) return lines;
+  const rest = lines.length - (cap - 1);
+  const kept = lines.slice(0, cap - 1);
+  kept.push(`… +${rest} more ${what}`);
+  return kept;
+}
+
 // --- Recursive directory walker ---
 
 import { readdirSync } from "node:fs";
