@@ -18,7 +18,7 @@
     "coding-agent"
   ],
   "bin": {
-    "fapony": "./fapony.ts"
+    "fapony": "fapony.ts"
   },
   "files": [
     "fapony.ts",
