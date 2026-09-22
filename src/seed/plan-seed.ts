@@ -35,7 +35,6 @@ import {
 } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { collectSourceFiles, isSkippedDir, SCAN_EXTS } from "../analyze.js";
-import { computeModelFit } from "../context/projectHealth.js";
 import {
   CONFIG_FILENAME,
   type Config,
@@ -46,7 +45,6 @@ import {
 } from "../core/config.js";
 import { extractExports } from "../map.js";
 import { readRecentMemDecisions } from "../memory.js";
-import { getStatsData } from "../stats/data.js";
 import { capLines, execGit, SIG_MAX } from "./primitives.js";
 
 // One chunk = one module's signatures — past ~40 lines a module is its own
@@ -191,7 +189,12 @@ function listExistingPlans(
   return capLines(items, MAX_PLAN_LIST, "plans");
 }
 
-// --- Context (fapony): mem decisions + model fit + existing in scope ---
+// --- Context (fapony): mem decisions + existing in scope ---
+//
+// No ledger-ranking line here (PLAN-seed-and-surface chunk 6): the ledger is
+// frozen and Positioning rule 2 forbids cross-model ranking claims, so a
+// seeded pointer at it teaches the reader to cite what cannot be cited.
+// computeModelFit() itself stays — `fapony stats` reads it.
 
 // One line per scope file naming its exports — `src/debt/scan.ts —
 // scanDebt() · DebtHit`. Files with no exports (or unreadable) are skipped:
@@ -243,17 +246,6 @@ function renderContextFapony(worktree: string): string {
           )
           .join(" · ")}`
       : "- Decisions on record (mem): _(none — no mem log or empty)_",
-  );
-  const fits = computeModelFit(getStatsData().byRegime, worktree);
-  lines.push(
-    fits.length > 0
-      ? `- Model fit (ledger, min N=5): ${fits
-          .map(
-            (f) =>
-              `${f.regime} → ${f.model} (N=${f.gates}, fail ${(f.failRate * 100).toFixed(0)}%)`,
-          )
-          .join(" · ")}`
-      : "- Model fit: _(not enough graded history yet)_",
   );
   return lines.join("\n");
 }
