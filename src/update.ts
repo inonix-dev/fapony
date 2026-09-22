@@ -29,6 +29,24 @@ function defaultInstall(): void {
   execSync("bun install", { cwd: ROOT, stdio: "pipe", timeout: 300_000 });
 }
 
+/** argv for the spawned plugin refresh — exported so tests can pin the flags:
+ *  a wrong flag fails silently (the child would just do a full install and
+ *  rewrite opencode.json, the exact bug `--plugins-only` exists to prevent). */
+export function refreshArgv(files: string[]): string[] {
+  const argv = [
+    join(ROOT, "fapony.ts"),
+    "install",
+    "--platform",
+    "opencode",
+    // Plugins only: a refresh touches fapony-owned plugin files, never the
+    // user's opencode.json (rule 6c).
+    "--plugins-only",
+  ];
+  // Opt-in plugin: refresh it when the user installed it, never create it.
+  if (files.includes("fapony-git-autonomy.ts")) argv.push("--git-autonomy");
+  return argv;
+}
+
 /**
  * Refresh OpenCode's generated plugin bodies after the pull.
  *
@@ -37,24 +55,22 @@ function defaultInstall(): void {
  * them current. Spawning a *fresh* process is the whole point: this one already
  * loaded the pre-pull templates, so calling the installer in-process would
  * rewrite the old body — the exact bug this exists to fix. `process.execPath`
- * is the bun running fapony, so no PATH dependency. Best-effort: a refresh must
- * never fail an update.
+ * is the bun running fapony, so no PATH dependency. Runs `--plugins-only`, so
+ * the refresh never reads or writes opencode.json or the skills symlink.
+ * Best-effort: a refresh must never fail an update.
  */
 function defaultRefreshPlugins(): void {
   const getHome = (): string => homedir();
   const files = opencodePluginFiles(getHome);
   if (files.length === 0) return;
   console.log("\n  Refreshing OpenCode plugins...");
-  const argv = [join(ROOT, "fapony.ts"), "install", "--platform", "opencode"];
-  // Opt-in plugin: refresh it when the user installed it, never create it.
-  if (files.includes("fapony-git-autonomy.ts")) argv.push("--git-autonomy");
-  const r = spawnSync(process.execPath, argv, {
+  const r = spawnSync(process.execPath, refreshArgv(files), {
     stdio: "pipe",
     timeout: 30_000,
   });
   if (r.error || r.status !== 0) {
     console.log(
-      "  ⚠  plugin refresh failed — run manually: fapony install --platform opencode",
+      "  ⚠  plugin refresh failed — run manually: fapony install --platform opencode --plugins-only",
     );
   }
 }

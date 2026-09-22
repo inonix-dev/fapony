@@ -90,6 +90,11 @@ function isConfigured(mcp: Record<string, unknown> | undefined): boolean {
 export interface OpencodeInstallOpts {
   /** Opt-in only: write the git-autonomy rewrite plugin. Never default. */
   gitAutonomy?: boolean;
+  /** Refresh only the generated plugin bodies — skip the opencode.json write
+   *  and the skills symlink entirely. This is `fapony update`'s post-pull
+   *  refresh: it must touch only fapony-owned plugin files, never the user's
+   *  config (rule 6c — overwriting what exists = ask first, or refuse). */
+  pluginsOnly?: boolean;
 }
 
 export function cmdInstallOpencode(
@@ -107,6 +112,13 @@ export function cmdInstallOpencode(
     installSessionStartPlugin(dryRun, getHome);
     if (opts.gitAutonomy) installGitAutonomyPlugin(dryRun, getHome);
   };
+
+  // Refresh path: plugin bodies only — returns before findOpencodeConfig, so
+  // neither opencode.json nor the skills symlink is read or written.
+  if (opts.pluginsOnly) {
+    installPlugins();
+    return;
+  }
 
   const configPath = findOpencodeConfig(getHome);
   let before: Record<string, unknown>;

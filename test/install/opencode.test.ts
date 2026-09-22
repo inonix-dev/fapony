@@ -17,6 +17,7 @@ import {
   commitHintPluginSource,
   INSTALL_ROOT,
   opencodePluginFiles,
+  readHintPluginSource,
   sessionStartPluginSource,
 } from "../../src/install.js";
 import {
@@ -595,4 +596,69 @@ test("testOpencodePluginFiles", () => {
     );
   });
   console.log("  ✓ opencodePluginFiles lists fapony plugins, ignores foreign");
+});
+
+// --- plugins-only: the `fapony update` refresh must never touch user config ---
+
+test("testInstallOpencodePluginsOnlyLeavesConfigAlone", () => {
+  withTempHome((home) => {
+    const dir = join(home, ".config", "opencode");
+    mkdirSync(join(dir, "plugins"), { recursive: true });
+    const configPath = join(dir, "opencode.jsonc");
+    // Comments + a custom command: both must survive byte-for-byte.
+    const original = `{
+  // hand tuned — must survive a refresh
+  "theme": "tokyonight",
+  "mcp": {
+    "fapony": { "type": "local", "command": ["/custom/bin/bun", "run", "/x.ts", "mcp"] }
+  }
+}
+`;
+    writeFileSync(configPath, original);
+    const readHint = join(dir, "plugins", "fapony-read-hint.ts");
+    writeFileSync(
+      readHint,
+      "// stale\nexport const FaponyReadHint = async () => ({});\n",
+    );
+
+    cmdInstallOpencode(false, { homedir: () => home }, { pluginsOnly: true });
+
+    assert.equal(
+      readFileSync(configPath, "utf-8"),
+      original,
+      "plugins-only must never rewrite opencode.json(c)",
+    );
+    assert.equal(
+      readFileSync(readHint, "utf-8"),
+      readHintPluginSource(INSTALL_ROOT),
+      "plugins-only must still refresh our own stale plugin body",
+    );
+    assert.ok(
+      !existsSync(claudeSkillsDir(() => home)),
+      "plugins-only must not link skills either",
+    );
+  });
+  console.log(
+    "  ✓ install opencode --plugins-only → config byte-identical, plugin refreshed",
+  );
+});
+
+test("testInstallOpencodePluginsOnlyCreatesNoConfig", () => {
+  withTempHome((home) => {
+    // No opencode config at all: plugins-only must not create one.
+    cmdInstallOpencode(false, { homedir: () => home }, { pluginsOnly: true });
+    assert.ok(
+      !existsSync(join(home, ".config", "opencode", "opencode.json")),
+      "plugins-only must never create opencode.json",
+    );
+    assert.ok(
+      existsSync(
+        join(home, ".config", "opencode", "plugins", "fapony-read-hint.ts"),
+      ),
+      "plugins-only must still write the plugin bodies",
+    );
+  });
+  console.log(
+    "  ✓ install opencode --plugins-only → no config created, plugins written",
+  );
 });

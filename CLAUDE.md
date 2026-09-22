@@ -155,7 +155,8 @@ the only inject channel `event` hooks lack), not at session creation. · **OpenC
 are baked files** — every other client writes a `fapony hook-*` command resolved at run time, so a `git pull`
 refreshes it and only a `*PluginSource` edit needs work. The installer **refreshes our own stale plugin in place**
 (ownership = the exported name it carries; a foreign file is still refused), so editing `*PluginSource` needs
-nothing manual: `fapony update` re-runs the installer in a fresh process after the pull, and plain
+nothing manual: `fapony update` re-runs the installer in a fresh process after the pull — with `--plugins-only`,
+so the refresh touches fapony's own plugin files and never your `opencode.json` — and plain
 `fapony install --platform opencode` does it too. In-process is never enough — the running `fapony update` loaded
 the pre-pull templates, so it must spawn (`src/update.ts` `defaultRefreshPlugins`).
 
