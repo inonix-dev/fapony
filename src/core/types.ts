@@ -70,18 +70,7 @@ export interface UsageDetail {
   steps: number;
   /** Per-session breakdown (SQL-aggregated, never raw part rows). */
   by_session: SessionDetail[];
-  /**
-   * Files read across 2+ sessions in this window and never edited/written —
-   * candidates for pasting into CLAUDE.md instead of re-reading every
-   * session. Top 20 by session count. Needs a wide `since` window (many
-   * sessions) before the pattern means anything — noise below that.
-   */
   stale_reads?: StaleReadFile[];
-  /**
-   * Step-token sums are NOT reported: per-step tokens overlap (each step
-   * carries the full context window), so SUM(step tokens) >> session tokens.
-   * Verified on real data — see testSessionDetailStepTokensNotSummed.
-   */
   note: string;
   /** Per-step timing/token/latency signal — present only when detail:true was requested. */
   timing?: StepTimingSummary | null;
@@ -96,21 +85,9 @@ export interface PassiveUsageResult {
   total_cost: number;
   session_count: number;
   by_model: ModelBreakdown[];
-  /** Present only when detail:true was requested (additive, default absent). */
   detail?: UsageDetail | null;
-  /** ZCode sessions, when available. Absent when ZCode DB not found. */
   zcode?: PassiveUsageResult | null;
-  /** Claude Code sessions, when available. Absent when projects dir not found. */
   claude_code?: PassiveUsageResult | null;
-  /**
-   * Why this read came back short, when it did. Absent on success.
-   *
-   * Zeros with no `error` mean "no sessions matched"; zeros WITH an error mean
-   * "could not read the client's log" — most often schema drift after the
-   * client updated. The two used to be indistinguishable: a renamed column
-   * made the query throw, the catch-all swallowed it, and the numbers just
-   * quietly went missing.
-   */
   error?: string;
 }
 
@@ -139,3 +116,27 @@ export const STEP_TOKENS_NOTE =
 
 export const TIMING_NOTE =
   "timing from embedded part fields only (data.time/data.state.time/step-finish tokens) with row-timestamp fallback; averages, never raw I/O";
+
+// --- Tool result types (PLAN-lib-layer chunk 2d) ---
+
+export interface ToolResult {
+  content: { type: "text"; text: string }[];
+  isError?: boolean;
+}
+
+export function jsonResult(data: unknown): ToolResult {
+  return {
+    content: [{ type: "text", text: JSON.stringify(data) }],
+  };
+}
+
+export function errorResult(message: string): ToolResult {
+  return {
+    content: [{ type: "text", text: JSON.stringify({ error: message }) }],
+    isError: true,
+  };
+}
+
+export function parseToolResult(result: ToolResult): unknown {
+  return JSON.parse(result.content[0].text);
+}
