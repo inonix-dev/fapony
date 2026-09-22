@@ -93,7 +93,8 @@ test("testClaimMemoryFailGracefully", () => {
 });
 
 // Regression: execSync must have timeout so hanging scripts don't block the process.
-// "sleep 999" should complete in ~15s (timeout), not 999s (the sleep duration).
+// "sleep 999" should complete in ~1s (injected timeout), not 999s (the sleep duration).
+// Production default stays 15s — the param exists so this test doesn't pay it.
 test("testClaimMemoryTimeout", () => {
   const hangingConfig: Config = {
     ...baseConfig(),
@@ -105,12 +106,12 @@ test("testClaimMemoryTimeout", () => {
   };
 
   const start = Date.now();
-  const result = claimMemory(hangingConfig, "/tmp", "test-id");
+  const result = claimMemory(hangingConfig, "/tmp", "test-id", 1_000);
   const elapsed = Date.now() - start;
 
   assert.equal(result, false, "should return false for hanging command");
-  // Should complete in ~15s (timeout), not 999s (the sleep)
-  if (elapsed > 20_000) {
+  // Should complete in ~1s (timeout), not 999s (the sleep)
+  if (elapsed > 5_000) {
     throw new Error(
       `timeout test took too long: ${elapsed}ms — execSync may be hanging`,
     );

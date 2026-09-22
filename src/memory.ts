@@ -74,6 +74,7 @@ export function claimMemory(
   config: Config,
   worktree: string,
   memId: string,
+  timeoutMs = 15_000,
 ): boolean {
   const mem = resolveMemoryConfig(config, worktree);
   if (!mem) return false;
@@ -83,7 +84,7 @@ export function claimMemory(
     execSync(cmd.join(" "), {
       cwd: worktree,
       stdio: ["pipe", "pipe", "pipe"],
-      timeout: 15_000,
+      timeout: timeoutMs,
     });
     return true;
   } catch {
