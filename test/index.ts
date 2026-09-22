@@ -438,6 +438,14 @@ import {
   testPlanSeedWritesPlan,
 } from "./plan-seed.test.js";
 import {
+  testCmdPlanSweepInProcess,
+  testPlanSweepAcceptsRepoRelativePath,
+  testPlanSweepApplyEndToEnd,
+  testRewriteMarkdownLinksInbound,
+  testRewriteMovedFileLinksNestedLayout,
+  testRewriteMovedFileLinksSiblingLayout,
+} from "./plan-sweep.test.js";
+import {
   testCalcCostCacheWriteFallsBackToInput,
   testCalcCostUsesCacheReadRate,
   testFetchPriceTableStub,
@@ -674,6 +682,12 @@ export async function cmdTest(): Promise<void> {
   testPlanSeedSingleFileScope();
   testPlanSeedOverlapScopeDedup();
   testPlanSeedConfigFallback();
+  testRewriteMovedFileLinksSiblingLayout();
+  testRewriteMovedFileLinksNestedLayout();
+  testRewriteMarkdownLinksInbound();
+  testPlanSweepApplyEndToEnd();
+  testPlanSweepAcceptsRepoRelativePath();
+  testCmdPlanSweepInProcess();
   testReviewSeedScopeFlags();
   testReviewSeedStructure();
   testReviewSeedRenames();
