@@ -290,7 +290,7 @@ plan/spec templates, และ skill ทั้งหมด
 3. **push ได้เฉพาะ branch ที่ทำงานอยู่ — ห้ามแตะ `main` ห้าม `--force`/`--force-with-lease`**
    agent เปิด PR ได้ กด merge เองไม่ได้
 4. **Commit แยก concern** — one commit per feature/area · **งานที่จบแล้ว commit เลย ห้ามถามก่อน**
-   · **จบ = typecheck ผ่าน + `bun fapony.ts test` ผ่าน** ถ้ายังไม่ผ่านคือยังไม่จบ อย่า commit ทับ
+   · **จบ = typecheck ผ่าน + `bun run test` ผ่าน** (`bun test` เปล่า ๆ จะ fail ที่ testClaimMemoryTimeout เพราะ default timeout 5s — script ใส่ `--timeout 20000` ไว้แล้ว) ถ้ายังไม่ผ่านคือยังไม่จบ อย่า commit ทับ
 5. **assertSafe() ต้องเรียกกับทุก shell command** ที่ spawn จาก config (memory/evidence/install)
    รวมถึงที่มาจาก template
 6. **fapony เขียนไฟล์ในเวิร์กทรีเป้าหมายได้ ถ้าเจ้าของสั่ง** — แทนด้วยสามข้อที่เช็คได้:
