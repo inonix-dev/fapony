@@ -30,6 +30,7 @@
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
     "test": "bun test --timeout 20000",
+    "test:changed": "bun test --timeout 20000 --changed",
     "knip": "bunx knip@6 --exclude types,nsTypes || true",
     "check": "bun run lint && bun run typecheck && bun test --timeout 20000",
     "prepublishOnly": "bash scripts/smoke-publish.sh",
