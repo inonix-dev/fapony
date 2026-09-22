@@ -472,7 +472,7 @@ fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]
 fapony report <run-id>  ·  fapony report-web [file]
 # ── setup ──
 fapony init <path>  ·  fapony install [--all|--platform <name>|--dry-run]  ·  fapony setup
-fapony update  ·  fapony telemetry show|send  ·  fapony test
+fapony update  ·  fapony telemetry show|send
 ```
 
 **`review-seed --files` คือ lookup ตอน *execute* ไม่ใช่แค่ "Before" ของ review-pony** — โชว์

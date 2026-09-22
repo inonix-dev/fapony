@@ -508,7 +508,6 @@ fapony install --dry-run                  # show what would happen without writi
 fapony setup                             # interactive wizard: config + scaffold in one step
 fapony update                            # self-update via git pull
 fapony telemetry show|send               # opt-in only, default off — see https://github.com/kire21b/fapony/blob/main/TELEMETRY.md
-fapony test                              # self-check
 ```
 
 ## Config

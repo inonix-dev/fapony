@@ -206,7 +206,7 @@ export async function cmdUpdate(deps: UpdateDeps = {}): Promise<void> {
   │  Update complete!                        │
   │                                          │
   │  Version: ${newVersion.padEnd(31)}│
-  │  Run "fapony test" to verify.            │
+  │  Run "bun run test" to verify.           │
   └──────────────────────────────────────────┘
 `);
 }

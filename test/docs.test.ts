@@ -94,3 +94,45 @@ test("testAddingFakeCommandFailsDocsCheck", () => {
   assert.ok(!read("CLAUDE.md").includes(fake));
   assert.ok(!read("README.md").includes(fake));
 });
+
+/**
+ * Reverse direction: every `fapony <name>` inside the CLI fences must exist
+ * in src/commands.ts. The forward guard (table → docs) cannot catch a phantom
+ * the docs advertise but the code never had — `fapony test` survived it
+ * exactly this way (mucplzjo: removed from cli.ts in 2ddd61e, docs left
+ * behind). Scoped to fenced blocks under the CLI sections so prose and
+ * historical mentions (e.g. `plan-list` in MCP history) don't trip it.
+ */
+function cliFenceCommands(doc: string, header: string): string[] {
+  const lines = doc.split("\n");
+  const start = lines.findIndex((l) => l.trim() === header);
+  assert.ok(start >= 0, `${header} section not found`);
+  let end = lines.findIndex((l, i) => i > start && l.startsWith("## "));
+  if (end < 0) end = lines.length;
+  const names: string[] = [];
+  let inFence = false;
+  for (const line of lines.slice(start, end)) {
+    if (line.trimStart().startsWith("```")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (!inFence) continue;
+    for (const m of line.matchAll(/fapony\s+([a-z][a-z-]*)/g)) names.push(m[1]);
+  }
+  return names;
+}
+
+test("testDocsAdvertiseNoPhantomCommands", () => {
+  const known = new Set(COMMANDS.map((c) => c.name));
+  const found = [
+    ...cliFenceCommands(read("CLAUDE.md"), "## CLI Commands"),
+    ...cliFenceCommands(read("README.md"), "## CLI"),
+  ];
+  assert.ok(found.length > 0, "expected fapony <cmd> mentions in CLI fences");
+  for (const n of found) {
+    assert.ok(
+      known.has(n),
+      `phantom command: docs advertise "fapony ${n}" but src/commands.ts has no such command (mucplzjo)`,
+    );
+  }
+});
