@@ -32,8 +32,19 @@ import {
 } from "./hooks/index.js";
 import { cmdMcp } from "./mcp/transport.js";
 
+export function printUsage(): void {
+  console.log(
+    "usage: fapony <setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|hook-edit-hint|hook-mv-guard|hook-session-start> [args]",
+  );
+}
+
 export async function cliMain(): Promise<void> {
   const [cmd, ...a] = process.argv.slice(2);
+
+  if (!cmd || cmd === "--help" || cmd === "-h") {
+    printUsage();
+    return;
+  }
 
   if (cmd === "analyze") {
     cmdAnalyze(a);
