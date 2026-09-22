@@ -6,6 +6,7 @@
 // from this path.
 
 export {
+  bugSignalFromTranscript,
   COMMIT_HINT_MIN_COMMITS,
   type CommitHintInput,
   type ContextLineData,

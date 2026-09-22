@@ -64,6 +64,7 @@ export {
   sessionStartContext,
 } from "./session-start.js";
 export {
+  bugSignalFromTranscript,
   cmdHookStop,
   cursorTranscriptPath,
   decideStop,

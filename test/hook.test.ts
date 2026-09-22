@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  bugSignalFromTranscript,
   COMMIT_HINT_MIN_COMMITS,
   capContext,
   commitHintFor,
@@ -411,6 +412,362 @@ test("testDecideStopAllowsEveryUnknown", () => {
   for (const [label, opts] of allowed) {
     assert.strictEqual(decideStop(opts), null, `should allow: ${label}`);
   }
+});
+
+// --- Bug-signal block (PLAN-bug-row-checker) ---
+
+test("testDecideStopBlocksOnBugSignalWithoutRow", () => {
+  // Agent announced a bug but filed no kind:bug row → block.
+  const reason = decideStop({
+    ...base,
+    commits: 0,
+    bugSignal: "เจอบั๊ก",
+    bugRowSinceStart: false,
+  });
+  assert.ok(reason, "bug signal without bug row must block");
+  assert.ok(reason.includes("เจอบั๊ก"), "reason names the matched word");
+  assert.ok(reason.includes("kind:bug"), "reason specifies kind:bug");
+  assert.ok(
+    reason.includes("fapony mem add bug"),
+    "reason names the bug-specific command",
+  );
+});
+
+test("testDecideStopAllowsBugSignalWithRow", () => {
+  // Agent announced a bug AND filed a bug row → allow.
+  assert.strictEqual(
+    decideStop({
+      ...base,
+      commits: 0,
+      bugSignal: "เจอบั๊ก",
+      bugRowSinceStart: true,
+    }),
+    null,
+    "bug signal with bug row must allow",
+  );
+});
+
+test("testDecideStopBugBlockIndependentOfCommits", () => {
+  // Bug block fires even when no commits landed — the two conditions are
+  // independent (session may plan to have zero commits).
+  const withCommits = decideStop({
+    ...base,
+    commits: 3,
+    bugSignal: "เจอบั๊ก",
+    bugRowSinceStart: false,
+  });
+  const withoutCommits = decideStop({
+    ...base,
+    commits: 0,
+    bugSignal: "เจอบั๊ก",
+    bugRowSinceStart: false,
+  });
+  assert.ok(withCommits, "blocks with commits");
+  assert.ok(withoutCommits, "blocks without commits too");
+});
+
+test("testDecideStopNoBugSignalAllows", () => {
+  // No bug signal → bug block doesn't fire (falls through to commit logic).
+  assert.strictEqual(
+    decideStop({
+      ...base,
+      commits: 0,
+      bugSignal: null,
+      bugRowSinceStart: false,
+    }),
+    null,
+    "no bug signal + no commits = allow",
+  );
+  assert.strictEqual(
+    decideStop({ ...base, commits: 0 }),
+    null,
+    "undefined bug signal = allow",
+  );
+});
+
+test("testDecideStopBugBlockMessageShort", () => {
+  // Bug block message must be ≤ 6 lines (plan §7).
+  const reason = decideStop({
+    ...base,
+    commits: 0,
+    bugSignal: "เจอบั๊ก",
+    bugRowSinceStart: false,
+  });
+  assert.ok(reason);
+  assert.ok(reason.split("\n").length <= 6, "bug block message stays short");
+});
+
+test("testDecideStopCommitBlockWidensWithBugSignal", () => {
+  // When commits fire AND a bug marker exists (but a bug row was filed, so the
+  // bug block was suppressed), the commit block message includes a nudge to use
+  // kind:bug instead of decision.
+  const reason = decideStop({
+    ...base,
+    commits: 2,
+    bugSignal: "เจอบั๊ก",
+    bugRowSinceStart: true, // bug row exists → bug block suppressed
+    memLastTs: "2026-09-15T00:00:00Z", // stale → commit block fires
+  });
+  assert.ok(reason, "commit block must fire");
+  assert.ok(
+    reason.includes("kind:bug"),
+    "commit block nudge must mention kind:bug",
+  );
+  assert.ok(
+    reason.includes("เจอบั๊ก"),
+    "commit block nudge must name the marker word",
+  );
+  assert.ok(
+    reason.includes("commit(s) landed"),
+    "must still carry the commit block header",
+  );
+});
+
+test("testDecideStopCommitBlockNoWidenWithoutBugSignal", () => {
+  // Without a bug signal, the commit block message stays unchanged.
+  const reason = decideStop({
+    ...base,
+    commits: 1,
+    memLastTs: "2026-09-15T00:00:00Z",
+  });
+  assert.ok(reason);
+  assert.ok(
+    !reason.includes("kind:bug"),
+    "commit block without bug signal must not mention kind:bug",
+  );
+});
+
+test("testStopBlockedBeforeBugSeparateFromCommit", () => {
+  // Bug blocks and commit blocks use separate dedup keys — a bug block
+  // must not consume the commit block's quota.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-sb-bug-"));
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = dir;
+  try {
+    const session = "/tmp/transcripts/sess-bug.jsonl";
+    // First commit block goes through
+    assert.equal(
+      stopBlockedBefore(session, "/repo"),
+      false,
+      "first commit block",
+    );
+    // Second commit block is suppressed
+    assert.equal(
+      stopBlockedBefore(session, "/repo"),
+      true,
+      "second commit block suppressed",
+    );
+    // But bug block still fires (separate kind)
+    assert.equal(
+      stopBlockedBefore(session, "/repo", "bug"),
+      false,
+      "bug block not consumed by commit",
+    );
+    // Bug block dedupes on its own
+    assert.equal(
+      stopBlockedBefore(session, "/repo", "bug"),
+      true,
+      "second bug block suppressed",
+    );
+    // A different worktree still blocks for both kinds
+    assert.equal(
+      stopBlockedBefore(session, "/repo/b"),
+      false,
+      "different worktree commit block",
+    );
+    assert.equal(
+      stopBlockedBefore(session, "/repo/b", "bug"),
+      false,
+      "different worktree bug block",
+    );
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ bug blocks use separate dedup key from commit blocks");
+});
+
+// --- Transcript scanner (bugSignalFromTranscript) ---
+
+function writeTranscript(
+  dir: string,
+  lines: Record<string, unknown>[],
+): string {
+  const p = join(dir, "transcript.jsonl");
+  writeFileSync(p, `${lines.map((l) => JSON.stringify(l)).join("\n")}\n`);
+  return p;
+}
+
+test("testBugSignalFromTranscriptFindsMarker", () => {
+  withTempRepo((dir) => {
+    const ts = writeTranscript(dir, [
+      {
+        message: {
+          role: "assistant",
+          created_at: "2026-09-22T10:00:00Z",
+          content: [
+            { type: "text", text: "ลอง check แล้ว เจอบั๊กจริงใน totalsRow" },
+          ],
+        },
+      },
+    ]);
+    const signal = bugSignalFromTranscript(
+      ts,
+      Date.parse("2026-09-22T09:00:00Z"),
+    );
+    assert.equal(signal, "เจอบั๊ก", "must find the marker word");
+  });
+  console.log("  ✓ bugSignalFromTranscript finds marker in assistant text");
+});
+
+test("testBugSignalFromTranscriptSkipsOldMessages", () => {
+  withTempRepo((dir) => {
+    const ts = writeTranscript(dir, [
+      {
+        message: {
+          role: "assistant",
+          created_at: "2026-09-21T10:00:00Z", // before since
+          content: [{ type: "text", text: "เจอบั๊กจริงนะ" }],
+        },
+      },
+    ]);
+    const signal = bugSignalFromTranscript(
+      ts,
+      Date.parse("2026-09-22T09:00:00Z"),
+    );
+    assert.strictEqual(signal, null, "old messages must be skipped");
+  });
+  console.log(
+    "  ✓ bugSignalFromTranscript skips messages before session start",
+  );
+});
+
+test("testBugSignalFromTranscriptIgnoresUserMessages", () => {
+  withTempRepo((dir) => {
+    const ts = writeTranscript(dir, [
+      {
+        message: {
+          role: "user",
+          created_at: "2026-09-22T10:00:00Z",
+          content: [{ type: "text", text: "ช่วยเจอบั๊กให้หน่อย" }],
+        },
+      },
+    ]);
+    const signal = bugSignalFromTranscript(
+      ts,
+      Date.parse("2026-09-22T09:00:00Z"),
+    );
+    assert.strictEqual(signal, null, "user messages must be ignored");
+  });
+  console.log("  ✓ bugSignalFromTranscript ignores user messages");
+});
+
+test("testBugSignalFromTranscriptSkipsToolUse", () => {
+  withTempRepo((dir) => {
+    const ts = writeTranscript(dir, [
+      {
+        message: {
+          role: "assistant",
+          created_at: "2026-09-22T10:00:00Z",
+          content: [
+            { type: "tool_use", name: "mem_add", input: { kind: "bug" } },
+          ],
+        },
+      },
+    ]);
+    const signal = bugSignalFromTranscript(
+      ts,
+      Date.parse("2026-09-22T09:00:00Z"),
+    );
+    assert.strictEqual(signal, null, "tool_use content must be skipped");
+  });
+  console.log("  ✓ bugSignalFromTranscript skips tool_use content");
+});
+
+test("testBugSignalFromTranscriptSilentOnMissingFile", () => {
+  const signal = bugSignalFromTranscript(
+    "/tmp/nonexistent-transcript.jsonl",
+    Date.parse("2026-09-22T09:00:00Z"),
+  );
+  assert.strictEqual(signal, null, "missing file must not throw");
+  console.log("  ✓ bugSignalFromTranscript silent on missing file");
+});
+
+test("testBugSignalFromTranscriptSkipsNonAnnouncementWords", () => {
+  withTempRepo((dir) => {
+    const ts = writeTranscript(dir, [
+      {
+        message: {
+          role: "assistant",
+          created_at: "2026-09-22T10:00:00Z",
+          content: [
+            {
+              type: "text",
+              text: "โค้ดมี pre-existing issue ที่ dies silently",
+            },
+          ],
+        },
+      },
+    ]);
+    const signal = bugSignalFromTranscript(
+      ts,
+      Date.parse("2026-09-22T09:00:00Z"),
+    );
+    assert.strictEqual(
+      signal,
+      null,
+      "symptom words (pre-existing, silently) must not trigger",
+    );
+  });
+  console.log("  ✓ bugSignalFromTranscript ignores non-announcement words");
+});
+
+test("testBugSignalFromTranscriptCapsLargeFile", () => {
+  withTempRepo((dir) => {
+    // Create a file > 10MB — scanner must bail out
+    const bigPath = join(dir, "big.jsonl");
+    const pad = "x".repeat(1024);
+    const lines = Array.from({ length: 12000 }, () => pad).join("\n");
+    writeFileSync(bigPath, lines);
+    const signal = bugSignalFromTranscript(bigPath, 0);
+    assert.strictEqual(signal, null, "> 10MB file must be skipped");
+  });
+  console.log("  ✓ bugSignalFromTranscript caps large transcripts at 10MB");
+});
+
+test("testBugBlockKillSwitch", () => {
+  // FAPONY_NO_BUG_BLOCK=1 disables bug-signal detection entirely.
+  withTempRepo((dir) => {
+    const ts = writeTranscript(dir, [
+      {
+        message: {
+          role: "assistant",
+          created_at: "2026-09-22T10:00:00Z",
+          content: [{ type: "text", text: "เจอบั๊กจริงใน totalsRow" }],
+        },
+      },
+    ]);
+    const origKill = process.env.FAPONY_NO_BUG_BLOCK;
+    process.env.FAPONY_NO_BUG_BLOCK = "1";
+    try {
+      bugSignalFromTranscript(ts, Date.parse("2026-09-22T09:00:00Z"));
+      // kill switch only applies in cmdHookStop, not in the pure function.
+      // But decideStop with bugSignal=null (what cmdHookStop passes when kill
+      // switch is on) must allow.
+      const reason = decideStop({
+        ...base,
+        commits: 0,
+        bugSignal: null,
+        bugRowSinceStart: false,
+      });
+      assert.strictEqual(reason, null, "kill switch → no bug block");
+    } finally {
+      if (origKill === undefined) delete process.env.FAPONY_NO_BUG_BLOCK;
+      else process.env.FAPONY_NO_BUG_BLOCK = origKill;
+    }
+  });
+  console.log("  ✓ FAPONY_NO_BUG_BLOCK=1 disables bug-signal block");
 });
 
 test("testUtcStampMatchesSqliteFormat", () => {
