@@ -462,7 +462,11 @@ at open, closed by `review-pony` — deterministic at both ends, no LLM in betwe
 
 ```bash
 # ── core: mem + debt ──
-fapony mem <add|close|find|kickoff|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
+fapony mem add <kind> "<text>" --files f1,f2 [spec.md]
+fapony mem close <id> "<msg>"
+fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]
+fapony mem kickoff [<plan.md>] [--pick <n>]
+fapony mem done | stale | claim | release | synced | plan-sweep | plan-check | rotate
 fapony debt [--id <convention>] [--where <path>]   # which files haven't migrated to a declared convention (live, read-only)
 fapony lint-baseline [--cmd ...] [--diff]   # separate "already red" from "I made it red"
 fapony init-mem                     # delete legacy .memory/ dirs + warn call sites still referencing them (data files untouched)

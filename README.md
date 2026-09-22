@@ -471,7 +471,7 @@ fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--
 # Memory & convention debt
 fapony mem add <kind> "<text>" --files f1,f2 [spec.md]   # append a mem row (decision/bug/note/next/hold)
 fapony mem close <id> "<msg>"              # close a bug
-fapony mem find "<text>"                   # substring-search every row
+fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]  # search mem log
 fapony mem kickoff [<plan.md>]             # open a session + a next-up list
 fapony mem where                           # show the resolved mem dir and which step won
 fapony mem done | stale              # views
