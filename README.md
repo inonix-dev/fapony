@@ -49,11 +49,11 @@ no new grades) ledger — the top of the `n≥5` frontier (`fapony stats --mode 
 
 | model | tokens/pass | quality | n |
 |---|---|---|---|
-| `claude-opus-5` | 22.5M | 3.8 | 10 |
-| `claude-sonnet-5` | 5.6M | 3.5 | 11 |
-| `muse-spark-1.3-contributor-free` | 4.3M | 4.0 | 5 |
+| `mimo-v2.5` | 3.9M | 4.0 | 9 |
+| `deepseek-v4.1-flash` | 2.3M | 3.9 | 19 |
+| `z-ai/glm-5.3-flash` | 1.2M | 3.8 | 9 |
 
-Same quality band, an 8× token spread — the kind of answer a session log can't give (it has tokens,
+Same quality band, a 3.3× token spread — the kind of answer a session log can't give (it has tokens,
 no grades) and a benchmark can't give either (it has grades, not your codebase). One caveat that's
 on you to hold: work isn't randomly assigned to models, so a gap this size is a strong prior, not a
 controlled trial — you likely route easy tasks to the cheap model already. `n≥5` is fapony's own
