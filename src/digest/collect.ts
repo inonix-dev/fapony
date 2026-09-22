@@ -10,11 +10,12 @@ import {
   doneDir,
   type Event,
   loadConfig,
-  openDb,
   planDir,
   type Run,
-} from "../db/index.js";
-import { computeHintImpact, type HintImpact, hintLogPath } from "../hook.js";
+} from "../core/config.js";
+import { type HintImpact, hintLogPath } from "../core/hint-log.js";
+import { openDb } from "../db/store.js";
+import { computeHintImpact } from "../hook.js";
 import { type MemRow, readMemLog } from "../memory.js";
 import { isPassFamily, VERDICT_GRADES } from "../parse.js";
 import { imputeResult, loadPrices } from "../price/index.js";

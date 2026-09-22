@@ -3,7 +3,7 @@
 import { Database } from "bun:sqlite";
 import assert from "node:assert";
 import { rmSync } from "node:fs";
-import { newRun } from "../../src/db/index.js";
+import { newRun } from "../../src/db/store.js";
 import { buildPayload } from "../../src/telemetry.js";
 import {
   createEmptyOpencodeDb,

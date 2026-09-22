@@ -232,6 +232,7 @@ function installClaudeHooks(dryRun: boolean, deps: InstallDeps): void {
   installStopHook(dryRun, deps);
   installReadHintHook(dryRun, deps);
   installEditHintHook(dryRun, deps);
+  installMvGuardHook(dryRun, deps);
   installSessionStartHook(dryRun, deps);
 }
 
@@ -273,6 +274,22 @@ function installEditHintHook(dryRun: boolean, deps: InstallDeps): void {
     matcher: "Edit",
     subcommand: "hook-edit-hint",
     label: "edit hint",
+  });
+}
+
+/**
+ * PreToolUse hook on Bash: denies a raw `git mv` of a plan file into a done/
+ * directory, pointing at `fapony mem plan-sweep --apply` instead — that
+ * command does the link rewrite a plain `git mv` skips. The one fapony hook
+ * that blocks besides Stop; matcher "Bash" keeps the spawn off every other
+ * tool call.
+ */
+function installMvGuardHook(dryRun: boolean, deps: InstallDeps): void {
+  ensureClaudeHook(dryRun, deps, {
+    event: "PreToolUse",
+    matcher: "Bash",
+    subcommand: "hook-mv-guard",
+    label: "plan-mv guard",
   });
 }
 

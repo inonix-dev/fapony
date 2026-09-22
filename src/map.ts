@@ -41,19 +41,36 @@ export interface ExportScan {
   error: string | null;
 }
 
-// --- Parse gate ---
+// --- Parse gate (injectable: default is Bun.Transpiler, no Node fallback —
+// Bun-only is a repo constraint. Pass a custom scanner to extractExports()
+// to reuse this module outside Bun or in tests.) ---
 
-let transpiler: Bun.Transpiler | null = null;
+export interface ExportScanner {
+  scan(source: string): { exports: string[] };
+}
+
+function createBunScanner(): ExportScanner {
+  const transpiler = new Bun.Transpiler({ loader: "tsx" });
+  return {
+    scan: (source) => transpiler.scan(source) as { exports: string[] },
+  };
+}
+
+let defaultScanner: ExportScanner | null = null;
+
+function getDefaultScanner(): ExportScanner {
+  if (!defaultScanner) defaultScanner = createBunScanner();
+  return defaultScanner;
+}
 
 interface ScanResult {
   error: string | null;
   exports: string[];
 }
 
-function scanSource(source: string): ScanResult {
+function scanSource(source: string, scanner: ExportScanner): ScanResult {
   try {
-    if (!transpiler) transpiler = new Bun.Transpiler({ loader: "tsx" });
-    const scanned = transpiler.scan(source) as { exports: string[] };
+    const scanned = scanner.scan(source);
     return { error: null, exports: scanned.exports };
   } catch (e) {
     return {
@@ -150,8 +167,12 @@ function braceNames(
 
 const VAR_DECL_RE = /^export\s+(?:const|let|var)\b/;
 
-export function extractExports(source: string): ExportScan {
-  const scanned = scanSource(source);
+export function extractExports(
+  source: string,
+  scanner?: ExportScanner,
+): ExportScan {
+  const s = scanner ?? getDefaultScanner();
+  const scanned = scanSource(source, s);
   if (scanned.error) return { symbols: [], error: scanned.error };
 
   // Ambient declarations (`export declare ...`) are invisible to scan(), so
@@ -161,7 +182,7 @@ export function extractExports(source: string): ExportScan {
     /^([ \t]*)export\s+declare\s+/gm,
     "$1export ",
   );
-  const strippedScan = scanSource(stripped);
+  const strippedScan = scanSource(stripped, s);
   const valid = new Set([
     ...scanned.exports,
     ...(strippedScan.error ? [] : strippedScan.exports),

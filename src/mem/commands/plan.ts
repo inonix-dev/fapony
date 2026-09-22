@@ -2,8 +2,9 @@
 // rationale: moving by hand = chasing relative links yourself (in the file + files that link to it) → the step gets skipped often
 // no arg = report only (safe, shows every kickoff/stale run)
 // <file.md> = check a single file, is it ready to move
-// <file.md> --apply = git mv + fix markdown links inside the file + fix inbound links from other files in plan/
-//                      + warn about plain-text mentions (detect-only, no auto-fix)
+// <file.md> --apply = git mv + fix markdown links inside the file + fix inbound links from every .md under .fapony/
+//                      (plan/ + done/ + spec/) + warn about plain-text mentions (detect-only, no auto-fix)
+//                      + warn about tracked files outside .fapony/ that mention the filename (detect-only)
 
 import {
   existsSync,
@@ -12,10 +13,20 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 
 import { openRows } from "../selectors.js";
-import { doneDir, memCmd, nextId, planDir, put, rel, rows } from "../store.js";
+import {
+  doneDir,
+  memCmd,
+  nextId,
+  planBase,
+  planDir,
+  put,
+  rel,
+  root,
+  rows,
+} from "../store.js";
 
 const SHIPPED = /^>\s*✅/m;
 const FRONT = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -52,6 +63,11 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // the file moved dir (same content) — an old markdown link meant the old path relative to oldDir, must re-relativize via newDir
 // resolve from newDir (where the file is now) — if the target also moved to the same dir → plain filename,
 // if the target stayed in oldDir → ../target (both correct)
+//
+// Runs on EVERY move, including the standard sibling layout (plan/ → done/ beside
+// it): same depth is not the same directory, so a sibling link like
+// [other](PLAN-other.md) breaks unless rewritten to ../plan/PLAN-other.md.
+// Skipping this pass left exactly that dangling (mtjn3ldk).
 // pass 1 only — fix only [text](target) markdown links, do not touch plain text
 export const rewriteMovedFileLinks = (
   file: string,
@@ -65,11 +81,17 @@ export const rewriteMovedFileLinks = (
     const [target, anchor] = t.split("#");
     if (!target || /^(https?:|mailto:|\/)/.test(target)) return m;
     // resolve from where the file IS now (newDir); if target doesn't exist
-    // there, fall back to oldDir (target stayed in original location)
+    // there, fall back to oldDir (target stayed in original location).
+    // If it exists in neither, the link is already broken — leave it for
+    // plan-check instead of fabricating a new broken path.
     const inNew = resolve(newDir, target);
-    const abs = existsSync(inNew) ? inNew : resolve(oldDir, target);
+    const inOld = resolve(oldDir, target);
+    const abs = existsSync(inNew) ? inNew : existsSync(inOld) ? inOld : null;
+    if (!abs) return m;
+    const next = `](${relative(newDir, abs) || "."}${anchor ? `#${anchor}` : ""})`;
+    if (next === m) return m;
     n++;
-    return `](${relative(newDir, abs) || "."}${anchor ? `#${anchor}` : ""})`;
+    return next;
   });
 
   if (n) writeFileSync(file, out);
@@ -172,11 +194,20 @@ export const cmdPlanSweep = (a: string[]) => {
     return;
   }
 
-  const src = join(dir, target);
-  if (!existsSync(src)) {
-    console.error(`${rel(src)} not found`);
+  // target arrives as a bare name (PLAN-x.md, the SKILL form) or a repo-relative
+  // path (.fapony/plan/PLAN-x.md, the example form) — both must resolve, so try
+  // planDir first, then the repo root, then the bare basename as a last resort.
+  const src = [
+    join(dir, target),
+    join(root, target),
+    join(dir, basename(target)),
+  ].find((p) => existsSync(p));
+  if (!src) {
+    console.error(`${target} not found (looked in ${rel(dir)}/ and repo root)`);
     process.exit(1);
   }
+  const name = basename(src);
+  const srcDir = dirname(src);
   const shipped = hasShippedHeader(src);
   if (!apply) {
     console.log(
@@ -191,21 +222,21 @@ export const cmdPlanSweep = (a: string[]) => {
   // but then run --apply directly and skip everything → risky when an agent ships automatically with no human check, so hard block
   if (!shipped && !process.env.MEM_FORCE) {
     console.error(
-      `${target}: no ✅ shipped header at the top — refusing to move (MEM_FORCE=1 to override)`,
+      `${name}: no ✅ shipped header at the top — refusing to move (MEM_FORCE=1 to override)`,
     );
     process.exit(1);
   }
-  const openSpec = `${rel(dir)}/${target}`;
+  const openSpec = rel(src);
   const openN = openRows(rows()).filter((r) => r.spec === openSpec);
   if (openN.length && !process.env.MEM_FORCE) {
     console.error(
-      `${target}: still has ${openN.length} open row(s) (next/bug/hold/decision/note) — close them or move the spec first (MEM_FORCE=1 to override):\n` +
+      `${name}: still has ${openN.length} open row(s) (next/bug/hold/decision/note) — close them or move the spec first (MEM_FORCE=1 to override):\n` +
         openN.map((r) => `  [${r.id}] ${r.kind} ${r.text}`).join("\n"),
     );
     process.exit(1);
   }
 
-  const dst = join(doneDir, target);
+  const dst = join(doneDir, name);
   if (existsSync(dst)) {
     console.error(`${rel(dst)} already exists`);
     process.exit(1);
@@ -221,14 +252,17 @@ export const cmdPlanSweep = (a: string[]) => {
     process.exit(1);
   }
 
-  // done/ is a sibling of plan/ = same depth, links in the file still resolve, no need to touch
-  // the old layout (plan/done/) is one level deeper, so it does need re-relativizing
-  const nested = dirname(doneDir) !== dirname(dir);
-  const ownLinks = nested ? rewriteMovedFileLinks(dst, dir, doneDir) : 0;
+  // own links always need re-relativizing — the file changed directory even in
+  // the sibling layout (plan/ → done/ beside it), so sibling links dangle
+  // unless rewritten (see rewriteMovedFileLinks).
+  const ownLinks = rewriteMovedFileLinks(dst, srcDir, doneDir);
 
+  // inbound: every .md under .fapony/ can link here — other active plans,
+  // shipped plans in done/ (they reference each other), and specs. Scanning
+  // plan/ only left done/+spec/ links dangling (mtl15q4y).
   let inbound = 0;
   let inboundFiles = 0;
-  for (const f of mdFiles(dir)) {
+  for (const f of mdFiles(planBase)) {
     if (f === dst) continue;
     const n = rewriteMarkdownLinks(f, src, dst);
     if (n) {
@@ -238,13 +272,9 @@ export const cmdPlanSweep = (a: string[]) => {
   }
 
   console.log(`moved ${rel(src)} → ${rel(dst)}`);
+  console.log(`links rewritten inside the file: ${ownLinks}`);
   console.log(
-    nested
-      ? `links rewritten inside the file: ${ownLinks}`
-      : `links rewritten inside the file: 0 (same depth, existing links still resolve)`,
-  );
-  console.log(
-    `inbound links rewritten: ${inbound} in ${inboundFiles} file(s) (scanned ${rel(dir)}/** only)`,
+    `inbound links rewritten: ${inbound} in ${inboundFiles} file(s) (scanned ${rel(planBase)}/**)`,
   );
 
   // log decision — record ship event (reuse existing kind, no new schema)
@@ -252,7 +282,7 @@ export const cmdPlanSweep = (a: string[]) => {
   put({
     id: nextId(rows()),
     kind: "decision",
-    text: `${target} shipped → ${rel(dst)}`,
+    text: `${name} shipped → ${rel(dst)}`,
     spec: doneSpec,
   });
   // ponytail: this decision *is* the move itself, nothing to write back into the spec — do not mark synced
@@ -262,35 +292,33 @@ export const cmdPlanSweep = (a: string[]) => {
   // plain-text mention detection (detect-only, no auto-fix)
   let plainTextTotal = 0;
   const plainTextFiles: string[] = [];
-  for (const f of mdFiles(dir)) {
-    const n = countPlainTextMentions(f, target);
+  for (const f of mdFiles(planBase)) {
+    if (f === dst) continue;
+    const n = countPlainTextMentions(f, name);
     if (n) {
       plainTextTotal += n;
-      plainTextFiles.push(f.replace(`${dir}/`, ""));
+      plainTextFiles.push(f.replace(`${planBase}/`, ""));
     }
   }
   if (plainTextTotal > 0) {
     console.log(
-      `⚠ ${plainTextTotal} plain-text mention(s) in ${plainTextFiles.length} file(s) under ${rel(dir)}/ — grep and update the paths yourself:\n${plainTextFiles.join("\n")}`,
+      `⚠ ${plainTextTotal} plain-text mention(s) in ${plainTextFiles.length} file(s) under ${rel(planBase)}/ — grep and update the paths yourself:\n${plainTextFiles.join("\n")}`,
     );
   }
 
-  // files outside plan/ that mention the target — detect-only
-  const grep = Bun.spawnSync([
-    "git",
-    "grep",
-    "-l",
-    target,
-    "--",
-    // the "files outside plan/" scope = the folder plan/ lives under (apps/vela, .fapony, …)
-    rel(dirname(planDir)),
-    `:!${rel(dir)}`,
-  ])
+  // files outside .fapony/ that mention the filename — detect-only.
+  // Everything under planBase/ was auto-fixed above, so what remains is repo
+  // docs and prose (README, docs/, CLAUDE.md) with hand-written paths.
+  // cwd: root — the pathspecs are root-relative no matter where fapony runs from.
+  const grep = Bun.spawnSync(
+    ["git", "grep", "-l", name, "--", ".", `:!${rel(planBase)}`],
+    { cwd: root },
+  )
     .stdout.toString()
     .trim();
   if (grep)
     console.log(
-      `⚠ files outside ${rel(dir)}/ still mention "${target}" — check them yourself (not auto-fixed):\n${grep}`,
+      `⚠ files outside ${rel(planBase)}/ still mention "${name}" — check them yourself (not auto-fixed):\n${grep}`,
     );
 };
 

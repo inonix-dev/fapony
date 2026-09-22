@@ -6,7 +6,7 @@
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch — setup|update|stats|telemetry|init|init-mem|mem|install|report|report-web|usage-scan|usage-web|price-scan|analyze|debt|lint-baseline|plan-seed|review-seed|digest|mcp|hook-stop|hook-read-hint|test
+  fapony.ts           # 7-line dispatch → src/adapters/cli.ts
   fapony.config.json  # runtime config (worktrees, review.maxRounds, memory, paths, safety) — optional, gitignored
   scripts/
     smoke-publish.sh      # npm publish smoke test
@@ -28,13 +28,24 @@ fapony/
     PLAN.md / SPEC.md              # plan+spec templates for `fapony init`
   src/
     mem/                # fapony mem <add|close|find|kickoff|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
-    db/               # SQLite + config
+    core/               # pure layer — no imports back to features/adapters/db-store (PLAN-lib-layer)
+      config.ts         # Config/Run/Event types + defaults + getters + load (single source; db/* are shims)
+      defaults.ts       # DEFAULT_SAFETY_DENY (single source)
+      mem-log.ts        # mem-log reader (resolveMemDir/readMemLog)
+      hint-log.ts       # hint-log pure helpers (hintLogPath)
+      hook-helpers.ts   # hook pure helpers
+      enums.ts          # REASON_CODES/REGIME_CODES
+      types.ts          # ToolResult + usage/result types
+      util.ts           # capLines + shared pure utils
+      parse.ts / safety.ts / format.ts / pricing.ts / debt-types.ts / debt-format.ts
+    db/               # SQLite store only — pure parts live in core/config.ts
       store.ts        # openDb + schema/migration (PRAGMA user_version) + CRUD
-      load.ts         # loadConfig()
-      getters.ts      # getters รวมศูนย์ — ห้าม hardcode ที่ call site
-      types.ts        # Config / Row types
-      defaults.ts     # DEFAULT_* constants (safety deny list, …)
-      index.ts        # re-export
+      index.ts        # barrel re-export (compat — src/ imports core/config or db/store directly)
+      defaults.ts / types.ts / getters.ts / load.ts  # shims re-exporting core/config.ts
+    adapters/           # I/O boundary — thin framing only, no logic (PLAN-lib-layer chunk 3)
+      cli.ts            # fapony.ts dispatch target
+      hooks/            # hook-stop / hook-read-hint / hook-edit-hint / hook-session-start + helpers
+      mcp/              # MCP server — stdio JSON-RPC, 3 mem tools (mem.ts); collect/check/report are engines only
     gates.ts          # per-round gate enrichment — model + session tokens per gate; carries `sessionId` so callers can dedupe
     parse.ts          # parseGateVerdict() + qualityScore()
     gate.ts           # gateOnce() — frozen review-verdict engine (no live callers since verdict_submit left MCP 2026-09)
@@ -72,7 +83,7 @@ fapony/
       format.ts         # zone grouping + formatDebt
       cli.ts            # worktreeOf + cmdDebt
       index.ts          # barrel re-export
-    hook.ts             # fapony hook-stop — Claude Code Stop hook: blocks a turn with ungraded commits · fapony hook-read-hint — PreToolUse(Read) annotate only: large full-file read → review-seed, and a re-read of the same path whose mtime has not moved this session → grep (read-track/<session>.jsonl in stateDir; FAPONY_NO_REREAD_HINT=1 disables)
+    hook.ts             # shim re-exporting adapters/hooks/* (see adapters/ above)
     init.ts            # fapony init — scaffold .fapony/{plan,done,spec,.memory,evidence.json}
     init-mem.ts        # init-mem — delete legacy .memory/ dirs + warn about stale package.json call sites
     digest/               # fapony digest — merges mem log + plans + usage cache + verdicts into one page
@@ -107,16 +118,6 @@ fapony/
       utils.ts          # shared JSON(C) helpers
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative / minutesBetween / avg
-    mcp/                   # MCP server — stdio JSON-RPC, 3 mem tools on the surface (collect/check/report are engines only — their tools were removed from the registry, see CLAUDE.md)
-      index.ts             # MCP entry point + tool registration
-      transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn the mem habit without editing their own rules file
-      evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
-      types.ts             # MCP type definitions
-      tools/
-        mem.ts             # mem_find / mem_add / mem_close — the core triple: read the mem log, append a row with files[] required, close a row by id (separate tool: close rows carry no files[])
-        collect.ts         # git facts — engine only, handoff_collect was removed from the registry
-        check.ts           # conformance — engine only, handoff_check was removed
-        report.ts          # facts + checks + evidence + verdict — engine only, verification_report was removed
     test.ts               # self-check ตัวเอง (thin wrapper → test/index.ts)
   test/
     *.test.ts              # one file per src module

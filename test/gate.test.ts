@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { getRun, newRun, setStatus } from "../src/db/index.js";
+import { getRun, newRun, setStatus } from "../src/db/store.js";
 import { gateOnce } from "../src/gate.js";
 import { withTmpDb } from "./helpers.js";
 

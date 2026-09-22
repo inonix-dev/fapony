@@ -3,9 +3,9 @@
 import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { loadConfig } from "../db/index.js";
-import { toolVerificationReport } from "../mcp/tools/report.js";
-import { parseToolResult } from "../mcp/types.js";
+import { toolVerificationReport } from "../adapters/mcp/tools/report.js";
+import { loadConfig } from "../core/config.js";
+import { parseToolResult } from "../core/types.js";
 import { getStatsData } from "../stats/data.js";
 import { renderReportHtml } from "./render.js";
 

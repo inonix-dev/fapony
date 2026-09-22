@@ -53,13 +53,7 @@ export function gitValue(kind: string, value: string): string {
 
 // Keep the head, always say how much was cut — a silent cut is
 // indistinguishable from "that was everything".
-export function capLines(lines: string[], cap: number, what: string): string[] {
-  if (lines.length <= cap) return lines;
-  const rest = lines.length - (cap - 1);
-  const kept = lines.slice(0, cap - 1);
-  kept.push(`… +${rest} more ${what}`);
-  return kept;
-}
+export { capLines } from "../core/util.js";
 
 // --- Signature formatting ---
 

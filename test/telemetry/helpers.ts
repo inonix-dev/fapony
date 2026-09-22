@@ -11,7 +11,7 @@ import {
   newRun,
   type openDb,
   setStatus,
-} from "../../src/db/index.js";
+} from "../../src/db/store.js";
 
 export function createEmptyOpencodeDb(): { dir: string; dbPath: string } {
   const dir = mkdtempSync(join(tmpdir(), "fapony-telemetry-opencode-"));

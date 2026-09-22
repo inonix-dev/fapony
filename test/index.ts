@@ -128,6 +128,20 @@ import {
   testGateOnceUncertain,
 } from "./gate.test.js";
 import {
+  testGitAutonomyCutsToneExamples,
+  testGitAutonomyDefaultInstallWritesNothing,
+  testGitAutonomyDispatchFlag,
+  testGitAutonomyDryRunNoWrite,
+  testGitAutonomyFallbackCatchesReword,
+  testGitAutonomyForeignFileUntouched,
+  testGitAutonomyOptInWritesPlugin,
+  testGitAutonomyPluginSourceDefersToShared,
+  testGitAutonomyRewritesAskFirst,
+  testGitAutonomyRewritesBashDescBothSurfaces,
+  testGitAutonomyStaleWarns,
+  testGitAutonomyStatusNamesStale,
+} from "./git-autonomy.test.js";
+import {
   testCodexNormalizeMapsToSameDecision,
   testCodexPayloadDetection,
   testCodexStopHookActiveAllows,
@@ -159,6 +173,9 @@ import {
   testEditHintSilentZeroImporters,
   testEditHintSkipsNonSourceAndMissing,
   testHookSessionStartSilentWithoutMemLog,
+  testMvGuardAllowsEverythingElse,
+  testMvGuardClaudeOutputShape,
+  testMvGuardDeniesPlanIntoDone,
   testReadContextBasenameAmbiguityStaysSilent,
   testReadContextCombinedCapAndOutsideRepo,
   testReadContextMemRowsByFilesAndPath,
@@ -293,6 +310,7 @@ import {
   testLintBaselineUnixFormatAndErrors,
 } from "./lint-baseline.test.js";
 import {
+  testMapExtractAcceptsInjectedScanner,
   testMapExtractExports,
   testMapExtractExportsParseError,
   testMapExtractIgnoresSampleText,
@@ -434,6 +452,14 @@ import {
   testPlanSeedStepCloseCarriesLiteralPlanPath,
   testPlanSeedWritesPlan,
 } from "./plan-seed.test.js";
+import {
+  testCmdPlanSweepInProcess,
+  testPlanSweepAcceptsRepoRelativePath,
+  testPlanSweepApplyEndToEnd,
+  testRewriteMarkdownLinksInbound,
+  testRewriteMovedFileLinksNestedLayout,
+  testRewriteMovedFileLinksSiblingLayout,
+} from "./plan-sweep.test.js";
 import {
   testCalcCostCacheWriteFallsBackToInput,
   testCalcCostUsesCacheReadRate,
@@ -658,6 +684,7 @@ export async function cmdTest(): Promise<void> {
   testGraphCacheInProcessInvalidation();
   testGraphCacheWriteThroughInvalidateFallback();
   testMapExtractExports();
+  testMapExtractAcceptsInjectedScanner();
   testMapExtractExportsParseError();
   testMapExtractIgnoresSampleText();
   testMapExtractMultilineTypeBlock();
@@ -671,6 +698,12 @@ export async function cmdTest(): Promise<void> {
   testPlanSeedSingleFileScope();
   testPlanSeedOverlapScopeDedup();
   testPlanSeedConfigFallback();
+  testRewriteMovedFileLinksSiblingLayout();
+  testRewriteMovedFileLinksNestedLayout();
+  testRewriteMarkdownLinksInbound();
+  testPlanSweepApplyEndToEnd();
+  testPlanSweepAcceptsRepoRelativePath();
+  testCmdPlanSweepInProcess();
   testReviewSeedScopeFlags();
   testReviewSeedStructure();
   testReviewSeedRenames();
@@ -710,6 +743,9 @@ export async function cmdTest(): Promise<void> {
   testEditHintFiresWithoutSession();
   testEditHintClaudeOutputShape();
   testEditHintPluginSource();
+  testMvGuardDeniesPlanIntoDone();
+  testMvGuardAllowsEverythingElse();
+  testMvGuardClaudeOutputShape();
   testCommitHintMinCommitsConstant();
   testCommitHintNullForNonCommit();
   testCommitHintNullOutsideGitRepo();
@@ -931,6 +967,18 @@ export async function cmdTest(): Promise<void> {
   testInstallOpencodeDryRunNoWrite();
   testInstallOpencodeParseErrorFails();
   testCmdInstallDispatchesOpencode();
+  testGitAutonomyRewritesAskFirst();
+  testGitAutonomyFallbackCatchesReword();
+  testGitAutonomyRewritesBashDescBothSurfaces();
+  testGitAutonomyCutsToneExamples();
+  testGitAutonomyStatusNamesStale();
+  testGitAutonomyPluginSourceDefersToShared();
+  testGitAutonomyDefaultInstallWritesNothing();
+  testGitAutonomyOptInWritesPlugin();
+  testGitAutonomyForeignFileUntouched();
+  testGitAutonomyStaleWarns();
+  testGitAutonomyDryRunNoWrite();
+  await testGitAutonomyDispatchFlag();
   testInstallCodexNoConfigFails();
   testInstallCodexAppendsEntry();
   testInstallCodexAlreadyConfiguredNoOp();

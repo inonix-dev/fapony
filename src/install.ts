@@ -37,6 +37,8 @@ export {
   cmdInstallOpencode,
   commitHintPluginSource,
   editHintPluginSource,
+  gitAutonomyPluginSource,
+  type OpencodeInstallOpts,
   readHintPluginSource,
 } from "./install/opencode.js";
 export {
@@ -58,6 +60,10 @@ export async function cmdInstall(
   const platform = args.find((a) => !a.startsWith("--"));
   const dryRun = args.includes("--dry-run");
   const installAll = args.includes("--all");
+  // Opt-in only: the git-autonomy rewrite is an opinion (commit-as-you-go),
+  // not a utility — never installed unless this flag rides along, including
+  // via --all. Opencode-only; other platforms ignore it.
+  const gitAutonomy = args.includes("--git-autonomy");
 
   // --- explicit platform: original behavior, unchanged ---
   if (platform === "antigravity") {
@@ -81,12 +87,12 @@ export async function cmdInstall(
     return;
   }
   if (platform === "opencode") {
-    cmdInstallOpencode(dryRun, deps);
+    cmdInstallOpencode(dryRun, deps, { gitAutonomy });
     return;
   }
   if (platform !== undefined) {
     console.error(
-      `usage: fapony install --platform antigravity|opencode|claude|cursor|zcode|codex [--dry-run]`,
+      `usage: fapony install --platform antigravity|opencode|claude|cursor|zcode|codex [--dry-run] [--git-autonomy]`,
     );
     console.error(
       `  supported platforms: antigravity, opencode, claude, cursor, zcode, codex`,
@@ -125,7 +131,7 @@ export async function cmdInstall(
   if (installAll) {
     console.error();
     for (const client of found) {
-      installPlatform(client.platform, dryRun, deps);
+      installPlatform(client.platform, dryRun, deps, { gitAutonomy });
     }
     return;
   }
@@ -154,7 +160,7 @@ export async function cmdInstall(
     for (const client of found) {
       const answer = await askFn(`install into ${client.platform}?`, "Y");
       if (isAffirmative(answer)) {
-        installPlatform(client.platform, dryRun, deps);
+        installPlatform(client.platform, dryRun, deps, { gitAutonomy });
       }
     }
   } finally {
@@ -166,6 +172,7 @@ function installPlatform(
   platform: string,
   dryRun: boolean,
   deps: InstallDeps,
+  opts: { gitAutonomy?: boolean } = {},
 ): void {
   switch (platform) {
     case "antigravity":
@@ -178,7 +185,7 @@ function installPlatform(
       cmdInstallCursor(dryRun, deps);
       break;
     case "opencode":
-      cmdInstallOpencode(dryRun, deps);
+      cmdInstallOpencode(dryRun, deps, opts);
       break;
     case "zcode":
       cmdInstallZcode(dryRun, deps);

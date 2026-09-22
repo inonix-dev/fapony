@@ -14,7 +14,7 @@ import {
   collectEvidence,
   readEvidenceConfig,
   resolveEvidencePath,
-} from "../../src/mcp/evidence.js";
+} from "../../src/adapters/mcp/evidence.js";
 
 function makeTmpWorktree(): string {
   const dir = mkdtempSync(join(tmpdir(), "fapony-evidence-"));

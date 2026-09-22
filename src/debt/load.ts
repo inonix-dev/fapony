@@ -10,7 +10,7 @@ import {
   CONVENTIONS_FILE,
   CONVENTIONS_FILENAME,
   FAPONY_DIR,
-} from "../db/defaults.js";
+} from "../core/config.js";
 import { resolveMemDir } from "../memory.js";
 import type { Convention, LoadedConventions } from "./types.js";
 

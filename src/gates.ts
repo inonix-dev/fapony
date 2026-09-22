@@ -9,7 +9,7 @@
 // cumulative. Events arrive sorted (run_id, id), so one bucketing pass plus a
 // forward spawn pointer over the disjoint windows is O(events) total.
 
-import type { Event } from "./db/index.js";
+import type { Event } from "./core/config.js";
 import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "./parse.js";
 import {
   findSessionAt,

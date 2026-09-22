@@ -21,6 +21,12 @@ if (picked && !isTest(picked)) {
   process.exit(1);
 }
 
-const names = picked ? [picked] : Object.keys(mod).filter(isTest);
+const all = picked ? [picked] : Object.keys(mod).filter(isTest);
+// Same contract as test/index.ts: SKIP_SLOW=1 drops the 15s hang-guard sleep.
+// Without this, `test:one memory` pays the sleep every dev iteration.
+const names =
+  !picked && process.env.SKIP_SLOW
+    ? all.filter((n) => n !== "testClaimMemoryTimeout")
+    : all;
 for (const n of names) await (mod[n] as () => unknown)();
 console.log(`\n${names.length} test(s) passed ✓`);

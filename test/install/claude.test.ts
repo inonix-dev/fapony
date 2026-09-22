@@ -265,7 +265,7 @@ export function testInstallClaudeReadHintAppendsOnce(): void {
   }
 
   const pre = read().hooks.PreToolUse;
-  assert.equal(pre.length, 2, "installing twice must not duplicate");
+  assert.equal(pre.length, 3, "installing twice must not duplicate");
   const byMatcher = new Map(pre.map((e) => [e.matcher, e]));
   assert.ok(byMatcher.has("Read"), "Read hint entry must be registered");
   assert.ok(
@@ -277,8 +277,13 @@ export function testInstallClaudeReadHintAppendsOnce(): void {
     JSON.stringify(byMatcher.get("Edit")).includes("hook-edit-hint"),
     "edit hint command must be registered",
   );
+  assert.ok(byMatcher.has("Bash"), "Bash mv-guard entry must be registered");
+  assert.ok(
+    JSON.stringify(byMatcher.get("Bash")).includes("hook-mv-guard"),
+    "mv-guard command must be registered",
+  );
   console.log(
-    "  ✓ install claude read+edit hints → PreToolUse matchers Read/Edit, append once",
+    "  ✓ install claude read+edit+mv-guard hints → PreToolUse matchers Read/Edit/Bash, append once",
   );
 }
 
@@ -317,7 +322,7 @@ export function testInstallClaudeEditHintAppendsOnce(): void {
   }
 
   const pre = read().hooks.PreToolUse;
-  assert.equal(pre.length, 3, "installing twice must not duplicate");
+  assert.equal(pre.length, 4, "installing twice must not duplicate");
   assert.ok(
     JSON.stringify(pre[0]).includes("/tmp/theirs"),
     "foreign PreToolUse hook must survive",
@@ -328,8 +333,18 @@ export function testInstallClaudeEditHintAppendsOnce(): void {
     JSON.stringify(edit).includes("hook-edit-hint"),
     "edit hint command must be registered",
   );
+  const bashEntries = pre.filter((e) => e.matcher === "Bash");
+  assert.equal(
+    bashEntries.length,
+    2,
+    "foreign Bash matcher and fapony's mv-guard Bash matcher both present",
+  );
+  assert.ok(
+    bashEntries.some((e) => JSON.stringify(e).includes("hook-mv-guard")),
+    "mv-guard command must be registered under its own Bash entry",
+  );
   console.log(
-    "  ✓ install claude edit hint → PreToolUse matcher Edit, appends once, keeps foreign",
+    "  ✓ install claude edit+mv-guard hints → PreToolUse matchers Edit/Bash, appends once, keeps foreign",
   );
 }
 
@@ -350,5 +365,6 @@ export function testInstallClaudeAlreadyConfiguredStillInstallsHooks(): void {
   const matchers = settings.hooks.PreToolUse.map((e) => e.matcher);
   assert.ok(matchers.includes("Read"), "Read hint must be written on upgrade");
   assert.ok(matchers.includes("Edit"), "Edit hint must be written on upgrade");
+  assert.ok(matchers.includes("Bash"), "mv-guard must be written on upgrade");
   console.log("  ✓ install claude already-configured → still wires hooks");
 }

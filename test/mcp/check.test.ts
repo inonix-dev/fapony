@@ -7,8 +7,8 @@ import { join } from "node:path";
 import {
   extractMultiField,
   toolHandoffCheck,
-} from "../../src/mcp/tools/check.js";
-import { parseToolResult } from "../../src/mcp/types.js";
+} from "../../src/adapters/mcp/tools/check.js";
+import { parseToolResult } from "../../src/adapters/mcp/types.js";
 
 // --- handoff_check tests ---
 

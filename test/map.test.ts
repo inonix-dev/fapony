@@ -1,7 +1,7 @@
 // test/map.test.ts — tests for extractExports() (src/map.ts)
 
 import assert from "node:assert";
-import { extractExports } from "../src/map.js";
+import { type ExportScanner, extractExports } from "../src/map.js";
 
 export function testMapExtractExports(): void {
   const src = [
@@ -119,4 +119,23 @@ export function testMapExtractVarDeclaratorLists(): void {
   console.log(
     "  ✓ map binds every name in a declarator list, not just the first",
   );
+}
+
+export function testMapExtractAcceptsInjectedScanner(): void {
+  const fake: ExportScanner = {
+    scan: () => ({ exports: ["injected"] }),
+  };
+  const { symbols, error } = extractExports("export const injected = 1;", fake);
+  assert.equal(error, null);
+  assert.deepEqual(symbols, [{ name: "injected", line: 1, kind: "const" }]);
+
+  const throwing: ExportScanner = {
+    scan: () => {
+      throw new Error("boom\nsecond line");
+    },
+  };
+  const failed = extractExports("export const a = 1;", throwing);
+  assert.equal(failed.error, "boom");
+  assert.equal(failed.symbols.length, 0);
+  console.log("  ✓ map honors an injected scanner (incl. its parse error)");
 }

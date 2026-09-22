@@ -1,4 +1,4 @@
-# MCP Handcheck Protocol — Usage Guide
+# MCP Tools — Usage Guide
 
 > For external agents (Claude Code / OpenCode / Codex / any MCP client) that want
 > machine facts about their work before recording it, without adopting fapony's loop.
@@ -79,7 +79,39 @@ failed, needs_human_review).
 | `checks_declared` | checks field present |
 | `facts_cross_referenced` | commits match git facts |
 
-### 2. `mem_add` / `mem_close` — Record what happened
+### 2. `mem_find` — Recall what was decided
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "mem_find",
+    "arguments": {
+      "worktree": "/path/to/repo",
+      "files": ["src/hook.ts"],
+      "text": "kickoff",
+      "kind": ["bug"],
+      "since": "2026-09-01",
+      "limit": 10
+    }
+  }
+}
+```
+
+**Params** (only `worktree` is required — absolute path, `git rev-parse --show-toplevel`):
+- `files[]` — repo-relative paths, matched against each row's stored `files[]`
+  first, falling back to a substring of `text`/`spec`/`ref` for rows written
+  before `--files` existed. In a monorepo pass the app directory to read its log.
+- `text` — substring filter, case-insensitive.
+- `kind` — filter by kind (`decision`/`note`/`bug`/`close`/…). Omit = every kind,
+  there is no default filter.
+- `since` — ISO date, only rows at or after this time.
+- `limit` — max rows returned (default 20); `total` still counts all matches.
+
+**Returns** `{rows, total, filesFound, skipped, memDir}`. `memDir:null` means the
+project has no mem log at all — not "nothing matched".
+
+### 3. `mem_add` / `mem_close` — Record what happened
 
 ```json
 {
@@ -105,6 +137,12 @@ failed, needs_human_review).
 **`files[]` is required and rejected when empty** — a row that names no file is
 unfindable when you next touch that file, so the server refuses it. Write `text`
 standalone: it is read months later with no access to this conversation.
+
+Two more rejections to know before you script against this:
+- `hold` requires a `spec` (`spec: <path/to/SPEC.md>`) — without one the row can
+  never be resolved by rotate, so the server refuses it.
+- `next` / `hold` are capped (15 / 10 open rows). Over the cap the server errors
+  until you close an old one; `MEM_FORCE=1` bypasses the cap the way the CLI does.
 
 Close the row when the pain is resolved:
 
@@ -147,7 +185,7 @@ echo '{"method":"tools/call","params":{"name":"mem_add","arguments":{"worktree":
 import json
 import subprocess
 
-class FaponyHandcheck:
+class FaponyMem:
     def __init__(self):
         self.proc = subprocess.Popen(
             ["fapony", "mcp"],
@@ -191,7 +229,7 @@ class FaponyHandcheck:
         self.proc.wait()
 
 # Usage
-hc = FaponyHandcheck()
+hc = FaponyMem()
 recall = hc.recall("/path/to/repo", ["src/touched.ts"])
 # facts + conformance run on the CLI: `fapony report <run-id>`
 row = hc.add_row("/path/to/repo", "bug", "what broke and why", ["src/touched.ts"])

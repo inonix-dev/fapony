@@ -10,7 +10,7 @@ import {
   incrementRound,
   newRun,
   setStatus,
-} from "../src/db/index.js";
+} from "../src/db/store.js";
 import { EMPTY_RESULT } from "../src/session/index.js";
 import {
   countPendingPlans,

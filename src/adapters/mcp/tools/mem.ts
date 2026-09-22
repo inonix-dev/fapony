@@ -6,7 +6,7 @@
 // file is unfindable when you touch that file (fill rate 26% CLI-flag vs 88%
 // MCP-required — schema wins over prose every time, see CLAUDE.md rule 9).
 
-import { openRows } from "../../mem/selectors.js";
+import { openRows } from "../../../mem/selectors.js";
 import {
   initStore,
   KINDS,
@@ -14,8 +14,8 @@ import {
   put,
   rows,
   type WorkKind,
-} from "../../mem/store.js";
-import { type MemRow, readMemLog, resolveMemDir } from "../../memory.js";
+} from "../../../mem/store.js";
+import { type MemRow, readMemLog, resolveMemDir } from "../../../memory.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
 
 export interface MemFindResult {

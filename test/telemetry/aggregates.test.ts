@@ -1,7 +1,7 @@
 // test/telemetry/aggregates.test.ts — telemetry aggregates from real runs
 
 import assert from "node:assert";
-import { addEvent, newRun, setStatus } from "../../src/db/index.js";
+import { addEvent, newRun, setStatus } from "../../src/db/store.js";
 import { buildPayload } from "../../src/telemetry.js";
 import { withTmpDb } from "./helpers.js";
 

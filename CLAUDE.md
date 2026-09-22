@@ -64,7 +64,7 @@ verified"* · *"Plan is entirely stale"* · ฉะนั้น mem ที่ม�
 
 | | **core — mem + debt** | **usage — วันแรก** | **ledger — แช่แข็ง** |
 | --- | --- | --- | --- |
-| โค้ด | `src/memory.ts` `src/debt/` `src/lint-baseline.ts` `src/mcp/tools/mem.ts` `src/init-mem.ts` | `src/session/` `src/usage/` `src/digest/` | `src/db/` `src/stats/` `src/report/` `src/context/` `src/mcp/tools/verdict.ts` |
+| โค้ด | `src/memory.ts` `src/debt/` `src/lint-baseline.ts` `src/adapters/mcp/tools/mem.ts` `src/init-mem.ts` | `src/session/` `src/usage/` `src/digest/` | `src/db/` (เหลือแค่ store) `src/stats/` `src/report/` `src/context/` |
 | เขียนอะไร | `.jsonl` ในรีโปที่วัด (ของทีม) | อ่านอย่างเดียว (cache) | 1 graded row ลง `~/.config/fapony/state.db` |
 | สถานะ | ที่ที่งานใหม่ไปลง | ที่มาของ day-1 value | **ไม่รับฟีเจอร์ใหม่** — แก้ได้เฉพาะบั๊ก |
 | ถ้าลบทิ้ง | ไม่เหลือ fapony | คนติดตั้งเห็น N=0 แล้วปิดทิ้ง | core ยังตอบได้ทุกข้อ |
@@ -98,20 +98,24 @@ agent ที่เปิดใน `cl-fapony/` โหลดไฟล์เดี
 ไม่ใช่ทุก session:
 
 ```
-fapony.ts       CLI dispatch
+fapony.ts       7-line dispatch → src/adapters/cli.ts
 src/mem/        fapony mem <add|close|find|kickoff|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
-src/memory.ts   mem log reader/resolver (.fapony/.memory)
+src/memory.ts   shell adapter + config (mem-log reader อยู่ src/core/mem-log.ts)
+src/core/       pure layer — config/types/pricing/safety/parse/format/debt-*/enums/hint-log/hook-helpers (ห้าม import กลับ features/adapters/db-store)
+src/adapters/   cli.ts + hooks/ (stop/read-hint/edit-hint/session-start) + mcp/ (transport, evidence allowlist, 3 tools)
+src/hook.ts     shim re-export → src/adapters/hooks/ (ยังมี importer จริง อย่าลบ)
 src/debt/       fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย" (live, ไม่ persist)
 src/lint-baseline.ts  แยก "แดงอยู่ก่อนแล้ว" ออกจาก "ฉันทำให้แดง"
 src/conventions-seed.ts  fill-signal ตอน init — wrapper detector อ่าน snapshot ไม่แตะ history
+src/map.ts      extractExports/extractBody (parse gate ฉีดได้ผ่าน ExportScanner, default Bun.Transpiler)
+src/seed/       plan-seed · review-seed (lookup ตอน execute)
 src/session/    passive usage reader ราย client + activeSession
 src/usage/      fapony usage-web — อ่าน cache ไม่แตะ session log
 src/digest/     fapony digest — รวม mem log, plans, usage cache, verdicts หน้าเดียว
-src/mcp/        MCP server — transport (SERVER_INSTRUCTIONS), evidence allowlist, tools/
 src/install/    หนึ่งไฟล์ต่อ client + skills.ts
-src/db/ src/stats/ src/report/ src/context/   ← ledger (แช่แข็ง)
-src/*.ts        gates · parse · safety · math · init · init-mem · telemetry · setup
-                · update · util · analyze · plan-seed · review-seed · hook
+src/db/ (store เท่านั้น) · src/stats/ src/report/ src/context/   ← ledger (แช่แข็ง)
+src/*.ts        gates · math · init · init-mem · telemetry · setup · update · analyze · price/ · web/
+                (parse/safety/util ที่ root คือ shim → core อย่าแก้ผิดก๊อปปี้)
 skill/          <name>/SKILL.md — symlink เข้า client โดย `fapony install`
 templates/      PLAN.md / SPEC.md — ของที่ `fapony init` วาง
 test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · test/install/ · test/telemetry/
@@ -227,7 +231,7 @@ events คือ audit trail ที่เป็นข้อเท็จจริ
 
 ## Config Schema
 
-ทุก field optional, `fapony.config.json` เองก็ optional — ดู `src/db/types.ts` เป็น source of truth:
+ทุก field optional, `fapony.config.json` เองก็ optional — ดู `src/core/config.ts` เป็น source of truth:
 
 ```json
 {
@@ -250,7 +254,7 @@ events คือ audit trail ที่เป็นข้อเท็จจริ
 - `telemetry` — opt-in only (omit หรือ `null` = ปิด) ดู [TELEMETRY.md](TELEMETRY.md)
 - env override: `FAPONY_CONFIG` · `FAPONY_STATE_DIR` (ชนะ `paths.stateDir`) ·
   `FAPONY_NO_REREAD_HINT=1` (kill switch ของ re-read hint — ไม่ยิงและไม่เขียน log)
-- getters รวมศูนย์ใน `src/db/getters.ts` — ห้าม hardcode default ซ้ำที่ call site
+- getters รวมศูนย์ใน `src/core/config.ts` — ห้าม hardcode default ซ้ำที่ call site
 - **ห้ามเพิ่ม config field ใหม่ถ้า derive จากโครงสร้างได้** (`plan/done` กับ `.memory` ทำแบบนี้แล้ว)
 
 ---
@@ -300,7 +304,7 @@ plan/spec templates, และ skill ทั้งหมด
 7. **บันทึก mem ระหว่างทำงาน พร้อม `--files` เสมอ** — นี่คือกฎที่แทนกฎ "ยิง verdict ทุกครั้ง"
    ในฐานะ habit หลัก · เขียน `decision` ตอนตัดสินใจอะไรที่ session หน้าจะงง, `bug` ตอนเจอของพัง,
    `note` ตอนจบ chunk · แถวที่ไม่มี `--files` ตกพื้นตอน cluster = เขียนไปเท่ากับไม่ได้เขียน
-8. **Stop hook บังคับ mem row** ([src/hook.ts](src/hook.ts)): จบเทิร์นที่มี commit แต่
+8. **Stop hook บังคับ mem row** ([src/hook.ts](src/hook.ts) — shim, logic อยู่ `src/adapters/hooks/`): จบเทิร์นที่มี commit แต่
    ไม่มี mem row ใหม่ = ถูก block หนึ่งครั้ง · ไม่มี mem log เลย = ไม่ block ·
    `verdict_submit` ถอดออกจาก MCP แล้ว (PLAN-verdict-to-mem) — engine อยู่ใน git
    ฟื้นเป็น CLI ได้ · hook ไม่ตัดสินเกรดแทน — แยก "ใครตัดสิน" ออกจาก

@@ -4,8 +4,8 @@ import assert from "node:assert";
 import { execSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { toolHandoffCollect } from "../../src/mcp/tools/collect.js";
-import { parseToolResult } from "../../src/mcp/types.js";
+import { toolHandoffCollect } from "../../src/adapters/mcp/tools/collect.js";
+import { parseToolResult } from "../../src/adapters/mcp/types.js";
 import { withTempRepo } from "./helpers.js";
 
 export function testHandoffCollectMissingArgs(): void {

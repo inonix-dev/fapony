@@ -9,7 +9,7 @@ import assert from "node:assert";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addEvent, newRun, openDb } from "../src/db/index.js";
+import { addEvent, newRun, openDb } from "../src/db/store.js";
 import { collectDigest } from "../src/digest/collect.js";
 import { renderDigestHtml } from "../src/digest/html.js";
 import { renderDigestText } from "../src/digest/text.js";

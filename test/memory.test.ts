@@ -3,7 +3,7 @@ import { execSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Config } from "../src/db/index.js";
+import type { Config } from "../src/core/config.js";
 import { initStore, put } from "../src/mem/store.js";
 import {
   claimMemory,

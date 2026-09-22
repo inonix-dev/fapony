@@ -11,7 +11,7 @@ import {
   openDb,
   SCHEMA_VERSION,
   setStatus,
-} from "../src/db/index.js";
+} from "../src/db/store.js";
 import { withTmpDb } from "./helpers.js";
 
 export function testDbLifecycle(): void {

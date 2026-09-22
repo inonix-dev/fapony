@@ -13,9 +13,9 @@ import {
   type Config,
   type Event,
   loadConfig,
-  openDb,
   type Run,
-} from "./db/index.js";
+} from "./core/config.js";
+import { openDb } from "./db/store.js";
 import { enrichGateWindows } from "./gates.js";
 import { readPassiveUsage } from "./session/index.js";
 import { avg, minutesBetween } from "./util.js";

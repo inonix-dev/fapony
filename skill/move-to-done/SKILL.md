@@ -40,8 +40,9 @@ You are about to move a PLAN that has been shipped to the archive.
    of `done/`, which is what `plan-sweep` and `kickoff` go by.
 
 2. **Run `plan-sweep --apply`** — this does the `git mv`, rewrites markdown links inside the
-   file and inbound links from other plan files, warns about plain-text mentions, and logs
-   a decision row — all in one call:
+   file and inbound links from every `.md` under `.fapony/` (`plan/`, `done/`, `spec/`),
+   warns about plain-text mentions and about tracked files outside `.fapony/` that still
+   name the file (both detect-only), and logs a decision row — all in one call:
    ```bash
    fapony mem plan-sweep <PLAN-foo.md> --apply
    ```

@@ -4,10 +4,10 @@
 // run metrics + verdict into a single VerificationReport.
 // Calls existing primitives — no duplicate parser/conformance logic.
 
-import { blastRadiusForWorktree } from "../../analyze.js";
-import { getEvents, getRun, openDb } from "../../db/index.js";
-import { loadConfig } from "../../db/load.js";
-import { parseGateEventData } from "../../parse.js";
+import { blastRadiusForWorktree } from "../../../analyze.js";
+import { loadConfig } from "../../../core/config.js";
+import { getEvents, getRun, openDb } from "../../../db/store.js";
+import { parseGateEventData } from "../../../parse.js";
 import { collectEvidence } from "../evidence.js";
 import type { CheckResult, VerificationReport } from "../primitives.js";
 import {

@@ -1,14 +1,14 @@
 // gateOnce is the core review-verdict logic — still live, called by the CLI
 // wrapper (cmdGate) was removed with the rest of the execute→review→fix loop
 // (Wave 2). The MCP verdict_submit tool was removed in PLAN-verdict-to-mem.
+import { loadConfig } from "./core/config.js";
 import {
   addEvent,
   getRun,
   incrementRound,
-  loadConfig,
   openDb,
   setStatus,
-} from "./db/index.js";
+} from "./db/store.js";
 import { closeMemory, kickoffMemory } from "./memory.js";
 import { isPassFamily, type VerdictGrade } from "./parse.js";
 

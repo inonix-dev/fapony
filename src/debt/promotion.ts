@@ -11,7 +11,7 @@
 // ≥ 6 chars from stale such as toLocaleString/useMutation — "throw"/"Error" are too
 // short and don't count, to avoid over-matching)
 
-import { openDb } from "../db/index.js";
+import { openDb } from "../db/store.js";
 import { readMemLog } from "../memory.js";
 import {
   type Convention,

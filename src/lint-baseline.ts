@@ -14,8 +14,7 @@
 import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { DEFAULT_EVIDENCE_FILE } from "./db/index.js";
-import { faponyDir } from "./db/load.js";
+import { DEFAULT_EVIDENCE_FILE, faponyDir } from "./core/config.js";
 import { assertSafe } from "./safety.js";
 
 const USAGE =
