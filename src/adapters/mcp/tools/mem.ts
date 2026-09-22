@@ -86,6 +86,11 @@ export function toolMemFind(args: Record<string, unknown>): ToolResult {
     : undefined;
   const text = typeof args.text === "string" ? args.text : undefined;
   const since = typeof args.since === "string" ? args.since : undefined;
+  if (since !== undefined && Number.isNaN(Date.parse(since))) {
+    return errorResult(
+      `since must be an ISO date (e.g. 2026-09-19T00:00:00.000Z), got: "${since}" — CLI accepts <N>d/YYYY-MM-DD, MCP takes ISO only`,
+    );
+  }
   const limit = typeof args.limit === "number" ? args.limit : undefined;
   const open = typeof args.open === "boolean" ? args.open : undefined;
 

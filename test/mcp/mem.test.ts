@@ -153,6 +153,19 @@ test("testMemFindToolValidation", () => {
     memDir: string | null;
   };
   assert.equal(ok.memDir, null);
+
+  // review-pony PLAN-unify-mem-engine: a non-ISO since used to string-compare
+  // against ISO timestamps and silently match nothing (read as "no history").
+  // The tool surface rejects it loudly; CLI keeps <N>d/YYYY-MM-DD via parseSince.
+  const badSince = toolMemFind({ worktree: "/nonexistent", since: "7d" });
+  assert.equal(badSince.isError, true);
+  const okSince = parseToolResult(
+    toolMemFind({
+      worktree: "/nonexistent",
+      since: "2026-09-19T00:00:00.000Z",
+    }),
+  ) as { memDir: string | null };
+  assert.equal(okSince.memDir, null);
   console.log("  ✓ mem_find rejects bare worktree names with a clear error");
 });
 
