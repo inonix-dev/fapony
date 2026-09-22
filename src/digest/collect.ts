@@ -14,6 +14,7 @@ import {
   type Run,
 } from "../core/config.js";
 import { type HintImpact, hintLogPath } from "../core/hint-log.js";
+import { parseSince } from "../core/since.js";
 import { openDb } from "../db/store.js";
 import { computeHintImpact } from "../hook.js";
 import { type MemRow, readMemLog } from "../memory.js";
@@ -99,25 +100,6 @@ export interface CollectOpts {
 }
 
 // --- helpers ---
-
-function parseSince(
-  raw: string | undefined,
-  now?: number,
-): { iso: string; label: string } {
-  const def = "7d";
-  const s = raw ?? def;
-  const dMatch = /^(\d+)d$/.exec(s);
-  if (dMatch) {
-    const days = Number(dMatch[1]);
-    const dt = new Date((now ?? Date.now()) - days * 86400000);
-    return { iso: dt.toISOString(), label: `${days}d` };
-  }
-  const dateMatch = /^\d{4}-\d{2}-\d{2}$/.exec(s);
-  if (dateMatch) {
-    return { iso: `${s}T00:00:00.000Z`, label: s };
-  }
-  throw new Error(`invalid --since format: "${s}" — use <N>d or YYYY-MM-DD`);
-}
 
 function resolveWorktree(override?: string): string {
   if (override) return override;

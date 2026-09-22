@@ -434,9 +434,10 @@ years:
 - **There is no `MASTER.md`.** Every line above is derived from the plan files themselves, so it
   cannot drift; a hand-kept master file always does.
 
-`status` / `blocked_by` / `blocks` / `superseded_by` are read by people, not by a tool — the one
-that read them, `plan_list`, was removed in 2026-09 once `mem kickoff` answered the same
-question from the CLI, where a schema costs nothing until it runs.
+`status` / `blocked_by` / `blocks` / `superseded_by` are read by `fapony mem plan-check`
+(dangling refs, blocker shipped but dependent still blocked, waiter cycles, blocked with all
+chunks ticked) and by `fapony mem plan-sweep` (blocked view + a `🔓` unblock hint on `--apply`).
+Sentence values ("waiting on support email") carry no `PLAN-*.md` token and are never flagged.
 
 The layout, and why archiving is a plain `git mv`:
 
@@ -464,13 +465,13 @@ fapony price-scan                        # fetch model price table → prices.js
 fapony usage-web [port]                   # live usage comparison dashboard from cache
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]  # KPIs: pass/stall rate, by-model, by-grade — --mode verdict ranks by quality/tokens instead
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page summary: decisions, open bugs, in-flight plans, cost, pass/fail — from what's already on disk
-fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN (+SPEC): frontmatter, 8 empty sections, prior-art list, ledger context; SPEC chunks carry signatures, every section capped — the agent fills the judgment
+fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN (+SPEC): frontmatter, 8 empty sections, prior-art list, mem-decision context + existing-in-scope; existing plans listed on stdout; SPEC chunks carry signatures, every section capped — the agent fills the judgment
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]  # read-only scope facts for a review (changed files, importers, untested, signatures, plan cross-check)
 
 # Memory & convention debt
 fapony mem add <kind> "<text>" --files f1,f2 [spec.md]   # append a mem row (decision/bug/note/next/hold)
 fapony mem close <id> "<msg>"              # close a bug
-fapony mem find "<text>"                   # substring-search every row
+fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]  # search mem log
 fapony mem kickoff [<plan.md>]             # open a session + a next-up list
 fapony mem where                           # show the resolved mem dir and which step won
 fapony mem done | stale              # views

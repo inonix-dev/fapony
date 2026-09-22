@@ -15,6 +15,11 @@ export {
   sessionKey,
   utcStamp,
 } from "../../core/hook-helpers.js";
+export {
+  BUG_MARKERS,
+  hasBugMarker,
+  isBugfixCommit,
+} from "./bug-markers.js";
 export { computeHintImpact } from "./compute-hint-impact.js";
 export {
   type ContextLineData,

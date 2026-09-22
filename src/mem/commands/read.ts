@@ -2,7 +2,9 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { parseSince } from "../../core/since.js";
 import { baselinePath, readEvidenceLintCmd } from "../../lint-baseline.js";
+import { CLI_FIND_EXCLUDE, engineFind } from "../engine.js";
 import { doneLines, fmtClose, fmtRow } from "../render.js";
 import { claimsOf, openRows, staleReport } from "../selectors.js";
 import type { CloseRow, WorkRow } from "../store.js";
@@ -65,31 +67,133 @@ export const cmdStale = () => {
 };
 
 export const cmdFind = (a: string[]) => {
-  // mem find <word> — grep text/spec case-insensitively, newest first, capped at 20 rows
-  const q = a.join(" ").toLowerCase();
-  if (!q) {
-    console.error(`usage: ${memCmd} find <word>`);
+  // mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]
+  // Query logic lives in the shared engine (../engine.ts) — this wrapper owns
+  // only argv parsing + the single-line print. MCP memFind calls the same
+  // engine with no kind default (contract); CLI keeps its legacy default of
+  // hiding bookkeeping rows unless --kind names them (PLAN-unify-mem-engine).
+  const flagVal = (flag: string, i: number): string | undefined => {
+    const t = a[i];
+    const eq = `${flag}=`;
+    if (t.startsWith(eq)) return t.slice(eq.length);
+    return a[i + 1];
+  };
+  const consumed = (flag: string, i: number): number => {
+    if (a[i].startsWith(`${flag}=`)) return 1;
+    return 2;
+  };
+
+  let kind: string[] | undefined;
+  let files: string[] | undefined;
+  let sinceRaw: string | undefined;
+  let limit: number | undefined;
+  let open = false;
+  const positional: string[] = [];
+
+  for (let i = 0; i < a.length; ) {
+    const t = a[i];
+    if (t === "--kind" || t.startsWith("--kind=")) {
+      const v = flagVal("--kind", i);
+      if (!v || v.startsWith("--")) {
+        console.error(
+          `--kind needs a value — usage: ${memCmd} find "<text>" --kind bug,decision`,
+        );
+        process.exit(1);
+      }
+      kind = v
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      i += consumed("--kind", i);
+    } else if (t === "--files" || t.startsWith("--files=")) {
+      const v = flagVal("--files", i);
+      if (!v || v.startsWith("--")) {
+        console.error(
+          `--files needs a value — usage: ${memCmd} find --files path/to/file.ts[,more]`,
+        );
+        process.exit(1);
+      }
+      files = v
+        .split(",")
+        .map((s) => s.trim().replace(/^\.\//, ""))
+        .filter(Boolean);
+      i += consumed("--files", i);
+    } else if (t === "--since" || t.startsWith("--since=")) {
+      const v = flagVal("--since", i);
+      if (!v || v.startsWith("--")) {
+        console.error(`--since needs a value — use <N>d or YYYY-MM-DD`);
+        process.exit(1);
+      }
+      sinceRaw = v;
+      i += consumed("--since", i);
+    } else if (t === "--limit" || t.startsWith("--limit=")) {
+      const v = flagVal("--limit", i);
+      const n = Number(v);
+      if (!v || v.startsWith("--") || !Number.isInteger(n) || n < 0) {
+        console.error(
+          `--limit needs a non-negative integer — got "${v ?? ""}"`,
+        );
+        process.exit(1);
+      }
+      limit = n;
+      i += consumed("--limit", i);
+    } else if (t === "--open") {
+      open = true;
+      i += 1;
+    } else {
+      positional.push(t);
+      i += 1;
+    }
+  }
+
+  const q = positional.join(" ").trim();
+  if (
+    !q &&
+    !kind?.length &&
+    !files?.length &&
+    !sinceRaw &&
+    limit === undefined &&
+    !open
+  ) {
+    console.error(
+      `usage: ${memCmd} find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]`,
+    );
     process.exit(1);
   }
+
+  let sinceIso: string | undefined;
+  if (sinceRaw) {
+    try {
+      sinceIso = parseSince(sinceRaw).iso;
+    } catch (e) {
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
+  }
+
   // allRows, not rows: find is recall — rotated history counts
-  const hits = allRows()
-    .filter(
-      (r): r is WorkRow =>
-        r.kind !== "close" &&
-        r.kind !== "synced" &&
-        r.kind !== "claim" &&
-        r.kind !== "release",
-    )
-    .filter(
-      (r) =>
-        r.text.toLowerCase().includes(q) ||
-        (r.spec ?? "").toLowerCase().includes(q),
-    )
-    .slice(-20);
-  for (const r of hits)
-    console.log(
-      `- [${r.id}] ${r.ts.slice(0, 10)} ${r.kind} ${r.text}${r.spec ? ` → ${r.spec}` : ""}`,
-    );
+  const { rows: newest } = engineFind(allRows(), {
+    text: q || undefined,
+    files,
+    kind,
+    excludeKind: kind?.length ? undefined : CLI_FIND_EXCLUDE,
+    sinceIso,
+    limit,
+    open: open || undefined,
+  });
+  // Legacy order: oldest first (engine returns newest first — same set, CLI print order unchanged)
+  const hits = [...newest].reverse();
+  for (const r of hits) {
+    if ("id" in r) {
+      console.log(
+        `- [${r.id}] ${r.ts.slice(0, 10)} ${r.kind} ${r.text ?? ""}${r.spec ? ` → ${r.spec}` : ""}`,
+      );
+    } else {
+      const label = "ref" in r && r.ref ? `${r.ref}(${r.kind})` : r.kind;
+      const body = ("text" in r && r.text) || ("spec" in r && r.spec) || "";
+      console.log(`- [${label}] ${r.ts.slice(0, 10)} ${r.kind} ${body}`);
+    }
+  }
   if (!hits.length) console.log("(no matches)");
 };
 
@@ -332,7 +436,7 @@ export const cmdKickoff = (a: string[]) => {
   const uniqueRecent = [...new Set(recentFiles)].slice(0, GROUP_CAP);
   if (uniqueRecent.length) {
     suggestions.push({
-      text: `แตะล่าสุด: ${uniqueRecent.join(", ")}`,
+      text: `Recently touched: ${uniqueRecent.join(", ")}`,
       run: `fapony review-seed --files ${uniqueRecent.join(",")}`,
     });
   }
@@ -341,7 +445,7 @@ export const cmdKickoff = (a: string[]) => {
   try {
     if (readEvidenceLintCmd(root) && !existsSync(baselinePath(root))) {
       suggestions.push({
-        text: "lint baseline ยังไม่ capture — แดงที่มีอยู่ก่อนจะถูกนับเป็นของคุณ",
+        text: "lint baseline not captured yet — pre-existing red will count as yours",
         run: "fapony lint-baseline --capture",
       });
     }

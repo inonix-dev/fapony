@@ -2,236 +2,240 @@
 
 ## What is fapony
 
-**ความจำความเจ็บของโปรเจกต์ สำหรับทีมที่เขียนโค้ดด้วย agent** — mem log (`.jsonl` ในรีโป)
-+ convention debt (`fapony debt`) + lint baseline บวกเครื่องอ่าน usage ที่บอกว่าแต่ละอย่าง
-กิน token เท่าไหร่ · ส่งเป็น MCP server (`fapony mcp` — stdio JSON-RPC) agent ไหนก็เรียกได้
+**The project's pain memory, for teams that write code with agents** — a mem log (`.jsonl` in the repo)
++ convention debt (`fapony debt`) + a lint baseline, plus a usage reader that reports what each of them
+costs in tokens · shipped as an MCP server (`fapony mcp` — stdio JSON-RPC) any agent can call.
 
-**North star:** **agent ไม่มีความเจ็บสะสม — มันจึงไม่เคยสร้าง abstraction เอง**
-ทุก session มันเกิดใหม่ เขียน `try/catch` ครั้งที่ 37 ด้วยความสดชื่นเท่าครั้งแรก ส่วน wrapper
-อย่าง `failWith` / `BaseInitClass` เกิดจาก *คน* ที่เจ็บซ้ำจนจำได้ · fapony คือสิ่งเดียวในห้องที่
-จำแทนได้ งานของมันคือ **จำความเจ็บ → บอกว่าเมื่อไหร่ควรมีของกลาง → ตามว่าย้ายไปถึงไหนแล้ว**
+**North star:** **agents accumulate no pain — so they never build the abstraction themselves.**
+Every session one is born anew, writing its 37th `try/catch` as cheerfully as the first, while wrappers
+like `failWith` / `BaseInitClass` get built by *people* who were hurt repeatedly enough to remember.
+fapony is the only thing in the room that remembers instead. Its job:
+**remember the pain → say when a shared thing is due → track how far the migration has gone.**
 
-**หน่วยของคุณค่าคือ token ไม่ใช่คุณภาพ** (ปรับ 2026-09-19 — ดู "ทำไมแกนย้าย") — คนที่เจ็บจริง
-คือคนที่**จ่ายค่า plan เอง** ไม่ใช่ dev ที่ใช้งบบริษัท ฉะนั้นทุกฟีเจอร์ต้องตอบได้ว่า
-**"ประหยัด token ไปกี่ตัว"** ไม่ใช่ "โค้ดดีขึ้นแค่ไหน" — อันหลังพิสูจน์ไม่ได้และไม่มีใครจ่ายเงินให้
-· ตัวอย่างที่วัดแล้ว: `review-seed --files` 5 ไฟล์ 2,146 บรรทัด = 3.7KB (~940 tokens)
-เทียบกับอ่านทั้ง 5 ไฟล์ ~35k tokens
+**The unit of value is tokens, not quality** (pivoted 2026-09-19 — see "Why the core moved") — the people
+who actually hurt are the ones **paying for their own plan**, not devs on a company budget, so every feature
+must answer **"how many tokens does it save"**, not "how much better is the code" — the latter is unprovable
+and nobody pays for it. · A measured example: `review-seed --files` over 5 files, 2,146 lines = 3.7KB
+(~940 tokens) vs ~35k tokens to read all 5 files.
 
-**สิ่งที่ *ไม่ใช่* งานของ fapony: หา dead code / โค้ดซ้ำ** — knip / madge / dependency-cruiser /
-jscpd เก่งกว่า · **knip คือ `checker` ไม่ใช่คู่แข่ง** — `debt.ts` มีกฎเหล็กว่า `checker != null`
-= fapony ไม่รายงานซ้ำ ฉะนั้น dead export / barrel ให้ผูกเป็น `"checker"` ของ convention นั้น
-ไม่ใช่เขียน detector ใหม่ · ช่องที่ว่างจริงคือ **layer 3: "ไฟล์ไหนยังไม่ย้าย"** — eslint บอกว่า
-บรรทัดนี้ผิด, CLAUDE.md บอกว่ากฎคืออะไร, **ไม่มีใครบอกว่าตัดสินใจไปเมื่อ 6 เดือนก่อนแล้วย้ายไป
-11 จาก 47**
+**What fapony is *not* for: finding dead code / duplicated code** — knip / madge / dependency-cruiser /
+jscpd do that better. · **knip is a `checker`, not a competitor** — `debt.ts` has an iron rule:
+`checker != null` = fapony stays silent, so dead exports / barrels get wired as the `"checker"` of that
+convention instead of a new detector. · The genuinely empty slot is **layer 3: "which files haven't
+migrated yet"** — eslint says this line is wrong, CLAUDE.md says what the rule is, **nobody says we
+decided this 6 months ago and have moved 11 of 47.**
 
 ---
 
-## ทำไมแกนย้ายจาก ledger มาเป็น mem + debt (2026-09-19)
+## Why the core moved from ledger to mem + debt (2026-09-19)
 
-fapony เริ่มจาก mem log `.jsonl` แล้วเดินไปทาง ledger (ให้ agent เกรดงานตัวเอง) ซึ่ง
-**ทำให้เห็นภาพได้จริงและคุ้มที่ทำ** — แต่วัดแล้วมันตันด้วยสามอย่าง:
+fapony started from a mem log `.jsonl`, then walked toward a ledger (agents grading their own work) — which
+**produced a real picture and was worth building** — but measurement showed it capped out on three things:
 
-1. **self-grading bias ไม่ใช่ค่าคงที่ — มันต่างกันรายโมเดล** เพราะแต่ละ model เกรดงานของตัวเอง
-   ฉะนั้น `claude-opus-5 q3.6` vs `deepseek-v4.1-flash q4.0` (regime=code, n=18/n=10)
-   **อธิบายได้ทั้งหมดด้วย "opus เข้มกับตัวเองกว่า"** โดยคุณภาพจริงไม่ต่างเลย · ranking รอด
-   bias ที่คงที่ ไม่รอด bias ที่ต่างรายตัว → **ห้ามอ้าง cross-model quality ranking เป็นข้อเท็จจริง**
-2. **grade เฟ้อ** — 340 จาก 360 gate เป็น pass-family, fail-family ทั้งหมด **24 แถว** all-time
-   ข้ามทุกโปรเจกต์ · denominator ขนาดนี้รองรับ per-file mechanic อะไรไม่ได้เลย (559 distinct files)
-3. **ตลาดของมันแคบกว่าที่คิด** — "model ไหนคุ้มกว่า" เจ็บเฉพาะคนจ่ายเอง ส่วน dev ที่ใช้
-   Max plan ของบริษัทไม่มีเหตุผลจะวัด
+1. **Self-grading bias is not a constant — it differs per model.** Each model grades its own work,
+   so `claude-opus-5 q3.6` vs `deepseek-v4.1-flash q4.0` (regime=code, n=18/n=10)
+   **is fully explained by "opus is harsher on itself"** with no real quality difference. · Rankings survive
+   a constant bias; they don't survive a per-model one → **never cite cross-model quality ranking as fact.**
+2. **Grade inflation** — 340 of 360 gates are pass-family; the fail family is **24 rows** all-time
+   across every project. · A denominator that size supports no per-file mechanic (559 distinct files).
+3. **Its market is narrower than assumed** — "which model is worth it" only hurts people paying out of
+   pocket; devs on a company Max plan have no reason to measure.
 
-**สิ่งที่รอดจากการวัดครั้งนี้คือ token** — มันมาจาก session log ไม่ได้มาจากคำประกาศของ agent
-ฉะนั้นมันโกงไม่ได้ · **เส้นแบ่งความน่าเชื่อถือใหม่ ใช้ตัดสินทุกฟีเจอร์:**
+**What survived that measurement is tokens** — they come from session logs, not from agents' proclamations,
+so they can't be gamed. · **The new credibility line, applied to every feature:**
 
-| เชื่อได้ | เชื่อไม่ได้ |
+| Believable | Not believable |
 | --- | --- |
-| token / cost จาก session log · git facts (commit, files, sha) · ผลรัน checker (eslint/knip/tsc) · regex match ของ debt | เกรดที่ agent ให้ตัวเอง · "typecheck ผ่านครบ" ที่ไม่มี exit code · คำว่า "แก้แล้ว" |
+| tokens / cost from session logs · git facts (commits, files, shas) · checker results (eslint/knip/tsc) · debt regex matches | grades an agent gave itself · "typecheck fully passes" with no exit code · the word "fixed" |
 
-**ledger ไม่ถูกลบ — มันถูกแช่แข็งและเปลี่ยนหน้าที่เป็น *เซนเซอร์ความเจ็บ*:** `verdict` ที่เป็น
-fail/`scope_mismatch`/`spec_gap` พร้อม `files[]` + `note` คือ input ของการหาโซนที่เจ็บซ้ำ ·
-ส่วนที่ยังใช้ได้เต็มปากคือ **token ต่องาน** (วัดได้) และ **`files[]` + `note`** (ข้อเท็จจริง
-ที่ agent พิมพ์ ไม่ใช่การตัดสิน) — **ไม่ใช่ตัวเกรด**
+**The ledger wasn't deleted — it was frozen and repurposed as a *pain sensor*:** `verdict`s that are
+fail / `scope_mismatch` / `spec_gap`, with `files[]` + `note`, are the input for finding zones that hurt
+repeatedly. · What can still be said with a straight face is **tokens per task** (measurable) and
+**`files[]` + `note`** (facts the agent typed, not judgments) — **never the grade itself.**
 
-**อ่าน fail 24 แถวแล้วได้บทเรียนที่เปลี่ยนเป้า:** ส่วนใหญ่ไม่ใช่ "ไม่รู้" แต่เป็น
-**"ไม่ได้ตรวจ"** — *"Round 1 fixed the symptom, not the cause"* · *"reported done, but never
+**Reading those 24 fail rows taught the lesson that moved the target:** most aren't "didn't know" but
+**"didn't check"** — *"Round 1 fixed the symptom, not the cause"* · *"reported done, but never
 ran the FULL bun test suite"* · *"reported all 4 findings fixed but only 2 of 4 actually
-verified"* · *"Plan is entirely stale"* · ฉะนั้น mem ที่มีค่าที่สุดไม่ใช่ "ไฟล์นี้เคยพังยังไง"
-แต่เป็น **"ครั้งก่อนตรวจไม่ครบตรงไหน"**
+verified"* · *"Plan is entirely stale"* · so the most valuable mem isn't "how did this file break before"
+but **"what did we fail to check last time."**
 
 ---
 
-## สามชั้น และเส้นที่ห้ามปนกัน
+## Three layers, and the lines that must never blur
 
-| | **core — mem + debt** | **usage — วันแรก** | **ledger — แช่แข็ง** |
+| | **core — mem + debt** | **usage — day one** | **ledger — frozen** |
 | --- | --- | --- | --- |
-| โค้ด | `src/memory.ts` `src/debt/` `src/lint-baseline.ts` `src/adapters/mcp/tools/mem.ts` `src/init-mem.ts` | `src/session/` `src/usage/` `src/digest/` | `src/db/` (เหลือแค่ store) `src/stats/` `src/report/` `src/context/` |
-| เขียนอะไร | `.jsonl` ในรีโปที่วัด (ของทีม) | อ่านอย่างเดียว (cache) | 1 graded row ลง `~/.config/fapony/state.db` |
-| สถานะ | ที่ที่งานใหม่ไปลง | ที่มาของ day-1 value | **ไม่รับฟีเจอร์ใหม่** — แก้ได้เฉพาะบั๊ก |
-| ถ้าลบทิ้ง | ไม่เหลือ fapony | คนติดตั้งเห็น N=0 แล้วปิดทิ้ง | core ยังตอบได้ทุกข้อ |
+| Code | `src/memory.ts` `src/debt/` `src/lint-baseline.ts` `src/adapters/mcp/tools/mem.ts` `src/init-mem.ts` | `src/session/` `src/usage/` `src/digest/` | `src/db/` (store only) `src/stats/` `src/report/` `src/context/` |
+| Writes | `.jsonl` in the measured repo (the team's) | read-only (cache) | 1 graded row into `~/.config/fapony/state.db` |
+| Status | where new work lands | the source of day-1 value | **no new features** — bug fixes only |
+| If deleted | no fapony left | installers see N=0 and walk away | core still answers everything |
 
-**กฎที่ตามมา:**
-1. **ledger ห้ามเป็นเงื่อนไขของ core และกลับกัน** — `fapony debt` / `mem_find` ต้องทำงานได้
-   โดยไม่มี `state.db` ·
-2. **ห้ามให้ ledger เขียนลง worktree** — เคยมีข้อเสนอให้ `verdict_submit` เขียน mem row
-   อัตโนมัติ **ปฏิเสธแล้ว**: มันบังคับให้เส้นทางที่ร้อนที่สุด spawn shell จาก config และพัง
-   เมื่อไม่มี `.fapony/` · ที่สำคัญกว่า — mem row มีค่าเพราะเป็นร้อยแก้ว standalone ที่คนหรือ
-   agent ตั้งใจเขียน ไม่ใช่ log ที่ถูก generate
-3. **ฟีเจอร์ใหม่ต้องมีเจ้าของชั้นเดียว** ถ้าเขียนแล้วไม่รู้ว่าอยู่ชั้นไหน = ยังไม่เข้าใจปัญหาพอ
+**The resulting rules:**
+1. **The ledger must never gate core, and vice versa** — `fapony debt` / `mem_find` must work
+   with no `state.db`.
+2. **The ledger must never write into a worktree** — a past proposal had `verdict_submit` auto-write
+   a mem row; **rejected**: it forces the hottest path to spawn a shell from config and breaks
+   wherever `.fapony/` is absent. · More importantly — a mem row is valuable because it is standalone
+   prose someone or some agent deliberately wrote, not a generated log.
+3. **A new feature gets exactly one owning layer.** If you can't tell which layer it belongs to,
+   you don't understand the problem well enough yet.
 
-**Runtime:** Bun-only · dep ใหม่ต้อง `await import()` ในเส้นทางที่ใช้จริง — `fapony mcp`
-ถูกสตาร์ททุก session ของทุก client และ `fapony.ts` static-import ทุก module
-เช็ค: initialize round trip ≤ ~100ms (วัด 63ms · `require("typescript")` เดี่ยว ๆ = 92ms
-คือทำพังได้ด้วย dep เดียว)
-**State:** SQLite ที่ `~/.config/fapony/state.db` (WAL) — `FAPONY_STATE_DIR` ย้ายได้ ·
-`read-track/<session>.jsonl` ใน stateDir เดียวกันคือ log ของ read hint (ต่อ session ทิ้งได้)
-**Topology:** `Project/fapony/` เป็นโฟลเดอร์เปล่าที่อุ้มสองรีโปเป็นพี่น้องกัน —
-`fapony/fapony/` = main checkout (เจ้าของแตะคนเดียว) · `fapony/cl-fapony/` = dev
-(clone คนละ `.git` — agent ทำงานที่นี่เท่านั้น) · **พ่อแม่ต้องไม่มี `CLAUDE.md`** ไม่งั้น
-agent ที่เปิดใน `cl-fapony/` โหลดไฟล์เดียวกันสองรอบ (นี่คือเหตุผลที่แยกออกมา 2026-09-20)
-**License:** MIT, public ตั้งแต่ commit แรก
+**Runtime:** Bun-only · new deps must be `await import()`ed on the path that actually uses them — `fapony mcp`
+starts on every session of every client and `fapony.ts` static-imports every module.
+Check: initialize round trip ≤ ~100ms (measured 63ms · a lone `require("typescript")` = 92ms
+can break it single-handedly).
+**State:** SQLite at `~/.config/fapony/state.db` (WAL) — `FAPONY_STATE_DIR` can move it. ·
+`read-track/<session>.jsonl` in the same stateDir is the read-hint log (disposable per session).
+**Topology:** `Project/fapony/` is an empty folder holding two repos as siblings —
+`fapony/fapony/` = main checkout (the owner touches it alone) · `fapony/cl-fapony/` = dev
+(a separate `.git` clone — agents work here only) · **the parent must have no `CLAUDE.md`**, or an
+agent opened in `cl-fapony/` loads the same file twice (the reason for the split, 2026-09-20).
+**License:** MIT, public from the first commit.
 
 ---
 
 ## Architecture
 
-แผนที่ราย**ไฟล์**อยู่ที่ [docs/architecture.md](docs/architecture.md) — อ่านตอนหาที่วางโค้ดใหม่
-ไม่ใช่ทุก session:
+The per-**file** map lives in [docs/architecture.md](docs/architecture.md) — read it when placing new code,
+not every session:
 
 ```
 fapony.ts       7-line dispatch → src/adapters/cli.ts
 src/mem/        fapony mem <add|close|find|kickoff|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
-src/memory.ts   shell adapter + config (mem-log reader อยู่ src/core/mem-log.ts)
-src/core/       pure layer — config/types/pricing/safety/parse/format/debt-*/enums/hint-log/hook-helpers (ห้าม import กลับ features/adapters/db-store)
+src/memory.ts   shell adapter + config (mem-log reader lives in src/core/mem-log.ts)
+src/core/       pure layer — config/types/pricing/safety/parse/format/debt-*/enums/hint-log/hook-helpers (never import back up into features/adapters/db-store)
 src/adapters/   cli.ts + hooks/ (stop/read-hint/edit-hint/session-start) + mcp/ (transport, evidence allowlist, 3 tools)
-src/hook.ts     shim re-export → src/adapters/hooks/ (ยังมี importer จริง อย่าลบ)
-src/debt/       fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย" (live, ไม่ persist)
-src/lint-baseline.ts  แยก "แดงอยู่ก่อนแล้ว" ออกจาก "ฉันทำให้แดง"
-src/conventions-seed.ts  fill-signal ตอน init — wrapper detector อ่าน snapshot ไม่แตะ history
-src/map.ts      extractExports/extractBody (parse gate ฉีดได้ผ่าน ExportScanner, default Bun.Transpiler)
-src/seed/       plan-seed · review-seed (lookup ตอน execute)
-src/session/    passive usage reader ราย client + activeSession
-src/usage/      fapony usage-web — อ่าน cache ไม่แตะ session log
-src/digest/     fapony digest — รวม mem log, plans, usage cache, verdicts หน้าเดียว
-src/install/    หนึ่งไฟล์ต่อ client + skills.ts
-src/db/ (store เท่านั้น) · src/stats/ src/report/ src/context/   ← ledger (แช่แข็ง)
+src/hook.ts     shim re-export → src/adapters/hooks/ (has real importers — don't delete)
+src/debt/       fapony debt — layer 3 "which files haven't migrated yet" (live, never persisted)
+src/lint-baseline.ts  separates "already red" from "I made it red"
+src/conventions-seed.ts  fill-signal at init — wrapper detector reads a snapshot, never touches history
+src/map.ts      extractExports/extractBody (parse gate injectable via ExportScanner, default Bun.Transpiler)
+src/seed/       plan-seed · review-seed (lookup at execute time)
+src/session/    per-client passive usage reader + activeSession
+src/usage/      fapony usage-web — reads the cache, never touches session logs
+src/digest/     fapony digest — mem log, plans, usage cache, and verdicts on one page
+src/install/    one file per client + skills.ts
+src/db/ (store only) · src/stats/ src/report/ src/context/   ← ledger (frozen)
 src/*.ts        gates · math · init · init-mem · telemetry · setup · update · analyze · price/ · web/
-                (parse/safety/util ที่ root คือ shim → core อย่าแก้ผิดก๊อปปี้)
-skill/          <name>/SKILL.md — symlink เข้า client โดย `fapony install`
-templates/      PLAN.md / SPEC.md — ของที่ `fapony init` วาง
-test/           หนึ่งไฟล์ต่อ src module + test/mcp/ · test/install/ · test/telemetry/
+                (root parse/safety/util are shims → core; don't edit the wrong copy)
+skill/          <name>/SKILL.md — symlinked into clients by `fapony install`
+templates/      PLAN.md / SPEC.md — what `fapony init` lays down
+test/           one file per src module + test/mcp/ · test/install/ · test/telemetry/
 ```
 
 ---
 
-## Client support — อะไรใช้ได้กับใคร (ปรับ 2026-09-21)
+## Client support — what works on whom (updated 2026-09-21)
 
-`fapony install` รู้จัก 5 ไคลเอนต์ · **MCP เป็นชิ้นเดียวที่ทุกตัวได้** · hook/hint เป็นรายไคลเอนต์
-และ **ลำดับยิงต่างกัน** — Claude Code ยิง *ก่อน* tool call (`PreToolUse` → `additionalContext`)
-ส่วน OpenCode ยิง *หลัง* (`tool.execute.after` — ช่อง annotate เดียวที่มี ต้อง mutate
-`output.output` ห้าม throw เพราะจะ block tool) ฉะนั้น OpenCode เห็นคำเตือนช้ากว่าหนึ่ง step
+`fapony install` knows 5 clients. · **MCP is the only piece all of them get.** · Hooks/hints are per-client
+and **fire in different order** — Claude Code fires *before* the tool call (`PreToolUse` → `additionalContext`)
+while OpenCode fires *after* (`tool.execute.after` — the only annotate channel available; must mutate
+`output.output`, never throw, or it blocks the tool). So OpenCode sees warnings one step later.
 
 | | claude | opencode | cursor | zcode | codex |
 | --- | --- | --- | --- | --- | --- |
 | MCP 3 tools | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Stop hook (ไม่จบเทิร์นที่มี commit แต่ไม่มี mem row ใหม่) | ✅ | — | ✅ | — | ✅ after trust |
-| Read hint (ไฟล์ใหญ่ + debt/mem) | ✅ ก่อน | ✅ หลัง | — | — | — |
-| Re-read hint (อ่านซ้ำไฟล์เดิม mtime ไม่ขยับ) | ✅ ก่อน | ✅ หลัง | — | — | — |
-| Edit hint (จำนวน importer ก่อนแก้ shape) | ✅ ก่อน | ✅ หลัง (edit+write) | — | — | — |
-| Commit hint (`git commit` → เตือน mem row) | — | ✅ หลัง | — | — | — |
-| SessionStart (ยิง `mem kickoff` เป็น context) | ✅ | ✅ ครั้งแรกที่ dispatch | — | — | ✅ after trust |
+| Stop hook — refuse to end a turn with commits but no new mem row | ✅ | — | ✅ | — | ✅ after trust |
+| Read hint — big file + debt/mem lines | ✅ before | ✅ after | — | — | — |
+| Re-read hint — repeat read of the same file, mtime unmoved | ✅ before | ✅ after | — | — | — |
+| Edit hint — importer count before a shape change | ✅ before | ✅ after (edit+write) | — | — | — |
+| Commit hint — `git commit` → record a mem row (and `kind:bug` on a fix-type commit) | — | ✅ after | — | — | — |
+| SessionStart — fire `mem kickoff` as context | ✅ | ✅ first dispatch only | — | — | ✅ after trust |
 | Skill symlink → `~/.claude/skills` | ✅ | ✅ | — | — | — |
 | Skill symlink → `~/.agents/skills` | — | — | — | ✅ | ✅ |
-| `usage-scan` อ่าน session log ของเจ้านั้น | ✅ | ✅ | — | ✅ | ✅ |
+| `usage-scan` reads that client's session log | ✅ | ✅ | — | ✅ | ✅ |
 
-`—` = ยังไม่ต่อ ไม่ใช่ทำไม่ได้ (Cursor ไม่มี PreToolUse · ZCode/Codex ไม่มี in-process hook surface
-สำหรับ read/edit hints — Codex `apply_patch` ส่ง patch text ไม่ใช่ file path) · **ทำไม hint อยู่บน hook ไม่ใช่
-MCP** — มันต้องยิงกลางเทิร์นเองโดย agent ไม่ต้องนึก ตรงเกณฑ์ MCP-vs-CLI (กฎ 13) เป๊ะ · **commit hint
-มีแต่ OpenCode** เพราะ Claude ใช้ Stop hook รายงาน commit ที่ยังไม่มี mem row แทน · Codex hooks ต้อง
-trust ผ่าน `/hooks` ก่อน run — `fapony install` บอกเมื่อต้องทำ · **SessionStart บน OpenCode มาตอน
-dispatch ครั้งแรก** (`experimental.chat.system.transform` ครั้งเดียวต่อ session — ช่อง inject เดียวที่
-`event` hook ไม่มี) ไม่ใช่ตอนสร้าง session · ตัวติดตั้ง **ไม่เคยเขียนทับ plugin ของตัวเอง**
-ฉะนั้นแก้ `*PluginSource` แล้วต้องลบไฟล์ใน `~/.config/opencode/plugins/` ทิ้งก่อน install ใหม่ ไม่งั้นได้ของเก่าเงียบ ๆ
+`—` = not wired yet, not impossible (Cursor has no PreToolUse · ZCode/Codex expose no in-process hook surface
+for read/edit hints — Codex `apply_patch` sends patch text, not file paths). · **Hints live on hooks rather
+than MCP on purpose** — they must fire mid-turn without the agent thinking of it, exactly the MCP-vs-CLI test
+(rule 13). · **The commit hint is OpenCode-only** because Claude reports commits-without-mem-rows through the
+Stop hook instead. · Codex hooks need trust via `/hooks` before they run — `fapony install` says so when needed. ·
+**SessionStart on OpenCode arrives at first dispatch** (`experimental.chat.system.transform`, once per session —
+the only inject channel `event` hooks lack), not at session creation. · The installer **never overwrites its own
+plugin**, so after editing `*PluginSource` delete the files under `~/.config/opencode/plugins/` before reinstalling,
+or you silently get the old one.
 
-## Memory: `.fapony/.memory/log.<คุณ>.jsonl` (append-only)
+## Memory: `.fapony/.memory/log.<you>.jsonl` (append-only)
 
-**นี่คือแกน** — log ออกแบบให้เป็นสมองส่วนกลางของโปรเจกต์ วางในรีโป ไม่ใช่ใน `state.db`
-(ของเครื่องใครเครื่องมัน clone ไม่ติด) · ชื่อไฟล์มาจาก `git config user.name` — คนละใบต่อคน
-จึงไม่มีอะไรให้ merge ชน ฉะนั้นรีโปที่ commit มัน `decision`/`bug`/`note` จะติดไปกับ clone ทันที
+**This is the core** — the log is designed as the project's shared brain, kept in the repo rather than in
+`state.db` (per-machine, never cloned). · File names come from `git config user.name` — one file per person,
+so nothing ever merge-conflicts, and any repo that commits its `decision` / `bug` / `note` rows carries them to
+every clone.
 
-**บันทึกระหว่างทำงาน ไม่ต้องรอให้สั่ง** — ไม่มีกลไกไหนเขียนให้ มีแต่ agent ที่รันเอง:
+**Record while you work — don't wait to be asked.** Nothing writes rows for you; only the agent running does:
 
 ```bash
-fapony mem kickoff .fapony/plan/PLAN-x.md   # เปิด session ด้วยอันนี้
-fapony mem add decision "ตัดสินอะไร เพราะอะไร" --files a.ts,b.ts
-fapony mem add bug "อะไรพัง" --files a.ts
-fapony mem add note "สถานะที่ session หน้าต้องรู้"
-fapony mem close <id> "แก้แล้ว <sha>"
+fapony mem kickoff .fapony/plan/PLAN-x.md   # open a session with this
+fapony mem add decision "what was decided, and why" --files a.ts,b.ts
+fapony mem add bug "what broke" --files a.ts
+fapony mem add note "state the next session must know"
+fapony mem close <id> "fixed in <sha>"
 fapony mem find "usage-web"
 ```
 
-- **`--files` สำคัญที่สุด** — ไม่มีมัน แถวนั้นตกพื้นตอน cluster หาโซนที่เจ็บซ้ำ · รีโปที่ log
-  เก่าไม่รู้จัก `--files` ให้ `fapony init-mem` ครั้งเดียว **ก่อน**จะสรุปอะไรจาก log
-  (วัดแล้ว: vela มี 2,672 แถว แต่ `files[]` ศูนย์แถว เพราะเหตุนี้)
-- เขียนแต่ละแถวให้ **standalone** — ถูกอ่านอีกทีในอีกหลายเดือนโดยไม่มีบทสนทนานี้
-- `close` เป็นตัวเดียวที่ปิด `bug` ไม่มีมัน list จะโตอย่างเดียว
-- **kind ทั้งหมดยังใช้จริง ไม่มี deprecated** — `decision`/`bug`/`note` agent เลือกเอง ส่วน
-  `next`/`hold`/`claim`/`release`/`synced`/`stale` เป็น bookkeeping ของ `mem.ts` เอง
-- **อ่านกลับผ่าน MCP `mem_find`** (`files[]`/`text`/`kind`/`since`/`limit` — ไม่มี default filter)
-- **หน่วยของ cluster คือ *โซน* ไม่ใช่ไฟล์** และต้องนับ **1 แถว = 1 เหตุการณ์** — เคยนับ
-  file-hit แล้วได้ `layouts/quick 10×` ซึ่งเฟ้อ (verdict เดียวแตะ 9 ไฟล์ถูกนับ 9) นับใหม่เหลือ
-  `server/services` 6× · `server/routes/v1` 6× และมีโซน ≥5 hits แค่ **2 โซน**
-  `(แก้ 2026-09-19 หลังวัดซ้ำด้วย .fapony/plan/pain-cluster.ts)`
+- **`--files` matters most** — without it the row falls through the floor when clustering for repeat-pain
+  zones. · A repo whose log predates `--files` gets one `fapony init-mem` **before** anyone concludes anything
+  from the log (measured: vela had 2,672 rows with zero `files[]` for exactly this reason).
+- Write every row **standalone** — it gets read months later with none of this conversation attached.
+- `close` is the only thing that closes a `bug`. Without it the list only grows.
+- **Every kind is live; none deprecated** — `decision` / `bug` / `note` are the agent's own call, while
+  `next` / `hold` / `claim` / `release` / `synced` / `stale` are `mem.ts`'s own bookkeeping.
+- **Read back via MCP `mem_find`** (`files[]` / `text` / `kind` / `since` / `limit` — no default filter).
+- **The cluster unit is the *zone*, not the file**, and count **1 row = 1 event** — counting
+  file-hits once gave `layouts/quick 10×`, which was inflated (one verdict touching 9 files counted 9);
+  recounting gave `server/services` 6× · `server/routes/v1` 6× with only **2 zones** at ≥5 hits
+  (fixed 2026-09-19 after re-measuring with `.fapony/plan/pain-cluster.ts`).
 
-**`.gitignore` ของรีโปนี้ ignore `.fapony/` ทั้งก้อน** (public repo — mem/plan เป็นบันทึกภายใน)
-ฉะนั้นที่นี่ log อ่านได้จากเครื่องตัวเองเท่านั้น ไม่ใช่ของที่แชร์ผ่าน clone · `.fapony/evidence.json`
-ก็ไม่ถูก commit ด้วย ทั้งที่กฎ evidence บอกว่าต้อง commit — ข้อยกเว้นนี้ใช้ได้เพราะที่นี่มีคนแก้
-คนเดียว repo ที่มีหลายคนต้องเพิ่ม negation เอง
+**This repo's `.gitignore` ignores `.fapony/` wholesale** (public repo — mem/plans are internal notes),
+so here the log is readable from this machine only, never shared via clone. · `.fapony/evidence.json`
+is likewise uncommitted even though the evidence rule says commit it — the exception holds because one person
+edits here; multi-person repos must add the negation themselves.
 
-**ทำไมไม่ยัดกฎนี้ลง `SERVER_INSTRUCTIONS`:** mem.ts เป็นของ *โปรเจกต์* ไม่ใช่ของ fapony
-และมีเฉพาะคนที่รัน `fapony init` · `SERVER_INSTRUCTIONS` จ่ายทุก session ของทุกคนที่ต่อ MCP
-— คนส่วนใหญ่ไม่มีไฟล์นี้ ข้อความจะกลายเป็นคำสั่งให้รันคำสั่งที่พัง
+**Why this rule isn't in `SERVER_INSTRUCTIONS`:** mem.ts belongs to the *project*, not to fapony,
+and exists only for whoever ran `fapony init`. · `SERVER_INSTRUCTIONS` is paid every session by everyone
+connected over MCP — most of them have no such file, and the text would become an instruction to run a command
+that fails.
 
 ---
 
 ## Convention debt — `fapony debt`
 
-layer 3 ที่ไม่มีใครตอบ: *"ตัดสินใจไปเมื่อ 6 เดือนก่อน แล้วย้ายไปถึงไหนแล้ว"*
+Layer 3, which nobody answers: *"we decided this 6 months ago — how far along is the move?"*
 
-- นิยาม convention อยู่ใน**รีโปที่วัด** (`<repo>/.fapony/conventions.json` — resolver เดียวกับ
-  mem log) — **fapony ไม่รู้จัก React หรือ Hono และต้องไม่รู้**
-- 1 convention = pattern ที่ควรใช้ (ok) + pattern ที่แปลว่ายังไม่ย้าย (stale) + scope (where)
-  + เงื่อนไขไฟล์ (guard)
-- **กฎเหล็ก: `checker != null` = fapony เงียบ** รายงานซ้ำกับ eslint คือ abstraction ที่มี
-  implementation เดียว และสอนให้ agent ข้ามทั้งคู่
-- คำนวณสดทุกครั้ง ไม่เขียนลงไหนเลย (เหมือน `analyze` — cache คือหนี้ล้วน ๆ list ที่แช่แข็ง
-  จะตกรุ่นเงียบ ๆ แบบ MASTER.md)
-- cap: stale regex ที่ match เกิน 250 ไฟล์ = regex พัง ไม่ใช่ convention → drop แล้วบอกตรง ๆ
+- A convention is defined in the **repo being measured** (`<repo>/.fapony/conventions.json` — same resolver
+  as the mem log). · **fapony knows neither React nor Hono, and must not.**
+- 1 convention = the pattern to use (ok) + the pattern meaning not-yet-migrated (stale) + scope (where)
+  + file conditions (guard).
+- **Iron rule: `checker != null` = fapony stays silent.** Re-reporting what eslint already reports is an
+  abstraction with a single implementation, and teaches agents to skip both.
+- Computed live every time, persisted nowhere (like `analyze` — a cache is pure debt; a frozen list
+  silently rots like MASTER.md).
+- Cap: a stale regex matching 250+ files is a broken regex, not a convention → dropped, and said plainly.
 
-`fapony lint-baseline` เป็นคู่ของมัน: แยก "แดงอยู่ก่อนแล้ว" ออกจาก "agent ทำให้แดง" โดย
-เทียบ `path:rule-id` (ไม่ใช่เลขบรรทัด — บรรทัดเลื่อนทุกครั้งที่แก้ไฟล์) ที่ base_sha ·
-report only ไม่เคย block · **นี่คือรูปธรรมของ "ประหยัด token"**: agent ที่ไม่เห็น baseline
-จะ `fix all` ก่อน แล้วงานจริงจมอยู่ใน diff ก้อนเดียว (ของจริงจากเจ้าของ: *"138 spots
-across ~40 files unrelated to the work"*)
+`fapony lint-baseline` is its pair: separates "already red" from "I made it red" by comparing
+`path:rule-id` (not line numbers — lines shift on every edit) at base_sha. · Report-only, never blocks. ·
+**This is "save tokens" made concrete**: an agent that can't see the baseline `fix all`s first, and the real
+work drowns in a single giant diff (from the owner, verbatim: *"138 spots across ~40 files unrelated to the work"*).
 
 ---
 
-## DB Schema (2 ตารางเท่านั้น ห้ามเพิ่ม)
+## DB schema (2 tables only — never add)
 
-ledger แช่แข็งแล้ว — schema นี้อยู่เพื่อความเข้ากันได้ ไม่ใช่เพื่อขยายต่อ:
+The ledger is frozen — this schema exists for compatibility, not extension:
 
 ```sql
 runs(id, worktree, plan, mem_id, status, base_sha, round, created_at, updated_at)
 events(id, run_id, ts, kind, data)   -- kind: spawn|gate|stop|memory_claim_closed|verification_report
 ```
 
-`runs` row = 1 measured unit of work ที่ `verdict_submit` สร้างเมื่อไม่มี run เปิดค้าง ·
-events คือ audit trail ที่เป็นข้อเท็จจริง ไม่ใช่ transcript
+A `runs` row = 1 measured unit of work, created by `verdict_submit` when no run was left open. ·
+Events are an audit trail of facts, not a transcript.
 
 ---
 
-## Config Schema
+## Config schema
 
-ทุก field optional, `fapony.config.json` เองก็ optional — ดู `src/core/config.ts` เป็น source of truth:
+Every field optional, `fapony.config.json` itself optional — `src/core/config.ts` is source of truth:
 
 ```json
 {
@@ -250,196 +254,213 @@ events คือ audit trail ที่เป็นข้อเท็จจริ
 }
 ```
 
-- `memory: null` = ปิดทั้งชั้น ไม่ error
-- `telemetry` — opt-in only (omit หรือ `null` = ปิด) ดู [TELEMETRY.md](TELEMETRY.md)
-- env override: `FAPONY_CONFIG` · `FAPONY_STATE_DIR` (ชนะ `paths.stateDir`) ·
-  `FAPONY_NO_REREAD_HINT=1` (kill switch ของ re-read hint — ไม่ยิงและไม่เขียน log) ·
-  `FAPONY_NO_BUG_BLOCK=1` (kill switch ของ bug-signal block — ไม่บังคับ `kind:bug` row)
-- getters รวมศูนย์ใน `src/core/config.ts` — ห้าม hardcode default ซ้ำที่ call site
-- **ห้ามเพิ่ม config field ใหม่ถ้า derive จากโครงสร้างได้** (`plan/done` กับ `.memory` ทำแบบนี้แล้ว)
+- `memory: null` = the whole layer off, no error.
+- `telemetry` — opt-in only (omitted or `null` = off), see [TELEMETRY.md](TELEMETRY.md).
+- env overrides: `FAPONY_CONFIG` · `FAPONY_STATE_DIR` (beats `paths.stateDir`) ·
+  `FAPONY_NO_REREAD_HINT=1` (kill switch for the re-read hint — neither fires nor logs) ·
+  `FAPONY_NO_BUG_BLOCK=1` (kill switch for the bug-signal block — no forced `kind:bug` row).
+- Getters are centralized in `src/core/config.ts` — never re-hardcode defaults at call sites.
+- **Never add a config field derivable from structure** (`plan/done` and `.memory` already work this way).
 
 ---
 
-## Edge Cases ที่จัดการแล้ว
+## Edge cases already handled
 
-ย้ายไปที่ [docs/edge-cases.md](docs/edge-cases.md) — **`grep` ที่นั่นตอนเจอพฤติกรรมแปลกที่
-ดูเหมือนเคยเจอ** (ทุกแถวคือกับดักที่เคยเสียเวลาไปแล้วจริง) เป็น lookup ที่ 90% ของ session
-ไม่ได้ใช้ เลยไม่ควรถูกจ่ายเข้า context ทุกครั้ง
+Moved to [docs/edge-cases.md](docs/edge-cases.md) — **`grep` there when behavior looks oddly familiar**
+(every row is a trap that already cost real time). A lookup 90% of sessions never need, so it should never be
+paid into context every time.
 
 ---
 
 ## History
 
-fapony เริ่มจาก execute→review→fix CLI loop ที่ spawn executor/reviewer เอง — ลบทิ้งทั้งหมด
-(`src/run/`, `src/loop/`, `src/plans.ts`, `src/handoff.ts`, ...) เพราะ client เจ้าของ model
-ทำเองได้ดีกว่า · จากนั้นแกนย้ายไป ledger (ให้ agent เกรดงานตัวเอง) ซึ่งตอบคำถามของมันจบแล้ว
-และ**ตัน**ด้วยสามเหตุผลข้างบน · แกนวันนี้คือ mem + debt ซึ่งบังเอิญเป็นจุดที่ fapony เริ่มต้น
-(mem log `.jsonl`) — ที่เหลือจากสองยุคนั้น: schema `runs`/`events`, `review.maxRounds`,
-plan/spec templates, และ skill ทั้งหมด
+fapony started as an execute→review→fix CLI loop that spawned its own executor/reviewer — deleted wholesale
+(`src/run/`, `src/loop/`, `src/plans.ts`, `src/handoff.ts`, ...) because the client's own model does it better. ·
+Then the core moved to a ledger (agents grading themselves), which answered its question fully and then
+**capped out** for the three reasons above. · Today's core is mem + debt, which happens to be where fapony began
+(the mem log `.jsonl`) — surviving from those two eras: the `runs` / `events` schema, `review.maxRounds`,
+the plan/spec templates, and all the skills.
 
-**บทเรียนที่ต้องไม่ลืม: ทั้งสองครั้งที่แกนย้าย เกิดจากการวัด ไม่ใช่จากความรู้สึก**
-
----
-
-## Rules for AI Agents
-
-1. **ห้ามสร้าง abstraction ที่มี implementation เดียว** — ไม่ scaffold เผื่ออนาคต
-2. **วัดก่อนสร้าง — ทุกครั้ง** รีโปนี้กลับคำเพราะตัวเลข 4 ครั้งแล้ว (`files[]` fill rate ที่เชื่อว่า 0
-   แต่จริง 88% · zone cluster ของ vela ที่เฟ้อจาก file-hit · self-grading bias · line count ตอน
-   คิดจะเปิดรีโปใหม่) **ทั้งสี่ครั้งความเชื่อเดิมผิด** · ถามหา base rate ก่อนเขียน detector เสมอ —
-   1-9% ฆ่าฟีเจอร์เตือนรายไฟล์มาแล้ว
-3. **push ได้เฉพาะ branch ที่ทำงานอยู่ — ห้ามแตะ `main` ห้าม `--force`/`--force-with-lease`**
-   agent เปิด PR ได้ กด merge เองไม่ได้
-4. **Commit แยก concern** — one commit per feature/area · **งานที่จบแล้ว commit เลย ห้ามถามก่อน**
-   · **จบ = typecheck ผ่าน + `bun run test` ผ่าน** (script = `--parallel` + `--timeout 20000` กัน flake บนเครื่องช้า — อย่าใช้ `bun test` เปล่า ๆ เป็น gate) · ระหว่างแก้ใช้ `bun run test:changed` (รันเฉพาะไฟล์ที่ diff กระทบ) ถ้ายังไม่ผ่านคือยังไม่จบ อย่า commit ทับ
-5. **assertSafe() ต้องเรียกกับทุก shell command** ที่ spawn จาก config (memory/evidence/install)
-   รวมถึงที่มาจาก template
-6. **fapony เขียนไฟล์ในเวิร์กทรีเป้าหมายได้ ถ้าเจ้าของสั่ง** — แทนด้วยสามข้อที่เช็คได้:
-   - **6a runtime state ห้ามอยู่ในเวิร์กทรี** — `state.db` อยู่ `~/.config/fapony/` เท่านั้น
-     (mem log เป็นคนละเรื่อง มันคือ *ของทีม* จึงต้องอยู่ในรีโป) · เช็ค: path ของ db ห้ามมาจาก
-     arg/config ที่ชี้เวิร์กทรี
-   - **6b คำสั่งที่อ่านโค้ด ห้ามมี write side effect** — `analyze` `debt` `lint-baseline`
-     `review-seed` `stats` `digest` `report` เขียนได้เฉพาะ path ที่ผู้ใช้ชี้เอง (`--out` /
-     ชื่อไฟล์ใน argv) · คำสั่งใหม่ที่อ่านโค้ดตกอยู่ใต้ข้อนี้อัตโนมัติ
-   - **6c เขียนทับของที่มีอยู่ = ถามก่อน หรือปฏิเสธ** — **consent ไม่ใช่ prohibition**
-7. **บันทึก mem ระหว่างทำงาน พร้อม `--files` เสมอ** — นี่คือกฎที่แทนกฎ "ยิง verdict ทุกครั้ง"
-   ในฐานะ habit หลัก · เขียน `decision` ตอนตัดสินใจอะไรที่ session หน้าจะงง, `bug` ตอนเจอของพัง,
-   `note` ตอนจบ chunk · แถวที่ไม่มี `--files` ตกพื้นตอน cluster = เขียนไปเท่ากับไม่ได้เขียน
-8. **Stop hook บังคับ mem row** ([src/hook.ts](src/hook.ts) — shim, logic อยู่ `src/adapters/hooks/`): จบเทิร์นที่มี commit แต่
-   ไม่มี mem row ใหม่ = ถูก block หนึ่งครั้ง · **จบเทิร์นที่ประกาศว่าเจอบั๊ก (คำ marker) แต่ไม่มี
-   `kind:bug` row = ถูก block หนึ่งครั้งต่อ session** · ไม่มี mem log เลย = ไม่ block ·
-   `verdict_submit` ถอดออกจาก MCP แล้ว (PLAN-verdict-to-mem) — engine อยู่ใน git
-   ฟื้นเป็น CLI ได้ · hook ไม่ตัดสินเกรดแทน — แยก "ใครตัดสิน" ออกจาก
-   "ใครบังคับให้บันทึก" อันหลังเท่านั้นที่ automate ได้ · kill switch:
-   `FAPONY_NO_BUG_BLOCK=1`
-9. **การ *ขอ* ไม่ได้ผล การ *บังคับ* ได้ผล** — วัดแล้วมีสองอย่างที่เปลี่ยนพฤติกรรมจริง:
-   required + enum + reject (`regime`) กับ Stop hook · ทุกอย่างที่เขียนว่า "ควรทำ" ในไฟล์กฎ
-   ไม่มีผลวัดได้ · **ฉะนั้นฟีเจอร์ที่พึ่ง "agent จะจำไปทำเอง" = ยังไม่เสร็จ**
-10. **`project_health_context` ไม่ใช่ reflex ก่อนแก้ไฟล์** — base rate ของ rework จริงคือ
-    1% (canalis) / 9% (fapony) ต่ำเกินจะเตือนอะไรได้ · tool ยังอยู่ เรียกได้ถ้าอยาก แต่
-    **ห้ามบังคับ ห้ามเอากลับเข้า `SERVER_INSTRUCTIONS`**
-11. **Execute plan ทีละ chunk ห้ามลากยาวเป็น session เดียว** — context ใน session เดียวมีแต่โต
-    ไม่เคยหด (วัดจริง: session 300-500 steps ลาก token สูงกว่า session สั้นอย่างไม่เป็นสัดส่วน
-     กับงานที่ทำ) จบ 1 chunk: ติ๊ก checkbox + stamp TL;DR → commit แยก →
-     `mem.ts add note "สิ่งที่ chunk ถัดไปต้องรู้" --files f1,f2 <path/to/PLAN-x.md>` (path ต้อง
-    พิมพ์เหมือนเดิมทุกครั้ง — `kickoff` เทียบ string ตรงตัว) → **หยุด** · session ถัดไปเปิดด้วย
-    `mem.ts kickoff <path เดิม>` แทนแบก transcript เก่า
-12. **ฟีเจอร์ที่ไม่มี caller = ลบ** — ทำจริงแล้ว: `fapony map` ไม่มี caller, `plan-seed` §2/§5
-    วัดได้ 3/3 ว่าง → −257 บรรทัด · ของฝั่งอำนวยความสะดวกพิสูจน์ตัวเองด้วยการถูกใช้
-    ไม่ใช่ด้วยการมีอยู่
-13. **จ่าย token อย่างฉลาด — ไม่ใช่ "ตัดให้น้อยที่สุด" แต่ "จ่ายตรงที่ได้คืน"**
-    ถ้าไม่จ่ายเลย agent ก็ไม่รู้อะไรเลย และ **ข้อมูลที่ agent ไม่รู้ = ข้อมูลที่ไม่มี** ·
-    สิ่งที่ agent รู้ทุกครั้งคือ **input token** ซึ่งถูกกว่า **output token** ที่มันจะเผาไป
-    เดา/อ่านทั้งไฟล์/แก้ผิดแล้วแก้ใหม่ · ฉะนั้นเกณฑ์ไม่ใช่ "ใหญ่ไหม" แต่คือ **"จ่าย input เท่านี้
-    แล้วประหยัด output ได้มากกว่าไหม"** (ของจริง: `review-seed --files` จ่าย ~940 → เลี่ยง ~35k)
-    - **MCP vs CLI ตัดกันตรงนี้:** schema ใน `tools/list` เป็น **ค่าเช่าคงที่** จ่ายทุก session
-      ของทุก client แม้ไม่เรียกสักครั้ง ส่วน CLI เป็น **0 จนกว่าจะรัน** · ฉะนั้น
-       **สิ่งที่คนสั่งให้ทำ = CLI · สิ่งที่ agent ต้องนึกได้เองกลางเทิร์นโดยไม่มีใครสั่ง = MCP** ·
-       `mem_find` ผ่านข้อนี้ ส่วน `fapony_stats` ไม่ผ่านเพราะคนเป็นคนถามเสมอ
-    - **เก็บให้พอ ไม่ใช่อธิบายให้เยอะ** — field ที่ต้องเขียนคำอธิบายสามย่อหน้าแปลว่ายังไม่รู้ว่า
-      จะเก็บอะไร · **ถ้าสรุปด้วยประโยคเดียวไม่ได้ แปลว่ายังไม่เข้าใจปัญหาพอ** (รูปเดียวกับกฎ 3)
-    - description เขียนแบบ **สั่ง ไม่ใช่โน้มน้าว** — "ส่งอันนี้มาด้วย" สั้นกว่าและได้ผลเท่ากับ
-      ย่อหน้าที่อธิบายว่าทำไมมันสำคัญ (กฎ 9: การขอไม่ได้ผล สิ่งที่ได้ผลคือ required + enum + reject)
-    - **เกณฑ์ตัดสินตอนจะเพิ่ม tool ใหม่:** agent จะเรียกมันเองกลางงานไหม ถ้าคำตอบคือ
-      "เรียกเมื่อเจ้าของสั่ง" = CLI · ถ้าตอบไม่ได้ = ยังไม่ต้องเพิ่ม
-
+**The lesson that must not be forgotten: both core moves came from measurement, not feeling.**
 
 ---
 
-## Moat — สามข้อที่ต้องถืออย่างน้อยสอง
+## Rules for AI agents
 
-ภัยคุกคามที่ฆ่า fapony ได้จริงมีแบบเดียว: **client เจ้าของ model ทำเอง** — รูปเดียวกับที่ดูด
-execute→review loop ไปแล้วครั้งหนึ่ง ดู History
+1. **Never build an abstraction with a single implementation** — no scaffolding for the future.
+2. **Measure before building — every time.** This repo reversed itself on numbers 4 times already (a `files[]`
+   fill rate believed 0 but really 88% · vela's zone cluster inflated by file-hits · self-grading bias ·
+   line counts back when opening a new repo was on the table). **All four prior beliefs were wrong.** · Always
+   ask for the base rate before writing a detector — 1–9% has already killed per-file alert features.
+3. **Push only the branch you're on — never touch `main`, never `--force` / `--force-with-lease`.**
+   Agents may open PRs, never merge them themselves.
+4. **One concern per commit** · **commit finished work immediately, don't ask first.** · **Done = typecheck
+   passes + `bun run test` passes** (the script = `--parallel` + `--timeout 20000` against flakes on slow machines —
+   never use bare `bun test` as a gate) · while iterating use `bun run test:changed` (only files the diff touches);
+   still red = not done, don't commit over it.
+5. **`assertSafe()` on every shell command** spawned from config (memory/evidence/install), including ones from
+   templates.
+6. **fapony may write files in the target worktree when the owner says so** — restated as three checkable rules:
+   - **6a runtime state never lives in a worktree** — `state.db` is `~/.config/fapony/` only
+     (the mem log is a different thing — it is the *team's*, so it belongs in the repo). · Check: the db path
+     must never come from an arg/config pointing at a worktree.
+   - **6b commands that read code must have no write side effects** — `analyze` `debt` `lint-baseline`
+     `review-seed` `stats` `digest` `report` may write only paths the user pointed at (`--out` /
+     a filename in argv). · New commands that read code fall under this automatically.
+   - **6c overwriting what exists = ask first, or refuse.** · **Consent is not prohibition.**
+7. **Record mem while you work, always with `--files`.** This is the rule that replaces "file a verdict every
+   time" as the core habit. · Write `decision` when you decide something the next session would puzzle over,
+   `bug` when you find something broken, `note` when a chunk lands. · A row without `--files` falls through the
+   floor at cluster time = writing it was writing nothing.
+8. **The Stop hook enforces a mem row** ([src/hook.ts](src/hook.ts) — shim; logic in `src/adapters/hooks/`):
+   ending a turn with commits but no new mem row = blocked once. · **Ending a turn that declares a bug with no
+   `kind:bug` row = blocked once per session.** · What counts as "a bug" lives in one place —
+   [src/adapters/hooks/bug-markers.ts](src/adapters/hooks/bug-markers.ts): `BUG_MARKERS` (announcement phrases,
+   multi-language, open for extension) **or** a `fix:` / `bugfix:` / `hotfix:` commit type (language-independent
+   — only the type token is English). Free-text phrases can never be universal, so extend the list per language
+   instead of inventing a new row kind — and never add symptom words ("broken", "dies silently"), which would
+   fire on any turn that merely reads a bug report. · OpenCode has no stop hook, so its commit hint carries the
+   same `kind:bug` nudge instead (rule 13). · No mem log at all = no block. ·
+   `verdict_submit` is off the MCP surface (PLAN-verdict-to-mem) — the engine is in git, revivable as a CLI. ·
+   The hook never grades in anyone's place — "who judges" stays separate from "who enforces recording"; only the
+   latter can be automated. · Kill switch: `FAPONY_NO_BUG_BLOCK=1`.
+9. **Asking doesn't work; enforcing does.** Measured: exactly two things actually change behavior —
+   required + enum + reject (`regime`) and the Stop hook. · Everything a rule file says agents "should" do has no
+   measurable effect. · **So a feature that relies on "the agent will remember to do it" = not done.**
+10. **`project_health_context` is not a pre-edit reflex.** The true rework base rate is
+    1% (canalis) / 9% (fapony) — too low to warn on. · The tool still exists; call it if you want, but
+    **never enforce it, never put it back in `SERVER_INSTRUCTIONS`.**
+11. **Execute plans one chunk at a time — never one long session.** Context in a single session only grows,
+    never shrinks (measured: 300–500-step sessions burn tokens wildly out of proportion to the work done).
+    Closing 1 chunk: tick the checkbox + stamp the TL;DR → its own commit →
+    `mem.ts add note "<what chunk N+1 must know>" --files f1,f2 <path/to/PLAN-x.md>` (retype the path
+    identically every time — `kickoff` compares raw strings) → **stop**. · The next session opens with
+    `mem.ts kickoff <same path>` instead of hauling the old transcript.
+12. **A feature with no caller = delete.** Actually done: `fapony map` had no caller; plan-seed §2/§5
+    measured 3/3 empty → −257 lines. · Convenience-side things prove themselves by being used, not by existing.
+13. **Spend tokens smart — not "cut to the minimum" but "pay where it pays back."**
+    Pay nothing and the agent knows nothing, and **data the agent doesn't know = data that doesn't exist.** ·
+    What the agent knows every time is **input tokens**, which are cheaper than the **output tokens** it would burn
+    guessing / reading whole files / fixing wrongly then re-fixing. · So the test isn't "is it big" but
+    **"does this much input save more output"** (verbatim case: `review-seed --files` pays ~940 → dodges ~35k).
+    - **MCP vs CLI splits here:** a schema in `tools/list` is **fixed rent** paid every session
+      of every client even when never called, while a CLI command is **0 until run**. · Hence
+      **what a human orders = CLI · what the agent must think of mid-turn unasked = MCP.** ·
+      `mem_find` passes this; `fapony_stats` didn't because only a human ever asks it.
+    - **Store enough; don't explain at length.** A field needing three paragraphs of explanation means you don't
+      know what you're storing yet. · **If it can't be summarized in one sentence, the problem isn't understood
+      well enough** (same shape as rule 3).
+    - Write descriptions as **orders, not persuasion** — "send this along" is shorter and works as well as a
+      paragraph on why it matters (rule 9: asking doesn't work; what works is required + enum + reject).
+    - **The test for adding a new tool:** will the agent call it on its own mid-task? If the answer is
+      "when the owner orders it" = CLI. · If there's no answer = don't add it yet.
 
-1. **ข้ามไคลเอนต์** — ไม้บรรทัดเดียวกันทับ Claude Code + OpenCode (หลัก), ZCode, Codex
-   session log ของแต่ละเจ้าไม่มีวันข้ามหากัน เพราะไม่มีใครได้ประโยชน์จากการทำให้ข้าม ·
-   `src/session/` 2,450 บรรทัดคือ moat ข้อนี้ทั้งดุ้น และเป็นของที่เขียนใหม่แพงที่สุด
-2. **ข้ามโปรเจกต์ / ข้ามเครื่อง** — `runs.worktree` เป็น key ตั้งแต่แรก · mem log อยู่ในรีโป
-   จึงข้ามเครื่องได้ฟรีผ่าน git อยู่แล้ว
-3. **เจ้าของถือข้อมูลเอง** — db อยู่ `~/.config/fapony/` เครื่องผู้ใช้ ไม่มี server ไม่มี account
-   telemetry opt-in และ allowlist เท่านั้น
-
-ทุกฟีเจอร์ต้องถืออย่างน้อยสองข้อ ถ้าข้อไหนก็ไม่ถือ = client เดียวก็ทำได้ = อย่าทำ
-
-**เรื่อง field ใหม่ — สรุปผิดมาสองรอบ อย่าสรุปรอบสาม:** รอบแรก "ทุก field ที่เพิ่ม ลด fill rate"
-(ผิด) รอบสอง "**optional** คือสิ่งที่ฆ่า fill rate" (ผิดอีก — `files[]` ยัง optional
-ทุกตัวอักษรแต่ fill rate 294/333 = 88%) · **ที่ยังจริง:** กฎข้อ 1 (ต้องพิสูจน์ว่าจำเป็น) และ
-required + enum + reject เป็นเครื่องมือที่แรงที่สุด · **ส่วน *ทำไม* fill rate มันพลิกคืน 09-11
-ข้อมูลแยกไม่ออก อย่าเขียนว่ารู้** — มีของเปลี่ยนสามอย่างในหน้าต่างเดียวกัน และแถวแรกที่มี
-`files[]` มาก่อน merge commit ราวหนึ่งชั่วโมง · **correlation วันเดียวกันไม่ใช่สาเหตุ**
 
 ---
 
-## Cloud — รายได้อนาคต ยังไม่สร้าง
+## Moat — hold at least two of three
 
-**ทิศที่มองไว้:** sync ราคาถูกข้ามเครื่อง เพราะรูปแบบการทำงานกำลังเปลี่ยน — สั่งงานผ่าน
-Telegram/iPad แล้วเปิดคอมที่บ้านรัน agent ไว้ · คนสั่งไม่ได้นั่งอยู่หน้าโค้ด agent จำไม่ได้
-ก็พลาดซ้ำ แล้วจบด้วยการเรียก model ตัวใหญ่มา scan + refactor 20 ไฟล์ — **ความเจ็บที่ mem + debt
-เล็งอยู่ตรง ๆ และวัดเป็น token ได้**
+The one threat that can actually kill fapony comes in a single shape: **the client's own model doing it** —
+the same shape that already absorbed the execute→review loop once. See History.
 
-**สัญญาณราคา:** ถาม dev ที่รู้จักเรื่อง $5/seat ได้คำตอบว่า *"ถ้าทำให้ไม่ต้องมา refactor
-20 ไฟล์ซ้ำ ๆ ก็จ่ายได้"* — **นี่คือ n=1 และเป็นคำพูด ไม่ใช่การจ่ายเงิน** อย่าอ้างเป็น validation
+1. **Cross-client** — one yardstick over Claude Code + OpenCode (primary), ZCode, Codex.
+   No client's session logs will ever cross to another, because nobody benefits from making them cross. ·
+   `src/session/`'s 2,450 lines are this moat entire, and the most expensive thing to rewrite.
+2. **Cross-project / cross-machine** — `runs.worktree` has been the key from the start. · The mem log lives in
+   the repo, so it crosses machines over git for free.
+3. **The owner holds their own data** — the db is on the user's machine at `~/.config/fapony/`, no server, no
+   account. Telemetry opt-in, allowlist only.
 
-**กฎกันสร้าง infra ล่วงหน้า (กฎ 1):**
-- **เกณฑ์เริ่มงาน cloud: มีคนที่ไม่ใช่เจ้าของใช้ fapony ต่อเนื่องเกิน 30 วัน** ก่อนหน้านั้น
-  sync คือ infra สำหรับ user คนเดียว = abstraction ที่มี implementation เดียว
-- **คนเดียวหลายเครื่องไม่ต้องใช้ cloud** — mem log อยู่ในรีโป (git พาไปเอง) และ `state.db`
-  เป็นไฟล์เดียว (private repo / Syncthing / iCloud พอ) · cloud จำเป็นจริงตอน ledger + mem
-  **ข้ามคน** เท่านั้น
-- **วันที่มี cloud โปรโมทข้อ 3 ของ Moat จะตาย** ("db อยู่เครื่องคุณ ไม่มี server ไม่มี account")
-  ต้องได้อะไรที่ใหญ่กว่ามาแลก และต้องมี self-host option ไม่งั้นเหลือ moat แค่สองข้อ
+Every feature must hold at least two. Holding none = one client could do it = don't build it.
 
----
-
-## Positioning — กฎกันโดนถล่มตอนโปรโมท
-
-1. **ห้ามใช้คำว่า "verifies" เป็นหัวเรื่อง** — fapony ไม่รันเทสต์เอง ไม่ตัดสินเอง
-   มันคือ **ที่จำ ไม่ใช่ผู้ตัดสิน** คนอ่าน HN เปิดซอร์สจริง พูดเกินคำเดียวเสียเครดิตทั้งโพสต์
-2. **ห้ามอ้างว่า fapony บอกได้ว่า model ไหนเก่งกว่า** — self-grading bias ต่างกันรายโมเดล
-   (ดู "ทำไมแกนย้าย") · ที่พูดได้คือ **token ต่องาน** ซึ่งวัดจาก log
-3. **นำด้วย day-1 value เสมอ** — `usage-scan` / `usage-web` (CLI) ทำงานทันทีที่ติดตั้งเพราะอ่าน log
-   ที่เขามีอยู่แล้ว ส่วน mem + debt คือ **retention ไม่ใช่ acquisition** (ต้องสะสมก่อนถึงมีค่า) ·
-   **ห้ามสลับลำดับ README ให้ mem/debt ขึ้นก่อน จนกว่าจะมีเลข moved% สองจุดเวลา** — ใครติดตั้ง
-   แล้วเจอ "ยังไม่มีประวัติพอ" เป็นอย่างแรก = ปิดทิ้ง (นี่คือสิ่งที่ฆ่า `project_health_context`)
-4. **ประกาศข้อจำกัดเองก่อนคนอื่นจับได้** — section "What fapony is not" ใน README ห้ามลบ
-5. **ห้ามขายว่า "fapony หา dead code / โค้ดซ้ำให้"** — knip / madge / jscpd ฟรีและเก่งกว่า
-   คนอ่านคนแรกจะตอบว่า "ก็ knip ไง" · ประโยคที่ขายได้คือ **"agent จำความเจ็บไม่ได้ จึงไม่เคย
-   สร้าง abstraction — fapony จำแทน แล้วบอกว่าย้ายไปถึงไหนแล้ว"**
-6. **cross-client คือจุดต่าง ไม่ใช่ตัว dashboard** — tool อ่าน usage ของ Claude Code มีเยอะแล้ว
-   ที่อ่าน 4 client บนไม้บรรทัดเดียวกันแทบไม่มี
-
-**กลุ่มเป้าหมายคือคนที่จ่ายค่า plan เอง** — dev ที่ใช้ Max plan ของบริษัทไม่เจ็บ จึงไม่ใช่ลูกค้า
-ทุกข้อความต้องพูดกับคนที่บริหาร token อยู่
-
-**เกณฑ์ว่าพร้อมโปรโมท:** คนที่ไม่ใช่เจ้าของติดตั้งแล้วเห็นอะไรที่มีประโยชน์ภายใน 60 วินาที
-— ไม่ใช่จำนวน feature · ลำดับช่อง: awesome-mcp-servers PR → r/ClaudeAI + ชุมชนไทย →
-บทความ *"I built the agent loop everyone builds first, then deleted it"* → Show HN
-**นัดเดียว อย่าเผา**
+**On new fields — miscounted twice, don't miscount a third time:** first "every field added lowers fill rate"
+(wrong); second, "**optional** is what kills fill rate" (wrong again — `files[]` is optional to the last letter
+yet fills 294/333 = 88%). · **What still holds:** rule 1 (prove necessity) and required + enum + reject as the
+strongest tool. · ***Why* the fill rate flipped back 09-11, the data can't separate — don't write that you know** —
+three things changed in the same window, and the first row with `files[]` predates the merge commit by about an
+hour. · **Same-day correlation is not causation.**
 
 ---
 
-## Plan Core — template สำหรับทุก plan
+## Cloud — future revenue, not built yet
 
-ใช้ [templates/PLAN.md](templates/PLAN.md) (`.fapony/plan/PLAN-<feature>.md`) และ
-[templates/SPEC.md](templates/SPEC.md) (`.fapony/spec/SPEC-<feature>.md`) · **กฎเหล็ก 4 ข้อ:**
-section 1–4 ห้ามขาด · section 6 แต่ละขั้นต้อง verify ได้ · section 8 ต้อง link กลับ ·
-**plan = what/why/order, spec = how in detail** — ห้ามแปะ API shape/schema/edge-case ลงใน
-plan section 7 ตรง ๆ ให้ link ไปที่ spec
+**The direction in mind:** cheap cross-machine sync, because the working shape is shifting — ordering work over
+Telegram/iPad, then running agents on the home machine. · The person ordering isn't sitting at the code, the agent
+doesn't remember, mistakes repeat, and it ends with calling a big model to scan + refactor 20 files — **exactly the
+pain mem + debt aims at, and measurable in tokens.**
 
-**Frontmatter + TL;DR:** หัวไฟล์มี `kind`/`status`/`blocked_by`/`blocks`/`superseded_by`/`spec`/`priority`
-(ค่าเป็น EN เสมอ — เป็น enum ที่ tool อ่าน) แล้วตามด้วย `## TL;DR` ≤15 บรรทัดที่เป็น**ส่วนเดียว
-ที่เปลี่ยนได้ระหว่างทำงาน** · `fapony mem kickoff` นับ checkbox ของ section `##` แรกเท่านั้น —
-**ห้ามสร้างไฟล์ MASTER.md** ทุกบรรทัดของมัน derive ได้อยู่แล้ว ไฟล์ที่ maintain เองจะตกรุ่นเสมอ ·
-`status`/`blocked_by`/`blocks`/`superseded_by` ยังเขียนไว้ได้แต่ตอนนี้ไม่มี tool อ่าน
+**Price signal:** asking a dev friend about $5/seat got *"if it saves re-refactoring the same 20 files, I'd pay"*
+— **that's n=1 and words, not money.** Never cite it as validation.
 
-**Layout `.fapony/{plan,done,spec}`:** `done/` อยู่**ข้าง ๆ** `plan/` ไม่ใช่ข้างใน — ลิงก์
-relative รอดทั้งหมด archive เหลือ `git mv` + sed ลิงก์ plan→plan · **ไม่เติมวันที่หน้าชื่อไฟล์**
-(วันที่อยู่ใน header `> ✅ **shipped YYYY-MM-DD**` แล้ว — "วันนั้นจบอะไร" ให้ derive ด้วย
-`grep -h shipped .fapony/done/*.md | sort`) · **spec ไม่ archive เลย** เพราะ spec คือห้องสมุด
-และ spec ที่ไม่ย้าย = ลิงก์ที่ไม่พัง
+**Rules against building infra early (rule 1):**
+- **Start-cloud criterion: someone who isn't the owner using fapony continuously for 30+ days.** Before that,
+  sync is infra for a single user = an abstraction with one implementation.
+- **One person, many machines needs no cloud.** The mem log is in the repo (git carries it) and `state.db`
+  is a single file (private repo / Syncthing / iCloud is enough). · Cloud becomes genuinely necessary only when
+  ledger + mem cross **people**.
+- **The day cloud exists, Moat point 3 dies** ("the db is on your machine, no server, no account").
+  It must buy something bigger in return, with a self-host option — otherwise two moats remain.
 
-**งาน wire/refactor ไม่ต้องมี PLAN.md** — คู่ที่ใช้จริงคือ `analyze <dir>` + `review-seed --files`
-ตอนเปิด แล้วปิดด้วย `review-pony` — deterministic ทั้งสองหัว ไม่มี LLM คั่นกลาง
+---
+
+## Positioning — rules against getting torn apart at launch
+
+1. **Never headline with "verifies".** fapony never runs tests itself, never judges itself.
+   It's **the memory, not the judge.** HN readers open the source for real — one overclaiming word burns the
+   whole post's credit.
+2. **Never claim fapony says which model is better.** Self-grading bias differs per model
+   (see "Why the core moved"). · What can be said is **tokens per task**, measured from logs.
+3. **Lead with day-1 value, always.** `usage-scan` / `usage-web` (CLI) work the moment they're installed because
+   they read logs already there, while mem + debt are **retention, not acquisition** (worthless until accumulated). ·
+   **Don't reorder the README to lead with mem/debt until moved% exists at two points in time** — anyone who installs
+   and meets "not enough history yet" as the first thing = walks away (that's what killed `project_health_context`).
+4. **Declare limits yourself before anyone else catches them.** The "What fapony is not" section in the README
+   must never be deleted.
+5. **Never sell "fapony finds your dead code / duplication".** knip / madge / jscpd are free and better.
+   The first reader replies "so, knip?" · The sentence that sells: **"agents can't remember pain, so they never
+   build abstractions — fapony remembers instead, and reports how far the move has gone."**
+6. **Cross-client is the differentiator, not the dashboard.** Plenty of tools read Claude Code usage already;
+   almost none read 4 clients on one yardstick.
+
+**The audience is people paying for their own plan.** Devs on a company Max plan don't hurt, so they're not
+customers. Every message speaks to someone managing tokens.
+
+**Launch-ready criterion:** someone who isn't the owner installs and sees something useful within 60 seconds —
+not a feature count. · Channel order: awesome-mcp-servers PR → r/ClaudeAI + Thai communities →
+the essay *"I built the agent loop everyone builds first, then deleted it"* → Show HN.
+**One shot — don't burn it.**
+
+---
+
+## Plan Core — the template for every plan
+
+Uses [templates/PLAN.md](templates/PLAN.md) (`.fapony/plan/PLAN-<feature>.md`) and
+[templates/SPEC.md](templates/SPEC.md) (`.fapony/spec/SPEC-<feature>.md`). · **4 iron rules:**
+sections 1–4 never missing · every step in section 6 verifiable · section 8 linked back. ·
+**plan = what/why/order, spec = how in detail** — never paste API shapes/schemas/edge cases into
+plan section 7 directly; link to the spec.
+
+**Frontmatter + TL;DR:** the header carries `kind` / `status` / `blocked_by` / `blocks` / `superseded_by` / `spec` / `priority`
+(values always EN — an enum the tool reads), then a `## TL;DR` ≤15 lines that is the **only part allowed to
+change mid-flight**. · `fapony mem kickoff` counts checkboxes of the first `##` section only —
+**never create MASTER.md**; every line of it is derivable anyway, and a hand-kept file always rots. ·
+`status` / `blocked_by` / `blocks` / `superseded_by` are read by `mem plan-check` (dangling refs,
+blocker shipped but dependent still blocked, waiter cycles, blocked with all chunks ticked) and by
+`mem plan-sweep` (blocked view + `🔓` unblock hint on `--apply`).
+
+**Ticked shas are verified, not trusted:** `mem plan-check` scans ticked lines in plan/ + done/ — a sha missing
+from git history or not an ancestor of HEAD becomes an issue (bare hex words git never heard of stay silent unless
+cited next to a real sha). · `kickoff` prints one ⚠ closure line for the last ticked chunk when its sha doesn't
+verify, and stays silent when it does. · A ticked box with no sha to check is a claim, not a close.
+
+**Layout `.fapony/{plan,done,spec}`:** `done/` sits **beside** `plan/`, not inside — every relative
+link survives the move, so archiving is `git mv` + sed of plan→plan links. · **No dates in filenames**
+(the date lives in the header `> ✅ **shipped YYYY-MM-DD**` — "what landed when" derives from
+`grep -h shipped .fapony/done/*.md | sort`). · **Specs are never archived** — the spec is a library,
+and an unmoved spec = unbroken links.
+
+**Wiring/refactor work needs no PLAN.md.** The pair actually used is `analyze <dir>` + `review-seed --files`
+at open, closed by `review-pony` — deterministic at both ends, no LLM in between.
 
 ---
 
@@ -447,27 +468,31 @@ relative รอดทั้งหมด archive เหลือ `git mv` + sed �
 
 ```bash
 # ── core: mem + debt ──
-fapony mem <add|close|find|kickoff|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
-fapony debt [--id <convention>] [--where <path>]   # ไฟล์ไหนยังไม่ย้ายไป convention ที่ประกาศไว้ (live, read-only)
-fapony lint-baseline [--cmd ...] [--diff]   # แยก "แดงอยู่ก่อนแล้ว" ออกจาก "ฉันทำให้แดง"
-fapony init-mem                     # ลบ .memory/ เก่า + เตือน call site ที่ยังอ้างถึง (data files ไม่ถูกแตะ)
+fapony mem add <kind> "<text>" --files f1,f2 [spec.md]
+fapony mem close <id> "<msg>"
+fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]
+fapony mem kickoff [<plan.md>] [--pick <n>]
+fapony mem done | stale | claim | release | synced | plan-sweep | plan-check | rotate
+fapony debt [--id <convention>] [--where <path>]   # which files haven't migrated to a declared convention (live, read-only)
+fapony lint-baseline [--cmd ...] [--diff]   # separate "already red" from "I made it red"
+fapony init-mem                     # delete legacy .memory/ dirs + warn call sites still referencing them (data files untouched)
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]
 # ── day-1: usage ──
 fapony usage-scan                    # scan session logs → usage-cache.jsonl (incremental)
-fapony usage-web [port]              # dashboard เทียบ usage จาก cache (ไม่แตะ session log)
-fapony price-scan                    # refresh ตารางราคา model
-# ── lookup (read-only, ไม่แตะ state) ──
-fapony analyze [path]                # hub/orphan/cycle/changed-untested — live graph, ไม่ persist
+fapony usage-web [port]              # dashboard comparing usage from cache (never touches session logs)
+fapony price-scan                    # refresh the model price table
+# ── lookup (read-only, never touches state) ──
+fapony analyze [path]                # hub/orphan/cycle/changed-untested — live graph, never persisted
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym]
 fapony plan-seed <name> [--spec] [--scope <path>]...
-# ── ledger (แช่แข็ง — แก้เฉพาะบั๊ก) ──
+# ── ledger (frozen — bug fixes only) ──
 fapony mcp                           # MCP server — stdio JSON-RPC, 3 tools
-fapony hook-stop                     # Stop hook — block เทิร์นที่มี commit แต่ไม่มี mem row ใหม่
-fapony hook-read-hint                # annotate 2 แบบ: อ่านไฟล์ใหญ่ทั้งไฟล์ → review-seed ·
-                                     # re-read ไฟล์เดิมใน session เดียวกันที่ mtime ไม่ขยับ → grep
-fapony hook-edit-hint                # PreToolUse Edit — บอกจำนวน importer ของไฟล์ที่กำลังแก้ (Claude)
-fapony hook-mv-guard                   # PreToolUse Bash — deny `git mv` ของ plan file เข้า done/ ให้ใช้ `plan-sweep --apply` แทน (Claude)
-fapony hook-session-start            # SessionStart — ยิง `mem kickoff` เข้า context (เงียบถ้าไม่มี mem log)
+fapony hook-stop                     # Stop hook — block turns with commits but no new mem row
+fapony hook-read-hint                # 2 annotation kinds: whole-file read of a big file → review-seed ·
+                                     # re-read of the same file in one session with unmoved mtime → grep
+fapony hook-edit-hint                # PreToolUse Edit — importer count of the file being edited (Claude)
+fapony hook-mv-guard                   # PreToolUse Bash — deny raw `git mv` of plan files into done/, use `plan-sweep --apply` instead (Claude)
+fapony hook-session-start            # SessionStart — fire `mem kickoff` into context (silent with no mem log)
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]
 fapony report <run-id>  ·  fapony report-web [file]
 # ── setup ──
@@ -475,77 +500,77 @@ fapony init <path>  ·  fapony install [--all|--platform <name>|--dry-run]  ·  
 fapony update  ·  fapony telemetry show|send
 ```
 
-**`review-seed --files` คือ lookup ตอน *execute* ไม่ใช่แค่ "Before" ของ review-pony** — โชว์
-export ทุกตัวพร้อมเลขบรรทัด + importer ทุกตัว (uncapped) · **ก่อนแก้ไฟล์ที่ยังไม่รู้จัก ยิงอันนี้
-แทนการ Read ทั้งไฟล์** แล้วค่อย Read เฉพาะช่วงบรรทัดที่มันชี้ · **รับ directory ได้ด้วย**
-(zone lookup — dir ขยายเป็นไฟล์ source ใต้นั้น cap 40 แล้วบอกตรง ๆ เมื่อตัด) · path ที่ไม่มีจริง
-ถูก drop พร้อมแจ้ง not found แทนที่จะนับเป็น changed เงียบ ๆ · scope แบบ diff
-(`--commit`/`--range`/`--staged`) ยัง cap เท่าเดิม นั่นคืองบของ review ไม่ใช่ของ lookup
+**`review-seed --files` is lookup at *execute* time, not just review-pony's "Before".** It shows
+every export with line numbers + every importer (uncapped). · **Before touching an unfamiliar file, fire this
+instead of Reading the whole file**, then Read only the line ranges it points at. · **Directories work too**
+(zone lookup — a dir expands to the source files under it, cap 40, and says so when cut). · Nonexistent paths
+are dropped with a not-found notice instead of silently counting as changed. · Diff scopes
+(`--commit` / `--range` / `--staged`) keep their old caps — that's the review's budget, not the lookup's.
 
 ```bash
 fapony review-seed --files src/x.ts --body resolveScope,findScope --callers resolveScope
 ```
 
-`--body` = declaration slice ของ export ที่ระบุ · `--callers` = symbol→symbol scan ข้าม importer
-ที่ static graph เห็น (dynamic use อยู่นอกมือ) · **export เท่านั้น** — ฟังก์ชันที่ไม่ export
-ตอบว่า "no export named X in scope" ไม่ใช่ "ไม่มี"
+`--body` = declaration slices of the named exports. · `--callers` = symbol→symbol scan across the importers
+the static graph sees (dynamic use is out of reach). · **Exports only** — a function that isn't exported
+answers "no export named X in scope", not "doesn't exist".
 
-**Dead code ใช้ `bunx knip@6`** ([knip.json](knip.json) ignore `templates/**` เพราะ `init-mem`
-ก๊อปโฟลเดอร์นั้นไปรีโปอื่น มันจึงไม่มีวันมี importer ที่นี่) · ไม่ผูก CI — gate ที่ต้องปลดล็อก
-ทุกครั้งแค่สอนให้ข้าม · **อ่านผลให้ถูก: มันรายงาน _unused export_ ไม่ใช่ unused function**
-ให้ถอดคำว่า `export` ไม่ใช่ลบฟังก์ชัน
+**Dead code goes through `bunx knip@6`** ([knip.json](knip.json) ignores `templates/**` because `init-mem`
+copies that folder into other repos, so it can never have an importer here). · Never gate CI on it — a gate that
+must be unlocked every time just teaches skipping. · **Read the output right: it reports _unused exports_, not
+unused functions.** Remove the word `export`, not the function.
 
 ---
 
 ## MCP Tools: fapony
 
-`fapony mcp` — stdio JSON-RPC, **3 tools** (`mem_add` เข้ามาพร้อม PLAN-agent-one-call ·
-`plan_list` ออกไป 2026-09-20 · `fapony_usage` ออกไป 2026-09-20 เหลือ CLI · `mem_close`
-เข้ามา 2026-09-21 เป็น tool แยกเพราะ close row ไม่มี `files[]` — ดูกฎ 12/13):
+`fapony mcp` — stdio JSON-RPC, **3 tools** (`mem_add` arrived with PLAN-agent-one-call ·
+`plan_list` left 2026-09-20 · `fapony_usage` left 2026-09-20 for CLI · `mem_close`
+arrived 2026-09-21 as a separate tool because a close row carries no `files[]` — see rules 12/13):
 
 | Tool | Purpose |
 |------|---------|
-| `mem_find` | **แกน** — ค้น mem log read-only: match `files[]` ที่เก็บจริงในแถวก่อน แล้ว fallback เป็น substring ของ text/spec/ref สำหรับแถวเก่าที่เขียนตอนยังไม่มี `--files` · ทุก kind ไม่มี default filter · `memDir:null` = ไม่มี mem (ไม่ใช่ "ไม่เจอ") |
-| `mem_add` | **แกน — ครึ่งเขียนของ `mem_find`** · append mem row (`decision`/`bug`/`note`/`next`/`hold`) โดย `files[]` **required + reject เมื่อว่าง** (กฎ 9: required ได้ผล การขอไม่ได้ผล) — แถวที่ไม่บอกไฟล์ หาไม่เจอตอนแตะไฟล์นั้น |
-| `mem_close` | **แกน — ครึ่งปิดของ `mem_add`** · ปิด row ด้วย id + tombstone message (`ref`+`text`, ไม่มี `files[]`) ฉะนั้นเป็น tool แยก ไม่ใช่ `kind:"close"` — schema ที่ required field ขึ้นกับค่าของอีก field คือรูปทรงที่เรียกผิดบ่อยที่สุด |
+| `mem_find` | **The core** — search the mem log read-only: match the row's stored `files[]` first, then fall back to substring of text/spec/ref for old rows written before `--files` existed · every kind, no default filter · `memDir:null` = no mem (not "no match") |
+| `mem_add` | **The core — the write half of `mem_find`.** Appends a mem row (`decision` / `bug` / `note` / `next` / `hold`) with `files[]` **required, rejected when empty** (rule 9: required works, asking doesn't) — a row that names no file is unfindable when you next touch that file |
+| `mem_close` | **The core — the close half of `mem_add`.** Closes a row by id with a tombstone message (`ref` + `text`, no `files[]`) — a separate tool, not `kind:"close"`, because a schema whose required fields depend on another field's value is the most-miscalled shape there is |
 
-**ที่ถอดออกไปแล้วและห้ามเอากลับ:** `verdict_submit` (2026-09-21 — PLAN-verdict-to-mem: schema
-2,126/5,049 ตัวอักษร = 42% ของค่าเช่าทุก session · เกรด 93.9% pass-family ไม่เคย discriminate ·
-Stop hook เปลี่ยนไปบังคับ mem row แทน · engine อยู่ใน git ฟื้นเป็น CLI ได้) · `fapony_usage` (2026-09-20 — สอบตกกฎ 13: คนเรียกมีแต่เจ้าของ
-("เมื่อวานเผาไปเท่าไหร่") ไม่ใช่ agent กลางเทิร์น · ทุก client แสดง token ของตัวเองอยู่แล้ว เหลือข้ออ้าง
-เดียวคือ cross-client ruler ซึ่ง CLI `usage-scan`/`usage-web` ตอบได้เหมือนกันด้วยค่าเช่าศูนย์ ·
-ลบ `src/mcp/tools/usage.ts` + test ทิ้ง, engine `src/session/` + `src/usage/` อยู่ครบเพราะ CLI ใช้ ·
-statusline integration ถอดออกทั้งฟีเจอร์ 2026-09-21 — caller ศูนย์บนเครื่องเจ้าของ (ponytail
-plugin's statusline ชนะไปแล้ว) และ cache write (`writeStatuslineCache` ใน transport.ts) ไม่มีใคร
-อ่านต่อ ตามกฎ 12) ·
-`plan_list` (2026-09-20 — `fapony mem kickoff` ตอบ
-"เหลืออะไร" จาก plan file ชุดเดียวกัน · ลบ `src/mcp/tools/plans.ts` + `getLastVerdictByPlan`
-ทิ้งด้วยเพราะไม่มี caller เหลือ ตามกฎ 12) · **สิ่งที่หายไปจริงวัดแล้วว่าเล็ก** (กฎ 2): ใน plan
-ทั้งหมด 42 ไฟล์ (plan/ 3 + done/ 39) `blocked_by` ถูกใช้ **0 ไฟล์ all-time** · `blocks` 3 ·
-`superseded_by` 2 · `status` 18 — คำถาม "อะไร blocked" ที่ plan_list ถูกสร้างมาตอบ ไม่เคยมี
-ข้อมูลให้ตอบ และ plan ที่ยังไม่ ship มี 3 ไฟล์ซึ่ง `ls` ก็พอ · ถ้าวันหนึ่งอยากได้ view นั้นจริง
-**ให้ฟื้นเป็น CLI `fapony plan-list`** (engine อยู่ใน git ที่ 46e0dac) ไม่ใช่เอากลับเข้า MCP · `fapony_stats` (CLI `fapony stats` ตอบเหมือนกันทุกอย่าง และ
-description ของมันขายว่า "บอกได้ว่าควรจ่ายให้ model ไหน" ซึ่งขัด Positioning ข้อ 2) ·
-`project_health_context` (caller ศูนย์ — engine `src/context/projectHealth.ts` ยังอยู่ ใช้จาก CLI ได้) ·
-`verification_report` / `handoff_check` / `handoff_collect` (ถอดไปก่อนหน้านี้ด้วยเหตุผลเดียวกัน) ·
-`verdict_submit` (2026-09-21 — PLAN-verdict-to-mem: schema 2,126/5,049 ตัวอักษร = 42% ของค่าเช่า
-ทุก session · เกรด 93.9% pass-family ไม่เคย discriminate · Stop hook เปลี่ยนไปบังคับ mem row
-แทน · engine อยู่ใน git ฟื้นเป็น CLI ได้) ·
-**วัดแล้ว: schema ทั้งชุด 5,049 → 3,654 ตัวอักษร (−27.6% จากการถอด `verdict_submit`
-เหลือ 3 tools — วัดด้วย tools/list JSON + instructions)**
+**Removed and never coming back:** `verdict_submit` (2026-09-21 — PLAN-verdict-to-mem: schema
+2,126/5,049 chars = 42% of the rent every session · grades 93.9% pass-family, never discriminated ·
+Stop hook enforces mem rows instead · engine is in git, revivable as a CLI) · `fapony_usage` (2026-09-20 —
+fails rule 13: its only caller is the owner ("how much burned yesterday"), never an agent mid-turn · every client
+already shows its own tokens, leaving cross-client ruler as the sole excuse, which CLI `usage-scan` / `usage-web`
+answer identically at zero rent · deleted `src/mcp/tools/usage.ts` + tests; the `src/session/` + `src/usage/` engines
+stay because the CLI uses them · statusline integration removed wholesale 2026-09-21 — zero callers on the owner's
+machine (the ponytail plugin's statusline won) and the cache write (`writeStatuslineCache` in transport.ts) had no
+further readers, per rule 12) ·
+`plan_list` (2026-09-20 — `fapony mem kickoff` answers
+"what's left" from the same plan files · deleted `src/mcp/tools/plans.ts` plus `getLastVerdictByPlan`
+for the same reason, per rule 12) · **What was actually lost measures small** (rule 2): across all 42 plans
+(plan/ 3 + done/ 39) `blocked_by` was used in **0 files** all-time · `blocks` 3 ·
+`superseded_by` 2 · `status` 18 — the "what's blocked" question `plan_list` was built to answer never had data
+to answer, and the 3 unshipped plans fit in an `ls`. · If that view is ever genuinely wanted,
+**revive it as CLI `fapony plan-list`** (engine in git at 46e0dac), not back into MCP · `fapony_stats` (CLI
+`fapony stats` answers everything identically, and its description sold "says which model to pay for", which
+violates Positioning rule 2) · `project_health_context` (zero callers — the `src/context/projectHealth.ts` engine
+stays, callable from CLI) · `verification_report` / `handoff_check` / `handoff_collect` (removed earlier for the
+same reason) · `verdict_submit` (2026-09-21 — PLAN-verdict-to-mem: schema 2,126/5,049 chars = 42% of the rent
+every session · grades 93.9% pass-family, never discriminated · Stop hook enforces mem rows instead · engine is in
+git, revivable as a CLI). ·
+**Measured: the full schema 5,049 → 3,654 chars (−27.6% from removing `verdict_submit`,
+3 tools left — measured on tools/list JSON + instructions)**
 
-ดู [docs/mcp-handcheck.md](docs/mcp-handcheck.md) สำหรับ protocol, adapter examples, safety rules
+See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for protocol, adapter examples, safety rules.
 
 ---
 
-## code-review-graph — CLI เท่านั้น (MCP ถอดแล้ว 2026-09-19)
+## code-review-graph — CLI only (MCP removed 2026-09-19)
 
-เจ้าของถอด MCP server ของ code-review-graph ออกเพราะ **แทบไม่ถูกเรียก** — ค่าเช่า schema
-จ่ายทุก session แต่ค่าที่ได้คืนเกือบศูนย์ (กฎ 13 รูปเดียวกับที่ `fapony_stats` โดน) ·
-**CLI `code-review-graph` ยังอยู่บน PATH และ graph ยังอัปเดตทุก commit ผ่าน pre-commit hook**
+The owner removed code-review-graph's MCP server because **it was almost never called** — schema rent
+paid every session for near-zero return (rule 13, the same shape that got `fapony_stats`). ·
+**The `code-review-graph` CLI is still on PATH and the graph still updates on every commit via the pre-commit hook.**
 
-ใช้เมื่อ narrow scope ก่อนอ่าน source — ถูกกว่าการ scan ไฟล์ และให้ callers/dependents/tests
-ที่ file search ให้ไม่ได้ · **แต่ยืนยันใน source เสมอ**: graph อ่าน commit ล่าสุด ไม่ใช่ไฟล์ที่
-กำลังแก้ · เมื่อ graph กับ source ขัดกัน **source ชนะ** · ผลว่างแปลได้ทั้ง "ไม่ได้ index" และ
-"ไม่เห็นแบบ static" ไม่ใช่ "ไม่มี" · **ไม่มี graph ไม่ใช่เหตุผลให้หยุด — `fapony review-seed
---files` ตอบคำถามเดียวกันได้ส่วนใหญ่และเป็นของในบ้าน**
+Use it to narrow scope before reading source — cheaper than scanning files, and gives callers/dependents/tests
+that file search can't. · **But always confirm in source**: the graph reads the latest commit, not the file being
+edited. · When graph and source disagree, **source wins.** · Empty results mean "not indexed" or "invisible
+statically" — never "doesn't exist". · **No graph is no reason to stop — `fapony review-seed
+--files` answers most of the same questions and is in-house.**

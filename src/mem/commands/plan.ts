@@ -31,6 +31,183 @@ import {
 const SHIPPED = /^>\s*✅/m;
 const FRONT = /^---\r?\n([\s\S]*?)\r?\n---/;
 const HELD = /^status:\s*(blocked|superseded)\b/m;
+const PLAN_REF_RE = /\bPLAN-[\w-]+\.md\b/g;
+
+export type PlanFrontmatter = {
+  status: string | null;
+  kind: string | null;
+  blockedByRaw: string | null;
+  blocksRaw: string | null;
+  supersededBy: string | null;
+};
+
+// frontmatter is the only dep-graph source — no new schema, parse what agents
+// already write per templates/PLAN.md (keys EN, values EN). Sentence values
+// ("waiting on support email") carry no PLAN-*.md token and are skipped by
+// the file checks, never flagged.
+export const parsePlanFrontmatter = (file: string): PlanFrontmatter => {
+  const out: PlanFrontmatter = {
+    status: null,
+    kind: null,
+    blockedByRaw: null,
+    blocksRaw: null,
+    supersededBy: null,
+  };
+  try {
+    const head = readFileSync(file, "utf8").slice(0, 4096);
+    const m = FRONT.exec(head);
+    if (!m) return out;
+    for (const line of m[1].split("\n")) {
+      const kv =
+        /^\s*(status|kind|blocked_by|blocks|superseded_by)\s*:\s*(.+?)\s*$/.exec(
+          line,
+        );
+      if (!kv) continue;
+      const v = kv[2].trim() || null;
+      if (kv[1] === "status") out.status = v;
+      else if (kv[1] === "kind") out.kind = v;
+      else if (kv[1] === "blocked_by") out.blockedByRaw = v;
+      else if (kv[1] === "blocks") out.blocksRaw = v;
+      else out.supersededBy = v;
+    }
+  } catch {
+    // unreadable file — callers treat nulls as "no frontmatter"
+  }
+  return out;
+};
+
+// every PLAN-*.md token inside the raw value (comma list or a sentence that
+// names a plan). Deduped basenames — resolution tries planDir then doneDir.
+export const extractPlanRefs = (raw: string | null): string[] => {
+  if (!raw) return [];
+  return [...new Set(raw.match(PLAN_REF_RE) ?? [])].map((p) => basename(p));
+};
+
+export const planLocation = (base: string): "plan" | "done" | null => {
+  try {
+    if (existsSync(join(planDir, base))) return "plan";
+    if (existsSync(join(doneDir, base))) return "done";
+  } catch {
+    // planDir/doneDir uninitialised in unit context — treat as unknown
+  }
+  return null;
+};
+
+// checkbox tally of the first ## section only — same contract as kickoff's
+// readPlanSectionItems (kept local: read.ts imports from this file, so an
+// import back would be a cycle). Counts only, no text.
+export const countFirstSection = (
+  file: string,
+): { checked: number; unchecked: number } => {
+  try {
+    const text = readFileSync(file, "utf8");
+    const body = text.replace(/^---\r?\n[\s\S]*?\r?\n---/, "");
+    const start = body.search(/^##\s+/m);
+    if (start < 0) return { checked: 0, unchecked: 0 };
+    const rest = body.slice(start);
+    const next = rest.slice(3).search(/^##\s+/m);
+    const block = next < 0 ? rest : rest.slice(0, next + 3);
+    let checked = 0;
+    let unchecked = 0;
+    for (const line of block.split("\n")) {
+      if (/^\s*[-*]\s+\[\s\]\s+.+$/.test(line)) unchecked++;
+      else if (/^\s*[-*]\s+\[[xX]\]\s+.+$/.test(line)) checked++;
+    }
+    return { checked, unchecked };
+  } catch {
+    return { checked: 0, unchecked: 0 };
+  }
+};
+
+// dep-graph issues over active plan files: dangling blocked_by/blocks refs,
+// "blocker shipped but dependent still blocked", and cycles. Pure (no
+// console/exit) so tests call it directly; cmdPlanCheck prints what it returns.
+export const collectDepIssues = (active: string[]): string[] => {
+  const issues: string[] = [];
+  const activeBases = new Set(active.map((f) => basename(f)));
+  // waiter -> blocker edges among active files only (done/ blockers are the
+  // unblocked-ready case above, not a cycle).
+  const edges = new Map<string, string[]>();
+
+  for (const f of active) {
+    const relPath = relative(planBase, f);
+    const fm = parsePlanFrontmatter(f);
+    const base = basename(f);
+
+    for (const ref of extractPlanRefs(fm.blockedByRaw)) {
+      const loc = planLocation(ref);
+      if (!loc) {
+        issues.push(
+          `${relPath} — blocked_by points at ${ref} but no such file is in plan/ or done/\n   fix: correct the filename or keep blocked_by as a plain sentence`,
+        );
+      } else if (loc === "done") {
+        issues.push(
+          `${relPath} — blocker ${ref} already shipped to done/ but this plan is still status:blocked\n   fix: clear status:blocked or tick the remaining chunk`,
+        );
+      }
+      if (activeBases.has(ref)) {
+        if (!edges.has(base)) edges.set(base, []);
+        edges.get(base)?.push(ref);
+      }
+    }
+
+    for (const ref of extractPlanRefs(fm.blocksRaw)) {
+      const loc = planLocation(ref);
+      if (!loc) {
+        issues.push(
+          `${relPath} — blocks points at ${ref} but no such file is in plan/ or done/\n   fix: correct the filename or drop it`,
+        );
+      }
+      // "F blocks G" = G waits on F → edge G -> F for cycle detection.
+      if (activeBases.has(ref)) {
+        if (!edges.has(ref)) edges.set(ref, []);
+        edges.get(ref)?.push(base);
+      }
+    }
+  }
+
+  // DFS cycle detection over the active-only edges.
+  const state = new Map<string, number>(); // 1 = on stack, 2 = done
+  const stack: string[] = [];
+  const visit = (n: string) => {
+    state.set(n, 1);
+    stack.push(n);
+    for (const t of edges.get(n) ?? []) {
+      if (state.get(t) === 1) {
+        const cyc = [...stack.slice(stack.indexOf(t)), t].join(" → ");
+        issues.push(
+          `cycle: ${cyc} — plans wait on each other, nothing can unblock\n   fix: drop one side of the blocked_by/blocks link`,
+        );
+        continue;
+      }
+      if (!state.get(t)) visit(t);
+    }
+    stack.pop();
+    state.set(n, 2);
+  };
+  for (const n of edges.keys()) if (!state.get(n)) visit(n);
+
+  return issues;
+};
+
+// status:blocked with every first-section chunk ticked = deferred doc debt:
+// the work reads done but the plan stays in plan/ forever (shippedNotMoved
+// never lists it — HELD excludes it). Trackers never finish, so they are out.
+export const collectBlockedTickedIssues = (active: string[]): string[] => {
+  const issues: string[] = [];
+  for (const f of active) {
+    const fm = parsePlanFrontmatter(f);
+    if (fm.status !== "blocked") continue;
+    if (fm.kind === "tracker") continue;
+    const { checked, unchecked } = countFirstSection(f);
+    if (checked > 0 && unchecked === 0) {
+      issues.push(
+        `${relative(planBase, f)} — status:blocked but all ${checked} chunk(s) ticked (deferred doc debt?)\n   fix: ship via ${planSweepCmd} ${basename(f)} --apply or add the remaining chunk`,
+      );
+    }
+  }
+  return issues;
+};
 
 // the ✅ shipped header is no longer on the first line — the current plan format starts with frontmatter
 // then `# title` (see templates/PLAN.md); check the file's head rather than a single first line
@@ -172,25 +349,45 @@ export const cmdPlanSweep = (a: string[]) => {
   const apply = a.includes("--apply");
 
   if (!target) {
-    if (!candidates.length) {
+    const all = rows();
+    if (candidates.length) {
+      console.log(
+        `# plan-sweep — ${candidates.length} file(s) marked shipped but not archived\n`,
+      );
+      for (const name of candidates) {
+        const spec = `${rel(dir)}/${name}`;
+        const openN = openRows(all).filter((r) => r.spec === spec).length;
+        const warn = openN
+          ? `  ⚠ ${openN} open row(s) (next/bug/hold/decision/note) — check before moving`
+          : "";
+        console.log(`- ${rel(dir)}/${name}${warn}`);
+      }
+      console.log(`\nmove: ${planSweepCmd} <file.md> --apply`);
+    } else {
       console.log(
         `no PLAN with a ✅ shipped header is sitting outside ${rel(doneDir)}/`,
       );
-      return;
     }
-    const all = rows();
-    console.log(
-      `# plan-sweep — ${candidates.length} file(s) marked shipped but not archived\n`,
+    // blocked plans are never move candidates (HELD excludes them from
+    // shippedNotMoved) — list them with progress + open rows so the debt on
+    // a waiting plan is visible instead of silent.
+    const blocked = mdFiles(dir).filter(
+      (f) => parsePlanFrontmatter(f).status === "blocked",
     );
-    for (const name of candidates) {
-      const spec = `${rel(dir)}/${name}`;
-      const openN = openRows(all).filter((r) => r.spec === spec).length;
-      const warn = openN
-        ? `  ⚠ ${openN} open row(s) (next/bug/hold/decision/note) — check before moving`
-        : "";
-      console.log(`- ${rel(dir)}/${name}${warn}`);
+    if (blocked.length) {
+      console.log(
+        `\n# blocked plans (${blocked.length}) — not move candidates\n`,
+      );
+      for (const f of blocked) {
+        const { checked, unchecked } = countFirstSection(f);
+        const spec = rel(f);
+        const openN = openRows(all).filter((r) => r.spec === spec).length;
+        const by = parsePlanFrontmatter(f).blockedByRaw ?? "?";
+        console.log(
+          `- ${spec} — ${checked}/${checked + unchecked} chunks · blocked_by: ${by}${openN ? ` · ⚠ ${openN} open row(s)` : ""}`,
+        );
+      }
     }
-    console.log(`\nmove: ${planSweepCmd} <file.md> --apply`);
     return;
   }
 
@@ -210,6 +407,13 @@ export const cmdPlanSweep = (a: string[]) => {
   const srcDir = dirname(src);
   const shipped = hasShippedHeader(src);
   if (!apply) {
+    const fm = parsePlanFrontmatter(src);
+    if (fm.status === "blocked") {
+      console.log(
+        `${target}: status:blocked (blocked_by: ${fm.blockedByRaw ?? "?"}) — not a move candidate, stays in plan/`,
+      );
+      return;
+    }
     console.log(
       shipped
         ? `${target}: has a ✅ shipped header — ready to move (add --apply)`
@@ -289,6 +493,28 @@ export const cmdPlanSweep = (a: string[]) => {
   // immediately or staleReport shows "decision never made it into the spec" on every ship (seen in kickoff 2026-09-02)
   put({ kind: "synced", spec: doneSpec });
 
+  // the ship may unblock waiting plans — the dep graph lives in frontmatter,
+  // so say which active plans name this file as their blocker (or were named
+  // in this file's own blocks:). Detect-only: the dependent keeps
+  // status:blocked until its owner clears it (plan-check flags it meanwhile).
+  const unblockedByName = mdFiles(dir).filter((f) =>
+    extractPlanRefs(parsePlanFrontmatter(f).blockedByRaw).includes(name),
+  );
+  const unblockedByOwnBlocks = extractPlanRefs(
+    parsePlanFrontmatter(dst).blocksRaw,
+  ).filter((b) => existsSync(join(dir, b)));
+  const unblocked = [
+    ...new Set([
+      ...unblockedByName.map((f) => basename(f)),
+      ...unblockedByOwnBlocks,
+    ]),
+  ];
+  if (unblocked.length) {
+    console.log(
+      `🔓 ${name} shipped — ${unblocked.join(", ")} list(s) it as blocker, clear status:blocked?`,
+    );
+  }
+
   // plain-text mention detection (detect-only, no auto-fix)
   let plainTextTotal = 0;
   const plainTextFiles: string[] = [];
@@ -324,6 +550,8 @@ export const cmdPlanSweep = (a: string[]) => {
 
 // plan-check — list active PLANs + detect shipped-not-moved + broken links
 // + verify the commits ticked chunks cite (chunk 8, PLAN-seed-and-surface)
+// + dep-graph (blocked_by/blocks: dangling, shipped-but-still-blocked, cycles)
+// + blocked-with-all-chunks-ticked (deferred doc debt) + blocked view
 // exit 0 = clean, 1 = issues found
 
 // A ticked chunk cites the commit that closed it — a sha git cannot find on
@@ -496,10 +724,41 @@ export const cmdPlanCheck = (a: string[]) => {
     });
   }
 
+  // 5) Dep-graph check — frontmatter blocked_by/blocks already states the
+  //    order, so verify it: dangling refs, blocker shipped but dependent still
+  //    blocked, and waiter cycles. Sentence values carry no PLAN-*.md token
+  //    and are skipped, never flagged.
+  for (const issue of collectDepIssues(active)) issues.push(issue);
+
+  // 6) Blocked-but-ticked check — status:blocked with every first-section
+  //    chunk ticked is deferred doc debt: shippedNotMoved never lists it
+  //    (HELD excludes it), so without this flag it sits in plan/ silently.
+  for (const issue of collectBlockedTickedIssues(active)) issues.push(issue);
+
   if (!quiet) {
     console.log(
       `closed chunks: ${closed} · citing a commit: ${citing} · verified: ${verified}`,
     );
+    // blocked view: waiting plans are never move candidates, but their debt
+    // (progress + open mem rows) must be visible somewhere — plan-check is it.
+    const blocked = active.filter(
+      (f) => parsePlanFrontmatter(f).status === "blocked",
+    );
+    if (blocked.length) {
+      const all = rows();
+      console.log(
+        `\nblocked plans (${blocked.length}) — waiting, not candidates:`,
+      );
+      for (const f of blocked) {
+        const { checked, unchecked } = countFirstSection(f);
+        const spec = rel(f);
+        const openN = openRows(all).filter((r) => r.spec === spec).length;
+        const by = parsePlanFrontmatter(f).blockedByRaw ?? "?";
+        console.log(
+          `- ${spec} — ${checked}/${checked + unchecked} chunks · blocked_by: ${by}${openN ? ` · ⚠ ${openN} open row(s)` : ""}`,
+        );
+      }
+    }
   }
 
   if (issues.length === 0) {

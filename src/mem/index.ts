@@ -27,7 +27,8 @@ subcommands:
   kickoff [<plan.md>] [--pick <n>]   open a session + a next-up list
   add <kind> "<text>" --files f1,f2 [spec.md]
   close <id> "<msg>"          close a bug
-  find "<text>"               substring-search every row
+  find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n]
+                          substring-search every row (archives included)
   done | stale              views
   claim <id> | release <id> | synced   bookkeeping
   plan-sweep [<plan.md> [--apply]]     move shipped plans + fix links
@@ -57,9 +58,13 @@ example: fapony mem add decision "chose X because Y" --files src/a.ts,src/b.ts`,
 tombstone a bug so it stops showing as open work
   --stdin         read the message from stdin
 example: fapony mem close mt14 "fixed in a2c6beb"`,
-  find: `usage: fapony mem find "<text>"
-substring search over every row's text/spec/ref — all kinds, no default filter
-example: fapony mem find "usage-web"`,
+  find: `usage: fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n]
+substring search over every row's text/spec/ref (rotated archives included) — bookkeeping kinds (close/synced/claim/release) hidden unless --kind names them
+  --kind a,b    include only these kinds (overrides the bookkeeping default)
+  --files f1,f2 rows about these paths (stored files[] first, text/spec/ref fallback)
+  --since 7d    only rows at or after this time (<N>d or YYYY-MM-DD)
+  --limit n     max rows returned (default 20, newest first)
+example: fapony mem find "usage-web" --kind bug,decision --limit 5`,
   done: `usage: fapony mem done
 closed rows with their tombstone message
 example: fapony mem done`,

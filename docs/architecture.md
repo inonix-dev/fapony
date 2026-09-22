@@ -44,7 +44,7 @@ fapony/
       defaults.ts / types.ts / getters.ts / load.ts  # shims re-exporting core/config.ts
     adapters/           # I/O boundary — thin framing only, no logic (PLAN-lib-layer chunk 3)
       cli.ts            # fapony.ts dispatch target
-      hooks/            # hook-stop / hook-read-hint / hook-edit-hint / hook-session-start + helpers
+      hooks/            # hook-stop / hook-read-hint / hook-edit-hint / hook-session-start · bug-markers.ts (shared bug signal) + helpers
       mcp/              # MCP server — stdio JSON-RPC, 3 mem tools (mem.ts); collect/check/report are engines only
     gates.ts          # per-round gate enrichment — model + session tokens per gate; carries `sessionId` so callers can dedupe
     parse.ts          # parseGateVerdict() + qualityScore()
@@ -61,7 +61,7 @@ fapony/
       claude-code.ts   # readClaudeCodeUsage() — Claude Code JSONL files
       codex.ts         # readCodexUsage() — Codex JSONL files
     context/           # project-health context block, keyed by files[] (any caller)
-      projectHealth.ts # buildProjectHealthContext() — pure over StatsData, ~15 lines max; computeModelFit() (regime×model right-sizing, min-N=5) shared by plan-seed
+      projectHealth.ts # buildProjectHealthContext() — pure over StatsData, ~15 lines max; computeModelFit() (regime×model right-sizing, min-N=5) read by `fapony stats` — plan-seed stopped citing it 2026-09-22 (frozen ledger; cross-model ranking claims are off the table)
       index.ts         # barrel re-export
     analyze.ts         # fapony analyze — buildGraph()/blastRadius()/diagnose() (hub/orphan/cycle/changed-untested), live import graph via Bun.Transpiler.scan(), never persisted
     map.ts              # extractExports() — on-demand source index, library only; the `fapony map` command was deleted once plan-seed/review-seed were its only callers (see PLAN-code-map)
@@ -69,7 +69,7 @@ fapony/
     conventions-seed.ts # init-time wrapper detector → writes .fapony/conventions.json — reads snapshot only, never touches history
     seed/               # seed commands — plan-seed + review-seed + shared primitives
       primitives.ts     # shared git helpers (execGit/gitOk/gitValue), capLines, SIG_MAX, SeedError
-      plan-seed.ts      # fapony plan-seed <name> [--spec] [--scope <path>]... — writes PLAN(+SPEC): frontmatter, 8 empty sections, §8 prior art, Context (fapony); SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200
+      plan-seed.ts      # fapony plan-seed <name> [--spec] [--scope <path>]... — writes PLAN(+SPEC): frontmatter, 8 empty sections, §8 prior art, Context (fapony: mem decisions + existing-in-scope), existing-plans stdout list; SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200
       review-seed.ts    # fapony review-seed [--staged|--commit|--range|--files|--plan] — read-only scope facts for a review (changed/importers/untested/signatures/cross-check)
     price/              # model pricing data — fetch + resolve
       fetch.ts          # fetchPricing() — HTTP fetch from upstream price table

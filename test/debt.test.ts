@@ -7,7 +7,7 @@ import { test } from "bun:test";
 // silent, a repo without conventions.json is silent (SPEC §6).
 
 import assert from "node:assert";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   debtForFile,
@@ -17,6 +17,7 @@ import {
   loadConventions,
   PROMOTION_THRESHOLD,
   resolveConventionsPath,
+  resolveDebtScope,
   worktreeOf,
 } from "../src/debt/index.js";
 import { withTempRepo, withTmpDb } from "./helpers.js";
@@ -376,4 +377,119 @@ test("testDebtWorktreeFollowsThePathNotGitRoot", () => {
     assert.equal(loadConventions(worktreeOf(repo)).path, null);
   });
   console.log("  ✓ debt → worktree follows the given path, not the git root");
+});
+
+/**
+ * Bugs mucvfaxk + mucvfiv5: one app-scoped conventions file (the vela
+ * shape), repo-relative `where`. The scope pairs a repo-root scan with the
+ * nearest — or, outside any app dir, the lone — conventions file.
+ */
+test("testDebtScopePairsRootScanWithNearestOrLoneConventions", () => {
+  withTempRepo((repo) => {
+    const root = realpathSync(repo);
+    mkdirSync(join(repo, "apps/shop/.fapony"), { recursive: true });
+    mkdirSync(join(repo, "apps/shop/src"), { recursive: true });
+    mkdirSync(join(repo, "packages/lib"), { recursive: true });
+    writeFileSync(
+      join(repo, "apps/shop/.fapony/conventions.json"),
+      JSON.stringify({
+        conventions: [
+          {
+            id: "shop-only",
+            rule: "r",
+            where: "apps/shop/src",
+            stale: "toLocaleString\\(\\)",
+          },
+          {
+            id: "shared",
+            rule: "r",
+            where: ".",
+            stale: "throw new Error",
+            guard: "extends Base",
+          },
+        ],
+      }),
+    );
+    writeFileSync(
+      join(repo, "apps/shop/src/money.ts"),
+      "export const x = n.toLocaleString();\n",
+    );
+    writeFileSync(
+      join(repo, "packages/lib/svc.ts"),
+      'export class S extends Base { m() { throw new Error("x"); } }\n',
+    );
+
+    // From inside the app: walk-up finds the app file, scan root is the repo.
+    const inApp = resolveDebtScope(join(repo, "apps/shop/src"));
+    assert.equal(inApp.scanRoot, root);
+    assert.deepEqual(inApp.loaded.convs.map((c) => c.id).sort(), [
+      "shared",
+      "shop-only",
+    ]);
+    assert.deepEqual(
+      debtForFile(
+        inApp.scanRoot,
+        join(root, "apps/shop/src/money.ts"),
+        inApp.loaded,
+      ).map((c) => c.id),
+      ["shop-only"],
+    );
+
+    // From outside any app dir: the lone-file fallback finds the same file
+    // (this is the packages/storage.ts case the plain walk-up misses).
+    const inPkg = resolveDebtScope(join(repo, "packages/lib"));
+    assert.equal(inPkg.scanRoot, root);
+    assert.deepEqual(inPkg.loaded.convs.map((c) => c.id).sort(), [
+      "shared",
+      "shop-only",
+    ]);
+    assert.deepEqual(
+      debtForFile(
+        inPkg.scanRoot,
+        join(root, "packages/lib/svc.ts"),
+        inPkg.loaded,
+      ).map((c) => c.id),
+      ["shared"],
+    );
+
+    // From the root itself (the mucvfiv5 CLI case): same fallback, full scan.
+    const atRoot = resolveDebtScope(repo);
+    assert.equal(atRoot.scanRoot, root);
+    assert.equal(atRoot.loaded.convs.length, 2);
+    const report = debtScan(atRoot.scanRoot, atRoot.loaded);
+    assert.deepEqual(
+      report.entries.find((e) => e.conv.id === "shop-only")?.files,
+      ["apps/shop/src/money.ts"],
+    );
+    assert.deepEqual(
+      report.entries.find((e) => e.conv.id === "shared")?.files,
+      ["packages/lib/svc.ts"],
+    );
+  });
+  console.log(
+    "  ✓ debt → scope pairs repo-root scan with nearest (or lone) conventions",
+  );
+});
+
+test("testDebtScopeStaysAmbiguousWithTwoConventionsFiles", () => {
+  withTempRepo((repo) => {
+    const root = realpathSync(repo);
+    mkdirSync(join(repo, "apps/a/.fapony"), { recursive: true });
+    mkdirSync(join(repo, "apps/b/.fapony"), { recursive: true });
+    const conv = JSON.stringify({
+      conventions: [{ id: "c", rule: "r", where: ".", stale: "zzz" }],
+    });
+    writeFileSync(join(repo, "apps/a/.fapony/conventions.json"), conv);
+    writeFileSync(join(repo, "apps/b/.fapony/conventions.json"), conv);
+    // From the root: two files → don't guess.
+    const atRoot = resolveDebtScope(repo);
+    assert.equal(atRoot.scanRoot, root);
+    assert.equal(atRoot.loaded.path, null);
+    // From inside an app: walk-up is still deterministic.
+    const inApp = resolveDebtScope(join(repo, "apps/a"));
+    assert.equal(inApp.loaded.convs.length, 1);
+  });
+  console.log(
+    "  ✓ debt → two conventions files stay ambiguous, app walk-up still wins",
+  );
 });

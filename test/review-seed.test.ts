@@ -275,6 +275,47 @@ test("testReviewSeedPlanCrossCheck", () => {
   );
 });
 
+test("testReviewSeedPlanPathResolution", () => {
+  withFixture((dir) => {
+    // bug mucm1own: join(worktree, arg) answered only the root-relative
+    // shape — absolute args became worktree+abs garbage, and cwd-relative
+    // args with .. escaped above the root. All three shapes must resolve.
+    const planDir = join(dir, ".fapony", "plan");
+    mkdirSync(planDir, { recursive: true });
+    const planPath = join(planDir, "PLAN-x.md");
+    writeFileSync(
+      planPath,
+      "---\nkind: unit\nstatus: active\nfiles: src/ghost.ts\n---\n\n# PLAN-x\n",
+    );
+    const subdir = join(dir, "src");
+
+    // absolute path, from the root
+    const abs = renderSeed(["--plan", planPath], dir);
+    assert.match(abs, /src\/ghost\.ts/);
+
+    // cwd-relative path, invoked from a subdir
+    const relCwd = renderSeed(["--plan", "../.fapony/plan/PLAN-x.md"], subdir);
+    assert.match(relCwd, /src\/ghost\.ts/);
+
+    // root-relative path, invoked from a subdir (already worked — keep it)
+    const relRoot = renderSeed(["--plan", ".fapony/plan/PLAN-x.md"], subdir);
+    assert.match(relRoot, /src\/ghost\.ts/);
+
+    // missing absolute path → same clean line, no stack trace
+    assert.throws(
+      () => renderSeed(["--plan", join(dir, "PLAN-nope.md")], dir),
+      (e: unknown) => {
+        assert.ok(e instanceof SeedError);
+        assert.match(e.message, /plan file not found/);
+        return true;
+      },
+    );
+  });
+  console.log(
+    "  ✓ review-seed --plan resolves absolute, cwd-relative, root-relative",
+  );
+});
+
 test("testReviewSeedNotARepo", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-review-seed-norepo-"));
   try {

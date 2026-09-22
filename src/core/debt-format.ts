@@ -77,7 +77,7 @@ export function formatDebt(report: DebtReport, showAll = false): string {
     for (let i = 0; i < cap; i++) {
       const [zone, zoneFiles] = zoneEntries[i];
       const pad = " ".repeat(Math.max(0, 42 - zone.length));
-      lines.push(`\n  ${zone}${pad}${zoneFiles.length} ไฟล์`);
+      lines.push(`\n  ${zone}${pad}${zoneFiles.length} files`);
       lines.push(`    ${zoneFiles.map((f) => f.split("/").pop()).join(" · ")}`);
       totalCapped += zoneFiles.length;
     }
@@ -85,7 +85,7 @@ export function formatDebt(report: DebtReport, showAll = false): string {
       const remaining = e.files.length - totalCapped;
       const remainingZones = zoneEntries.length - cap;
       lines.push(
-        `\n  … อีก ${remainingZones} โซน (${remaining} ไฟล์) — fapony debt --id ${e.conv.id} --all`,
+        `\n  … ${remainingZones} more zones (${remaining} files) — fapony debt --id ${e.conv.id} --all`,
       );
     }
   }

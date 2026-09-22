@@ -3,15 +3,21 @@
 // Split from src/hook.ts (PLAN-lib-layer chunk 3). Reads hint log + re-runs
 // debt detection to count resolved vs unresolved hints.
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import {
   type HintFireRow,
   type HintImpact,
   hintLogDir,
   worktreeKey,
 } from "../../core/hint-log.js";
-import { debtForFile, loadConventions } from "../../debt/index.js";
+import { debtForFile, resolveDebtScope } from "../../debt/index.js";
 
 /**
  * Compute hint-fire impact from the log. `since` is an ISO date string;
@@ -80,14 +86,25 @@ export function computeHintImpact(
 
   for (const [key, ids] of debtByFile) {
     const [worktree, file] = key.split("\t");
-    const absFile = join(worktree, file);
+    let absFile = join(worktree, file);
     let currentIds: Set<string>;
     try {
       if (!statSync(absFile).isFile()) {
         impact.debt.unknown += ids.length;
         continue;
       }
-      const convs = debtForFile(worktree, absFile, loadConventions(worktree));
+      // The log stores the worktree lexically; scanRoot is physical —
+      // resolve so debtForFile compares like with like.
+      try {
+        absFile = realpathSync(absFile);
+      } catch {
+        // keep the lexical form
+      }
+      // Same scope as the hint itself — resolving at the git root would
+      // load zero conventions in a monorepo and count every shown id as
+      // resolved (precision stuck at 100%).
+      const scope = resolveDebtScope(dirname(absFile));
+      const convs = debtForFile(scope.scanRoot, absFile, scope.loaded);
       currentIds = new Set(convs.map((c) => c.id));
     } catch {
       impact.debt.unknown += ids.length;

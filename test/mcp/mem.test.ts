@@ -153,7 +153,75 @@ test("testMemFindToolValidation", () => {
     memDir: string | null;
   };
   assert.equal(ok.memDir, null);
+
+  // review-pony PLAN-unify-mem-engine: a non-ISO since used to string-compare
+  // against ISO timestamps and silently match nothing (read as "no history").
+  // The tool surface rejects it loudly; CLI keeps <N>d/YYYY-MM-DD via parseSince.
+  const badSince = toolMemFind({ worktree: "/nonexistent", since: "7d" });
+  assert.equal(badSince.isError, true);
+  const okSince = parseToolResult(
+    toolMemFind({
+      worktree: "/nonexistent",
+      since: "2026-09-19T00:00:00.000Z",
+    }),
+  ) as { memDir: string | null };
+  assert.equal(okSince.memDir, null);
   console.log("  ✓ mem_find rejects bare worktree names with a clear error");
+});
+
+// PLAN-unify-mem-engine chunk 4: open:true answers "what bugs remain" without
+// the caller correlating close tombstones by hand. Default stays unfiltered
+// (contract locked by testMemFindReturnsAllKindsNoDefaultFilter).
+test("testMemFindOpenFiltersClosedBugs", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memfind-"));
+  try {
+    writeLog(dir, [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "a",
+        kind: "bug",
+        id: "b1",
+        text: "open bug",
+      },
+      {
+        ts: "2026-01-02T00:00:00.000Z",
+        agent: "a",
+        kind: "bug",
+        id: "b2",
+        text: "fixed bug",
+      },
+      {
+        ts: "2026-01-03T00:00:00.000Z",
+        agent: "a",
+        kind: "close",
+        ref: "b2",
+        text: "fixed in abc",
+      },
+      {
+        ts: "2026-01-04T00:00:00.000Z",
+        agent: "a",
+        kind: "synced",
+        text: "s",
+      },
+    ]);
+    const all = memFind({ worktree: dir });
+    assert.equal(all.total, 4, "default: no filter");
+    const open = memFind({ worktree: dir, open: true, kind: ["bug"] });
+    assert.equal(open.total, 1);
+    assert.equal(open.rows[0].text, "open bug");
+    // the tool surface passes open through (non-boolean ignored → unfiltered)
+    const via = parseToolResult(
+      toolMemFind({ worktree: dir, open: true, kind: ["bug"] }),
+    ) as { total: number };
+    assert.equal(via.total, 1);
+    const unfiltered = parseToolResult(
+      toolMemFind({ worktree: dir, open: "yes", kind: ["bug"] }),
+    ) as { total: number };
+    assert.equal(unfiltered.total, 2, "non-boolean open is ignored");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_find open:true returns remaining bugs only");
 });
 
 // Rows written by `mem add --files` carry structured files[]; the query must
@@ -311,6 +379,33 @@ test("testMemAddRejectsMissingFilesAndBadKind", () => {
   console.log("  ✓ mem_add rejects no files / bad kind / hold without spec");
 });
 
+// PLAN-unify-mem-engine chunk 2 §4.1: memFind sees rotated archives —
+// log.YYYY-MM-DD.jsonl matches the loose log*.jsonl regex, so recall survives
+// rotate. This locks the accident as contract: tightening the regex later must
+// not silently drop recall (readMemLog-level cover already exists; this is the
+// memFind-level one).
+test("testMemFindSeesRotatedArchive", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memfind-arch-"));
+  try {
+    const memDir = join(dir, ".fapony", ".memory");
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(
+      join(memDir, "log.jsonl"),
+      `${JSON.stringify({ ts: "2026-09-19T00:00:00.000Z", agent: "a", kind: "note", text: "live row" })}\n`,
+    );
+    writeFileSync(
+      join(memDir, "log.2026-03-01.jsonl"),
+      `${JSON.stringify({ ts: "2026-03-01T00:00:00.000Z", agent: "a", kind: "bug", text: "archived row" })}\n`,
+    );
+    const r = memFind({ worktree: dir, text: "archived row" });
+    assert.equal(r.total, 1, "rotated archive must be visible to mem_find");
+    assert.equal(r.rows[0].kind, "bug");
+    assert.equal(r.filesFound, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_find sees rotated archives (contract, not accident)");
+});
 // Regression 2026-09-19: agent/person both fell back to the literal "unknown",
 // and a generic OS account (admin/user/owner — what a fresh install offers) was
 // taken at face value, so two different people wrote one indistinguishable
