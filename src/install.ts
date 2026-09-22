@@ -39,7 +39,9 @@ export {
   editHintPluginSource,
   gitAutonomyPluginSource,
   type OpencodeInstallOpts,
+  opencodePluginFiles,
   readHintPluginSource,
+  sessionStartPluginSource,
 } from "./install/opencode.js";
 export {
   agentsSkillsDir,

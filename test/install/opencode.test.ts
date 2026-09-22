@@ -14,7 +14,10 @@ import {
   claudeSkillsDir,
   cmdInstall,
   cmdInstallOpencode,
+  commitHintPluginSource,
   INSTALL_ROOT,
+  opencodePluginFiles,
+  sessionStartPluginSource,
 } from "../../src/install.js";
 import {
   captureErrors,
@@ -298,6 +301,34 @@ test("testInstallOpencodeCommitHintIdempotent", () => {
   });
 });
 
+test("testInstallOpencodeCommitHintStaleRefreshed", () => {
+  withTempHome((home) => {
+    const pluginsDir = join(home, ".config", "opencode", "plugins");
+    mkdirSync(pluginsDir, { recursive: true });
+    const pluginPath = join(pluginsDir, "fapony-commit-hint.ts");
+    // An older generation (the pre-recordHintFire shape): carries the plugin
+    // name but not the current body. The installers used to answer "already
+    // installed — no change" for exactly this, keeping a stale hook live.
+    const stale =
+      "// fapony commit hint\nexport const FaponyCommitHint = async () => ({});\n";
+    writeFileSync(pluginPath, stale);
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.match(err, /commit hint: updated/, `got: ${err}`);
+    assert.equal(
+      readFileSync(pluginPath, "utf-8"),
+      commitHintPluginSource(INSTALL_ROOT),
+      "our own stale plugin must be rewritten to the current template",
+    );
+  });
+  console.log(
+    "  ✓ install opencode commit hint → stale plugin refreshed in place",
+  );
+});
+
 test("testInstallOpencodeCommitHintForeignFileUntouched", () => {
   withTempHome((home) => {
     const pluginsDir = join(home, ".config", "opencode", "plugins");
@@ -465,14 +496,15 @@ test("testInstallOpencodeSessionStartPlugin", () => {
   );
 });
 
-test("testInstallOpencodeSessionStartStaleWarns", () => {
+test("testInstallOpencodeSessionStartStaleRefreshed", () => {
   withTempHome((home) => {
     const pluginsDir = join(home, ".config", "opencode", "plugins");
     mkdirSync(pluginsDir, { recursive: true });
     const pluginPath = join(pluginsDir, "fapony-session-start.ts");
-    // Ours (carries the exported plugin name) but an older generation. The
-    // installer never overwrites its own file, so it must name it stale rather
-    // than report "already installed — no change" (that kept mub2ezhi alive).
+    // Ours (carries the exported plugin name) but an older generation. The body
+    // is baked at install time, so a pull updates the imported logic but never
+    // this file — the installer must rewrite it, or a fixed hook stays
+    // unreachable forever (how the pre-hook plugin mub2ezhi would have survived).
     const stale =
       "// fapony session start\nexport const FaponySessionStart = async () => ({});\n";
     writeFileSync(pluginPath, stale);
@@ -481,20 +513,15 @@ test("testInstallOpencodeSessionStartStaleWarns", () => {
         cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
       ),
     );
-    assert.match(err, /stale fapony plugin/, `got: ${err}`);
-    assert.match(
-      err,
-      /delete .*fapony-session-start\.ts/,
-      "names the file to delete",
-    );
+    assert.match(err, /session start: updated/, `got: ${err}`);
     assert.equal(
       readFileSync(pluginPath, "utf-8"),
-      stale,
-      "stale plugin must not be silently overwritten",
+      sessionStartPluginSource(INSTALL_ROOT),
+      "our own stale plugin must be rewritten to the current template",
     );
   });
   console.log(
-    "  ✓ install opencode session start → stale plugin warns, untouched",
+    "  ✓ install opencode session start → stale plugin refreshed in place",
   );
 });
 
@@ -538,4 +565,34 @@ test("testInstallOpencodeSessionStartDryRun", () => {
     );
     console.log("  ✓ install opencode session start → dry-run no write");
   });
+});
+
+// --- post-pull plugin refresh detection (the `fapony update` gate) ---
+
+test("testOpencodePluginFiles", () => {
+  withTempHome((home) => {
+    assert.deepStrictEqual(
+      opencodePluginFiles(() => home),
+      [],
+      "no plugins dir → nothing installed",
+    );
+    const pluginsDir = join(home, ".config", "opencode", "plugins");
+    mkdirSync(pluginsDir, { recursive: true });
+    // A foreign plugin must never count — that's what keeps update from
+    // touching a file the user owns.
+    writeFileSync(join(pluginsDir, "someone-else.ts"), "// x\n");
+    assert.deepStrictEqual(
+      opencodePluginFiles(() => home),
+      [],
+      "a foreign plugin is not a fapony install",
+    );
+    writeFileSync(join(pluginsDir, "fapony-read-hint.ts"), "// ours\n");
+    writeFileSync(join(pluginsDir, "fapony-git-autonomy.ts"), "// ours\n");
+    assert.deepStrictEqual(
+      opencodePluginFiles(() => home).sort(),
+      ["fapony-git-autonomy.ts", "fapony-read-hint.ts"],
+      "lists every fapony-*.ts plugin, and only those",
+    );
+  });
+  console.log("  ✓ opencodePluginFiles lists fapony plugins, ignores foreign");
 });

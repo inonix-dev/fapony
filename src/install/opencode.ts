@@ -2,7 +2,13 @@
 //
 // Adds mcp.fapony config to ~/.config/opencode/opencode.json or opencode.jsonc.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { claudeSkillsDir, linkSkills, reportSkills } from "./skills.js";
@@ -94,6 +100,14 @@ export function cmdInstallOpencode(
   const exitFn = deps.exit ?? defaultExit;
   const getHome = deps.homedir ?? homedir;
 
+  const installPlugins = (): void => {
+    installReadHintPlugin(dryRun, getHome);
+    installCommitHintPlugin(dryRun, getHome);
+    installEditHintPlugin(dryRun, getHome);
+    installSessionStartPlugin(dryRun, getHome);
+    if (opts.gitAutonomy) installGitAutonomyPlugin(dryRun, getHome);
+  };
+
   const configPath = findOpencodeConfig(getHome);
   let before: Record<string, unknown>;
   let isNew = false;
@@ -117,11 +131,7 @@ export function cmdInstallOpencode(
     if (configPath) console.error(`  (${configPath})`);
     const skillsDir = claudeSkillsDir(getHome);
     reportSkills(linkSkills(skillsDir, dryRun), skillsDir, dryRun);
-    installReadHintPlugin(dryRun, getHome);
-    installCommitHintPlugin(dryRun, getHome);
-    installEditHintPlugin(dryRun, getHome);
-    installSessionStartPlugin(dryRun, getHome);
-    if (opts.gitAutonomy) installGitAutonomyPlugin(dryRun, getHome);
+    installPlugins();
     return;
   }
 
@@ -143,11 +153,7 @@ export function cmdInstallOpencode(
       console.error(`  (${configPath})`);
     }
     console.log(computeDiff(before, after));
-    installReadHintPlugin(dryRun, getHome);
-    installCommitHintPlugin(dryRun, getHome);
-    installEditHintPlugin(dryRun, getHome);
-    installSessionStartPlugin(dryRun, getHome);
-    if (opts.gitAutonomy) installGitAutonomyPlugin(dryRun, getHome);
+    installPlugins();
     return;
   }
 
@@ -167,11 +173,7 @@ export function cmdInstallOpencode(
   console.error(`  restart opencode to load the MCP server`);
   const skillsDir = claudeSkillsDir(getHome);
   reportSkills(linkSkills(skillsDir, dryRun), skillsDir, dryRun);
-  installReadHintPlugin(dryRun, getHome);
-  installCommitHintPlugin(dryRun, getHome);
-  installEditHintPlugin(dryRun, getHome);
-  installSessionStartPlugin(dryRun, getHome);
-  if (opts.gitAutonomy) installGitAutonomyPlugin(dryRun, getHome);
+  installPlugins();
 }
 
 /**
@@ -412,102 +414,102 @@ export const FaponyEditHint = async ({ directory }) => {
 `;
 }
 
-function installReadHintPlugin(dryRun: boolean, getHome: () => string): void {
+/**
+ * Write one generated OpenCode plugin file, refreshing our own older copy.
+ *
+ * Ownership is the exported plugin name (`FaponyReadHint`, …) — the one token
+ * every generated body carries. A file without it is someone's own plugin and
+ * is never touched, same rule as the skill symlinks. A file *with* it but
+ * different content is ours and stale: the plugin body is baked at install
+ * time, so a `git pull` updates the imported logic (src/hook.ts) but never this
+ * file. Refusing to overwrite it is how an old hook stays reachable forever —
+ * the Thai-only bug marker survived exactly that way — so ours gets rewritten
+ * in place, and only a foreign file is reported and left alone.
+ */
+function installPluginFile(
+  dryRun: boolean,
+  getHome: () => string,
+  fileName: string,
+  label: string,
+  ownedName: string,
+  desired: string,
+): void {
   const pluginsDir = join(getHome(), ".config", "opencode", "plugins");
-  const pluginPath = join(pluginsDir, "fapony-read-hint.ts");
-  if (existsSync(pluginPath)) {
-    let current = "";
+  const pluginPath = join(pluginsDir, fileName);
+  const write = (): boolean => {
+    if (dryRun) return true;
     try {
-      current = readFileSync(pluginPath, "utf-8");
-    } catch {
-      current = "";
+      mkdirSync(pluginsDir, { recursive: true });
+      writeFileSync(pluginPath, desired, "utf-8");
+      return true;
+    } catch (e) {
+      console.error(`  ${label}: failed to write — ${(e as Error).message}`);
+      return false;
     }
-    if (current.includes("readHintFor")) {
-      console.error(`  read hint: already installed — no change`);
-      return;
+  };
+
+  if (!existsSync(pluginPath)) {
+    if (write()) {
+      console.error(
+        `  ${label}: ${dryRun ? "would write" : "wrote"} ${pluginPath}`,
+      );
     }
+    return;
+  }
+
+  let current = "";
+  try {
+    current = readFileSync(pluginPath, "utf-8");
+  } catch {
+    current = "";
+  }
+  if (current === desired) {
+    console.error(`  ${label}: already installed — no change`);
+    return;
+  }
+  if (!current.includes(ownedName)) {
     console.error(
-      `  read hint: ${pluginPath} exists but isn't fapony's — not overwriting.`,
+      `  ${label}: ${pluginPath} exists but isn't fapony's — not overwriting.`,
     );
     return;
   }
-  if (!dryRun) {
-    try {
-      mkdirSync(pluginsDir, { recursive: true });
-      writeFileSync(pluginPath, readHintPluginSource(INSTALL_ROOT), "utf-8");
-    } catch (e) {
-      console.error(`  read hint: failed to write — ${(e as Error).message}`);
-      return;
-    }
+  if (write()) {
+    console.error(
+      `  ${label}: ${dryRun ? "would update" : "updated"} ${pluginPath}`,
+    );
   }
-  console.error(
-    `  read hint: ${dryRun ? "would write" : "wrote"} ${pluginPath}`,
+}
+
+function installReadHintPlugin(dryRun: boolean, getHome: () => string): void {
+  installPluginFile(
+    dryRun,
+    getHome,
+    "fapony-read-hint.ts",
+    "read hint",
+    "FaponyReadHint",
+    readHintPluginSource(INSTALL_ROOT),
   );
 }
 
 function installCommitHintPlugin(dryRun: boolean, getHome: () => string): void {
-  const pluginsDir = join(getHome(), ".config", "opencode", "plugins");
-  const pluginPath = join(pluginsDir, "fapony-commit-hint.ts");
-  if (existsSync(pluginPath)) {
-    let current = "";
-    try {
-      current = readFileSync(pluginPath, "utf-8");
-    } catch {
-      current = "";
-    }
-    if (current.includes("commitHintFor")) {
-      console.error(`  commit hint: already installed — no change`);
-      return;
-    }
-    console.error(
-      `  commit hint: ${pluginPath} exists but isn't fapony's — not overwriting.`,
-    );
-    return;
-  }
-  if (!dryRun) {
-    try {
-      mkdirSync(pluginsDir, { recursive: true });
-      writeFileSync(pluginPath, commitHintPluginSource(INSTALL_ROOT), "utf-8");
-    } catch (e) {
-      console.error(`  commit hint: failed to write — ${(e as Error).message}`);
-      return;
-    }
-  }
-  console.error(
-    `  commit hint: ${dryRun ? "would write" : "wrote"} ${pluginPath}`,
+  installPluginFile(
+    dryRun,
+    getHome,
+    "fapony-commit-hint.ts",
+    "commit hint",
+    "FaponyCommitHint",
+    commitHintPluginSource(INSTALL_ROOT),
   );
 }
 
 function installEditHintPlugin(dryRun: boolean, getHome: () => string): void {
-  const pluginsDir = join(getHome(), ".config", "opencode", "plugins");
-  const pluginPath = join(pluginsDir, "fapony-edit-hint.ts");
-  if (existsSync(pluginPath)) {
-    let current = "";
-    try {
-      current = readFileSync(pluginPath, "utf-8");
-    } catch {
-      current = "";
-    }
-    if (current.includes("editHintFor")) {
-      console.error(`  edit hint: already installed — no change`);
-      return;
-    }
-    console.error(
-      `  edit hint: ${pluginPath} exists but isn't fapony's — not overwriting.`,
-    );
-    return;
-  }
-  if (!dryRun) {
-    try {
-      mkdirSync(pluginsDir, { recursive: true });
-      writeFileSync(pluginPath, editHintPluginSource(INSTALL_ROOT), "utf-8");
-    } catch (e) {
-      console.error(`  edit hint: failed to write — ${(e as Error).message}`);
-      return;
-    }
-  }
-  console.error(
-    `  edit hint: ${dryRun ? "would write" : "wrote"} ${pluginPath}`,
+  installPluginFile(
+    dryRun,
+    getHome,
+    "fapony-edit-hint.ts",
+    "edit hint",
+    "FaponyEditHint",
+    editHintPluginSource(INSTALL_ROOT),
   );
 }
 
@@ -571,50 +573,13 @@ function installSessionStartPlugin(
   dryRun: boolean,
   getHome: () => string,
 ): void {
-  const pluginsDir = join(getHome(), ".config", "opencode", "plugins");
-  const pluginPath = join(pluginsDir, "fapony-session-start.ts");
-  if (existsSync(pluginPath)) {
-    let current = "";
-    try {
-      current = readFileSync(pluginPath, "utf-8");
-    } catch {
-      current = "";
-    }
-    if (current.includes("FaponySessionStart")) {
-      // Ours — and generated, so never overwritten. A file baked by an older
-      // fapony differs from what we generate now: say so instead of "no change",
-      // which is how the pre-hook plugin (mub2ezhi) would have been kept.
-      if (current !== sessionStartPluginSource(INSTALL_ROOT)) {
-        console.error(
-          `  session start: stale fapony plugin — delete ${pluginPath} and re-run install`,
-        );
-        return;
-      }
-      console.error(`  session start: already installed — no change`);
-      return;
-    }
-    console.error(
-      `  session start: ${pluginPath} exists but isn't fapony's — not overwriting.`,
-    );
-    return;
-  }
-  if (!dryRun) {
-    try {
-      mkdirSync(pluginsDir, { recursive: true });
-      writeFileSync(
-        pluginPath,
-        sessionStartPluginSource(INSTALL_ROOT),
-        "utf-8",
-      );
-    } catch (e) {
-      console.error(
-        `  session start: failed to write — ${(e as Error).message}`,
-      );
-      return;
-    }
-  }
-  console.error(
-    `  session start: ${dryRun ? "would write" : "wrote"} ${pluginPath}`,
+  installPluginFile(
+    dryRun,
+    getHome,
+    "fapony-session-start.ts",
+    "session start",
+    "FaponySessionStart",
+    sessionStartPluginSource(INSTALL_ROOT),
   );
 }
 
@@ -680,45 +645,27 @@ function installGitAutonomyPlugin(
   dryRun: boolean,
   getHome: () => string,
 ): void {
-  const pluginsDir = join(getHome(), ".config", "opencode", "plugins");
-  const pluginPath = join(pluginsDir, "fapony-git-autonomy.ts");
-  if (existsSync(pluginPath)) {
-    let current = "";
-    try {
-      current = readFileSync(pluginPath, "utf-8");
-    } catch {
-      current = "";
-    }
-    if (current.includes("FaponyGitAutonomy")) {
-      // Ours — and generated, so never overwritten. Same stale-check shape
-      // as the session-start plugin: an older generation must say so instead
-      // of "no change", or a fixed rewrite never reaches the client.
-      if (current !== gitAutonomyPluginSource(INSTALL_ROOT)) {
-        console.error(
-          `  git-autonomy: stale fapony plugin — delete ${pluginPath} and re-run install --git-autonomy`,
-        );
-        return;
-      }
-      console.error(`  git-autonomy: already installed — no change`);
-      return;
-    }
-    console.error(
-      `  git-autonomy: ${pluginPath} exists but isn't fapony's — not overwriting.`,
-    );
-    return;
-  }
-  if (!dryRun) {
-    try {
-      mkdirSync(pluginsDir, { recursive: true });
-      writeFileSync(pluginPath, gitAutonomyPluginSource(INSTALL_ROOT), "utf-8");
-    } catch (e) {
-      console.error(
-        `  git-autonomy: failed to write — ${(e as Error).message}`,
-      );
-      return;
-    }
-  }
-  console.error(
-    `  git-autonomy: ${dryRun ? "would write" : "wrote"} ${pluginPath}`,
+  installPluginFile(
+    dryRun,
+    getHome,
+    "fapony-git-autonomy.ts",
+    "git-autonomy",
+    "FaponyGitAutonomy",
+    gitAutonomyPluginSource(INSTALL_ROOT),
   );
+}
+
+/** The fapony-generated plugin files present in an OpenCode install. Empty =
+ *  OpenCode has none, so `fapony update` must not install into a client the user
+ *  never opted into. Callers also use it to tell whether the opt-in git-autonomy
+ *  plugin is installed, so an update can refresh it without ever creating it. */
+export function opencodePluginFiles(getHome: () => string = homedir): string[] {
+  const pluginsDir = join(getHome(), ".config", "opencode", "plugins");
+  try {
+    return readdirSync(pluginsDir).filter(
+      (f) => f.startsWith("fapony-") && f.endsWith(".ts"),
+    );
+  } catch {
+    return [];
+  }
 }

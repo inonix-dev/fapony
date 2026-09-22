@@ -381,6 +381,11 @@ at once. ZCode and Codex get the same skills linked into `~/.agents/skills`. A d
 that already exists and isn't a fapony link is reported and left alone — replace it by hand
 if you want fapony's version.
 
+OpenCode is the one client whose hooks are generated files rather than `fapony hook-*`
+commands, so `fapony update` also re-runs the installer in a fresh process to refresh them.
+A fapony-owned plugin is rewritten in place; a file that isn't fapony's is reported and left
+alone, same as the skill links.
+
 `plan-with-pony` is vendor-neutral — the SKILL.md *is* the prompt, so pipe it to any agent:
 
 ```bash
