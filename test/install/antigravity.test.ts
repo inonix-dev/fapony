@@ -315,6 +315,30 @@ test("testInstallAntigravityAgyPathWithoutGeminiDir", () => {
   });
 });
 
+test("testInstallAntigravityEmptyMcpConfigHandled", () => {
+  withTempHome((home) => {
+    const configDir = join(home, ".gemini", "config");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "mcp_config.json"), ""); // 0-byte file
+
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallAntigravity(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const mcp = JSON.parse(
+      readFileSync(join(configDir, "mcp_config.json"), "utf-8"),
+    ) as { mcpServers?: Record<string, unknown> };
+    assert.ok(
+      mcp.mcpServers?.fapony,
+      "fapony added even if mcp_config.json was 0 bytes",
+    );
+    console.log(
+      "  ✓ install antigravity empty 0-byte mcp_config.json → handled gracefully",
+    );
+  });
+});
+
 function readIfExists(path: string): string | null {
   try {
     return readFileSync(path, "utf-8");

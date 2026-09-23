@@ -34,7 +34,9 @@ function isFaponyEntry(entry: unknown): boolean {
 
 function readJsonObject(path: string): Record<string, unknown> | null {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
+    const raw = readFileSync(path, "utf-8").trim();
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return null;
     }
