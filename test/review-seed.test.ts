@@ -651,6 +651,32 @@ test("testReviewSeedPlanFallbackGitLogGrep", () => {
   console.log("  ✓ review-seed --plan fallback: git log grep finds commits");
 });
 
+test("testReviewSeedPlanFallbackGrepWithoutMdSuffix", () => {
+  withFixture((dir) => {
+    // Repo convention cites the plan as "(PLAN-x chunk N)" — no .md suffix.
+    // Grepping the full basename once missed exactly this (review-pony finding 2).
+    const planDir = join(dir, ".fapony", "plan");
+    mkdirSync(planDir, { recursive: true });
+    const planPath = join(planDir, "PLAN-stem.md");
+    writeFileSync(planPath, "# PLAN-stem\n\n## TL;DR\n- [ ] chunk 1\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "feat: traps (PLAN-stem chunk 1)"', {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    const out = renderSeed(["--plan", ".fapony/plan/PLAN-stem.md"], dir);
+    assert.match(
+      out,
+      /commits via git log grep/,
+      `stem grep must match suffix-less citations:\n${out}`,
+    );
+    assert.doesNotMatch(out, /no commits found/, `must find commits:\n${out}`);
+  });
+  console.log(
+    "  ✓ review-seed --plan fallback: stem grep matches chunk citations",
+  );
+});
+
 test("testReviewSeedPlanFallbackHeaderCommits", () => {
   withFixture((dir) => {
     // Write a plan with > **Commits:** line but no files[] frontmatter

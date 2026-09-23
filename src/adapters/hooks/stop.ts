@@ -358,11 +358,12 @@ export function isPlanPath(p: string): boolean {
   );
 }
 
-/** Count ticked `- [x]` checkbox lines. */
+/** Count ticked `- [x]` checkbox lines (indented or not — the plan template
+ * indents TL;DR progress with two spaces). */
 export function countTicks(content: string): number {
   let n = 0;
   for (const line of content.split("\n")) {
-    if (/^-\s\[[xX]\]/.test(line)) n++;
+    if (/^\s*-\s\[[xX]\]/.test(line)) n++;
   }
   return n;
 }
@@ -376,7 +377,7 @@ export function countTicks(content: string): number {
  */
 export function hasHandoffLiteral(content: string): boolean {
   for (const line of content.split("\n")) {
-    if (/^-\s\[[ xX]\].*handoff/i.test(line)) return true;
+    if (/^\s*-\s\[[ xX]\].*handoff/i.test(line)) return true;
   }
   return false;
 }

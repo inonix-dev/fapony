@@ -171,6 +171,23 @@ test("testCountTicksAndLiteral", () => {
   assert.ok(!hasHandoffLiteral("- [x] chunk 1 — work\n"));
 });
 
+test("testIndentedCheckboxesCount", () => {
+  // The plan template indents TL;DR progress two spaces — an anchored ^-
+  // once made the whole gate blind on every real plan (review-pony finding 1).
+  const before = "  - [ ] chunk 1 — work\n  - [ ] handoff: write the note\n";
+  const after = "  - [x] chunk 1 — work\n  - [ ] handoff: write the note\n";
+  assert.equal(countTicks(before), 0);
+  assert.equal(countTicks(after), 1);
+  assert.ok(hasHandoffLiteral(before), "indented literal opts in");
+  assert.ok(hasHandoffLiteral(after));
+  const d = decideHandoff({
+    files: [{ rel: REL, before, after }],
+    memRows: [],
+    sinceMs: SINCE_MS,
+  });
+  assert.equal(d.blockedPlan, REL, "indented tick without a row must block");
+});
+
 test("testHandoffBlockMessageNamesPlanAndCommand", () => {
   const msg = handoffBlockMessage(REL);
   assert.ok(msg.includes(REL), "message names the plan path");

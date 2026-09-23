@@ -404,9 +404,12 @@ function planFallbackCommits(
       }));
     if (shas && shas.length > 0) return shas;
   }
-  // Source 2: git log --grep for the plan filename
+  // Source 2: git log --grep for the plan name. Chunk commits cite the plan
+  // as "(PLAN-x chunk N)" — never with the .md suffix — so grep the stem:
+  // it still matches messages that do carry the suffix (substring).
+  const stem = planBase.replace(/\.md$/, "");
   const logResult = execGit(
-    `git log --grep=${planBase} --format=%h --max-count=10`,
+    `git log --grep=${stem} --format=%h --max-count=10`,
     cwd,
   );
   if (logResult.ok && logResult.output.trim()) {
