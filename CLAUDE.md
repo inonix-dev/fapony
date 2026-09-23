@@ -107,25 +107,25 @@ test/           one file per src module + test/mcp/ · test/install/ · test/tel
 
 ---
 
-## Client support — what works on whom (updated 2026-09-21)
+## Client support — what works on whom (updated 2026-09-23)
 
-`fapony install` knows 5 clients. · **MCP is the only piece all of them get.** · Hooks/hints are per-client
+`fapony install` knows 6 clients. · **MCP is the only piece all of them get.** · Hooks/hints are per-client
 and **fire in different order** — Claude Code fires *before* the tool call (`PreToolUse` → `additionalContext`)
 while OpenCode fires *after* (`tool.execute.after` — the only annotate channel available; must mutate
 `output.output`, never throw, or it blocks the tool). So OpenCode sees warnings one step later.
 
-| | claude | opencode | cursor | zcode | codex |
-| --- | --- | --- | --- | --- | --- |
-| MCP 3 tools | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Stop hook — refuse to end a turn with commits but no new mem row | ✅ | — | ✅ | — | ✅ after trust |
-| Read hint — big file + debt/mem lines | ✅ before | ✅ after | — | — | — |
-| Re-read hint — repeat read of the same file, mtime unmoved | ✅ before | ✅ after | — | — | — |
-| Edit hint — importer count before a shape change | ✅ before | ✅ after (edit+write) | — | — | — |
-| Commit hint — `git commit` → record a mem row (and `kind:bug` on a fix-type commit) | — | ✅ after | — | — | — |
-| SessionStart — fire `mem kickoff` as context | ✅ | ✅ first dispatch only | — | — | ✅ after trust |
-| Skill symlink → `~/.claude/skills` | ✅ | ✅ | — | — | — |
-| Skill symlink → `~/.agents/skills` | — | — | — | ✅ | ✅ |
-| `usage-scan` reads that client's session log | ✅ | ✅ | — | ✅ | ✅ |
+| | claude | opencode | cursor | zcode | codex | antigravity |
+| --- | --- | --- | --- | --- | --- | --- |
+| MCP 3 tools | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Stop hook — refuse to end a turn with commits but no new mem row | ✅ | — | ✅ | — | ✅ after trust | — |
+| Read hint — big file + debt/mem lines | ✅ before | ✅ after | — | — | — | — |
+| Re-read hint — repeat read of the same file, mtime unmoved | ✅ before | ✅ after | — | — | — | — |
+| Edit hint — importer count before a shape change | ✅ before | ✅ after (edit+write) | — | — | — | — |
+| Commit hint — `git commit` → record a mem row (and `kind:bug` on a fix-type commit) | — | ✅ after | — | — | — | — |
+| SessionStart — fire `mem kickoff` as context | ✅ | ✅ first dispatch only | — | — | ✅ after trust | — |
+| Skill symlink → `~/.claude/skills` | ✅ | ✅ | — | — | — | — |
+| Skill symlink → `~/.agents/skills` | — | — | — | ✅ | ✅ | ✅ |
+| `usage-scan` reads that client's session log | ✅ | ✅ | — | ✅ | ✅ | — |
 
 `—` = not wired yet, not impossible. **Hints live on hooks, not MCP, on purpose** — they must fire mid-turn
 without the agent thinking of it (the MCP-vs-CLI test, rule 13). · **OpenCode is the only client whose hooks
