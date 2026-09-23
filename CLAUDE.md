@@ -343,7 +343,9 @@ the plan/spec templates, and all the skills.
     `mem.ts kickoff <same path>` instead of hauling the old transcript. · **If `review-seed` was run
     this chunk, paste its file:line facts (signatures/importers) into the note, not just "what to do
     next"** — `review-seed` itself is stateless (no cache, by design — measured 2026-09-23: `--files`
-    0.35s / `--plan` 0.41s, a warm graph cache would not be felt, so it stays uncached), so the note is
+    0.35s / `--plan` 0.41s on this repo (120 files); re-measured on a 2,952-file repo — 0.31-0.51s,
+    no scaling with file count, so a cache would not be felt even at worst case — closed, don't
+    re-propose without new data), so the note is
     the only place that lookup survives into chunk N+1; without it, N+1 pays the same lookup again from
     zero.
 12. **A feature with no caller = delete.** Actually done: `fapony map` had no caller; plan-seed §2/§5
