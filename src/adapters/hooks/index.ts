@@ -69,6 +69,7 @@ export {
   sessionStartContext,
 } from "./session-start.js";
 export {
+  bugDedupeKey,
   bugSignalFromTranscript,
   cmdHookStop,
   countTicks,
@@ -78,6 +79,7 @@ export {
   fileAtRevision,
   handoffBaseSha,
   handoffBlockMessage,
+  handoffDedupeKey,
   type HandoffDecision,
   type HandoffPlanFile,
   hasHandoffLiteral,
@@ -93,5 +95,6 @@ export {
   type StopClient,
   stopBlockedBefore,
   stopBlockPath,
+  stopBlockSurface,
   stopOutput,
 } from "./stop.js";

@@ -4,15 +4,18 @@ import assert from "node:assert";
 import { readFileSync } from "node:fs";
 import type { MemRow } from "../../src/core/mem-log.js";
 import {
+  bugDedupeKey,
   countTicks,
   decideHandoff,
   handoffBlockMessage,
+  handoffDedupeKey,
   hasHandoffLiteral,
   isPlanPath,
   memHasHandoffForPlan,
   mergeStopReasons,
   stopBlockedBefore,
   stopBlockPath,
+  stopBlockSurface,
 } from "../../src/hook.js";
 import { withStateDir } from "./helpers.js";
 
@@ -263,5 +266,69 @@ test("testMergePrefersCommitAndDedupesPerKind", () => {
       .filter(Boolean)
       .map((l) => (JSON.parse(l) as { kind?: string }).kind ?? "commit");
     assert.deepEqual(kinds, ["commit"], "one commit row, nothing else");
+  });
+});
+
+test("testStopBlockSurfaceNamesTheFire", () => {
+  assert.equal(stopBlockSurface(null), "commit-block");
+  assert.equal(stopBlockSurface("เจอบั๊ก"), "bug-block");
+  assert.equal(stopBlockSurface("found a bug"), "bug-block");
+});
+
+test("testHandoffDedupeKeyIsPerPlan", () => {
+  withStateDir(() => {
+    const session = "/tmp/transcripts/sess-handoff-perplan.jsonl";
+    const wt = "/repo";
+    const x = handoffDedupeKey(".fapony/plan/PLAN-x.md");
+    const y = handoffDedupeKey(".fapony/plan/PLAN-y.md");
+    assert.notEqual(x, y, "different plans are different problems");
+    assert.equal(stopBlockedBefore(session, wt, x), false, "plan X blocks");
+    assert.equal(stopBlockedBefore(session, wt, x), true, "plan X nags once");
+    assert.equal(
+      stopBlockedBefore(session, wt, y),
+      false,
+      "plan Y still surfaces — X must not spend Y's quota",
+    );
+  });
+});
+
+test("testBugDedupeKeyIsPerMarker", () => {
+  withStateDir(() => {
+    const session = "/tmp/transcripts/sess-bug-permarker.jsonl";
+    const wt = "/repo";
+    const a = bugDedupeKey("เจอบั๊ก");
+    const b = bugDedupeKey("found a bug");
+    assert.notEqual(a, b, "different markers are different problems");
+    assert.equal(stopBlockedBefore(session, wt, a), false, "first bug blocks");
+    assert.equal(stopBlockedBefore(session, wt, a), true, "same bug nags once");
+    assert.equal(
+      stopBlockedBefore(session, wt, b),
+      false,
+      "a different announced bug still surfaces",
+    );
+  });
+});
+
+test("testMergeRecordsPerMarkerBugQuota", () => {
+  withStateDir(() => {
+    const session = "/tmp/transcripts/sess-merge-marker.jsonl";
+    const wt = "/repo";
+    const merged = mergeStopReasons({
+      commitReason: 'This turn reported a bug ("found a bug") …',
+      handoffReason: null,
+      session,
+      worktree: wt,
+      bugSignal: "found a bug",
+    });
+    assert.ok(merged, "bug reason goes through once");
+    const kinds = readFileSync(stopBlockPath(session), "utf-8")
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => (JSON.parse(l) as { kind?: string }).kind ?? "commit");
+    assert.deepEqual(
+      kinds,
+      ["bug:found a bug"],
+      "the row names the marker — a coarse 'bug' would spend every bug's quota",
+    );
   });
 });

@@ -38,7 +38,9 @@ export interface HintFireRow {
     | "edit"
     | "open-bug"
     | "handoff-would-block"
-    | "handoff-pass";
+    | "handoff-pass"
+    | "commit-block"
+    | "bug-block";
   file: string | null;
   count: number;
   ids?: string[];
@@ -73,6 +75,8 @@ export interface HintImpact {
     "open-bug": number;
     "handoff-would-block": number;
     "handoff-pass": number;
+    "commit-block": number;
+    "bug-block": number;
   };
   debt: { shown: number; resolved: number; unknown: number };
   window: string | null;

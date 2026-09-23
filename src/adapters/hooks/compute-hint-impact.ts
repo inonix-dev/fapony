@@ -39,6 +39,8 @@ export function computeHintImpact(
       "open-bug": 0,
       "handoff-would-block": 0,
       "handoff-pass": 0,
+      "commit-block": 0,
+      "bug-block": 0,
     },
     debt: { shown: 0, resolved: 0, unknown: 0 },
     window: since ?? null,

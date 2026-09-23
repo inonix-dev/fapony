@@ -462,15 +462,42 @@ export function handoffBlockMessage(planRel: string): string {
     `The next session opens from that note — without it, chunk N+1 re-derives everything from zero.`,
     `  fapony mem add note "<what chunk N+1 must know>" --files <files> ${planRel}`,
     `Then end the turn again — the row is the handoff; ticking the literal is cosmetic.`,
-    `Fires once per session.`,
+    `Fires once per session per plan.`,
   ].join("\n");
 }
 
 /**
- * Merge the commit/bug reason with the handoff reason. Each blocking kind
- * owns its own dedupe quota (commit / bug / handoff fire once per session):
- * the commit/bug dedupe below must only ever see a commit/bug-derived
- * reason, and a handoff reason only fills an otherwise-allowed turn.
+ * Which hint-log surface a commit/bug stop fire records. Logged on every
+ * fire — shown or dedupe-suppressed alike — so a repeated signal stays
+ * measurable: "shown" is recoverable by joining stop-block rows, but a
+ * suppressed fire with no row at all would vanish entirely.
+ */
+export function stopBlockSurface(
+  bugSignal: string | null,
+): "commit-block" | "bug-block" {
+  return bugSignal ? "bug-block" : "commit-block";
+}
+
+/**
+ * Dedupe keys are per-problem, not per-kind: the same problem nags once per
+ * session, but a different plan / a different announced bug still surfaces.
+ * A coarse kind ("handoff") lets the first problem spend the quota for all
+ * the others. Keys stay free-form strings — stopBlockedBefore compares them
+ * opaquely, and JSON escaping keeps even odd markers one row per line.
+ */
+export function handoffDedupeKey(planRel: string): string {
+  return `handoff:${planRel}`;
+}
+
+export function bugDedupeKey(marker: string): string {
+  return `bug:${marker}`;
+}
+
+/**
+ * Merge the commit/bug reason with the handoff reason. Each blocking problem
+ * owns its own dedupe quota: the commit/bug dedupe below must only ever see
+ * a commit/bug-derived reason, and a handoff reason only fills an
+ * otherwise-allowed turn.
  *
  * The shape this replaces shared one `reason` variable for both, so a
  * handoff block fell into the commit dedupe and recorded a kind:"commit"
@@ -491,7 +518,7 @@ export function mergeStopReasons(opts: {
     stopBlockedBefore(
       opts.session,
       opts.worktree,
-      opts.bugSignal ? "bug" : "commit",
+      opts.bugSignal ? bugDedupeKey(opts.bugSignal) : "commit",
     )
   ) {
     reason = null;
@@ -622,6 +649,19 @@ export async function cmdHookStop(): Promise<void> {
       bugRowSinceStart,
     });
 
+    // Record every commit/bug fire — shown or suppressed. The dedupe below
+    // decides the message, never the record: a suppressed repeat is still a
+    // problem found, and the trial can only answer what the log kept.
+    if (reason && worktree) {
+      recordHintFire({
+        ts: new Date().toISOString(),
+        worktree,
+        surface: stopBlockSurface(bugSignal),
+        file: null,
+        count: 1,
+      });
+    }
+
     // Handoff trial (PLAN-active-pain chunk 1): independent of commits.
     // Default ships log-only — a would-block/pass row in hint-log answers
     // the trial questions (gate precision, read-only silence, old-plan
@@ -683,7 +723,7 @@ export async function cmdHookStop(): Promise<void> {
                       !stopBlockedBefore(
                         norm.transcriptPath,
                         worktree,
-                        "handoff",
+                        handoffDedupeKey(h.blockedPlan),
                       )
                     ) {
                       handoffReason = handoffBlockMessage(h.blockedPlan);
@@ -709,8 +749,7 @@ export async function cmdHookStop(): Promise<void> {
 
     // Handoff merges last and only fills an otherwise-allowed turn — the
     // commit/bug dedupe never sees (or consumes) a handoff-derived reason.
-    reason = mergeStopReasons({
-      commitReason: reason,
+    reason = mergeStopReasons({      commitReason: reason,
       handoffReason,
       session: norm.transcriptPath,
       worktree,

@@ -7,6 +7,7 @@
 
 export {
   BUG_MARKERS,
+  bugDedupeKey,
   bugSignalFromTranscript,
   COMMIT_HINT_MIN_COMMITS,
   type CommitHintInput,
@@ -40,6 +41,7 @@ export {
   gitAutonomyStatus,
   handoffBaseSha,
   handoffBlockMessage,
+  handoffDedupeKey,
   type HandoffDecision,
   type HandoffPlanFile,
   hasHandoffLiteral,
@@ -79,6 +81,7 @@ export {
   sessionStartContext,
   stopBlockedBefore,
   stopBlockPath,
+  stopBlockSurface,
   stopOutput,
   utcStamp,
   worktreeKey,
