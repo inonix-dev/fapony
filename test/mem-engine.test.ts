@@ -550,6 +550,19 @@ test("testOpenKeysImportantIndex", () => {
     ] as never),
     [],
   );
+  // decisions are never closed → a keyed decision is not an open problem
+  assert.deepEqual(
+    openKeys([
+      {
+        ts: "2026-01-09T00:00:00.000Z",
+        kind: "decision",
+        text: "d",
+        id: "d1",
+        key: "some-decision",
+      },
+    ] as never),
+    [],
+  );
 
   // fmtRow: #key only when present
   const keyed = fmtRow(rows[1] as never);
