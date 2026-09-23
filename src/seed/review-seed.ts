@@ -23,7 +23,7 @@ import type { Stats } from "node:fs";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import {
-  buildGraph,
+  buildGraphCached,
   collectSourceFiles,
   type ImportGraph,
   isTestedThroughBarrels,
@@ -652,7 +652,7 @@ function renderLookup(
   }
 
   if (flags.callers) {
-    const graph = buildGraph(worktree);
+    const graph = buildGraphCached(worktree);
     const targets = (resolved?.entries ?? [])
       .map((e) => e.path)
       .filter(hasGraph);
@@ -721,7 +721,7 @@ export function renderSeed(args: string[], cwd: string): string {
   // Static graph over the whole worktree — same producer as `fapony analyze`.
   let graph: ImportGraph | null = null;
   try {
-    graph = buildGraph(worktree);
+    graph = buildGraphCached(worktree);
   } catch {
     graph = null;
   }
