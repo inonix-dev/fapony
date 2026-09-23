@@ -69,7 +69,7 @@ fapony/
     conventions-seed.ts # init-time wrapper detector → writes .fapony/conventions.json — reads snapshot only, never touches history
     seed/               # seed commands — plan-seed + review-seed + shared primitives
       primitives.ts     # shared git helpers (execGit/gitOk/gitValue), capLines, SIG_MAX, SeedError
-      plan-seed.ts      # fapony plan-seed <name> [--spec] [--scope <path>]... — writes PLAN(+SPEC): frontmatter, 8 empty sections, §8 prior art, Context (fapony: mem decisions + existing-in-scope), existing-plans stdout list; SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200
+      plan-seed.ts      # fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]... — writes PLAN(+SPEC): frontmatter, 8 empty sections, §8 prior art, Context (fapony: mem decisions + existing-in-scope), existing-plans stdout list; SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200
       review-seed.ts    # fapony review-seed [--staged|--commit|--range|--files|--plan] — read-only scope facts for a review (changed/importers/untested/signatures/cross-check)
     price/              # model pricing data — fetch + resolve
       fetch.ts          # fetchPricing() — HTTP fetch from upstream price table

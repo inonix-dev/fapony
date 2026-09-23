@@ -237,7 +237,7 @@ fapony usage-web [port]                    # usage comparison dashboard from cac
 # lookup (read-only, never touches state)
 fapony analyze [path]                      # live repo graph: hubs, orphans, cycles, changed-untested
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]  # scope facts for a review
-fapony plan-seed <name> [--spec] [--scope <path>]...  # write PLAN (+SPEC): frontmatter, capped sections, prior-art list
+fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...  # write PLAN (+SPEC): frontmatter, capped sections, prior-art list
 
 # hooks & MCP (wired by `fapony install`, not run by hand)
 fapony mcp                                 # MCP server (stdio JSON-RPC — 3 tools)

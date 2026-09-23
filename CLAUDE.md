@@ -418,7 +418,7 @@ fapony price-scan                    # refresh the model price table
 # ── lookup (read-only, never touches state) ──
 fapony analyze [path]                # hub/orphan/cycle/changed-untested — live graph, never persisted
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym[,sym]]
-fapony plan-seed <name> [--spec] [--scope <path>]...
+fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...
 # ── ledger (frozen — bug fixes only) ──
 fapony mcp                           # MCP server — stdio JSON-RPC, 3 tools
 fapony hook-stop                     # Stop hook — block turns with commits but no new mem row

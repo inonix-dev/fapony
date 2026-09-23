@@ -1,4 +1,4 @@
-// src/seed/plan-seed.ts — `fapony plan-seed <name> [--spec] [--scope <path>]...`
+// src/seed/plan-seed.ts — `fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...`
 //
 // Writes PLAN + SPEC straight into planDir/specDir. What it pre-fills is the
 // structure (frontmatter, the 8 sections, prior art, ledger context) — the
@@ -660,7 +660,8 @@ export function renderKnownTraps(
 // --- CLI entry ---
 
 export function cmdPlanSeed(args: string[]): void {
-  const usage = "usage: fapony plan-seed <name> [--spec] [--scope <path>]...";
+  const usage =
+    "usage: fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...";
   // Positional parse, not args.find(!startsWith("--")) — a --scope VALUE is
   // a non-flag argument and must never be mistaken for the plan name.
   let name: string | undefined;

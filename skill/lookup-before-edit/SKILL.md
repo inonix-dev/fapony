@@ -11,7 +11,7 @@ A full-file read on a 500-line module costs ~35k tokens of output; a lookup cost
 ## The one command
 
 ```bash
-fapony review-seed --files <f1,f2,dir> [--body <sym>] [--callers <sym>]
+fapony review-seed --files <f1,f2,dir> [--body <sym>[,<sym>]] [--callers <sym>[,<sym>]]
 ```
 
 What it returns: every export with its line number (uncapped), plus the importers — first 12
@@ -22,7 +22,7 @@ per file, the rest as `(+N)`, so the total is still readable. That is your entry
 
 - `--body <sym>[,<sym>]` — declaration slice of those exports (truncated at 80 lines each):
   "what does this do" without the file.
-- `--callers <sym>` — symbol→symbol scan across the importers the static graph sees.
+- `--callers <sym>[,<sym>]` — symbol→symbol scan across the importers the static graph sees.
 - Directories expand to the source files under them (cap 40, stated when cut). Paths that do
   not exist are dropped with a notice, not counted silently.
 
