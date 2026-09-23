@@ -22,11 +22,7 @@ import { withStateDir } from "./helpers.js";
 const SINCE_MS = new Date("2026-09-23T10:00:00.000Z").getTime();
 const REL = ".fapony/plan/PLAN-x.md";
 
-function row(
-  kind: string,
-  ts: string,
-  extra: Partial<MemRow> = {},
-): MemRow {
+function row(kind: string, ts: string, extra: Partial<MemRow> = {}): MemRow {
   return { ts, agent: "t", kind, text: "x", ...extra };
 }
 
@@ -50,9 +46,7 @@ test("testHandoffBlocksTickWithoutRow", () => {
 test("testHandoffPassesWithSpecRow", () => {
   const d = decideHandoff({
     files: [{ rel: REL, before: BEFORE, after: AFTER_TICKED }],
-    memRows: [
-      row("note", "2026-09-23T10:30:00.000Z", { spec: REL }),
-    ],
+    memRows: [row("note", "2026-09-23T10:30:00.000Z", { spec: REL })],
     sinceMs: SINCE_MS,
   });
   assert.equal(d.blockedPlan, null, "note with spec pointing at plan passes");
@@ -61,12 +55,14 @@ test("testHandoffPassesWithSpecRow", () => {
 test("testHandoffPassesWithFilesRow", () => {
   const d = decideHandoff({
     files: [{ rel: REL, before: BEFORE, after: AFTER_TICKED }],
-    memRows: [
-      row("next", "2026-09-23T11:00:00.000Z", { files: [REL] }),
-    ],
+    memRows: [row("next", "2026-09-23T11:00:00.000Z", { files: [REL] })],
     sinceMs: SINCE_MS,
   });
-  assert.equal(d.blockedPlan, null, "next with files[] pointing at plan passes");
+  assert.equal(
+    d.blockedPlan,
+    null,
+    "next with files[] pointing at plan passes",
+  );
 });
 
 test("testHandoffIgnoresStaleRows", () => {
@@ -182,7 +178,8 @@ test("testHandoffBlockMessageNamesPlanAndCommand", () => {
   assert.ok(!/bun fapony\.ts/.test(msg), "repo-neutral: no runner prefix");
 });
 
-test("testMemHandoffMatchesBareBasename", () => {  assert.ok(
+test("testMemHandoffMatchesBareBasename", () => {
+  assert.ok(
     memHasHandoffForPlan(
       [row("note", "2026-09-23T10:30:00.000Z", { spec: "PLAN-x.md" })],
       REL,
@@ -192,9 +189,11 @@ test("testMemHandoffMatchesBareBasename", () => {  assert.ok(
   );
   assert.ok(
     !memHasHandoffForPlan(
-      [row("note", "2026-09-23T10:30:00.000Z", {
-        spec: ".fapony/plan/PLAN-other.md",
-      })],
+      [
+        row("note", "2026-09-23T10:30:00.000Z", {
+          spec: ".fapony/plan/PLAN-other.md",
+        }),
+      ],
       REL,
       SINCE_MS,
     ),

@@ -13,8 +13,8 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { hookTsMs, sessionKey, utcStamp } from "../../core/hook-helpers.js";
 import { recordHintFire } from "../../core/hint-log.js";
+import { hookTsMs, sessionKey, utcStamp } from "../../core/hook-helpers.js";
 import type { MemRow } from "../../core/mem-log.js";
 import { readMemLog, whereMemDir } from "../../memory.js";
 import { hasBugMarker } from "./bug-markers.js";
@@ -528,10 +528,7 @@ export function mergeStopReasons(opts: {
 }
 
 /** Plan files this session wrote: committed since birthtime, unstaged, or brand-new. */
-export function sessionPlanFiles(
-  cwd: string,
-  since: string,
-): string[] | null {
+export function sessionPlanFiles(cwd: string, since: string): string[] | null {
   const names = (args: string[]): string[] | null => {
     const out = git(args, cwd);
     if (out === null) return null;
@@ -540,7 +537,13 @@ export function sessionPlanFiles(
       .map((s) => s.trim())
       .filter(Boolean);
   };
-  const a = names(["log", "--name-only", "--since", `${since} +0000`, "--format="]);
+  const a = names([
+    "log",
+    "--name-only",
+    "--since",
+    `${since} +0000`,
+    "--format=",
+  ]);
   const b = names(["diff", "--name-only", "HEAD"]);
   const c = names(["ls-files", "--others", "--exclude-standard"]);
   if (!a && !b && !c) return null;
@@ -749,7 +752,8 @@ export async function cmdHookStop(): Promise<void> {
 
     // Handoff merges last and only fills an otherwise-allowed turn — the
     // commit/bug dedupe never sees (or consumes) a handoff-derived reason.
-    reason = mergeStopReasons({      commitReason: reason,
+    reason = mergeStopReasons({
+      commitReason: reason,
       handoffReason,
       session: norm.transcriptPath,
       worktree,

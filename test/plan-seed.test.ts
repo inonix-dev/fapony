@@ -526,3 +526,29 @@ test("testPlanSeedExistingPlansCap", () => {
   }
   console.log("  ✓ plan-seed plan list caps at 10, active first");
 });
+
+test("testPlanSeedScopeCommaList", () => {
+  // Agents type `--scope a,b,c` — the comma shape --files already accepts.
+  // It fails on a path that never is unless the split happens at parse time.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-comma-"));
+  try {
+    mkdirSync(join(dir, "src"), { recursive: true });
+    mkdirSync(join(dir, "other"), { recursive: true });
+    writeFileSync(join(dir, "src", "a.ts"), "export const a = 1;\n");
+    writeFileSync(join(dir, "other", "b.ts"), "export const b = 1;\n");
+    withCwd(dir, () => {
+      cmdPlanSeed(["comma", "--scope", "src,other"]);
+      const plan = readFileSync(
+        join(dir, ".fapony", "plan", "PLAN-comma.md"),
+        "utf-8",
+      );
+      assert.ok(
+        plan.includes("src/a.ts") && plan.includes("other/b.ts"),
+        "comma-separated --scope roots are all in scope",
+      );
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ plan-seed --scope accepts comma lists");
+});
