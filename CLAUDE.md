@@ -340,7 +340,10 @@ the plan/spec templates, and all the skills.
     Closing 1 chunk: tick the checkbox + stamp the TL;DR → its own commit →
     `mem.ts add note "<what chunk N+1 must know>" --files f1,f2 <path/to/PLAN-x.md>` (retype the path
     identically every time — `kickoff` compares raw strings) → **stop**. · The next session opens with
-    `mem.ts kickoff <same path>` instead of hauling the old transcript.
+    `mem.ts kickoff <same path>` instead of hauling the old transcript. · **If `review-seed` was run
+    this chunk, paste its file:line facts (signatures/importers) into the note, not just "what to do
+    next"** — `review-seed` itself is stateless (no cache, by design), so the note is the only place
+    that lookup survives into chunk N+1; without it, N+1 pays the same lookup again from zero.
 12. **A feature with no caller = delete.** Actually done: `fapony map` had no caller; plan-seed §2/§5
     measured 3/3 empty → −257 lines. · Convenience-side things prove themselves by being used, not by existing.
 13. **Spend tokens smart — not "cut to the minimum" but "pay where it pays back."**
