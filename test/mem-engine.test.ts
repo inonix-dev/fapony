@@ -15,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readMemLog } from "../src/core/mem-log.js";
+import { cmdFind, cmdKickoff } from "../src/mem/commands/read.js";
 import {
   CAP_NEXT,
   CapError,
@@ -23,8 +24,10 @@ import {
   engineClose,
   engineFind,
 } from "../src/mem/engine.js";
+import { fmtRow } from "../src/mem/render.js";
+import { openKeys } from "../src/mem/selectors.js";
 import { initStore } from "../src/mem/store.js";
-import { withTempRepo } from "./helpers.js";
+import { captureLogs, withTempRepo } from "./helpers.js";
 
 const FAPONY = join(import.meta.dir, "..", "fapony.ts");
 
@@ -452,5 +455,97 @@ test("testMemFindCliKeyFlagEndToEnd", () => {
   });
   console.log(
     "  ✓ CLI find --key hits, misses with known keys, rejects no value",
+  );
+});
+
+// PLAN-mem-keys chunk 3 — important-index: openKeys derives distinct keys on
+// open rows; kickoff prints one line under the header; fmtRow/find show #key
+// only when present (keyless rows stay byte-identical).
+test("testOpenKeysImportantIndex", () => {
+  const rows = [
+    {
+      ts: "2026-01-01T00:00:00.000Z",
+      kind: "bug",
+      text: "dedupe stop hook",
+      id: "b1",
+      key: "fix-stop-dedupe",
+    },
+    {
+      ts: "2026-01-02T00:00:00.000Z",
+      kind: "note",
+      text: "same problem follow-up",
+      id: "n1",
+      key: "fix-stop-dedupe",
+    },
+    {
+      ts: "2026-01-03T00:00:00.000Z",
+      kind: "note",
+      text: "other problem",
+      id: "n2",
+      key: "unify-mem-engine",
+    },
+    {
+      ts: "2026-01-04T00:00:00.000Z",
+      kind: "note",
+      text: "legacy v1 row",
+      id: "v1",
+    },
+    {
+      ts: "2026-01-05T00:00:00.000Z",
+      kind: "close",
+      text: "fixed in abc",
+      ref: "b1",
+    },
+  ];
+
+  // b1 closed → only n1 remains under fix-stop-dedupe; sorted by key
+  const keys = openKeys(rows as never);
+  assert.deepEqual(keys, [
+    { key: "fix-stop-dedupe", open: 1 },
+    { key: "unify-mem-engine", open: 1 },
+  ]);
+  // every keyed row tombstoned (or only keyless left) → empty (kickoff silent)
+  assert.deepEqual(
+    openKeys([
+      rows[3],
+      { ts: "2026-01-06T00:00:00.000Z", kind: "close", text: "d", ref: "n1" },
+      { ts: "2026-01-07T00:00:00.000Z", kind: "close", text: "d", ref: "n2" },
+      { ts: "2026-01-08T00:00:00.000Z", kind: "close", text: "d", ref: "b1" },
+    ] as never),
+    [],
+  );
+
+  // fmtRow: #key only when present
+  const keyed = fmtRow(rows[1] as never);
+  assert.match(keyed, /note #fix-stop-dedupe same problem follow-up/);
+  const keyless = fmtRow(rows[3] as never);
+  assert.ok(!keyless.includes("#"), `keyless fmtRow stays clean: ${keyless}`);
+
+  // kickoff no-args: one open-keys line under the header, silent when none
+  withTempRepo((dir) => {
+    const memDir = join(dir, ".fapony", ".memory");
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(
+      join(memDir, "log.jsonl"),
+      `${[rows[1], rows[2], rows[3]].map((r) => JSON.stringify(r)).join("\n")}\n`,
+    );
+    initStore(dir);
+    const prev = process.cwd();
+    process.chdir(dir);
+    try {
+      const out = captureLogs(() => cmdKickoff([]));
+      assert.match(
+        out,
+        /^# .+ — 3 entries\nopen keys: fix-stop-dedupe\(1\), unify-mem-engine\(1\) — fapony mem find --key <key>/m,
+      );
+      // find prints #key on keyed rows
+      const findOut = captureLogs(() => cmdFind(["--key", "fix-stop-dedupe"]));
+      assert.match(findOut, /note #fix-stop-dedupe same problem follow-up/);
+    } finally {
+      process.chdir(prev);
+    }
+  });
+  console.log(
+    "  ✓ openKeys index, kickoff open-keys line, #key on fmtRow/find",
   );
 });

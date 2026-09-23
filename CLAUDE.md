@@ -147,8 +147,10 @@ fapony mem kickoff .fapony/plan/PLAN-x.md   # open a session with this
 fapony mem add decision "what was decided, and why" --files a.ts,b.ts
 fapony mem add bug "what broke" --files a.ts
 fapony mem add note "state the next session must know"
+fapony mem add note "about a known problem" --files a.ts --key fix-stop-dedupe  # key = problem identity
 fapony mem close <id> "fixed in <sha>"
 fapony mem find "usage-web"
+fapony mem find --key fix-stop-dedupe
 ```
 
 - **`--files` matters most** — without it the row falls through the floor when clustering for repeat-pain
@@ -158,7 +160,7 @@ fapony mem find "usage-web"
 - `close` is the only thing that closes a `bug`. Without it the list only grows.
 - **Every kind is live; none deprecated** — `decision` / `bug` / `note` are the agent's own call, while
   `next` / `hold` / `claim` / `release` / `synced` / `stale` are `mem.ts`'s own bookkeeping.
-- **Read back via MCP `mem_find`** (`files[]` / `text` / `kind` / `since` / `limit` — no default filter).
+- **Read back via MCP `mem_find`** (`files[]` / `text` / `kind` / `key` / `since` / `limit` — no default filter).
 - **The cluster unit is the *zone*, not the file**, and count **1 row = 1 event** — counting
   file-hits once gave `layouts/quick 10×`, which was inflated (one verdict touching 9 files counted 9);
   recounting gave `server/services` 6× · `server/routes/v1` 6× with only **2 zones** at ≥5 hits
@@ -400,9 +402,9 @@ at open, closed by `review-pony` — deterministic at both ends, no LLM in betwe
 
 ```bash
 # ── core: mem + debt ──
-fapony mem add <kind> "<text>" --files f1,f2 [spec.md]
+fapony mem add <kind> "<text>" --files f1,f2 [--key k] [spec.md]
 fapony mem close <id> "<msg>"
-fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]
+fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--key k] [--open]
 fapony mem kickoff [<plan.md>] [--pick <n>]
 fapony mem done | stale | claim | release | synced | plan-sweep | plan-check | rotate
 fapony debt [--id a,b] [--where <path>]   # which files haven't migrated to a declared convention (live, read-only)
@@ -462,8 +464,8 @@ arrived 2026-09-21 as a separate tool because a close row carries no `files[]` �
 
 | Tool | Purpose |
 |------|---------|
-| `mem_find` | **The core** — search the mem log read-only: match the row's stored `files[]` first, then fall back to substring of text/spec/ref for old rows written before `--files` existed · every kind, no default filter · `memDir:null` = no mem (not "no match") |
-| `mem_add` | **The core — the write half of `mem_find`.** Appends a mem row (`decision` / `bug` / `note` / `next` / `hold`) with `files[]` **required, rejected when empty** (rule 9: required works, asking doesn't) — a row that names no file is unfindable when you next touch that file |
+| `mem_find` | **The core** — search the mem log read-only: `key` exact-first (wrong key answers `known keys`), then match the row's stored `files[]`, then fall back to substring of text/spec/ref for old rows written before `--files` existed · every kind, no default filter · `memDir:null` = no mem (not "no match") |
+| `mem_add` | **The core — the write half of `mem_find`.** Appends a mem row (`decision` / `bug` / `note` / `next` / `hold`) with `files[]` **required, rejected when empty** (rule 9: required works, asking doesn't) — a row that names no file is unfindable when you next touch that file · optional `key` `[a-z0-9-]{3,40}` = problem identity, rejected on pattern |
 | `mem_close` | **The core — the close half of `mem_add`.** Closes a row by id with a tombstone message (`ref` + `text`, no `files[]`) — a separate tool, not `kind:"close"`, because a schema whose required fields depend on another field's value is the most-miscalled shape there is |
 
 **Removed and never coming back:** `verdict_submit`, `fapony_usage`, `plan_list`, `fapony_stats`,

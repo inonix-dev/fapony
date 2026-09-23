@@ -6,8 +6,8 @@ import { parseSince } from "../../core/since.js";
 import { baselinePath, readEvidenceLintCmd } from "../../lint-baseline.js";
 import { CLI_FIND_EXCLUDE, engineFind } from "../engine.js";
 import { doneLines, fmtClose, fmtRow } from "../render.js";
-import { claimsOf, openRows, staleReport } from "../selectors.js";
-import type { CloseRow, WorkRow } from "../store.js";
+import { claimsOf, openKeys, openRows, staleReport } from "../selectors.js";
+import type { CloseRow, LogRow, WorkRow } from "../store.js";
 import { allRows, app, memCmd, planDir, root, rows } from "../store.js";
 import { checkTickedLine, planSweepCmd, shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
@@ -49,6 +49,21 @@ const BUGS_LIMIT = 10;
 const BRANCH_LIMIT = 10;
 const RECENT_OPEN_LIMIT = 10;
 const RECENT_OPEN_TEXT = 160;
+const OPEN_KEYS_LIMIT = 8;
+
+// Important-index line (PLAN-mem-keys chunk 3): one line under the kickoff
+// header listing keys that still have open rows — silent when none. Placed
+// before every tier so the 4KB session-start cap can never drop it (only
+// ## recent is cut first). Counts are open rows per key, not total rows.
+const openKeysLine = (all: LogRow[]): string => {
+  const keys = openKeys(all);
+  if (!keys.length) return "";
+  const shown = keys.slice(0, OPEN_KEYS_LIMIT);
+  const body = shown.map(({ key, open }) => `${key}(${open})`).join(", ");
+  const more =
+    keys.length > OPEN_KEYS_LIMIT ? ` +${keys.length - OPEN_KEYS_LIMIT}` : "";
+  return `open keys: ${body}${more} — ${memCmd} find --key <key>`;
+};
 
 const shortText = (text: string, max = RECENT_OPEN_TEXT): string => {
   if (text.length <= max) return text;
@@ -200,8 +215,10 @@ export const cmdFind = (a: string[]) => {
   const hits = [...result.rows].reverse();
   for (const r of hits) {
     if ("id" in r) {
+      // #key only when present — rows without one keep the old shape
+      const keyTag = r.key ? ` #${r.key}` : "";
       console.log(
-        `- [${r.id}] ${r.ts.slice(0, 10)} ${r.kind} ${r.text ?? ""}${r.spec ? ` → ${r.spec}` : ""}`,
+        `- [${r.id}] ${r.ts.slice(0, 10)} ${r.kind}${keyTag} ${r.text ?? ""}${r.spec ? ` → ${r.spec}` : ""}`,
       );
     } else {
       const label = "ref" in r && r.ref ? `${r.ref}(${r.kind})` : r.kind;
@@ -527,6 +544,8 @@ export const cmdKickoff = (a: string[]) => {
   if (!arg && !planFile) {
     // no args = ranked open rows + next up + recent closes
     console.log(`# ${app} — ${all.length} entries`);
+    const keys = openKeysLine(all);
+    if (keys) console.log(keys);
 
     const open = openRows(all);
     const claims = claimsOf(all);

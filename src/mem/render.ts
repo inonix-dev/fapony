@@ -6,7 +6,10 @@ import type { ClaimRow, CloseRow, LogRow, WorkRow } from "./store.js";
 export const fmtRow = (r: WorkRow, claims?: Map<string, ClaimRow>) => {
   let s = `- [${r.id}]`;
   if (claims?.has(r.id)) s += ` (${claims.get(r.id)?.agent})`;
-  s += ` ${r.kind} ${r.text}`;
+  s += ` ${r.kind}`;
+  // key only when present — rows without one stay byte-identical
+  if (r.key) s += ` #${r.key}`;
+  s += ` ${r.text}`;
   if (r.spec) s += ` → ${r.spec}`;
   return s;
 };

@@ -61,8 +61,14 @@ test("testMcpInitialize", () => {
   // (rework base rate 1-9%), and this string is paid on every session.
   assert.doesNotMatch(r.instructions ?? "", /project_health_context/);
   assert.match(r.instructions ?? "", /mem add/);
+  // PLAN-mem-keys chunk 3: one line names the key habit (write + recall) —
+  // rent stays at that single sentence.
+  assert.match(r.instructions ?? "", /--key/);
+  assert.match(r.instructions ?? "", /mem_find key/);
   assert.doesNotMatch(r.instructions ?? "", /verdict_submit/);
-  console.log("  ✓ mcp initialize returns protocol version + instructions");
+  console.log(
+    "  ✓ mcp initialize returns protocol version + instructions (+ --key line)",
+  );
 });
 
 test("testMcpNotificationsIgnored", () => {
