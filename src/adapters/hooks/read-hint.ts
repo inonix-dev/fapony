@@ -392,6 +392,16 @@ export async function cmdHookReadHint(): Promise<void> {
           count: ctx.memLines.length,
         });
       }
+      if (ctx && ctx.openBugIds.length > 0) {
+        recordHintFire({
+          ts: new Date().toISOString(),
+          worktree,
+          surface: "open-bug",
+          file: rel,
+          count: ctx.openBugIds.length,
+          ids: ctx.openBugIds,
+        });
+      }
     }
   } catch {
     // any failure = no hint; a hook must never block a read over a hint
