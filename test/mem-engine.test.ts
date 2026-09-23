@@ -585,3 +585,190 @@ test("testOpenKeysImportantIndex", () => {
     "  ✓ openKeys index, kickoff open-keys line, #key on fmtRow/find",
   );
 });
+
+// PLAN-comma-x chunk 2 — repeated --files must accumulate into files[] and
+// never leak the extra value into the row text (live corruption, row
+// muds6zg5: `--files a --files b` wrote text "x b"). The positional reparse
+// replaces the old first-value-only filter for every edge it touched —
+// a text word equal to the files value, a trailing .md spec, hold, --stdin.
+test("testMemAddRepeatedFilesAccumulate", () => {
+  withTempRepo((dir) => {
+    const run = (...extra: string[]) =>
+      Bun.spawnSync(["bun", FAPONY, "mem", "add", ...extra], {
+        cwd: dir,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    const rows = (): {
+      kind: string;
+      text: string;
+      spec?: string;
+      files?: string[];
+    }[] => {
+      const memDir = join(dir, ".fapony", ".memory");
+      return readdirSync(memDir)
+        .filter((f) => f.endsWith(".jsonl"))
+        .map((f) => join(memDir, f))
+        .flatMap((p) =>
+          readFileSync(p, "utf8")
+            .split("\n")
+            .filter(Boolean)
+            .map((l) => JSON.parse(l)),
+        );
+    };
+    const last = () => {
+      const r = rows().at(-1);
+      assert.ok(r, "row written");
+      return r;
+    };
+
+    // done-criterion 4: text stays "x", files[] = [a.ts, b.ts]
+    const rep = run("note", "x", "--files", "a.ts", "--files", "b.ts");
+    assert.equal(rep.exitCode, 0, rep.stderr.toString());
+    let row = last();
+    assert.equal(row.text, "x");
+    assert.deepEqual(row.files, ["a.ts", "b.ts"]);
+
+    // comma form + repeat compose into one files[]
+    const mix = run("note", "mixed", "--files", "a.ts,b.ts", "--files", "c.ts");
+    assert.equal(mix.exitCode, 0, mix.stderr.toString());
+    row = last();
+    assert.equal(row.text, "mixed");
+    assert.deepEqual(row.files, ["a.ts", "b.ts", "c.ts"]);
+
+    // a text word equal to the files value is NOT eaten (old value-filter)
+    const same = run("note", "a.ts", "--files", "a.ts", "--files", "b.ts");
+    assert.equal(same.exitCode, 0, same.stderr.toString());
+    row = last();
+    assert.equal(row.text, "a.ts");
+    assert.deepEqual(row.files, ["a.ts", "b.ts"]);
+
+    // trailing .md spec survives a repeated --files (old filter left the 2nd
+    // value after the .md, so the spec was lost and the text corrupted)
+    const spec = run(
+      "note",
+      "look at this",
+      "plan.md",
+      "--files",
+      "a.ts",
+      "--files",
+      "b.ts",
+    );
+    assert.equal(spec.exitCode, 0, spec.stderr.toString());
+    row = last();
+    assert.equal(row.text, "look at this");
+    assert.equal(row.spec, "plan.md");
+    assert.deepEqual(row.files, ["a.ts", "b.ts"]);
+
+    // hold: spec required, text clean under repeated --files
+    const hold = run(
+      "hold",
+      "moving on",
+      "--files",
+      "a.ts",
+      "--files",
+      "b.ts",
+      "PLAN-x.md",
+    );
+    assert.equal(hold.exitCode, 0, hold.stderr.toString());
+    row = last();
+    assert.equal(row.kind, "hold");
+    assert.equal(row.text, "moving on");
+    assert.equal(row.spec, "PLAN-x.md");
+    assert.deepEqual(row.files, ["a.ts", "b.ts"]);
+
+    // --stdin: text from stdin, repeated --files still accumulate
+    const stdinRun = Bun.spawnSync(
+      [
+        "bun",
+        FAPONY,
+        "mem",
+        "add",
+        "note",
+        "--stdin",
+        "--files",
+        "a.ts",
+        "--files",
+        "b.ts",
+      ],
+      {
+        cwd: dir,
+        stdin: Buffer.from("from stdin"),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    assert.equal(stdinRun.exitCode, 0, stdinRun.stderr.toString());
+    row = last();
+    assert.equal(row.text, "from stdin");
+    assert.deepEqual(row.files, ["a.ts", "b.ts"]);
+
+    // a repeated --files missing its value dies before any write
+    const before = rows().length;
+    const bad = run("note", "no files val", "--files", "a.ts", "--files");
+    assert.equal(bad.exitCode, 1);
+    assert.match(bad.stderr.toString(), /--files is required/);
+    assert.equal(rows().length, before, "failed add writes nothing");
+  });
+  console.log(
+    "  ✓ CLI repeated --files accumulates; text/spec/stdin/hold edges stay clean",
+  );
+});
+
+// PLAN-comma-x chunk 2 — repeated list flags on find accumulate instead of
+// last-winning (`--kind bug --kind decision` used to keep only decision).
+test("testMemFindRepeatedFlagsAccumulate", () => {
+  withTempRepo((dir) => {
+    const memDir = join(dir, ".fapony", ".memory");
+    mkdirSync(memDir, { recursive: true });
+    const row = (o: Record<string, unknown>) =>
+      JSON.stringify({ ts: "2026-01-01T00:00:00.000Z", agent: "t", ...o });
+    writeFileSync(
+      join(memDir, "log.jsonl"),
+      `${[
+        row({ id: "b1", kind: "bug", text: "alpha bug", files: ["src/x.ts"] }),
+        row({
+          id: "d1",
+          kind: "decision",
+          text: "beta decision",
+          files: ["src/y.ts"],
+        }),
+        row({ id: "n1", kind: "note", text: "gamma note" }),
+      ].join("\n")}\n`,
+    );
+    initStore(dir);
+    const prev = process.cwd();
+    process.chdir(dir);
+    try {
+      // repeated --kind: BOTH named kinds show, unnamed kind stays hidden
+      const kinds = captureLogs(() =>
+        cmdFind(["--kind", "bug", "--kind", "decision"]),
+      );
+      assert.ok(kinds.includes("alpha bug"), `kind repeat 1:\n${kinds}`);
+      assert.ok(kinds.includes("beta decision"), `kind repeat 2:\n${kinds}`);
+      assert.ok(!kinds.includes("gamma note"), `no last-wins:\n${kinds}`);
+
+      // comma + repeat compose for --kind
+      const kindMix = captureLogs(() =>
+        cmdFind(["--kind", "bug,decision", "--kind", "note"]),
+      );
+      assert.ok(kindMix.includes("alpha bug"), kindMix);
+      assert.ok(kindMix.includes("beta decision"), kindMix);
+      assert.ok(kindMix.includes("gamma note"), kindMix);
+
+      // repeated --files: BOTH files' rows come back (was: only the last)
+      const filesOut = captureLogs(() =>
+        cmdFind(["--files", "src/x.ts", "--files", "src/y.ts"]),
+      );
+      assert.ok(filesOut.includes("alpha bug"), `files repeat 1:\n${filesOut}`);
+      assert.ok(
+        filesOut.includes("beta decision"),
+        `files repeat 2:\n${filesOut}`,
+      );
+      assert.ok(!filesOut.includes("gamma note"), filesOut);
+    } finally {
+      process.chdir(prev);
+    }
+  });
+  console.log("  ✓ find repeated --kind/--files accumulate, never last-win");
+});

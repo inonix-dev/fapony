@@ -80,14 +80,17 @@ export function cmdDebt(args: string[]): void {
         process.exit(1);
       }
       i++;
-      filesMode = v
+      // Accumulate, never reassign: a repeated --files grows the set
+      // (PLAN-comma-x chunk 2 — last-wins was silent data loss).
+      const parts = v
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      if (filesMode.length === 0) {
+      if (parts.length === 0) {
         console.error(`fapony debt: --files needs at least one path\n${USAGE}`);
         process.exit(1);
       }
+      filesMode = [...(filesMode ?? []), ...parts];
     } else if (a === "--id") {
       const v = args[i + 1];
       if (!v || v.startsWith("--")) {
@@ -96,15 +99,16 @@ export function cmdDebt(args: string[]): void {
       }
       i++;
       // Comma list, same shape as --files: ids are slugs, an id can't hold
-      // a comma, so any comma splits (PLAN-comma-x).
-      filterIds = v
+      // a comma, so any comma splits (PLAN-comma-x). Repeats accumulate too.
+      const parts = v
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      if (filterIds.length === 0) {
+      if (parts.length === 0) {
         console.error(`fapony debt: --id needs a convention id\n${USAGE}`);
         process.exit(1);
       }
+      filterIds = [...filterIds, ...parts];
     } else if (a === "--where") {
       const v = args[i + 1];
       if (!v || v.startsWith("--")) {

@@ -168,12 +168,32 @@ function parseScope(args: string[]): Scope {
     }
   }
   if (flags.length === 0) return { kind: "default" };
-  if (flags.length > 1) {
+  // Repeats of the SAME kind: --files occurrences merge into one scope list
+  // (an agent splitting a lookup across two --files tokens is the same shape
+  // as the comma list it already accepts); an identical scalar repeat is
+  // idempotent; a scalar repeated with a DIFFERENT value is ambiguous and
+  // errors — never last-wins (PLAN-comma-x chunk 2). The mixed-scope guard
+  // below counts distinct kinds, not occurrences, so `--files a --files b`
+  // is one scope, not "files, files".
+  const merged = new Map<string, Scope>();
+  for (const f of flags) {
+    const prev = merged.get(f.kind);
+    if (prev === undefined) {
+      merged.set(f.kind, f);
+    } else if (f.kind === "files" && prev.kind === "files") {
+      prev.list = [...new Set([...prev.list, ...f.list])];
+    } else if (JSON.stringify(prev) !== JSON.stringify(f)) {
+      throw new SeedError(
+        `review-seed: --${f.kind} given twice with different values\n${USAGE}`,
+      );
+    }
+  }
+  if (merged.size > 1) {
     throw new SeedError(
-      `review-seed: one scope flag at a time (got ${flags.map((f) => f.kind).join(", ")})\n${USAGE}`,
+      `review-seed: one scope flag at a time (got ${[...merged.keys()].join(", ")})\n${USAGE}`,
     );
   }
-  return flags[0];
+  return [...merged.values()][0];
 }
 
 // --- Scope resolution: one flag = one declared git call ---

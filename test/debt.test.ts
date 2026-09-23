@@ -145,6 +145,75 @@ test("testDebtIdCommaList", () => {
   console.log("  ✓ debt --id accepts comma lists");
 });
 
+// PLAN-comma-x chunk 2 — repeated list flags accumulate, never last-win
+// (`--id a --id b` used to keep only b; same for --files).
+test("testDebtRepeatedFlagsAccumulate", () => {
+  withTempRepo((repo) => {
+    seed(
+      repo,
+      [
+        {
+          id: "service-errors",
+          rule: "use failWith instead of throw new Error",
+          where: "src",
+          stale: "throw new Error",
+          ok: "failWith",
+        },
+        {
+          id: "money-format",
+          rule: "use formatMoney instead of toFixed",
+          where: "src",
+          stale: "toFixed",
+          ok: "formatMoney",
+        },
+      ],
+      {
+        "src/a.ts": `throw new Error("x");\n`,
+        "src/b.ts": `toFixed(2);\n`,
+      },
+    );
+    const json = <T>(args: string[]): T =>
+      withTmpDb(() => JSON.parse(captureLogs(() => cmdDebt(args)))) as T;
+
+    // repeated --id: both named conventions survive
+    const ids = json<{ entries: { conv: { id: string } }[] }>([
+      repo,
+      "--id",
+      "service-errors",
+      "--id",
+      "money-format",
+      "--json",
+    ]).entries.map((e) => e.conv.id);
+    assert.deepEqual(ids, ["service-errors", "money-format"]);
+
+    // comma form + repeat compose
+    const mixed = json<{ entries: { conv: { id: string } }[] }>([
+      repo,
+      "--id",
+      "service-errors",
+      "--id",
+      "money-format,nonexistent",
+      "--json",
+    ]).entries.map((e) => e.conv.id);
+    assert.deepEqual(mixed, ["service-errors", "money-format"]);
+
+    // repeated --files: both files in the files-mode report
+    const filesOut = json<{ files: { file: string }[] }>([
+      repo,
+      "--files",
+      "src/a.ts",
+      "--files",
+      "src/b.ts",
+      "--json",
+    ]);
+    assert.deepEqual(
+      filesOut.files.map((f) => f.file),
+      ["src/a.ts", "src/b.ts"],
+    );
+  });
+  console.log("  ✓ debt repeated --id/--files accumulate, never last-win");
+});
+
 test("testDebtCheckerRowsStaySilent", () => {
   withTempRepo((repo) => {
     seed(

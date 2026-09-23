@@ -98,8 +98,11 @@ export const cmdFind = (a: string[]) => {
     return 2;
   };
 
-  let kind: string[] | undefined;
-  let files: string[] | undefined;
+  // Accumulators, not reassignments: a repeated list flag must grow the set,
+  // never last-win (PLAN-comma-x chunk 2). Exported as string[] | undefined
+  // after the loop so every downstream check reads the same shape.
+  const kindAcc: string[] = [];
+  const filesAcc: string[] = [];
   let sinceRaw: string | undefined;
   let limit: number | undefined;
   let open = false;
@@ -116,10 +119,12 @@ export const cmdFind = (a: string[]) => {
         );
         process.exit(1);
       }
-      kind = v
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+      kindAcc.push(
+        ...v
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      );
       i += consumed("--kind", i);
     } else if (t === "--files" || t.startsWith("--files=")) {
       const v = flagVal("--files", i);
@@ -129,10 +134,12 @@ export const cmdFind = (a: string[]) => {
         );
         process.exit(1);
       }
-      files = v
-        .split(",")
-        .map((s) => s.trim().replace(/^\.\//, ""))
-        .filter(Boolean);
+      filesAcc.push(
+        ...v
+          .split(",")
+          .map((s) => s.trim().replace(/^\.\//, ""))
+          .filter(Boolean),
+      );
       i += consumed("--files", i);
     } else if (t === "--key" || t.startsWith("--key=")) {
       const v = flagVal("--key", i);
@@ -174,6 +181,8 @@ export const cmdFind = (a: string[]) => {
     }
   }
 
+  const kind = kindAcc.length ? kindAcc : undefined;
+  const files = filesAcc.length ? filesAcc : undefined;
   const q = positional.join(" ").trim();
   if (
     !q &&

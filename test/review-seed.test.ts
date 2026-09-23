@@ -143,6 +143,54 @@ test("testReviewSeedScopeFlags", () => {
   );
 });
 
+// PLAN-comma-x chunk 2 — same-kind --files ×2 merges into ONE scope (it used
+// to error "one scope flag at a time (got files, files)"); the mixed-scope
+// guard counts distinct kinds, and a scalar scope flag with conflicting
+// values stays loud — never last-wins.
+test("testReviewSeedRepeatedFilesScopeMerges", () => {
+  withFixture((dir, rootSha, commit2) => {
+    // two --files tokens = one merged scope, both files listed
+    const out = renderSeed(["--files", "src/a.ts", "--files", "src/b.ts"], dir);
+    assert.match(out, /--files \(as given\)/);
+    assert.match(out, /src\/a\.ts/);
+    assert.match(out, /src\/b\.ts/);
+
+    // comma form + repeat compose into the same scope
+    const mix = renderSeed(
+      ["--files", "src/a.ts,src/b.ts", "--files", "src/c.ts"],
+      dir,
+    );
+    assert.match(mix, /src\/c\.ts/);
+
+    // the same missing path across two tokens is one not-found, not two
+    const dupMiss = renderSeed(
+      ["--files", "missing.ts", "--files", "missing.ts"],
+      dir,
+    );
+    assert.match(dupMiss, /not found \(1\): missing\.ts/);
+
+    // mixed kinds still error (guard counts distinct kinds)
+    assert.throws(
+      () => renderSeed(["--staged", "--files", "src/a.ts"], dir),
+      SeedError,
+    );
+
+    // scalar with DIFFERENT values is ambiguous → loud, never last-wins
+    assert.throws(
+      () => renderSeed(["--commit", rootSha, "--commit", commit2], dir),
+      /given twice with different values/,
+    );
+
+    // identical scalar repeat is idempotent
+    const staged = renderSeed(["--staged", "--staged"], dir);
+    assert.match(staged, /--staged/);
+    assert.match(staged, /src\/d\.ts/);
+  });
+  console.log(
+    "  ✓ review-seed repeated same-kind --files merges; mixed/conflict stays loud",
+  );
+});
+
 test("testReviewSeedStructure", () => {
   withFixture((dir) => {
     const out = renderSeed(["--files", "src/a.ts,src/b.ts"], dir);
