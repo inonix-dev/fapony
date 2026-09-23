@@ -29,35 +29,17 @@ decided this 6 months ago and have moved 11 of 47.**
 
 ## Why the core moved from ledger to mem + debt (2026-09-19)
 
-fapony started from a mem log `.jsonl`, then walked toward a ledger (agents grading their own work) — which
-**produced a real picture and was worth building** — but measurement showed it capped out on three things:
-
-1. **Self-grading bias is not a constant — it differs per model.** Each model grades its own work,
-   so `claude-opus-5 q3.6` vs `deepseek-v4.1-flash q4.0` (regime=code, n=18/n=10)
-   **is fully explained by "opus is harsher on itself"** with no real quality difference. · Rankings survive
-   a constant bias; they don't survive a per-model one → **never cite cross-model quality ranking as fact.**
-2. **Grade inflation** — 340 of 360 gates are pass-family; the fail family is **24 rows** all-time
-   across every project. · A denominator that size supports no per-file mechanic (559 distinct files).
-3. **Its market is narrower than assumed** — "which model is worth it" only hurts people paying out of
-   pocket; devs on a company Max plan have no reason to measure.
-
-**What survived that measurement is tokens** — they come from session logs, not from agents' proclamations,
-so they can't be gamed. · **The new credibility line, applied to every feature:**
+Ledger (agents grading their own work) capped out on 3 measured problems: self-grading bias differs per
+model (never cite cross-model quality ranking as fact) · grade inflation (24 fail rows all-time — too small
+for a per-file mechanic) · market narrower than assumed (only people paying out of pocket care "which model
+is worth it"). **What survived: tokens** — from session logs, can't be gamed.
 
 | Believable | Not believable |
 | --- | --- |
 | tokens / cost from session logs · git facts (commits, files, shas) · checker results (eslint/knip/tsc) · debt regex matches | grades an agent gave itself · "typecheck fully passes" with no exit code · the word "fixed" |
 
-**The ledger wasn't deleted — it was frozen and repurposed as a *pain sensor*:** `verdict`s that are
-fail / `scope_mismatch` / `spec_gap`, with `files[]` + `note`, are the input for finding zones that hurt
-repeatedly. · What can still be said with a straight face is **tokens per task** (measurable) and
-**`files[]` + `note`** (facts the agent typed, not judgments) — **never the grade itself.**
-
-**Reading those 24 fail rows taught the lesson that moved the target:** most aren't "didn't know" but
-**"didn't check"** — *"Round 1 fixed the symptom, not the cause"* · *"reported done, but never
-ran the FULL bun test suite"* · *"reported all 4 findings fixed but only 2 of 4 actually
-verified"* · *"Plan is entirely stale"* · so the most valuable mem isn't "how did this file break before"
-but **"what did we fail to check last time."**
+Ledger wasn't deleted, just frozen as a *pain sensor*: fail/`scope_mismatch`/`spec_gap` verdicts with
+`files[]`+`note` feed repeat-pain-zone clustering — never the grade itself. Full story: `fapony mem find "why the core moved"`.
 
 ---
 
@@ -145,20 +127,11 @@ while OpenCode fires *after* (`tool.execute.after` — the only annotate channel
 | Skill symlink → `~/.agents/skills` | — | — | — | ✅ | ✅ |
 | `usage-scan` reads that client's session log | ✅ | ✅ | — | ✅ | ✅ |
 
-`—` = not wired yet, not impossible (Cursor has no PreToolUse · ZCode/Codex expose no in-process hook surface
-for read/edit hints — Codex `apply_patch` sends patch text, not file paths). · **Hints live on hooks rather
-than MCP on purpose** — they must fire mid-turn without the agent thinking of it, exactly the MCP-vs-CLI test
-(rule 13). · **The commit hint is OpenCode-only** because Claude reports commits-without-mem-rows through the
-Stop hook instead. · Codex hooks need trust via `/hooks` before they run — `fapony install` says so when needed. ·
-**SessionStart on OpenCode arrives at first dispatch** (`experimental.chat.system.transform`, once per session —
-the only inject channel `event` hooks lack), not at session creation. · **OpenCode is the only client whose hooks
-are baked files** — every other client writes a `fapony hook-*` command resolved at run time, so a `git pull`
-refreshes it and only a `*PluginSource` edit needs work. The installer **refreshes our own stale plugin in place**
-(ownership = the exported name it carries; a foreign file is still refused), so editing `*PluginSource` needs
-nothing manual: `fapony update` re-runs the installer in a fresh process after the pull — with `--plugins-only`,
-so the refresh touches fapony's own plugin files and never your `opencode.json` — and plain
-`fapony install --platform opencode` does it too. In-process is never enough — the running `fapony update` loaded
-the pre-pull templates, so it must spawn (`src/update.ts` `defaultRefreshPlugins`).
+`—` = not wired yet, not impossible. **Hints live on hooks, not MCP, on purpose** — they must fire mid-turn
+without the agent thinking of it (the MCP-vs-CLI test, rule 13). · **OpenCode is the only client whose hooks
+are baked files**; every other client writes a `fapony hook-*` command resolved at run time, so `git pull`
+refreshes it for free — `fapony update`/`fapony install --platform opencode` refresh OpenCode's baked plugin
+in a fresh process instead. Full mechanics: `fapony mem find "hook mechanics"`.
 
 ## Memory: `.fapony/.memory/log.<you>.jsonl` (append-only)
 
@@ -279,14 +252,10 @@ paid into context every time.
 
 ## History
 
-fapony started as an execute→review→fix CLI loop that spawned its own executor/reviewer — deleted wholesale
-(`src/run/`, `src/loop/`, `src/plans.ts`, `src/handoff.ts`, ...) because the client's own model does it better. ·
-Then the core moved to a ledger (agents grading themselves), which answered its question fully and then
-**capped out** for the three reasons above. · Today's core is mem + debt, which happens to be where fapony began
-(the mem log `.jsonl`) — surviving from those two eras: the `runs` / `events` schema, `review.maxRounds`,
-the plan/spec templates, and all the skills.
-
-**The lesson that must not be forgotten: both core moves came from measurement, not feeling.**
+Execute→review→fix CLI loop → deleted (client's own model does it better) → ledger (agents grading
+themselves) → capped out → today's mem + debt, which is where fapony began. Surviving relics: the
+`runs`/`events` schema, `review.maxRounds`, plan/spec templates, all skills. **Both core moves came from
+measurement, not feeling.** Full story: `fapony mem find "History"`.
 
 ---
 
@@ -342,12 +311,10 @@ the plan/spec templates, and all the skills.
     identically every time — `kickoff` compares raw strings) → **stop**. · The next session opens with
     `mem.ts kickoff <same path>` instead of hauling the old transcript. · **If `review-seed` was run
     this chunk, paste its file:line facts (signatures/importers) into the note, not just "what to do
-    next"** — `review-seed` itself is stateless (no cache, by design — measured 2026-09-23: `--files`
-    0.35s / `--plan` 0.41s on this repo (120 files); re-measured on a 2,952-file repo — 0.31-0.51s,
-    no scaling with file count, so a cache would not be felt even at worst case — closed, don't
-    re-propose without new data), so the note is
-    the only place that lookup survives into chunk N+1; without it, N+1 pays the same lookup again from
-    zero.
+    next"** — `review-seed` is stateless by design (no cache — measured 0.31-0.51s uncached even on a
+    2,952-file repo, no scaling with file count, closed, don't re-propose without new data), so the note
+    is the only place that lookup survives into chunk N+1; without it, N+1 pays the same lookup again
+    from zero.
 12. **A feature with no caller = delete.** Actually done: `fapony map` had no caller; plan-seed §2/§5
     measured 3/3 empty → −257 lines. · Convenience-side things prove themselves by being used, not by existing.
 13. **Spend tokens smart — not "cut to the minimum" but "pay where it pays back."**
@@ -385,62 +352,15 @@ the same shape that already absorbed the execute→review loop once. See History
 
 Every feature must hold at least two. Holding none = one client could do it = don't build it.
 
-**On new fields — miscounted twice, don't miscount a third time:** first "every field added lowers fill rate"
-(wrong); second, "**optional** is what kills fill rate" (wrong again — `files[]` is optional to the last letter
-yet fills 294/333 = 88%). · **What still holds:** rule 1 (prove necessity) and required + enum + reject as the
-strongest tool. · ***Why* the fill rate flipped back 09-11, the data can't separate — don't write that you know** —
-three things changed in the same window, and the first row with `files[]` predates the merge commit by about an
-hour. · **Same-day correlation is not causation.**
+**On new fields:** what holds is rule 1 (prove necessity) and required+enum+reject as the strongest tool —
+"optional kills fill rate" was tried and measured wrong (`files[]` is optional yet fills 88%). Full
+miscounting story: `fapony mem find "miscounted twice"`.
 
 ---
 
-## Cloud — future revenue, not built yet
+## Positioning — read [docs/positioning.md](docs/positioning.md) before writing README/launch copy
 
-**The direction in mind:** cheap cross-machine sync, because the working shape is shifting — ordering work over
-Telegram/iPad, then running agents on the home machine. · The person ordering isn't sitting at the code, the agent
-doesn't remember, mistakes repeat, and it ends with calling a big model to scan + refactor 20 files — **exactly the
-pain mem + debt aims at, and measurable in tokens.**
-
-**Price signal:** asking a dev friend about $5/seat got *"if it saves re-refactoring the same 20 files, I'd pay"*
-— **that's n=1 and words, not money.** Never cite it as validation.
-
-**Rules against building infra early (rule 1):**
-- **Start-cloud criterion: someone who isn't the owner using fapony continuously for 30+ days.** Before that,
-  sync is infra for a single user = an abstraction with one implementation.
-- **One person, many machines needs no cloud.** The mem log is in the repo (git carries it) and `state.db`
-  is a single file (private repo / Syncthing / iCloud is enough). · Cloud becomes genuinely necessary only when
-  ledger + mem cross **people**.
-- **The day cloud exists, Moat point 3 dies** ("the db is on your machine, no server, no account").
-  It must buy something bigger in return, with a self-host option — otherwise two moats remain.
-
----
-
-## Positioning — rules against getting torn apart at launch
-
-1. **Never headline with "verifies".** fapony never runs tests itself, never judges itself.
-   It's **the memory, not the judge.** HN readers open the source for real — one overclaiming word burns the
-   whole post's credit.
-2. **Never claim fapony says which model is better.** Self-grading bias differs per model
-   (see "Why the core moved"). · What can be said is **tokens per task**, measured from logs.
-3. **Lead with day-1 value, always.** `usage-scan` / `usage-web` (CLI) work the moment they're installed because
-   they read logs already there, while mem + debt are **retention, not acquisition** (worthless until accumulated). ·
-   **Don't reorder the README to lead with mem/debt until moved% exists at two points in time** — anyone who installs
-   and meets "not enough history yet" as the first thing = walks away (that's what killed `project_health_context`).
-4. **Declare limits yourself before anyone else catches them.** The "What fapony is not" section in the README
-   must never be deleted.
-5. **Never sell "fapony finds your dead code / duplication".** knip / madge / jscpd are free and better.
-   The first reader replies "so, knip?" · The sentence that sells: **"agents can't remember pain, so they never
-   build abstractions — fapony remembers instead, and reports how far the move has gone."**
-6. **Cross-client is the differentiator, not the dashboard.** Plenty of tools read Claude Code usage already;
-   almost none read 4 clients on one yardstick.
-
-**The audience is people paying for their own plan.** Devs on a company Max plan don't hurt, so they're not
-customers. Every message speaks to someone managing tokens.
-
-**Launch-ready criterion:** someone who isn't the owner installs and sees something useful within 60 seconds —
-not a feature count. · Channel order: awesome-mcp-servers PR → r/ClaudeAI + Thai communities →
-the essay *"I built the agent loop everyone builds first, then deleted it"* → Show HN.
-**One shot — don't burn it.**
+Not needed for a normal coding session — only when touching the README, a launch post, or marketing copy.
 
 ---
 
@@ -546,30 +466,11 @@ arrived 2026-09-21 as a separate tool because a close row carries no `files[]` �
 | `mem_add` | **The core — the write half of `mem_find`.** Appends a mem row (`decision` / `bug` / `note` / `next` / `hold`) with `files[]` **required, rejected when empty** (rule 9: required works, asking doesn't) — a row that names no file is unfindable when you next touch that file |
 | `mem_close` | **The core — the close half of `mem_add`.** Closes a row by id with a tombstone message (`ref` + `text`, no `files[]`) — a separate tool, not `kind:"close"`, because a schema whose required fields depend on another field's value is the most-miscalled shape there is |
 
-**Removed and never coming back:** `verdict_submit` (2026-09-21 — PLAN-verdict-to-mem: schema
-2,126/5,049 chars = 42% of the rent every session · grades 93.9% pass-family, never discriminated ·
-Stop hook enforces mem rows instead · engine is in git, revivable as a CLI) · `fapony_usage` (2026-09-20 —
-fails rule 13: its only caller is the owner ("how much burned yesterday"), never an agent mid-turn · every client
-already shows its own tokens, leaving cross-client ruler as the sole excuse, which CLI `usage-scan` / `usage-web`
-answer identically at zero rent · deleted `src/mcp/tools/usage.ts` + tests; the `src/session/` + `src/usage/` engines
-stay because the CLI uses them · statusline integration removed wholesale 2026-09-21 — zero callers on the owner's
-machine (the ponytail plugin's statusline won) and the cache write (`writeStatuslineCache` in transport.ts) had no
-further readers, per rule 12) ·
-`plan_list` (2026-09-20 — `fapony mem kickoff` answers
-"what's left" from the same plan files · deleted `src/mcp/tools/plans.ts` plus `getLastVerdictByPlan`
-for the same reason, per rule 12) · **What was actually lost measures small** (rule 2): across all 42 plans
-(plan/ 3 + done/ 39) `blocked_by` was used in **0 files** all-time · `blocks` 3 ·
-`superseded_by` 2 · `status` 18 — the "what's blocked" question `plan_list` was built to answer never had data
-to answer, and the 3 unshipped plans fit in an `ls`. · If that view is ever genuinely wanted,
-**revive it as CLI `fapony plan-list`** (engine in git at 46e0dac), not back into MCP · `fapony_stats` (CLI
-`fapony stats` answers everything identically, and its description sold "says which model to pay for", which
-violates Positioning rule 2) · `project_health_context` (zero callers — the `src/context/projectHealth.ts` engine
-stays, callable from CLI) · `verification_report` / `handoff_check` / `handoff_collect` (removed earlier for the
-same reason) · `verdict_submit` (2026-09-21 — PLAN-verdict-to-mem: schema 2,126/5,049 chars = 42% of the rent
-every session · grades 93.9% pass-family, never discriminated · Stop hook enforces mem rows instead · engine is in
-git, revivable as a CLI). ·
-**Measured: the full schema 5,049 → 3,654 chars (−27.6% from removing `verdict_submit`,
-3 tools left — measured on tools/list JSON + instructions)**
+**Removed and never coming back:** `verdict_submit`, `fapony_usage`, `plan_list`, `fapony_stats`,
+`project_health_context`, `verification_report`, `handoff_check`, `handoff_collect` — each failed rule 13
+(only a human ever called it, or the CLI already answers it at zero rent) or rule 2 (measured value was
+tiny). Engines mostly stay in git/CLI, revivable if the shape of use changes. Full removal-by-removal
+rationale: `fapony mem find "MCP tools removal"`.
 
 See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for protocol, adapter examples, safety rules.
 
