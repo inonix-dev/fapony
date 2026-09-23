@@ -1,0 +1,196 @@
+// test/hook/handoff.test.ts — PLAN-active-pain chunk 1: handoff enforcement.
+import { test } from "bun:test";
+import assert from "node:assert";
+import type { MemRow } from "../../src/core/mem-log.js";
+import {
+  countTicks,
+  decideHandoff,
+  handoffBlockMessage,
+  hasHandoffLiteral,
+  isPlanPath,
+  memHasHandoffForPlan,
+} from "../../src/hook.js";
+
+const SINCE_MS = new Date("2026-09-23T10:00:00.000Z").getTime();
+const REL = ".fapony/plan/PLAN-x.md";
+
+function row(
+  kind: string,
+  ts: string,
+  extra: Partial<MemRow> = {},
+): MemRow {
+  return { ts, agent: "t", kind, text: "x", ...extra };
+}
+
+const BEFORE = `- [ ] chunk 1 — work
+- [ ] handoff: write the note for chunk 2
+`;
+const AFTER_TICKED = `- [x] chunk 1 — work
+- [ ] handoff: write the note for chunk 2
+`;
+
+test("testHandoffBlocksTickWithoutRow", () => {
+  const d = decideHandoff({
+    files: [{ rel: REL, before: BEFORE, after: AFTER_TICKED }],
+    memRows: [],
+    sinceMs: SINCE_MS,
+  });
+  assert.equal(d.blockedPlan, REL, "literal + new tick + no row must block");
+  assert.deepEqual(d.evaluated, [REL]);
+});
+
+test("testHandoffPassesWithSpecRow", () => {
+  const d = decideHandoff({
+    files: [{ rel: REL, before: BEFORE, after: AFTER_TICKED }],
+    memRows: [
+      row("note", "2026-09-23T10:30:00.000Z", { spec: REL }),
+    ],
+    sinceMs: SINCE_MS,
+  });
+  assert.equal(d.blockedPlan, null, "note with spec pointing at plan passes");
+});
+
+test("testHandoffPassesWithFilesRow", () => {
+  const d = decideHandoff({
+    files: [{ rel: REL, before: BEFORE, after: AFTER_TICKED }],
+    memRows: [
+      row("next", "2026-09-23T11:00:00.000Z", { files: [REL] }),
+    ],
+    sinceMs: SINCE_MS,
+  });
+  assert.equal(d.blockedPlan, null, "next with files[] pointing at plan passes");
+});
+
+test("testHandoffIgnoresStaleRows", () => {
+  const d = decideHandoff({
+    files: [{ rel: REL, before: BEFORE, after: AFTER_TICKED }],
+    memRows: [row("note", "2026-09-23T09:59:59.000Z", { spec: REL })],
+    sinceMs: SINCE_MS,
+  });
+  assert.equal(
+    d.blockedPlan,
+    REL,
+    "a row older than session start is not a handoff",
+  );
+});
+
+test("testHandoffIgnoresWrongKinds", () => {
+  for (const kind of ["decision", "bug", "claim"]) {
+    const d = decideHandoff({
+      files: [{ rel: REL, before: BEFORE, after: AFTER_TICKED }],
+      memRows: [row(kind, "2026-09-23T10:30:00.000Z", { spec: REL })],
+      sinceMs: SINCE_MS,
+    });
+    assert.equal(
+      d.blockedPlan,
+      REL,
+      `kind:${kind} must not satisfy the handoff (note/next only)`,
+    );
+  }
+});
+
+test("testHandoffPassesOldPlanWithoutLiteral", () => {
+  const old = `- [x] chunk 1 — work\n`;
+  const d = decideHandoff({
+    files: [{ rel: REL, before: `- [ ] chunk 1 — work\n`, after: old }],
+    memRows: [],
+    sinceMs: SINCE_MS,
+  });
+  assert.equal(d.blockedPlan, null, "no literal = fail-open pass");
+  assert.deepEqual(d.evaluated, [], "literal-less plans are not evaluated");
+});
+
+test("testHandoffPassesScopeEditWithoutNewTick", () => {
+  const same = `- [ ] chunk 1 — scope text changed\n- [ ] handoff: write the note\n`;
+  const d = decideHandoff({
+    files: [{ rel: REL, before: BEFORE, after: same }],
+    memRows: [],
+    sinceMs: SINCE_MS,
+  });
+  assert.equal(d.blockedPlan, null, "scope edit with no new tick passes");
+  // Literal present → evaluated (trial logs a pass, proving the gate ran).
+  assert.deepEqual(d.evaluated, [REL]);
+});
+
+test("testHandoffCatchesCommittedTick", () => {
+  // The chunk workflow commits the tick before the hook fires, so before/after
+  // compare across the pre-session base — not diff HEAD. A ticked base with
+  // no newer tick on disk is already-handed-off work, not a new close.
+  const d = decideHandoff({
+    files: [{ rel: REL, before: AFTER_TICKED, after: AFTER_TICKED }],
+    memRows: [],
+    sinceMs: SINCE_MS,
+  });
+  assert.equal(d.blockedPlan, null, "tick predating the session is not new");
+});
+
+test("testHandoffLiteralTickAloneDoesNotPass", () => {
+  // Review finding 1: the ticked literal is cosmetic — only a mem row passes.
+  const tickedLiteral = `- [x] chunk 1 — work\n- [x] handoff: note written\n`;
+  assert.ok(hasHandoffLiteral(tickedLiteral), "ticked literal still opts in");
+  const d = decideHandoff({
+    files: [{ rel: REL, before: BEFORE, after: tickedLiteral }],
+    memRows: [],
+    sinceMs: SINCE_MS,
+  });
+  assert.equal(d.blockedPlan, REL, "ticked literal without a row still blocks");
+});
+
+test("testHandoffFirstBlockerWins", () => {
+  const other = ".fapony/plan/PLAN-y.md";
+  const d = decideHandoff({
+    files: [
+      { rel: REL, before: BEFORE, after: AFTER_TICKED },
+      { rel: other, before: BEFORE, after: AFTER_TICKED },
+    ],
+    memRows: [],
+    sinceMs: SINCE_MS,
+  });
+  assert.equal(d.blockedPlan, REL);
+  assert.deepEqual(d.evaluated, [REL, other]);
+});
+
+test("testIsPlanPath", () => {
+  assert.ok(isPlanPath(".fapony/plan/PLAN-x.md"));
+  assert.ok(isPlanPath("./.fapony/plan/PLAN-x.md"));
+  assert.ok(!isPlanPath(".fapony/done/PLAN-x.md"), "done/ is not gated");
+  assert.ok(!isPlanPath(".fapony/spec/SPEC-x.md"), "spec/ is not gated");
+  assert.ok(!isPlanPath(".fapony/plan/notes.txt"), "only .md");
+  assert.ok(!isPlanPath("src/stop.ts"), "source is not gated");
+});
+
+test("testCountTicksAndLiteral", () => {
+  assert.equal(countTicks(BEFORE), 0);
+  assert.equal(countTicks(AFTER_TICKED), 1);
+  assert.ok(hasHandoffLiteral(BEFORE), "unticked literal opts in");
+  assert.ok(hasHandoffLiteral(AFTER_TICKED));
+  assert.ok(!hasHandoffLiteral("- [x] chunk 1 — work\n"));
+});
+
+test("testHandoffBlockMessageNamesPlanAndCommand", () => {
+  const msg = handoffBlockMessage(REL);
+  assert.ok(msg.includes(REL), "message names the plan path");
+  assert.ok(msg.includes("fapony mem add note"), "message gives the command");
+  assert.ok(!/bun fapony\.ts/.test(msg), "repo-neutral: no runner prefix");
+});
+
+test("testMemHandoffMatchesBareBasename", () => {
+  assert.ok(
+    memHasHandoffForPlan(
+      [row("note", "2026-09-23T10:30:00.000Z", { spec: "PLAN-x.md" })],
+      REL,
+      SINCE_MS,
+    ),
+    "a bare basename spec still names the plan",
+  );
+  assert.ok(
+    !memHasHandoffForPlan(
+      [row("note", "2026-09-23T10:30:00.000Z", {
+        spec: ".fapony/plan/PLAN-other.md",
+      })],
+      REL,
+      SINCE_MS,
+    ),
+    "a row for another plan does not satisfy",
+  );
+});

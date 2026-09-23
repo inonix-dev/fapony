@@ -30,7 +30,15 @@ export function hintLogPath(worktree: string): string {
 export interface HintFireRow {
   ts: string;
   worktree: string;
-  surface: "read" | "debt" | "mem" | "commit" | "edit" | "open-bug";
+  surface:
+    | "read"
+    | "debt"
+    | "mem"
+    | "commit"
+    | "edit"
+    | "open-bug"
+    | "handoff-would-block"
+    | "handoff-pass";
   file: string | null;
   count: number;
   ids?: string[];
@@ -63,6 +71,8 @@ export interface HintImpact {
     commit: number;
     edit: number;
     "open-bug": number;
+    "handoff-would-block": number;
+    "handoff-pass": number;
   };
   debt: { shown: number; resolved: number; unknown: number };
   window: string | null;

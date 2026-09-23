@@ -30,7 +30,16 @@ export function computeHintImpact(
   const dir = hintLogDir();
   const impact: HintImpact = {
     fired: 0,
-    by_surface: { read: 0, debt: 0, mem: 0, commit: 0, edit: 0, "open-bug": 0 },
+    by_surface: {
+      read: 0,
+      debt: 0,
+      mem: 0,
+      commit: 0,
+      edit: 0,
+      "open-bug": 0,
+      "handoff-would-block": 0,
+      "handoff-pass": 0,
+    },
     debt: { shown: 0, resolved: 0, unknown: 0 },
     window: since ?? null,
   };
