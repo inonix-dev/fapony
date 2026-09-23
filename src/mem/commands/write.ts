@@ -39,8 +39,22 @@ export const cmdAdd = async (a: string[]) => {
   }
   // --key is optional; pattern validation lives in engineAdd (one checker,
   // both surfaces — PLAN-mem-keys chunk 1). argv layer only extracts it.
-  const keyFlagIdx = a.indexOf("--key");
-  const keyVal = keyFlagIdx >= 0 ? a[keyFlagIdx + 1] : undefined;
+  // Accepts `--key value` and `--key=value` alike (same as cmdFind) — an
+  // exact-match lookup for "--key" would leave a `--key=x` token inside the
+  // text and write a keyless row with exit 0 (silent drop, never allowed).
+  let keyFlagIdx = -1;
+  let keyVal: string | undefined;
+  let keyTake = 0;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === "--key" || a[i].startsWith("--key=")) {
+      keyFlagIdx = i;
+      keyVal = a[i].startsWith("--key=")
+        ? a[i].slice("--key=".length)
+        : a[i + 1];
+      keyTake = a[i].startsWith("--key=") ? 1 : 2;
+      break;
+    }
+  }
   if (keyFlagIdx >= 0 && (!keyVal || keyVal.startsWith("--"))) {
     console.error(
       `--key needs a value — usage: ${memCmd} add ${a[0]} "<text>" --files f1,f2 --key fix-stop-dedupe`,
@@ -53,7 +67,7 @@ export const cmdAdd = async (a: string[]) => {
   // legitimately appear in the text, and value-matching would eat it.
   const filtered = arg.filter((x, i) => {
     const orig = i + 1;
-    if (keyFlagIdx >= 0 && (orig === keyFlagIdx || orig === keyFlagIdx + 1)) {
+    if (keyFlagIdx >= 0 && orig >= keyFlagIdx && orig < keyFlagIdx + keyTake) {
       return false;
     }
     return x !== "--stdin" && x !== "--files" && x !== filesVal;

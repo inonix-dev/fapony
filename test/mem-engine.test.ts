@@ -311,6 +311,42 @@ test("testMemAddCliKeyFlagEndToEnd", () => {
       before,
       "failed adds write nothing",
     );
+
+    // --key=value form (same as find) — must key the row, never leak the
+    // token into the text as a keyless row with exit 0
+    const eq = add(
+      "equals form row",
+      "--files",
+      "e.ts",
+      "--key=fix-stop-dedupe",
+    );
+    assert.equal(eq.exitCode, 0, eq.stderr.toString());
+    const eqLog = readdirSync(memDir)
+      .filter((f) => f.endsWith(".jsonl"))
+      .map((f) => join(memDir, f))
+      .map((p) => readFileSync(p, "utf8"))
+      .join("\n");
+    const eqRow = eqLog
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as { text?: string; key?: string })
+      .find((r) => r.text === "equals form row");
+    assert.ok(eqRow, "equals-form row written");
+    assert.equal(eqRow.key, "fix-stop-dedupe");
+    assert.ok(
+      !eqRow.text?.includes("--key="),
+      "flag token stays out of the text",
+    );
+
+    // --key= with a bad pattern still rejects loudly, writes nothing
+    const eqBad = add("equals bad row", "--files", "f.ts", "--key=Fix-Stop");
+    assert.equal(eqBad.exitCode, 1, "bad --key= value must exit 1");
+    assert.match(eqBad.stderr.toString(), /key must match/);
+
+    // bare --key= with no value → usage error, not a keyless row
+    const eqEmpty = add("equals empty row", "--files", "g.ts", "--key=");
+    assert.equal(eqEmpty.exitCode, 1);
+    assert.match(eqEmpty.stderr.toString(), /--key needs a value/);
   });
   console.log("  ✓ CLI --key writes v:2, rejects bad/missing key with exit 1");
 });
