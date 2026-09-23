@@ -77,3 +77,24 @@ test("testDetectClientsMixed", () => {
     console.log("  ✓ detect clients → mixed");
   });
 });
+
+test("testDetectAntigravityViaAgyBinary", () => {
+  withTempHome((home) => {
+    // No ~/.gemini, but `agy` on PATH → still detected (plan: detect from
+    // ~/.gemini OR binary agy).
+    const deps: InstallDeps = {
+      homedir: () => home,
+      checkCmd: (cmd) => cmd === "agy",
+    };
+    const result = detectClients(deps);
+    const antigravity = result.find((d) => d.platform === "antigravity");
+    assert.ok(antigravity?.installed, "antigravity should be found via agy");
+    assert.ok(
+      antigravity.why.includes("agy"),
+      `why should mention agy, got: ${antigravity.why}`,
+    );
+    const claude = result.find((d) => d.platform === "claude");
+    assert.ok(!claude?.installed, "claude should not be found");
+    console.log("  ✓ detect antigravity via agy CLI (no ~/.gemini)");
+  });
+});

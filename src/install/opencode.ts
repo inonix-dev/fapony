@@ -271,6 +271,9 @@ export const FaponyReadHint = async ({ directory }) => {
           if (ctx.memLines.length > 0) {
             recordHintFire({ ts: new Date().toISOString(), worktree: ctx.worktree, surface: "mem", file: rel, count: ctx.memLines.length });
           }
+          if (ctx.openBugIds.length > 0) {
+            recordHintFire({ ts: new Date().toISOString(), worktree: ctx.worktree, surface: "open-bug", file: rel, count: ctx.openBugIds.length, ids: ctx.openBugIds });
+          }
         }
       } catch {
         // a hint must never break a read
@@ -411,6 +414,9 @@ export const FaponyEditHint = async ({ directory }) => {
               }
               if (ctx?.memLines?.length) {
                 recordHintFire({ ts: new Date().toISOString(), worktree, surface: "mem", file: rel, count: ctx.memLines.length });
+              }
+              if (ctx?.openBugIds?.length) {
+                recordHintFire({ ts: new Date().toISOString(), worktree, surface: "open-bug", file: rel, count: ctx.openBugIds.length, ids: ctx.openBugIds });
               }
             }
           } catch {

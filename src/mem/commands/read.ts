@@ -6,8 +6,8 @@ import { parseSince } from "../../core/since.js";
 import { baselinePath, readEvidenceLintCmd } from "../../lint-baseline.js";
 import { CLI_FIND_EXCLUDE, engineFind } from "../engine.js";
 import { doneLines, fmtClose, fmtRow } from "../render.js";
-import { claimsOf, openRows, staleReport } from "../selectors.js";
-import type { CloseRow, WorkRow } from "../store.js";
+import { claimsOf, openKeys, openRows, staleReport } from "../selectors.js";
+import type { CloseRow, LogRow, WorkRow } from "../store.js";
 import { allRows, app, memCmd, planDir, root, rows } from "../store.js";
 import { checkTickedLine, planSweepCmd, shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
@@ -49,6 +49,21 @@ const BUGS_LIMIT = 10;
 const BRANCH_LIMIT = 10;
 const RECENT_OPEN_LIMIT = 10;
 const RECENT_OPEN_TEXT = 160;
+const OPEN_KEYS_LIMIT = 8;
+
+// Important-index line (PLAN-mem-keys chunk 3): one line under the kickoff
+// header listing keys that still have open rows — silent when none. Placed
+// before every tier so the 4KB session-start cap can never drop it (only
+// ## recent is cut first). Counts are open rows per key, not total rows.
+const openKeysLine = (all: LogRow[]): string => {
+  const keys = openKeys(all);
+  if (!keys.length) return "";
+  const shown = keys.slice(0, OPEN_KEYS_LIMIT);
+  const body = shown.map(({ key, open }) => `${key}(${open})`).join(", ");
+  const more =
+    keys.length > OPEN_KEYS_LIMIT ? ` +${keys.length - OPEN_KEYS_LIMIT}` : "";
+  return `open keys: ${body}${more} — ${memCmd} find --key <key>`;
+};
 
 const shortText = (text: string, max = RECENT_OPEN_TEXT): string => {
   if (text.length <= max) return text;
@@ -67,7 +82,7 @@ export const cmdStale = () => {
 };
 
 export const cmdFind = (a: string[]) => {
-  // mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]
+  // mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--key k] [--open]
   // Query logic lives in the shared engine (../engine.ts) — this wrapper owns
   // only argv parsing + the single-line print. MCP memFind calls the same
   // engine with no kind default (contract); CLI keeps its legacy default of
@@ -83,11 +98,15 @@ export const cmdFind = (a: string[]) => {
     return 2;
   };
 
-  let kind: string[] | undefined;
-  let files: string[] | undefined;
+  // Accumulators, not reassignments: a repeated list flag must grow the set,
+  // never last-win (PLAN-comma-x chunk 2). Exported as string[] | undefined
+  // after the loop so every downstream check reads the same shape.
+  const kindAcc: string[] = [];
+  const filesAcc: string[] = [];
   let sinceRaw: string | undefined;
   let limit: number | undefined;
   let open = false;
+  let key: string | undefined;
   const positional: string[] = [];
 
   for (let i = 0; i < a.length; ) {
@@ -100,10 +119,12 @@ export const cmdFind = (a: string[]) => {
         );
         process.exit(1);
       }
-      kind = v
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+      kindAcc.push(
+        ...v
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      );
       i += consumed("--kind", i);
     } else if (t === "--files" || t.startsWith("--files=")) {
       const v = flagVal("--files", i);
@@ -113,11 +134,25 @@ export const cmdFind = (a: string[]) => {
         );
         process.exit(1);
       }
-      files = v
-        .split(",")
-        .map((s) => s.trim().replace(/^\.\//, ""))
-        .filter(Boolean);
+      filesAcc.push(
+        ...v
+          .split(",")
+          .map((s) => s.trim().replace(/^\.\//, ""))
+          .filter(Boolean),
+      );
       i += consumed("--files", i);
+    } else if (t === "--key" || t.startsWith("--key=")) {
+      const v = flagVal("--key", i);
+      if (!v || v.startsWith("--")) {
+        console.error(
+          `--key needs a value — usage: ${memCmd} find --key fix-stop-dedupe`,
+        );
+        process.exit(1);
+      }
+      // No KEY_RE validation on the read side — a wrong-pattern key never
+      // exists in the log, so the engine answers with knownKeys instead.
+      key = v;
+      i += consumed("--key", i);
     } else if (t === "--since" || t.startsWith("--since=")) {
       const v = flagVal("--since", i);
       if (!v || v.startsWith("--")) {
@@ -146,17 +181,20 @@ export const cmdFind = (a: string[]) => {
     }
   }
 
+  const kind = kindAcc.length ? kindAcc : undefined;
+  const files = filesAcc.length ? filesAcc : undefined;
   const q = positional.join(" ").trim();
   if (
     !q &&
     !kind?.length &&
     !files?.length &&
+    !key &&
     !sinceRaw &&
     limit === undefined &&
     !open
   ) {
     console.error(
-      `usage: ${memCmd} find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]`,
+      `usage: ${memCmd} find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--key k] [--open]`,
     );
     process.exit(1);
   }
@@ -172,21 +210,24 @@ export const cmdFind = (a: string[]) => {
   }
 
   // allRows, not rows: find is recall — rotated history counts
-  const { rows: newest } = engineFind(allRows(), {
+  const result = engineFind(allRows(), {
     text: q || undefined,
     files,
     kind,
     excludeKind: kind?.length ? undefined : CLI_FIND_EXCLUDE,
     sinceIso,
+    key,
     limit,
     open: open || undefined,
   });
   // Legacy order: oldest first (engine returns newest first — same set, CLI print order unchanged)
-  const hits = [...newest].reverse();
+  const hits = [...result.rows].reverse();
   for (const r of hits) {
     if ("id" in r) {
+      // #key only when present — rows without one keep the old shape
+      const keyTag = r.key ? ` #${r.key}` : "";
       console.log(
-        `- [${r.id}] ${r.ts.slice(0, 10)} ${r.kind} ${r.text ?? ""}${r.spec ? ` → ${r.spec}` : ""}`,
+        `- [${r.id}] ${r.ts.slice(0, 10)} ${r.kind}${keyTag} ${r.text ?? ""}${r.spec ? ` → ${r.spec}` : ""}`,
       );
     } else {
       const label = "ref" in r && r.ref ? `${r.ref}(${r.kind})` : r.kind;
@@ -194,7 +235,19 @@ export const cmdFind = (a: string[]) => {
       console.log(`- [${label}] ${r.ts.slice(0, 10)} ${r.kind} ${body}`);
     }
   }
-  if (!hits.length) console.log("(no matches)");
+  if (!hits.length) {
+    // A wrong key answers with the real ones (SPEC fail example) — a silent
+    // empty would read as "this problem never happened" (rule 9).
+    if (key && result.knownKeys) {
+      console.log(
+        `no key ${key}; known keys: ${
+          result.knownKeys.length ? result.knownKeys.join(", ") : "(none)"
+        }`,
+      );
+    } else {
+      console.log("(no matches)");
+    }
+  }
 };
 
 /** Read a plan file and extract checked + unchecked items from the first ## section. */
@@ -500,6 +553,8 @@ export const cmdKickoff = (a: string[]) => {
   if (!arg && !planFile) {
     // no args = ranked open rows + next up + recent closes
     console.log(`# ${app} — ${all.length} entries`);
+    const keys = openKeysLine(all);
+    if (keys) console.log(keys);
 
     const open = openRows(all);
     const claims = claimsOf(all);

@@ -13,7 +13,9 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { recordHintFire } from "../../core/hint-log.js";
 import { hookTsMs, sessionKey, utcStamp } from "../../core/hook-helpers.js";
+import type { MemRow } from "../../core/mem-log.js";
 import { readMemLog, whereMemDir } from "../../memory.js";
 import { hasBugMarker } from "./bug-markers.js";
 
@@ -334,6 +336,247 @@ function hasBugRowSince(worktree: string, since: string): boolean {
   }
 }
 
+// --- Handoff enforcement (PLAN-active-pain chunk 1) ---
+//
+// Rule 11 closes a chunk with a tick + commit + a mem note the next session
+// opens from — but rule 9 says "the agent will remember" never holds. This
+// checks the handoff row exists when a plan chunk was ticked this session.
+// Ships as a log-only trial first: default mode only writes hint-log rows
+// (surfaces handoff-would-block / handoff-pass); FAPONY_HANDOFF_BLOCK=1
+// enforces for real. FAPONY_NO_HANDOFF_BLOCK=1 disables both entirely.
+
+/** Repo-relative plan dir — hardcoded like planDir(), never from config. */
+const HANDOFF_PLAN_PREFIX = ".fapony/plan/";
+
+/** A repo-relative path the gate cares about: a .md file under plan/. */
+export function isPlanPath(p: string): boolean {
+  const norm = p.replace(/^\.\//, "").replace(/\\/g, "/");
+  return (
+    norm.startsWith(HANDOFF_PLAN_PREFIX) &&
+    norm.endsWith(".md") &&
+    norm.length > HANDOFF_PLAN_PREFIX.length + ".md".length
+  );
+}
+
+/** Count ticked `- [x]` checkbox lines (indented or not — the plan template
+ * indents TL;DR progress with two spaces). */
+export function countTicks(content: string): number {
+  let n = 0;
+  for (const line of content.split("\n")) {
+    if (/^\s*-\s\[[xX]\]/.test(line)) n++;
+  }
+  return n;
+}
+
+/**
+ * A plan opts into the mechanism with a handoff literal — a checkbox line
+ * mentioning handoff, ticked or not. Status is ignored on purpose: a ticked
+ * box alone proves no note exists (review finding 1), so the literal only
+ * marks participation and the mem row is the only way through. Plans without
+ * one (every old plan) fail open.
+ */
+export function hasHandoffLiteral(content: string): boolean {
+  for (const line of content.split("\n")) {
+    if (/^\s*-\s\[[ xX]\].*handoff/i.test(line)) return true;
+  }
+  return false;
+}
+
+function planRefMatches(value: string | undefined, rel: string): boolean {
+  if (!value) return false;
+  const v = value.replace(/^\.\//, "").replace(/\\/g, "/");
+  const r = rel.replace(/^\.\//, "").replace(/\\/g, "/");
+  if (v === r) return true;
+  if (v.endsWith(`/${r}`) || r.endsWith(`/${v}`)) return true;
+  // Plan filenames are unique per repo (PLAN-<name>.md) — a bare basename
+  // still names the file when one side stored only it.
+  const vb = v.split("/").pop() ?? v;
+  const rb = r.split("/").pop() ?? r;
+  return vb.length > 0 && vb === rb;
+}
+
+/**
+ * True when a note/next row filed at or after session start points at the
+ * plan — via spec (the positional plan path of `mem add`) or files[].
+ * Timestamps compare numerically: mem rows are ISO, session start is
+ * utcStamp, and string-compare reads every same-day row as newer ('T' > ' ').
+ */
+export function memHasHandoffForPlan(
+  rows: MemRow[],
+  planRel: string,
+  sinceMs: number,
+): boolean {
+  for (const r of rows) {
+    if (r.kind !== "note" && r.kind !== "next") continue;
+    const ms = hookTsMs(r.ts);
+    if (Number.isNaN(ms) || ms < sinceMs) continue;
+    if (planRefMatches(r.spec, planRel)) return true;
+    for (const f of r.files ?? []) {
+      if (planRefMatches(f, planRel)) return true;
+    }
+  }
+  return false;
+}
+
+export interface HandoffPlanFile {
+  /** Repo-relative plan path, e.g. .fapony/plan/PLAN-x.md. */
+  rel: string;
+  /** Content at the pre-session base commit ("" when untracked there). */
+  before: string;
+  /** Content on disk now. */
+  after: string;
+}
+
+export interface HandoffDecision {
+  /** First plan with literal + new tick + no handoff row, or null. */
+  blockedPlan: string | null;
+  /** Plans the gate actually evaluated (literal present). */
+  evaluated: string[];
+}
+
+/**
+ * Pure decision over pre-loaded file states. Every condition must hold to
+ * block: literal present, more ticks than at base, no handoff row since
+ * session start. Anything else passes — including plans that never opted in.
+ */
+export function decideHandoff(opts: {
+  files: HandoffPlanFile[];
+  memRows: MemRow[];
+  sinceMs: number;
+}): HandoffDecision {
+  const evaluated: string[] = [];
+  let blockedPlan: string | null = null;
+  for (const f of opts.files) {
+    if (!hasHandoffLiteral(f.after)) continue;
+    evaluated.push(f.rel);
+    if (blockedPlan) continue;
+    if (countTicks(f.after) <= countTicks(f.before)) continue;
+    if (memHasHandoffForPlan(opts.memRows, f.rel, opts.sinceMs)) continue;
+    blockedPlan = f.rel;
+  }
+  return { blockedPlan, evaluated };
+}
+
+export function handoffBlockMessage(planRel: string): string {
+  return [
+    `Chunk ticked in ${planRel} but no handoff mem row exists for this session.`,
+    `The next session opens from that note — without it, chunk N+1 re-derives everything from zero.`,
+    `  fapony mem add note "<what chunk N+1 must know>" --files <files> ${planRel}`,
+    `Then end the turn again — the row is the handoff; ticking the literal is cosmetic.`,
+    `Fires once per session per plan.`,
+  ].join("\n");
+}
+
+/**
+ * Which hint-log surface a commit/bug stop fire records. Logged on every
+ * fire — shown or dedupe-suppressed alike — so a repeated signal stays
+ * measurable: "shown" is recoverable by joining stop-block rows, but a
+ * suppressed fire with no row at all would vanish entirely.
+ */
+export function stopBlockSurface(
+  bugSignal: string | null,
+): "commit-block" | "bug-block" {
+  return bugSignal ? "bug-block" : "commit-block";
+}
+
+/**
+ * Dedupe keys are per-problem, not per-kind: the same problem nags once per
+ * session, but a different plan / a different announced bug still surfaces.
+ * A coarse kind ("handoff") lets the first problem spend the quota for all
+ * the others. Keys stay free-form strings — stopBlockedBefore compares them
+ * opaquely, and JSON escaping keeps even odd markers one row per line.
+ */
+export function handoffDedupeKey(planRel: string): string {
+  return `handoff:${planRel}`;
+}
+
+export function bugDedupeKey(marker: string): string {
+  return `bug:${marker}`;
+}
+
+/**
+ * Merge the commit/bug reason with the handoff reason. Each blocking problem
+ * owns its own dedupe quota: the commit/bug dedupe below must only ever see
+ * a commit/bug-derived reason, and a handoff reason only fills an
+ * otherwise-allowed turn.
+ *
+ * The shape this replaces shared one `reason` variable for both, so a
+ * handoff block fell into the commit dedupe and recorded a kind:"commit"
+ * row for a handoff block — spending the commit quota without a commit
+ * block ever firing, and letting the next quota-less turn through.
+ */
+export function mergeStopReasons(opts: {
+  commitReason: string | null;
+  handoffReason: string | null;
+  session: string | null;
+  worktree: string | null;
+  bugSignal: string | null;
+}): string | null {
+  let reason = opts.commitReason;
+  if (
+    reason &&
+    opts.worktree &&
+    stopBlockedBefore(
+      opts.session,
+      opts.worktree,
+      opts.bugSignal ? bugDedupeKey(opts.bugSignal) : "commit",
+    )
+  ) {
+    reason = null;
+  }
+  if (!reason) reason = opts.handoffReason;
+  return reason;
+}
+
+/** Plan files this session wrote: committed since birthtime, unstaged, or brand-new. */
+export function sessionPlanFiles(cwd: string, since: string): string[] | null {
+  const names = (args: string[]): string[] | null => {
+    const out = git(args, cwd);
+    if (out === null) return null;
+    return out
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
+  const a = names([
+    "log",
+    "--name-only",
+    "--since",
+    `${since} +0000`,
+    "--format=",
+  ]);
+  const b = names(["diff", "--name-only", "HEAD"]);
+  const c = names(["ls-files", "--others", "--exclude-standard"]);
+  if (!a && !b && !c) return null;
+  const seen = new Set<string>();
+  for (const list of [a, b, c]) {
+    for (const p of list ?? []) {
+      const norm = p.replace(/^\.\//, "");
+      if (isPlanPath(norm)) seen.add(norm);
+    }
+  }
+  return [...seen].sort();
+}
+
+/**
+ * Last commit that existed before the session started — the baseline a
+ * "new tick" compares against. `git diff HEAD` alone misses the common case:
+ * the chunk workflow commits the tick before the hook fires.
+ */
+export function handoffBaseSha(cwd: string, since: string): string | null {
+  const sha = git(["rev-list", "-1", `--before=${since} +0000`, "HEAD"], cwd);
+  return sha || null;
+}
+
+/** File content at a revision, or null when untracked there / on git error. */
+export function fileAtRevision(
+  cwd: string,
+  base: string,
+  rel: string,
+): string | null {
+  return git(["show", `${base}:${rel}`], cwd);
+}
+
 function git(args: string[], cwd: string): string | null {
   try {
     const p = Bun.spawnSync(["git", ...args], {
@@ -409,17 +652,114 @@ export async function cmdHookStop(): Promise<void> {
       bugSignal,
       bugRowSinceStart,
     });
-    if (
-      reason &&
-      worktree &&
-      stopBlockedBefore(
-        norm.transcriptPath,
+
+    // Record every commit/bug fire — shown or suppressed. The dedupe below
+    // decides the message, never the record: a suppressed repeat is still a
+    // problem found, and the trial can only answer what the log kept.
+    if (reason && worktree) {
+      recordHintFire({
+        ts: new Date().toISOString(),
         worktree,
-        bugSignal ? "bug" : "commit",
-      )
-    ) {
-      reason = null;
+        surface: stopBlockSurface(bugSignal),
+        file: null,
+        count: 1,
+      });
     }
+
+    // Handoff trial (PLAN-active-pain chunk 1): independent of commits.
+    // Default ships log-only — a would-block/pass row in hint-log answers
+    // the trial questions (gate precision, read-only silence, old-plan
+    // silence, committed-tick detection) without blocking anyone.
+    // FAPONY_HANDOFF_BLOCK=1 enforces; FAPONY_NO_HANDOFF_BLOCK=1 skips all.
+    // Kept in its own variable so the commit/bug dedupe below never consumes
+    // a handoff block's quota (or vice versa) — each kind fires once.
+    let handoffReason: string | null = null;
+    if (
+      worktree &&
+      since &&
+      process.env.FAPONY_NO_HANDOFF_BLOCK !== "1" &&
+      !norm.stopHookActive
+    ) {
+      try {
+        const sinceMs = hookTsMs(since);
+        if (!Number.isNaN(sinceMs)) {
+          const plans = sessionPlanFiles(norm.cwd, since);
+          if (plans && plans.length > 0) {
+            const baseSha = handoffBaseSha(norm.cwd, since);
+            if (baseSha) {
+              const handoffMem = readMemLog(worktree);
+              // No log at all = fail-open, silently: without mem data the
+              // evaluation never ran, so a pass row would pollute the trial.
+              if (handoffMem.filesFound > 0) {
+                const files: HandoffPlanFile[] = [];
+                for (const rel of plans) {
+                  let after: string | null = null;
+                  try {
+                    after = await Bun.file(join(worktree, rel)).text();
+                  } catch {
+                    after = null;
+                  }
+                  if (after === null) continue;
+                  files.push({
+                    rel,
+                    before: fileAtRevision(norm.cwd, baseSha, rel) ?? "",
+                    after,
+                  });
+                }
+                if (files.length > 0) {
+                  const h = decideHandoff({
+                    files,
+                    memRows: handoffMem.rows,
+                    sinceMs,
+                  });
+                  const now = new Date().toISOString();
+                  if (h.blockedPlan) {
+                    recordHintFire({
+                      ts: now,
+                      worktree,
+                      surface: "handoff-would-block",
+                      file: h.blockedPlan,
+                      count: 1,
+                    });
+                    if (
+                      process.env.FAPONY_HANDOFF_BLOCK === "1" &&
+                      !reason &&
+                      !stopBlockedBefore(
+                        norm.transcriptPath,
+                        worktree,
+                        handoffDedupeKey(h.blockedPlan),
+                      )
+                    ) {
+                      handoffReason = handoffBlockMessage(h.blockedPlan);
+                    }
+                  } else if (h.evaluated.length > 0) {
+                    recordHintFire({
+                      ts: now,
+                      worktree,
+                      surface: "handoff-pass",
+                      file: h.evaluated[0],
+                      count: 1,
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // fail-open — never block on handoff machinery failing
+      }
+    }
+
+    // Handoff merges last and only fills an otherwise-allowed turn — the
+    // commit/bug dedupe never sees (or consumes) a handoff-derived reason.
+    reason = mergeStopReasons({
+      commitReason: reason,
+      handoffReason,
+      session: norm.transcriptPath,
+      worktree,
+      bugSignal,
+    });
   } catch {
     reason = null;
   }

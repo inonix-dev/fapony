@@ -10,6 +10,7 @@
 // does it at dispatch, the MCP wrapper does it per call with its worktree.
 // (PLAN-unify-mem-engine chunk 1)
 
+import { KEY_RE } from "../core/mem-log.js";
 import { openRows } from "./selectors.js";
 import { KINDS, nextId, put, rows, type WorkKind } from "./store.js";
 
@@ -35,6 +36,8 @@ export interface EngineAddArgs {
   text: string;
   files: string[];
   spec?: string;
+  /** Problem identity — optional, but validated against KEY_RE whenever present. */
+  key?: string;
 }
 
 export interface EngineAddResult {
@@ -43,6 +46,7 @@ export interface EngineAddResult {
   text: string;
   files: string[];
   spec?: string;
+  key?: string;
   ts: string;
 }
 
@@ -59,6 +63,13 @@ export function engineAdd(a: EngineAddArgs): EngineAddResult {
   // Without a spec a hold can never be resolved by rotate — reject at write.
   if (a.kind === "hold" && !a.spec) {
     throw new Error("hold requires a spec — pass spec: <path/to/SPEC.md>");
+  }
+  // One validator for both surfaces (CLI argv reaches here too) — reject loudly
+  // with a usable example, never silently drop the key (SPEC-mem-keys §Validation).
+  if (a.key !== undefined && !KEY_RE.test(a.key)) {
+    throw new Error(
+      `key must match [a-z0-9-]{3,40} — e.g. "fix-stop-dedupe", got "${a.key}"`,
+    );
   }
 
   const all = rows();
@@ -83,14 +94,27 @@ export function engineAdd(a: EngineAddArgs): EngineAddResult {
 
   const id = nextId(all);
   const ts = new Date().toISOString();
+  // Every row written from here on is v:2 — key optional, but the version
+  // stamps the schema so a reader can tell new rows from v:1 legacy ones.
+  // JSON.stringify drops the undefined key, so keyless rows carry only v.
   put({
     id,
     kind: a.kind as WorkKind,
     text: a.text,
     spec: a.spec,
     files: a.files,
+    key: a.key,
+    v: 2,
   });
-  return { id, kind: a.kind, text: a.text, files: a.files, spec: a.spec, ts };
+  return {
+    id,
+    kind: a.kind,
+    text: a.text,
+    files: a.files,
+    spec: a.spec,
+    key: a.key,
+    ts,
+  };
 }
 
 export interface EngineCloseArgs {
@@ -165,11 +189,20 @@ export interface EngineFindArgs {
    * qualify. Default false — recall shows closed rows too.
    */
   open?: boolean;
+  /**
+   * Exact problem-identity match — rows whose effective key differs fall out
+   * (v:1 rows included; they stay reachable via files/text). A close row
+   * matches through the key of the work row its ref points at (derived at
+   * read time, never stored). A pure miss also returns knownKeys.
+   */
+  key?: string;
 }
 
 export interface EngineFindResult<T> {
   rows: T[];
   total: number;
+  /** Present only on a pure key miss — every distinct key in `all`, sorted. */
+  knownKeys?: string[];
 }
 
 export type FindableRow = {
@@ -178,6 +211,7 @@ export type FindableRow = {
   spec?: string;
   ref?: string;
   files?: string[];
+  key?: string;
   ts: string;
 };
 
@@ -214,6 +248,34 @@ export function engineFind<T extends FindableRow>(
     out = out.filter((r) => !drop.has(r.kind));
   }
 
+  // Exact key match, before text/files — a wrong key must never fall through
+  // to substring luck. Close rows derive their key from the ref'd work row
+  // (read-time derive: match only; the row itself stays keyless). knownKeys
+  // fires only on a pure key miss — answer a wrong guess with the real list.
+  let knownKeys: string[] | undefined;
+  if (a.key) {
+    const want = a.key;
+    const idKey = new Map<string, string>();
+    for (const r of all) {
+      if ("id" in r && typeof r.id === "string" && r.key) {
+        idKey.set(r.id, r.key);
+      }
+    }
+    const eff = (r: T): string | undefined =>
+      r.key ??
+      (r.kind === "close" && typeof r.ref === "string"
+        ? idKey.get(r.ref)
+        : undefined);
+    out = out.filter((r) => eff(r) === want);
+    if (!all.some((r) => eff(r) === want)) {
+      const distinct = new Set<string>();
+      for (const r of all) {
+        if (r.key) distinct.add(r.key);
+      }
+      knownKeys = [...distinct].sort();
+    }
+  }
+
   if (a.text?.trim()) {
     const needle = a.text.toLowerCase();
     out = out.filter((r) =>
@@ -245,5 +307,9 @@ export function engineFind<T extends FindableRow>(
 
   const total = out.length;
   const limit = Math.max(0, a.limit ?? FIND_DEFAULT_LIMIT);
-  return { rows: out.slice(0, limit), total };
+  return {
+    rows: out.slice(0, limit),
+    total,
+    ...(knownKeys ? { knownKeys } : {}),
+  };
 }

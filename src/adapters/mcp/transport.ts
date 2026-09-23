@@ -19,7 +19,7 @@ import { errorResult, type ToolResult } from "./types.js";
 
 const SERVER_INSTRUCTIONS = `fapony records decisions, bugs, and notes about this project so the next session (or the next agent) knows what happened and what to watch out for.
 
-When you finish a unit of work, record a mem row: fapony mem add <decision|bug|note> "what happened" --files <files> <path/to/PLAN.md>. files[] is required — a row without it is unfindable when you touch that file next session.
+When you finish a unit of work, record a mem row: fapony mem add <decision|bug|note> "what happened" --files <files> <path/to/PLAN.md>. files[] is required — a row without it is unfindable when you touch that file next session. Name a known problem with --key <a-z0-9-id> and recall every row for it via mem_find key.
 
 worktree must be the absolute path (git rev-parse --show-toplevel): every query scopes by it, so a bare name or none files the row where nothing reads it, and nothing errors to say so. Write the note standalone — it is read months later with no access to this conversation.
 

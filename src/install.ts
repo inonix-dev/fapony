@@ -1,4 +1,4 @@
-// src/install.ts — `fapony install --platform opencode|claude|cursor|zcode|codex` command.
+// src/install.ts — `fapony install --platform antigravity|agy|opencode|claude|cursor|zcode|codex` command.
 // opencode: adds mcp.fapony config to ~/.config/opencode/opencode.json or opencode.jsonc.
 // claude: shells out to `claude mcp add` (never parses/writes ~/.claude.json directly).
 // cursor: writes mcpServers.fapony to ~/.cursor/mcp.json directly and merges the
@@ -59,7 +59,9 @@ export async function cmdInstall(
   args: string[],
   deps: InstallDeps = {},
 ): Promise<void> {
-  const platform = args.find((a) => !a.startsWith("--"));
+  const platformArg = args.find((a) => !a.startsWith("--"));
+  // `agy` = Antigravity's CLI name — alias, same provider.
+  const platform = platformArg === "agy" ? "antigravity" : platformArg;
   const dryRun = args.includes("--dry-run");
   const installAll = args.includes("--all");
   // Opt-in only: the git-autonomy rewrite is an opinion (commit-as-you-go),
@@ -96,10 +98,10 @@ export async function cmdInstall(
   }
   if (platform !== undefined) {
     console.error(
-      `usage: fapony install --platform antigravity|opencode|claude|cursor|zcode|codex [--dry-run] [--git-autonomy] [--plugins-only]`,
+      `usage: fapony install --platform antigravity|agy|opencode|claude|cursor|zcode|codex [--dry-run] [--git-autonomy] [--plugins-only]`,
     );
     console.error(
-      `  supported platforms: antigravity, opencode, claude, cursor, zcode, codex`,
+      `  supported platforms: antigravity (agy), opencode, claude, cursor, zcode, codex`,
     );
     (deps.exit ?? defaultExit)(1);
     return;

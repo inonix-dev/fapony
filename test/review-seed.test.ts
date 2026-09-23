@@ -143,6 +143,54 @@ test("testReviewSeedScopeFlags", () => {
   );
 });
 
+// PLAN-comma-x chunk 2 — same-kind --files ×2 merges into ONE scope (it used
+// to error "one scope flag at a time (got files, files)"); the mixed-scope
+// guard counts distinct kinds, and a scalar scope flag with conflicting
+// values stays loud — never last-wins.
+test("testReviewSeedRepeatedFilesScopeMerges", () => {
+  withFixture((dir, rootSha, commit2) => {
+    // two --files tokens = one merged scope, both files listed
+    const out = renderSeed(["--files", "src/a.ts", "--files", "src/b.ts"], dir);
+    assert.match(out, /--files \(as given\)/);
+    assert.match(out, /src\/a\.ts/);
+    assert.match(out, /src\/b\.ts/);
+
+    // comma form + repeat compose into the same scope
+    const mix = renderSeed(
+      ["--files", "src/a.ts,src/b.ts", "--files", "src/c.ts"],
+      dir,
+    );
+    assert.match(mix, /src\/c\.ts/);
+
+    // the same missing path across two tokens is one not-found, not two
+    const dupMiss = renderSeed(
+      ["--files", "missing.ts", "--files", "missing.ts"],
+      dir,
+    );
+    assert.match(dupMiss, /not found \(1\): missing\.ts/);
+
+    // mixed kinds still error (guard counts distinct kinds)
+    assert.throws(
+      () => renderSeed(["--staged", "--files", "src/a.ts"], dir),
+      SeedError,
+    );
+
+    // scalar with DIFFERENT values is ambiguous → loud, never last-wins
+    assert.throws(
+      () => renderSeed(["--commit", rootSha, "--commit", commit2], dir),
+      /given twice with different values/,
+    );
+
+    // identical scalar repeat is idempotent
+    const staged = renderSeed(["--staged", "--staged"], dir);
+    assert.match(staged, /--staged/);
+    assert.match(staged, /src\/d\.ts/);
+  });
+  console.log(
+    "  ✓ review-seed repeated same-kind --files merges; mixed/conflict stays loud",
+  );
+});
+
 test("testReviewSeedStructure", () => {
   withFixture((dir) => {
     const out = renderSeed(["--files", "src/a.ts,src/b.ts"], dir);
@@ -553,7 +601,7 @@ test("testReviewSeedBodyAndCallers", () => {
     );
     writeFileSync(
       join(dir, "src", "user.ts"),
-      'import { outer } from "./multi.js";\n// outer mention\nconst s = "outer in a string";\nconsole.log(outer(1));\n',
+      'import { outer, helper } from "./multi.js";\n// outer mention\nconst s = "outer in a string";\nconsole.log(outer(1));\n',
     );
     execSync("git add -A", { cwd: dir, stdio: "ignore" });
 
@@ -604,6 +652,25 @@ test("testReviewSeedBodyAndCallers", () => {
       `textual caveat must be stated:\n${callers}`,
     );
 
+    // Comma list: one section per symbol, single-symbol output unchanged
+    // (PLAN-comma-x — today `a,b` errors as one invalid symbol).
+    const two = renderSeed(
+      ["--files", "src/multi.ts", "--callers", "outer,helper"],
+      dir,
+    );
+    assert.ok(
+      two.includes("callers of outer") && two.includes("callers of helper"),
+      `multi --callers keeps a section per symbol:\n${two}`,
+    );
+    assert.ok(
+      two.includes("src/user.ts:1,2,3,4"),
+      `outer hits identical in multi mode:\n${two}`,
+    );
+    assert.ok(
+      two.split("\n").some((l) => l === "  src/user.ts:1"),
+      `helper hits its own importer line:\n${two}`,
+    );
+
     const missing = renderSeed(
       ["--files", "src/multi.ts", "--body", "nope"],
       dir,
@@ -620,6 +687,121 @@ test("testReviewSeedBodyAndCallers", () => {
     );
   });
   console.log(
-    "  ✓ review-seed --body slices declarations, --callers scans importers",
+    "  ✓ review-seed --body slices declarations, --callers scans importers (comma list too)",
   );
+});
+
+// --- Chunk 5: review-seed --plan fallback (no frontmatter → git log grep) ---
+
+test("testReviewSeedPlanFallbackGitLogGrep", () => {
+  withFixture((dir) => {
+    // Write a plan with no frontmatter, commit it with the plan filename in the message
+    const planDir = join(dir, ".fapony", "plan");
+    mkdirSync(planDir, { recursive: true });
+    const planPath = join(planDir, "PLAN-fallback.md");
+    writeFileSync(planPath, "# PLAN-fallback\n\n## TL;DR\n- [ ] chunk 1\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "add PLAN-fallback.md"', {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    const rel = ".fapony/plan/PLAN-fallback.md";
+    const out = renderSeed(["--plan", rel], dir);
+    // Should find commits via git log grep, not just "no files: frontmatter"
+    assert.match(
+      out,
+      /commits via git log grep/,
+      `label must indicate fallback source:\n${out}`,
+    );
+    assert.doesNotMatch(out, /no commits found/, `must find commits:\n${out}`);
+  });
+  console.log("  ✓ review-seed --plan fallback: git log grep finds commits");
+});
+
+test("testReviewSeedPlanFallbackGrepWithoutMdSuffix", () => {
+  withFixture((dir) => {
+    // Repo convention cites the plan as "(PLAN-x chunk N)" — no .md suffix.
+    // Grepping the full basename once missed exactly this (review-pony finding 2).
+    const planDir = join(dir, ".fapony", "plan");
+    mkdirSync(planDir, { recursive: true });
+    const planPath = join(planDir, "PLAN-stem.md");
+    writeFileSync(planPath, "# PLAN-stem\n\n## TL;DR\n- [ ] chunk 1\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "feat: traps (PLAN-stem chunk 1)"', {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    const out = renderSeed(["--plan", ".fapony/plan/PLAN-stem.md"], dir);
+    assert.match(
+      out,
+      /commits via git log grep/,
+      `stem grep must match suffix-less citations:\n${out}`,
+    );
+    assert.doesNotMatch(out, /no commits found/, `must find commits:\n${out}`);
+  });
+  console.log(
+    "  ✓ review-seed --plan fallback: stem grep matches chunk citations",
+  );
+});
+
+test("testReviewSeedPlanFallbackHeaderCommits", () => {
+  withFixture((dir) => {
+    // Write a plan with > **Commits:** line but no files[] frontmatter
+    const planDir = join(dir, ".fapony", "plan");
+    mkdirSync(planDir, { recursive: true });
+    const planPath = join(planDir, "PLAN-header.md");
+    writeFileSync(
+      planPath,
+      "# PLAN-header\n\n> **Commits:** abc1234 def5678\n\n## TL;DR\n- [ ] chunk 1\n",
+    );
+    // abc1234/def5678 won't resolve as real commits, so it falls through to git log
+    // But let's test with a real commit
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "add PLAN-header.md"', {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    const sha = execSync("git rev-parse --short=7 HEAD", {
+      cwd: dir,
+      encoding: "utf-8",
+    }).trim();
+    // Rewrite with real sha in header
+    writeFileSync(
+      planPath,
+      `# PLAN-header\n\n> **Commits:** ${sha}\n\n## TL;DR\n- [ ] chunk 1\n`,
+    );
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "update PLAN-header with real sha"', {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    const rel = ".fapony/plan/PLAN-header.md";
+    const out = renderSeed(["--plan", rel], dir);
+    assert.match(
+      out,
+      /commits via header/,
+      `label must indicate header source:\n${out}`,
+    );
+  });
+  console.log("  ✓ review-seed --plan fallback: header > **Commits:** line");
+});
+
+test("testReviewSeedPlanFallbackNoCommits", () => {
+  withFixture((dir) => {
+    // Plan with no frontmatter and no matching commits → falls back to default diff
+    const planDir = join(dir, ".fapony", "plan");
+    mkdirSync(planDir, { recursive: true });
+    const planPath = join(planDir, "PLAN-nomatch.md");
+    writeFileSync(planPath, "# PLAN-nomatch\n\n## TL;DR\n- [ ] chunk 1\n");
+    // Don't commit it — git log grep won't find it
+    const rel = ".fapony/plan/PLAN-nomatch.md";
+    const out = renderSeed(["--plan", rel], dir);
+    assert.match(out, /no commits found/, `must say no commits found:\n${out}`);
+    assert.match(
+      out,
+      /diff HEAD \+ untracked/,
+      `falls back to default diff:\n${out}`,
+    );
+  });
+  console.log("  ✓ review-seed --plan fallback: no commits → default diff");
 });

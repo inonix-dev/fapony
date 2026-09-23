@@ -206,3 +206,126 @@ test("testKickoffClosureHint", () => {
   });
   console.log("  ✓ kickoff: closure hint warns once, silent when verified");
 });
+
+// --- Chunk 4: plan-check drift warns (W1 + W2) ---
+
+import { collectDriftWarns } from "../src/mem/commands/plan.js";
+
+test("testDriftWarnW1NotStartedWithTicks", () => {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
+    // W1: header says "draft" but chunks are ticked
+    writeFileSync(
+      join(dir, ".fapony/plan/PLAN-drift.md"),
+      `---\nkind: unit\n---\n\n# Drift\n\n> **Status:** 🚧 draft\n\n## TL;DR\n- [x] chunk 1 — done\n- [ ] chunk 2 — next\n`,
+    );
+    const warns = collectDriftWarns([join(dir, ".fapony/plan/PLAN-drift.md")]);
+    assert.equal(warns.length, 1, `W1 must fire:\n${warns.join("\n")}`);
+    assert.match(warns[0], /status header says "🚧 draft"/);
+    assert.match(warns[0], /1 chunk\(s\) are ticked/);
+  });
+  console.log("  ✓ W1: not-started header + ticked chunks → warn");
+});
+
+test("testDriftWarnW1InProgressNoWarn", () => {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
+    // in-progress with ticks = normal, must NOT warn
+    writeFileSync(
+      join(dir, ".fapony/plan/PLAN-flight.md"),
+      `---\nkind: unit\n---\n\n# Flight\n\n> **Status:** 🚧 in-progress\n\n## TL;DR\n- [x] chunk 1 — done\n- [ ] chunk 2 — next\n`,
+    );
+    const warns = collectDriftWarns([join(dir, ".fapony/plan/PLAN-flight.md")]);
+    assert.equal(
+      warns.length,
+      0,
+      `in-progress must not warn:\n${warns.join("\n")}`,
+    );
+  });
+  console.log("  ✓ W1: in-progress header → no warn (false positive guard)");
+});
+
+test("testDriftWarnW2AllTickedNotShipped", () => {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
+    // W2: all chunks ticked but no shipped marker
+    writeFileSync(
+      join(dir, ".fapony/plan/PLAN-done.md"),
+      `---\nkind: unit\n---\n\n# Done\n\n> **Status:** 🚧 in-progress\n\n## TL;DR\n- [x] chunk 1 — done\n- [x] chunk 2 — done\n`,
+    );
+    const warns = collectDriftWarns([join(dir, ".fapony/plan/PLAN-done.md")]);
+    assert.equal(warns.length, 1, `W2 must fire:\n${warns.join("\n")}`);
+    assert.match(
+      warns[0],
+      /all 2 chunk\(s\) ticked but header never marked shipped/,
+    );
+  });
+  console.log("  ✓ W2: all ticked + not shipped → warn");
+});
+
+test("testDriftWarnW2ShippedNoWarn", () => {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
+    // All ticked + shipped header = no warn
+    writeFileSync(
+      join(dir, ".fapony/plan/PLAN-shipped.md"),
+      `---\nkind: unit\n---\n\n# Shipped\n\n> ✅ **shipped 2026-09-23**\n\n## TL;DR\n- [x] chunk 1 — done\n- [x] chunk 2 — done\n`,
+    );
+    const warns = collectDriftWarns([
+      join(dir, ".fapony/plan/PLAN-shipped.md"),
+    ]);
+    assert.equal(
+      warns.length,
+      0,
+      `shipped must not warn:\n${warns.join("\n")}`,
+    );
+  });
+  console.log("  ✓ W2: shipped header → no warn");
+});
+
+test("testDriftWarnBlockedSkipped", () => {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
+    // status:blocked = not a drift target (has its own handling)
+    writeFileSync(
+      join(dir, ".fapony/plan/PLAN-blocked.md"),
+      `---\nkind: unit\nstatus: blocked\nblocked_by: PLAN-other.md\n---\n\n# Blocked\n\n## TL;DR\n- [x] chunk 1 — done\n`,
+    );
+    const warns = collectDriftWarns([
+      join(dir, ".fapony/plan/PLAN-blocked.md"),
+    ]);
+    assert.equal(
+      warns.length,
+      0,
+      `blocked plans must be skipped:\n${warns.join("\n")}`,
+    );
+  });
+  console.log("  ✓ status:blocked plans are skipped by drift check");
+});
+
+test("testDriftWarnE2E", () => {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
+    mkdirSync(join(dir, ".fapony", "done"), { recursive: true });
+    // A plan with W1: draft + ticked
+    writeFileSync(
+      join(dir, ".fapony/plan/PLAN-w1.md"),
+      `---\nkind: unit\n---\n\n# W1\n\n> **Status:** draft\n\n## TL;DR\n- [x] chunk 1 — done\n- [ ] chunk 2 — next\n`,
+    );
+    // A clean plan
+    writeFileSync(
+      join(dir, ".fapony/plan/PLAN-clean.md"),
+      `---\nkind: unit\n---\n\n# Clean\n\n> **Status:** 🚧 in-progress\n\n## TL;DR\n- [x] chunk 1 — done\n- [ ] chunk 2 — next\n`,
+    );
+    const proc = Bun.spawnSync(["bun", FAPONY, "mem", "plan-check"], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const out = proc.stdout.toString();
+    assert.equal(proc.exitCode, 0, `drift warns must not fail:\n${out}`);
+    assert.match(out, /drift warning\(s\)/, "prints drift section");
+    assert.match(out, /PLAN-w1\.md/, "names the drifted plan");
+  });
+  console.log("  ✓ plan-check e2e: drift warns appear but don't block");
+});

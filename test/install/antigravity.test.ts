@@ -2,12 +2,13 @@ import { test } from "bun:test";
 // test/install/antigravity.test.ts — Antigravity install provider
 
 import assert from "node:assert";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cmdInstall, cmdInstallAntigravity } from "../../src/install.js";
 import {
   captureErrors,
   silentErrors,
+  skillNames,
   type TestExit,
   testExit,
   withTempHome,
@@ -19,7 +20,11 @@ test("testInstallAntigravityNoDirFails", () => {
     const err = silentErrors(() =>
       captureErrors(() => {
         try {
-          cmdInstallAntigravity(false, { exit: testExit, homedir: () => home });
+          cmdInstallAntigravity(false, {
+            exit: testExit,
+            homedir: () => home,
+            checkCmd: () => false,
+          });
         } catch (e) {
           code = (e as TestExit).code;
         }
@@ -121,12 +126,18 @@ test("testInstallAntigravityDryRunNoWrite", () => {
       !readIfExists(join(home, ".gemini", "config", "mcp_config.json")),
       "mcp_config.json written",
     );
+    for (const name of skillNames()) {
+      assert.ok(
+        !existsSync(join(home, ".agents", "skills", name)),
+        `skill ${name} must not be linked in dry-run`,
+      );
+    }
     assert.ok(err.includes("dry-run"), `got: ${err}`);
     assert.ok(
       err.includes("would create") || err.includes("would write"),
       `got: ${err}`,
     );
-    console.log("  ✓ install antigravity dry-run → no write");
+    console.log("  ✓ install antigravity dry-run → no write, no links");
   });
 });
 
@@ -169,13 +180,138 @@ test("testCmdInstallDispatchesAntigravity", () => {
   withTempHome((home) => {
     mkdirSync(join(home, ".gemini", "config"), { recursive: true });
     silentErrors(() =>
-      cmdInstall(["antigravity"], { exit: testExit, homedir: () => home }),
+      cmdInstall(["antigravity"], {
+        exit: testExit,
+        homedir: () => home,
+        checkCmd: () => false,
+      }),
     );
     const mcp = JSON.parse(
       readFileSync(join(home, ".gemini", "config", "mcp_config.json"), "utf-8"),
     ) as { mcpServers?: Record<string, unknown> };
     assert.ok(mcp.mcpServers?.fapony, "mcp.fapony should be written");
     console.log("  ✓ install dispatch routes --platform antigravity");
+  });
+});
+
+test("testCmdInstallDispatchesAgyAlias", () => {
+  withTempHome((home) => {
+    mkdirSync(join(home, ".gemini", "config"), { recursive: true });
+    silentErrors(() =>
+      cmdInstall(["agy"], {
+        exit: testExit,
+        homedir: () => home,
+        checkCmd: () => false,
+      }),
+    );
+    const mcp = JSON.parse(
+      readFileSync(join(home, ".gemini", "config", "mcp_config.json"), "utf-8"),
+    ) as { mcpServers?: Record<string, unknown> };
+    assert.ok(mcp.mcpServers?.fapony, "mcp.fapony should be written");
+    console.log("  ✓ install dispatch routes --platform agy alias");
+  });
+});
+
+test("testInstallAntigravityLinksSkills", () => {
+  withTempHome((home) => {
+    mkdirSync(join(home, ".gemini", "config"), { recursive: true });
+    silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallAntigravity(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const skillsDir = join(home, ".agents", "skills");
+    const names = skillNames();
+    assert.ok(names.length > 0, "repo should ship at least one skill");
+    for (const name of names) {
+      assert.ok(
+        existsSync(join(skillsDir, name)),
+        `skill ${name} should be linked`,
+      );
+    }
+    console.log("  ✓ install antigravity links all skills → ~/.agents/skills");
+  });
+});
+
+test("testInstallAntigravitySkillsConflictUntouched", () => {
+  withTempHome((home) => {
+    mkdirSync(join(home, ".gemini", "config"), { recursive: true });
+
+    // Plant a conflicting skill dir (not a symlink) — a user's own skill.
+    const skillsDir = join(home, ".agents", "skills");
+    const names = skillNames();
+    assert.ok(names.length > 0, "repo should ship at least one skill");
+    const victim = names[0];
+    mkdirSync(join(skillsDir, victim), { recursive: true });
+    writeFileSync(join(skillsDir, victim, "SKILL.md"), "user content");
+
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallAntigravity(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    assert.ok(
+      err.includes(victim) && err.includes("not overwriting"),
+      `conflict reported: ${err}`,
+    );
+    assert.equal(
+      readFileSync(join(skillsDir, victim, "SKILL.md"), "utf-8"),
+      "user content",
+      "conflict must not overwrite",
+    );
+    // One conflict must not block the remaining skills.
+    for (const name of names.slice(1)) {
+      assert.ok(
+        existsSync(join(skillsDir, name)),
+        `skill ${name} should still be linked despite conflict`,
+      );
+    }
+    console.log(
+      "  ✓ install antigravity skill conflict → preserve user content",
+    );
+  });
+});
+
+test("testInstallAntigravityCreatesMissingConfigDir", () => {
+  withTempHome((home) => {
+    // ~/.gemini exists but ~/.gemini/config does not — the app's first run
+    // may stop short of creating the config dir (plan §5 escape hatch).
+    mkdirSync(join(home, ".gemini"), { recursive: true });
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallAntigravity(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const mcp = JSON.parse(
+      readFileSync(join(home, ".gemini", "config", "mcp_config.json"), "utf-8"),
+    ) as { mcpServers?: Record<string, unknown> };
+    assert.ok(mcp.mcpServers?.fapony, `got: ${err}`);
+    console.log(
+      "  ✓ install antigravity missing config/ → created recursively",
+    );
+  });
+});
+
+test("testInstallAntigravityAgyPathWithoutGeminiDir", () => {
+  withTempHome((home) => {
+    // No ~/.gemini at all, but `agy` on PATH → treated as installed,
+    // ~/.gemini/config created on write.
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallAntigravity(false, {
+          exit: testExit,
+          homedir: () => home,
+          checkCmd: (cmd) => cmd === "agy",
+        }),
+      ),
+    );
+    const mcp = JSON.parse(
+      readFileSync(join(home, ".gemini", "config", "mcp_config.json"), "utf-8"),
+    ) as { mcpServers?: Record<string, unknown> };
+    assert.ok(mcp.mcpServers?.fapony, `got: ${err}`);
+    console.log(
+      "  ✓ install antigravity agy on PATH, no ~/.gemini → creates tree",
+    );
   });
 });
 

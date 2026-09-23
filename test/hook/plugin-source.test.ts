@@ -23,6 +23,10 @@ test("testReadHintPluginSource", () => {
     src.includes("pjoin(directory, filePath)"),
     "fire-log joins against directory, not worktree",
   );
+  assert.ok(
+    src.includes('surface: "open-bug"'),
+    "must log open-bug fires (PLAN-active-pain chunk 3)",
+  );
   console.log(
     "  ✓ read hint opencode plugin imports shared logic, annotate-only",
   );
@@ -46,6 +50,10 @@ test("testEditHintPluginSource", () => {
   assert.ok(
     src.includes('surface: "edit"'),
     "must log through the edit fire surface",
+  );
+  assert.ok(
+    src.includes('surface: "open-bug"'),
+    "must log open-bug fires (PLAN-active-pain chunk 3)",
   );
   assert.ok(
     src.includes("pjoin(directory, filePath)"),

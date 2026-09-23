@@ -21,7 +21,7 @@
 
 import type { Stats } from "node:fs";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import {
   buildGraph,
   collectSourceFiles,
@@ -61,7 +61,7 @@ const LOOKUP_OUTPUT_CAP = 120;
 const DISCLAIMER =
   "static graph only — seed is where to enter, not what is verified";
 const USAGE =
-  "usage: fapony review-seed [--staged | --commit <sha> | --range <a...b> | --files f1,f2,dir | --plan <PLAN.md>] [--body sym[,sym]] [--callers sym]";
+  "usage: fapony review-seed [--staged | --commit <sha> | --range <a...b> | --files f1,f2,dir | --plan <PLAN.md>] [--body sym[,sym]] [--callers sym[,sym]]";
 // --body / --callers are the executor's lookup, not the reviewer's seed: when
 // either is present the output is only those sections (plus worktree line and
 // disclaimer) — the standard sections would be a wall around the one answer.
@@ -82,13 +82,13 @@ type Scope =
 interface LookupFlags {
   /** --body sym[,sym] — declaration slices from the named file(s). */
   body: string[];
-  /** --callers sym — symbol→symbol grep over importer files. */
-  callers: string | null;
+  /** --callers sym[,sym] — symbol→symbol grep over importer files. */
+  callers: string[];
 }
 
 function parseLookup(args: string[]): LookupFlags {
   const body: string[] = [];
-  let callers: string | null = null;
+  const callers: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--body" || a === "--callers") {
@@ -97,29 +97,21 @@ function parseLookup(args: string[]): LookupFlags {
         throw new SeedError(`review-seed: ${a} needs a value\n${USAGE}`);
       }
       i++;
-      if (a === "--body") {
-        for (const s of v
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)) {
-          if (!/^[A-Za-z_$][\w$]*$/.test(s)) {
-            throw new SeedError(`review-seed: invalid symbol: ${s}`);
-          }
-          body.push(s);
+      // Both flags take the same comma shape --files takes: split, trim,
+      // drop empties, validate each symbol (PLAN-comma-x).
+      const syms = v
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (syms.length === 0) {
+        throw new SeedError(`review-seed: ${a} needs a symbol\n${USAGE}`);
+      }
+      for (const s of syms) {
+        if (!/^[A-Za-z_$][\w$]*$/.test(s)) {
+          throw new SeedError(`review-seed: invalid symbol: ${s}`);
         }
-        if (body.length === 0) {
-          throw new SeedError(`review-seed: --body needs a symbol\n${USAGE}`);
-        }
-      } else {
-        if (!/^[A-Za-z_$][\w$]*$/.test(v)) {
-          throw new SeedError(`review-seed: invalid symbol: ${v}`);
-        }
-        if (callers) {
-          throw new SeedError(
-            `review-seed: --callers takes one symbol\n${USAGE}`,
-          );
-        }
-        callers = v;
+        if (a === "--body") body.push(s);
+        else callers.push(s);
       }
     }
   }
@@ -176,12 +168,32 @@ function parseScope(args: string[]): Scope {
     }
   }
   if (flags.length === 0) return { kind: "default" };
-  if (flags.length > 1) {
+  // Repeats of the SAME kind: --files occurrences merge into one scope list
+  // (an agent splitting a lookup across two --files tokens is the same shape
+  // as the comma list it already accepts); an identical scalar repeat is
+  // idempotent; a scalar repeated with a DIFFERENT value is ambiguous and
+  // errors — never last-wins (PLAN-comma-x chunk 2). The mixed-scope guard
+  // below counts distinct kinds, not occurrences, so `--files a --files b`
+  // is one scope, not "files, files".
+  const merged = new Map<string, Scope>();
+  for (const f of flags) {
+    const prev = merged.get(f.kind);
+    if (prev === undefined) {
+      merged.set(f.kind, f);
+    } else if (f.kind === "files" && prev.kind === "files") {
+      prev.list = [...new Set([...prev.list, ...f.list])];
+    } else if (JSON.stringify(prev) !== JSON.stringify(f)) {
+      throw new SeedError(
+        `review-seed: --${f.kind} given twice with different values\n${USAGE}`,
+      );
+    }
+  }
+  if (merged.size > 1) {
     throw new SeedError(
-      `review-seed: one scope flag at a time (got ${flags.map((f) => f.kind).join(", ")})\n${USAGE}`,
+      `review-seed: one scope flag at a time (got ${[...merged.keys()].join(", ")})\n${USAGE}`,
     );
   }
-  return flags[0];
+  return [...merged.values()][0];
 }
 
 // --- Scope resolution: one flag = one declared git call ---
@@ -376,6 +388,57 @@ function resolvePlanPath(arg: string, cwd: string, worktree: string): string {
   throw new SeedError(`review-seed: plan file not found: ${arg}`);
 }
 
+// Fallback commit resolution for --plan without files[] frontmatter.
+// Tries two sources in order:
+//   1. `> **Commits:** sha1 sha2 …` line in the plan header
+//   2. `git log --grep <PLAN-filename> --format=%h`
+// Returns the first source that yields commits, with metadata for the label.
+function isCommitObject(sha: string, cwd: string): boolean {
+  return execGit(`git cat-file -e ${sha}^{commit}`, cwd).ok;
+}
+
+function planFallbackCommits(
+  planText: string,
+  planBase: string,
+  cwd: string,
+): { sha: string; short: string; source: "header" | "git log grep" }[] {
+  // Source 1: > **Commits:** line in the plan header (first 2048 bytes)
+  const head = planText.slice(0, 2048);
+  const commitsLine = />\s*\*?\*?Commits:?\*?\*?\s+(.+)/i.exec(head);
+  if (commitsLine) {
+    const shas = commitsLine[1]
+      .match(/\b[0-9a-f]{7,12}\b/g)
+      ?.filter((s) => isCommitObject(s, cwd))
+      .map((s) => ({
+        sha: s,
+        short: s,
+        source: "header" as const,
+      }));
+    if (shas && shas.length > 0) return shas;
+  }
+  // Source 2: git log --grep for the plan name. Chunk commits cite the plan
+  // as "(PLAN-x chunk N)" — never with the .md suffix — so grep the stem:
+  // it still matches messages that do carry the suffix (substring).
+  const stem = planBase.replace(/\.md$/, "");
+  const logResult = execGit(
+    `git log --grep=${stem} --format=%h --max-count=10`,
+    cwd,
+  );
+  if (logResult.ok && logResult.output.trim()) {
+    const shas = logResult.output
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((s) => ({
+        sha: s,
+        short: s,
+        source: "git log grep" as const,
+      }));
+    if (shas.length > 0) return shas;
+  }
+  return [];
+}
+
 function resolveScope(
   scope: Scope,
   cwd: string,
@@ -394,15 +457,33 @@ function resolveScope(
   }
   if (scope.kind === "plan") {
     const planPath = resolvePlanPath(scope.path, cwd, worktree);
-    const planFiles = planFrontFiles(readFileSync(planPath, "utf-8"));
+    const planText = readFileSync(planPath, "utf-8");
+    const planFiles = planFrontFiles(planText);
     if (planFiles === null) {
-      // No files[] to scope from — fall back to the default diff, say so.
+      // No files[] — try fallback commit sources before default diff.
+      const planBase = basename(planPath);
+      const fallbackCommits = planFallbackCommits(planText, planBase, cwd);
+      if (fallbackCommits.length > 0) {
+        // Use the fallback commits as the scope: get the files touched by those commits.
+        const shaList = fallbackCommits.map((c) => c.sha).join(" ");
+        const entries = parseNumstat(
+          execGit(`git diff-tree --no-commit-id --numstat -r ${shaList}`, cwd)
+            .output,
+        );
+        const source = fallbackCommits[0].source;
+        return {
+          label: `--plan ${scope.path} (commits via ${source}: ${fallbackCommits.map((c) => c.short).join(", ")})`,
+          entries,
+        };
+      }
+      // No commits found either — fall back to the default diff, say so.
       const entries = [
         ...parseNumstat(execGit("git diff HEAD --numstat -M", cwd).output),
         ...untrackedFiles(execGit("git status --porcelain -uall", cwd).output),
       ];
       return {
-        label: "--plan (no files: frontmatter) — diff HEAD + untracked",
+        label:
+          "--plan (no files: frontmatter, no commits found) — diff HEAD + untracked",
         entries,
       };
     }
@@ -597,7 +678,7 @@ function renderLookup(
   lines.push(`worktree: ${worktree} (${lookupLabel(flags)})`);
 
   let resolved: ResolvedScope | null = null;
-  if (flags.callers) {
+  if (flags.callers.length > 0) {
     resolved = resolveScope(scope, cwd, worktree);
   }
 
@@ -651,30 +732,34 @@ function renderLookup(
     }
   }
 
-  if (flags.callers) {
+  if (flags.callers.length > 0) {
     const graph = buildGraph(worktree);
     const targets = (resolved?.entries ?? [])
       .map((e) => e.path)
       .filter(hasGraph);
-    const found = findCallers(flags.callers, targets, graph, worktree);
-    if (targets.length === 0) {
-      lines.push(`callers of ${flags.callers}: no source files in scope`);
-    } else if (found.rows.length === 0) {
-      lines.push(
-        `callers of ${flags.callers}: none found in static importers (dynamic or non-importing use is out of reach)`,
-      );
-    } else {
-      lines.push(
-        `callers of ${flags.callers} (textual hits, may be comments/strings):`,
-      );
-      for (const f of found.rows) {
-        const more = f.more > 0 ? ` (+${f.more} more hits)` : "";
-        lines.push(`  ${f.file}:${f.hits.join(",")}${more}`);
-      }
-      if (found.filesCapped) {
+    // One section per symbol — a merged any-of scan would lose which
+    // symbol hit, and a single symbol's output stays byte-identical.
+    for (const sym of flags.callers) {
+      const found = findCallers(sym, targets, graph, worktree);
+      if (targets.length === 0) {
+        lines.push(`callers of ${sym}: no source files in scope`);
+      } else if (found.rows.length === 0) {
         lines.push(
-          `  ⚠ more importer files matched — capped at ${MAX_CALLER_FILES}`,
+          `callers of ${sym}: none found in static importers (dynamic or non-importing use is out of reach)`,
         );
+      } else {
+        lines.push(
+          `callers of ${sym} (textual hits, may be comments/strings):`,
+        );
+        for (const f of found.rows) {
+          const more = f.more > 0 ? ` (+${f.more} more hits)` : "";
+          lines.push(`  ${f.file}:${f.hits.join(",")}${more}`);
+        }
+        if (found.filesCapped) {
+          lines.push(
+            `  ⚠ more importer files matched — capped at ${MAX_CALLER_FILES}`,
+          );
+        }
       }
     }
   }
@@ -686,7 +771,9 @@ function renderLookup(
 function lookupLabel(flags: LookupFlags): string {
   const parts: string[] = [];
   if (flags.body.length > 0) parts.push(`--body ${flags.body.join(",")}`);
-  if (flags.callers) parts.push(`--callers ${flags.callers}`);
+  if (flags.callers.length > 0) {
+    parts.push(`--callers ${flags.callers.join(",")}`);
+  }
   return parts.join(" ");
 }
 
@@ -709,7 +796,7 @@ export function renderSeed(args: string[], cwd: string): string {
   // feeds --callers its targets), but the standard sections are suppressed —
   // the caller asked for one answer, not the review seed around it.
   const lookup = parseLookup(args);
-  if (lookup.body.length > 0 || lookup.callers) {
+  if (lookup.body.length > 0 || lookup.callers.length > 0) {
     return renderLookup(lookup, scope, cwd, worktree);
   }
 

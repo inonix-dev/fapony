@@ -190,6 +190,68 @@ export const collectDepIssues = (active: string[]): string[] => {
   return issues;
 };
 
+// W1: status header says not-started but chunks are ticked.
+// W2: all chunks ticked but header never marked shipped.
+// WARN-level only — counted separately from issues, never changes exit code.
+//
+// Vocab measured from .fapony/{plan,done}/*.md (2026-09-23):
+//   in-progress 8 · done 4 · shipped/✅ shipped 6 · draft 1
+//   frontmatter status: shipped 8 · blocked 2
+const NOT_STARTED =
+  /(?:^|\n)>\s*\*?\*?Status:?\*?\*?\s+.*(?:draft|drafted|not[\s-]started)/i;
+const SHIPPED_RE =
+  /(?:^|\n)>\s*✅|(?:^|\n)>\s*\*?\*?Status:?\*?\*?\s+.*(?:shipped|done)/i;
+const FM_SHIPPED = /^status:\s*shipped\b/m;
+
+export const collectDriftWarns = (active: string[]): string[] => {
+  const warns: string[] = [];
+  for (const f of active) {
+    const fm = parsePlanFrontmatter(f);
+    // Skip plans whose frontmatter already says shipped/blocked/superseded or
+    // is a tracker — these have their own handling elsewhere.
+    if (FM_SHIPPED.test("") && fm.status === "shipped") continue;
+    if (fm.status === "blocked" || fm.status === "superseded") continue;
+    if (fm.kind === "tracker") continue;
+    // frontmatter status: shipped = already done
+    if (fm.status === "shipped") continue;
+
+    const text = readFileSync(f, "utf8");
+    const relPath = relative(planBase, f);
+    const { checked, unchecked } = countFirstSection(f);
+    const total = checked + unchecked;
+    if (total === 0) continue;
+
+    // W1: header says not-started but chunks are ticked
+    const head = text.slice(0, 2048);
+    if (
+      checked > 0 &&
+      NOT_STARTED.test(head) &&
+      !SHIPPED_RE.test(head) &&
+      !FM_SHIPPED.test(text)
+    ) {
+      // Extract the status value for the message
+      const statusMatch = />\s*\*?\*?Status:?\*?\*?\s+(.+)/i.exec(head);
+      const statusVal = statusMatch?.[1]?.replace(/\*\*/g, "").trim() ?? "?";
+      warns.push(
+        `${relPath} — status header says "${statusVal}" but ${checked} chunk(s) are ticked\n   fix: update the header to 🚧 in-progress or ✅ shipped`,
+      );
+    }
+
+    // W2: all chunks ticked but header never marked shipped
+    if (
+      checked > 0 &&
+      unchecked === 0 &&
+      !SHIPPED_RE.test(head) &&
+      !FM_SHIPPED.test(text)
+    ) {
+      warns.push(
+        `${relPath} — all ${checked} chunk(s) ticked but header never marked shipped\n   fix: add ✅ shipped to the header or run ${planSweepCmd} ${basename(f)} --apply`,
+      );
+    }
+  }
+  return warns;
+};
+
 // status:blocked with every first-section chunk ticked = deferred doc debt:
 // the work reads done but the plan stays in plan/ forever (shippedNotMoved
 // never lists it — HELD excludes it). Trackers never finish, so they are out.
@@ -735,6 +797,10 @@ export const cmdPlanCheck = (a: string[]) => {
   //    (HELD excludes it), so without this flag it sits in plan/ silently.
   for (const issue of collectBlockedTickedIssues(active)) issues.push(issue);
 
+  // 7) Drift warns — W1 (not-started header + ticks) and W2 (all ticked +
+  //    not shipped). WARN-only: counted separately, never changes exit code.
+  const driftWarns = collectDriftWarns(active);
+
   if (!quiet) {
     console.log(
       `closed chunks: ${closed} · citing a commit: ${citing} · verified: ${verified}`,
@@ -758,6 +824,10 @@ export const cmdPlanCheck = (a: string[]) => {
           `- ${spec} — ${checked}/${checked + unchecked} chunks · blocked_by: ${by}${openN ? ` · ⚠ ${openN} open row(s)` : ""}`,
         );
       }
+    }
+    if (driftWarns.length > 0) {
+      console.log(`\n⚠ ${driftWarns.length} drift warning(s) (not blocking):`);
+      for (const w of driftWarns) console.log(`- ${w}`);
     }
   }
 

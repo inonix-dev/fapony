@@ -23,7 +23,8 @@ export const TOOLS = [
       "memDir shows which log dir was resolved (walked up from the given " +
       "worktree — in a monorepo pass the app directory to read its log). " +
       "Returns {rows, total, filesFound, " +
-      "skipped, memDir}: memDir:null = no mem at all, not 'nothing matched'.",
+      "skipped, memDir}: memDir:null = no mem at all, not 'nothing matched'. " +
+      "A key query that misses adds knownKeys (every key in the log).",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -64,6 +65,11 @@ export const TOOLS = [
           description:
             "true = unresolved work only: drops close/claim/release/synced rows and work rows already closed. Omit = every row. With kind:[bug] answers 'what bugs remain?'",
         },
+        key: {
+          type: "string",
+          description:
+            "Exact problem-identity match — miss returns knownKeys (every key in the log). No pattern: a wrong-pattern query must reach the server",
+        },
       },
       required: ["worktree"],
     },
@@ -103,6 +109,12 @@ export const TOOLS = [
         spec: {
           type: "string",
           description: "Optional spec/plan .md path",
+        },
+        key: {
+          type: "string",
+          pattern: "^[a-z0-9-]{3,40}$",
+          description:
+            "Problem identity (not kind, not files) — same problem, same key",
         },
       },
       required: ["worktree", "kind", "text", "files"],

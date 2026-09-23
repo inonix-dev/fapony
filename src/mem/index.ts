@@ -25,9 +25,9 @@ const MEM_HELP = `usage: fapony mem [--mem-dir <path>] <sub> [args]
 subcommands:
   where                       show the resolved mem dir and which step won
   kickoff [<plan.md>] [--pick <n>]   open a session + a next-up list
-  add <kind> "<text>" --files f1,f2 [spec.md]
+  add <kind> "<text>" --files f1,f2 [--key k] [spec.md]
   close <id> "<msg>"          close a bug
-  find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n]
+  find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--key k]
                           substring-search every row (archives included)
   done | stale              views
   claim <id> | release <id> | synced   bookkeeping
@@ -49,19 +49,21 @@ open a session and print a "next up" list (priority plans, unchecked chunks, ope
   <plan.md>   plan whose first unchecked chunk is offered as a context line
   --pick <n>  run suggestion [n] non-interactively; refuses context/template items
 example: fapony mem kickoff .fapony/plan/PLAN-x.md`,
-  add: `usage: fapony mem add <next|bug|decision|note|hold> "<text>" --files f1,f2 [spec.md]
+  add: `usage: fapony mem add <next|bug|decision|note|hold> "<text>" --files f1,f2 [--key k] [spec.md]
 append one row to the mem log
   --files f1,f2   repo-relative paths this row is about (required)
+  --key k         problem identity, [a-z0-9-]{3,40} — same problem = same key (optional)
   --stdin         read <text> from stdin (avoids shell metachar)
-example: fapony mem add decision "chose X because Y" --files src/a.ts,src/b.ts`,
+example: fapony mem add decision "chose X because Y" --files src/a.ts,src/b.ts --key unify-mem-engine`,
   close: `usage: fapony mem close <id> "<what was done | commit>"
 tombstone a bug so it stops showing as open work
   --stdin         read the message from stdin
 example: fapony mem close mt14 "fixed in a2c6beb"`,
-  find: `usage: fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n]
+  find: `usage: fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--key k]
 substring search over every row's text/spec/ref (rotated archives included) — bookkeeping kinds (close/synced/claim/release) hidden unless --kind names them
   --kind a,b    include only these kinds (overrides the bookkeeping default)
   --files f1,f2 rows about these paths (stored files[] first, text/spec/ref fallback)
+  --key k       exact problem-identity match — a miss prints the known keys
   --since 7d    only rows at or after this time (<N>d or YYYY-MM-DD)
   --limit n     max rows returned (default 20, newest first)
 example: fapony mem find "usage-web" --kind bug,decision --limit 5`,

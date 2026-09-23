@@ -103,13 +103,16 @@ failed, needs_human_review).
   first, falling back to a substring of `text`/`spec`/`ref` for rows written
   before `--files` existed. In a monorepo pass the app directory to read its log.
 - `text` — substring filter, case-insensitive.
+- `key` — exact problem-identity match; a miss returns `knownKeys` (every
+  distinct key in the log) instead of a silent empty.
 - `kind` — filter by kind (`decision`/`note`/`bug`/`close`/…). Omit = every kind,
   there is no default filter.
 - `since` — ISO date, only rows at or after this time.
 - `limit` — max rows returned (default 20); `total` still counts all matches.
 
-**Returns** `{rows, total, filesFound, skipped, memDir}`. `memDir:null` means the
-project has no mem log at all — not "nothing matched".
+**Returns** `{rows, total, filesFound, skipped, memDir}` — plus `knownKeys` when
+a `key` query misses. `memDir:null` means the project has no mem log at all —
+not "nothing matched".
 
 ### 3. `mem_add` / `mem_close` — Record what happened
 

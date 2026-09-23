@@ -7,12 +7,40 @@ import { dispatch } from "../../src/adapters/mcp/transport.js";
 test("testMcpToolsList", () => {
   const result = dispatch("tools/list", {});
   assert.ok(result && typeof result === "object");
-  const r = result as { tools: { name: string }[] };
+  const r = result as {
+    tools: {
+      name: string;
+      inputSchema: { properties: Record<string, unknown> };
+    }[];
+  };
   assert.deepEqual(
     r.tools.map((t) => t.name),
     ["mem_find", "mem_add", "mem_close"],
   );
-  console.log("  ✓ mcp tools/list returns 3 tools");
+  // PLAN-mem-keys chunk 1: mem_add's schema advertises key with the pattern —
+  // clients validate before the call, engineAdd still validates after it.
+  const memAdd = r.tools.find((t) => t.name === "mem_add");
+  const key = memAdd?.inputSchema.properties.key as
+    | { pattern?: string }
+    | undefined;
+  assert.ok(key, "mem_add schema must expose key");
+  assert.equal(key?.pattern, "^[a-z0-9-]{3,40}$");
+  // PLAN-mem-keys chunk 2: mem_find advertises key WITHOUT a pattern — a
+  // wrong-pattern query must reach the server and answer with knownKeys.
+  const memFind = r.tools.find((t) => t.name === "mem_find");
+  const findKey = memFind?.inputSchema.properties.key as
+    | { type?: string; pattern?: string }
+    | undefined;
+  assert.ok(findKey, "mem_find schema must expose key");
+  assert.equal(findKey?.type, "string");
+  assert.equal(
+    findKey?.pattern,
+    undefined,
+    "find must not pattern-reject a query",
+  );
+  console.log(
+    "  ✓ mcp tools/list: mem_add carries key pattern, mem_find carries key",
+  );
 });
 
 test("testMcpInitialize", () => {
@@ -33,8 +61,14 @@ test("testMcpInitialize", () => {
   // (rework base rate 1-9%), and this string is paid on every session.
   assert.doesNotMatch(r.instructions ?? "", /project_health_context/);
   assert.match(r.instructions ?? "", /mem add/);
+  // PLAN-mem-keys chunk 3: one line names the key habit (write + recall) —
+  // rent stays at that single sentence.
+  assert.match(r.instructions ?? "", /--key/);
+  assert.match(r.instructions ?? "", /mem_find key/);
   assert.doesNotMatch(r.instructions ?? "", /verdict_submit/);
-  console.log("  ✓ mcp initialize returns protocol version + instructions");
+  console.log(
+    "  ✓ mcp initialize returns protocol version + instructions (+ --key line)",
+  );
 });
 
 test("testMcpNotificationsIgnored", () => {

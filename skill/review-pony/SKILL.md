@@ -35,8 +35,8 @@ proof that you looked. Start at pass 1.
 Run `fapony review-seed` with the scope flag matching what you're reviewing (default = uncommitted,
 `--commit <sha>`, `--range <a...b>`, `--files f1,f2,dir`, `--plan <PLAN.md>`). The output is where to
 enter, never coverage — walk it, run it, kill your findings as normal. No fapony CLI or the call
-errors → skip silently and review anyway — a hint, not a gate. Mid-walk, `--files <f> --body <sym>
---callers <sym>` answers "what does this do / who calls it" without reading the file.
+errors → skip silently and review anyway — a hint, not a gate. Mid-walk, `--files <f> --body <sym>[,<sym>]
+--callers <sym>[,<sym>]` answers "what does this do / who calls it" without reading the file.
 
 **`--plan` on an already-shipped plan comes back "nothing in this scope" — that's the wrong scope,
 not no scope.** A shipped plan has nothing left in the working tree to diff. If its header cites

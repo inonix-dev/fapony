@@ -184,6 +184,16 @@ export async function cmdHookEditHint(): Promise<void> {
             file: rel && !rel.startsWith("..") ? rel : null,
             count: 1,
           });
+          if (ctx && ctx.openBugIds.length > 0) {
+            recordHintFire({
+              ts: new Date().toISOString(),
+              worktree,
+              surface: "open-bug",
+              file: rel && !rel.startsWith("..") ? rel : null,
+              count: ctx.openBugIds.length,
+              ids: ctx.openBugIds,
+            });
+          }
         }
       } catch {
         // best-effort — swallow

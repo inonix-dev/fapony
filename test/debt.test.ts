@@ -10,6 +10,7 @@ import assert from "node:assert";
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  cmdDebt,
   debtForFile,
   debtScan,
   findPromotions,
@@ -20,7 +21,7 @@ import {
   resolveDebtScope,
   worktreeOf,
 } from "../src/debt/index.js";
-import { withTempRepo, withTmpDb } from "./helpers.js";
+import { captureLogs, withTempRepo, withTmpDb } from "./helpers.js";
 
 function seed(
   repo: string,
@@ -92,6 +93,125 @@ test("testDebtDerivesListAndDropsWithTheFile", () => {
     assert.equal(after.entries[0].files.length, 0);
   });
   console.log("  ✓ debt → derives from the repo, drops when a file migrates");
+});
+
+test("testDebtIdCommaList", () => {
+  // `--id a,b` compared as ONE literal id → silent 0 rows, the same
+  // typo-vs-empty shape as a wrong subcommand (PLAN-comma-x).
+  withTempRepo((repo) => {
+    seed(
+      repo,
+      [
+        {
+          id: "service-errors",
+          rule: "use failWith instead of throw new Error",
+          where: "src",
+          stale: "throw new Error",
+          ok: "failWith",
+        },
+        {
+          id: "money-format",
+          rule: "use formatMoney instead of toFixed",
+          where: "src",
+          stale: "toFixed",
+          ok: "formatMoney",
+        },
+      ],
+      {
+        "src/a.ts": `throw new Error("x");\ntoFixed(2);\n`,
+      },
+    );
+    const ids = (args: string[]): string[] =>
+      withTmpDb(() => {
+        const out = captureLogs(() => cmdDebt(args));
+        return JSON.parse(out).entries.map(
+          (e: { conv: { id: string } }) => e.conv.id,
+        ) as string[];
+      });
+    assert.deepEqual(ids([repo, "--id", "service-errors", "--json"]), [
+      "service-errors",
+    ]);
+    assert.deepEqual(
+      ids([repo, "--id", "service-errors,money-format", "--json"]),
+      ["service-errors", "money-format"],
+      "comma list keeps every named id",
+    );
+    assert.deepEqual(
+      ids([repo, "--id", "money-format,nonexistent", "--json"]),
+      ["money-format"],
+      "unknown names drop silently; known ones survive",
+    );
+  });
+  console.log("  ✓ debt --id accepts comma lists");
+});
+
+// PLAN-comma-x chunk 2 — repeated list flags accumulate, never last-win
+// (`--id a --id b` used to keep only b; same for --files).
+test("testDebtRepeatedFlagsAccumulate", () => {
+  withTempRepo((repo) => {
+    seed(
+      repo,
+      [
+        {
+          id: "service-errors",
+          rule: "use failWith instead of throw new Error",
+          where: "src",
+          stale: "throw new Error",
+          ok: "failWith",
+        },
+        {
+          id: "money-format",
+          rule: "use formatMoney instead of toFixed",
+          where: "src",
+          stale: "toFixed",
+          ok: "formatMoney",
+        },
+      ],
+      {
+        "src/a.ts": `throw new Error("x");\n`,
+        "src/b.ts": `toFixed(2);\n`,
+      },
+    );
+    const json = <T>(args: string[]): T =>
+      withTmpDb(() => JSON.parse(captureLogs(() => cmdDebt(args)))) as T;
+
+    // repeated --id: both named conventions survive
+    const ids = json<{ entries: { conv: { id: string } }[] }>([
+      repo,
+      "--id",
+      "service-errors",
+      "--id",
+      "money-format",
+      "--json",
+    ]).entries.map((e) => e.conv.id);
+    assert.deepEqual(ids, ["service-errors", "money-format"]);
+
+    // comma form + repeat compose
+    const mixed = json<{ entries: { conv: { id: string } }[] }>([
+      repo,
+      "--id",
+      "service-errors",
+      "--id",
+      "money-format,nonexistent",
+      "--json",
+    ]).entries.map((e) => e.conv.id);
+    assert.deepEqual(mixed, ["service-errors", "money-format"]);
+
+    // repeated --files: both files in the files-mode report
+    const filesOut = json<{ files: { file: string }[] }>([
+      repo,
+      "--files",
+      "src/a.ts",
+      "--files",
+      "src/b.ts",
+      "--json",
+    ]);
+    assert.deepEqual(
+      filesOut.files.map((f) => f.file),
+      ["src/a.ts", "src/b.ts"],
+    );
+  });
+  console.log("  ✓ debt repeated --id/--files accumulate, never last-win");
 });
 
 test("testDebtCheckerRowsStaySilent", () => {

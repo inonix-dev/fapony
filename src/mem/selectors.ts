@@ -25,6 +25,19 @@ export const openRows = (all: LogRow[]): WorkRow[] => {
   );
 };
 
+// Distinct keys on open work rows, sorted — the important-index ingredient
+// (PLAN-mem-keys chunk 3). A key is open while ≥1 keyed row survives the
+// tombstone set; computed live like every other selector, never persisted.
+export const openKeys = (all: LogRow[]): { key: string; open: number }[] => {
+  const counts = new Map<string, number>();
+  for (const r of openRows(all)) {
+    if (r.key) counts.set(r.key, (counts.get(r.key) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([key, open]) => ({ key, open }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+};
+
 // C) claimsOf: returns Map ref → latest claim row still active
 // active = the latest claim|release row is a claim and ref is not in dead (close)
 export const claimsOf = (all: LogRow[]): Map<string, ClaimRow> => {

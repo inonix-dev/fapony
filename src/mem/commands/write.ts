@@ -19,30 +19,87 @@ export const cmdAdd = async (a: string[]) => {
   // PLAN-convention-debt chunk 3: files[] is required — a measured optional field
   // had fill rate 0 (required+enum = 50/50) and recall on old logs without files[] caught only
   // 48.1% — fix the write side, not the read side: a row that does not name the file = unfindable when you touch that file
-  const filesFlagIdx = a.indexOf("--files");
-  const filesVal = filesFlagIdx >= 0 ? a[filesFlagIdx + 1] : undefined;
-  if (!filesVal || filesVal.startsWith("--")) {
+
+  // Positional reparse (PLAN-comma-x chunk 2): walk argv once, consume every
+  // known flag occurrence, keep the rest as positional = text + optional
+  // trailing spec.md. The old filter removed only the first --files value by
+  // identity, so `--files a --files b` left the stray `b` in the row text
+  // (live corruption, row muds6zg5) — and a text word equal to the files
+  // value was eaten instead. Flag strip stays positional, never by value:
+  // a key like "fix" may legitimately sit inside the text.
+  const positional: string[] = [];
+  const rawFiles: string[] = [];
+  let filesValueMissing = false;
+  let useStdin = false;
+  let sawKey = false;
+  let keyVal: string | undefined;
+  const rest = a.slice(1);
+  for (let i = 0; i < rest.length; i++) {
+    const t = rest[i];
+    if (t === "--stdin") {
+      useStdin = true;
+      continue;
+    }
+    if (t === "--files") {
+      const v = rest[i + 1];
+      if (v !== undefined && !v.startsWith("--")) {
+        rawFiles.push(v);
+        i++;
+      } else {
+        filesValueMissing = true; // dies in validation below
+      }
+      continue;
+    }
+    if (t === "--key" || t.startsWith("--key=")) {
+      const eq = t.startsWith("--key=");
+      const v = eq ? t.slice("--key=".length) : rest[i + 1];
+      if (!sawKey) {
+        sawKey = true;
+        keyVal = v; // first occurrence wins — validated below
+      }
+      // Consume the value token on every occurrence so a stray repeat never
+      // leaks into the text (same leak class as a repeated --files).
+      if (!eq && v !== undefined && !v.startsWith("--")) i++;
+      continue;
+    }
+    positional.push(t);
+  }
+
+  // Validation order unchanged from the old parser: files → key → hold → text.
+  if (filesValueMissing || rawFiles.length === 0) {
     console.error(
       `--files is required — usage: ${memCmd} add ${a[0]} "<text>" --files path/to/file.ts[,more] [spec.md]`,
     );
     process.exit(1);
   }
-  const files = filesVal
-    .split(",")
-    .map((s) => s.trim().replace(/^\.\//, ""))
-    .filter(Boolean);
-  if (files.length === 0) {
+  const files: string[] = [];
+  for (const v of rawFiles) {
+    const parts = v
+      .split(",")
+      .map((s) => s.trim().replace(/^\.\//, ""))
+      .filter(Boolean);
+    if (parts.length === 0) {
+      console.error(
+        `--files needs at least one path — usage: ${memCmd} add ${a[0]} "<text>" --files path/to/file.ts[,more]`,
+      );
+      process.exit(1);
+    }
+    files.push(...parts);
+  }
+  // --key is optional; pattern validation lives in engineAdd (one checker,
+  // both surfaces — PLAN-mem-keys chunk 1). argv layer only extracts it.
+  // Accepts `--key value` and `--key=value` alike (same as cmdFind) — an
+  // exact-match lookup for "--key" would leave a `--key=x` token inside the
+  // text and write a keyless row with exit 0 (silent drop, never allowed).
+  if (sawKey && (!keyVal || keyVal.startsWith("--"))) {
     console.error(
-      `--files needs at least one path — usage: ${memCmd} add ${a[0]} "<text>" --files path/to/file.ts[,more]`,
+      `--key needs a value — usage: ${memCmd} add ${a[0]} "<text>" --files f1,f2 --key fix-stop-dedupe`,
     );
     process.exit(1);
   }
-  const arg = a.slice(1);
-  const useStdin = arg.includes("--stdin");
-  const filtered = arg.filter(
-    (x) => x !== "--stdin" && x !== "--files" && x !== filesVal,
-  );
-  const spec = filtered.at(-1)?.endsWith(".md") ? filtered.pop() : undefined;
+  const spec = positional.at(-1)?.endsWith(".md")
+    ? positional.pop()
+    : undefined;
   if (a[0] === "hold" && !spec) {
     console.error(
       `hold requires a spec — usage: ${memCmd} add hold "..." --files f1,f2 <spec.md>`,
@@ -58,18 +115,18 @@ export const cmdAdd = async (a: string[]) => {
     }
   } else {
     // text is required
-    if (!filtered.length || (filtered.length === 0 && !spec)) {
+    if (positional.length === 0) {
       console.error(
         `text is required — usage: ${memCmd} add <kind> "<text>" --files f1,f2 [spec.md]`,
       );
       process.exit(1);
     }
-    text = filtered.join(" ");
+    text = positional.join(" ");
   }
   // Domain rules (caps, id) live in the shared engine — this wrapper owns
   // only argv surface and the MEM_FORCE hint wording (PLAN-unify-mem-engine).
   try {
-    const { id } = engineAdd({ kind: a[0], text, spec, files });
+    const { id } = engineAdd({ kind: a[0], text, spec, files, key: keyVal });
     console.log(id);
   } catch (e) {
     if (e instanceof CapError) {

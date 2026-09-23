@@ -15,6 +15,7 @@ import {
   memAdd,
   memClose,
   memFind,
+  toolMemAdd,
   toolMemClose,
   toolMemFind,
 } from "../../src/adapters/mcp/tools/mem.js";
@@ -319,6 +320,81 @@ test("testMemCloseRejectsUnknownIdAndEmptyText", () => {
   console.log("  ✓ mem_close rejects unknown id, empty text, bad worktree");
 });
 
+// PLAN-mem-keys chunk 1 — mem_add carries key: engine validates the pattern,
+// the tool rejects a non-string key instead of silently dropping it, and the
+// row comes back from mem_find with key + v:2 while v:1 rows read unchanged.
+test("testMemAddKeyWritesV2AndRejectsBadShape", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memadd-key-"));
+  try {
+    writeLog(dir, [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "old",
+        kind: "note",
+        text: "legacy v1 row",
+        files: ["old.ts"],
+      },
+    ]);
+    const added = memAdd({
+      worktree: dir,
+      kind: "note",
+      text: "keyed row",
+      files: ["src/x.ts"],
+      key: "fix-stop-dedupe",
+    });
+    assert.equal(added.key, "fix-stop-dedupe");
+    const found = memFind({ worktree: dir, files: ["src/x.ts"] });
+    assert.equal(found.rows[0].key, "fix-stop-dedupe");
+    assert.equal(found.rows[0].v, 2);
+    // v:1 legacy row untouched by the schema bump
+    const legacy = memFind({ worktree: dir, text: "legacy v1 row" });
+    assert.equal(legacy.rows[0].key, undefined);
+    assert.equal(legacy.rows[0].v, undefined);
+
+    // pattern violation → engine rejects, tool surfaces the message
+    assert.throws(
+      () =>
+        memAdd({
+          worktree: dir,
+          kind: "note",
+          text: "x",
+          files: ["a.ts"],
+          key: "Fix-Stop",
+        }),
+      /key must match/,
+    );
+    const badShape = toolMemAdd({
+      worktree: dir,
+      kind: "note",
+      text: "x",
+      files: ["a.ts"],
+      key: 42,
+    });
+    assert.equal(badShape.isError, true, "non-string key must be rejected");
+    const badPattern = toolMemAdd({
+      worktree: dir,
+      kind: "note",
+      text: "x",
+      files: ["a.ts"],
+      key: "Fix-Stop",
+    });
+    assert.equal(badPattern.isError, true, "bad pattern must be rejected");
+    const ok = parseToolResult(
+      toolMemAdd({
+        worktree: dir,
+        kind: "note",
+        text: "schema ok",
+        files: ["b.ts"],
+        key: "mem-keys-chunk1",
+      }),
+    ) as { key?: string; id: string };
+    assert.equal(ok.key, "mem-keys-chunk1");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_add writes key+v:2, rejects bad key shape and pattern");
+});
+
 // Regression 2026-09-19 (review-pony): mem_add resolved its mem dir by walking
 // up from the worktree while mem_find guesses the app dir — in a monorepo the
 // row landed at the git root, where nothing reads it. Writer and reader must
@@ -457,4 +533,74 @@ test("testMemIdentityNeverCollapsesToUnknown", () => {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem identity falls back to a machine tag, never 'unknown'");
+});
+
+// PLAN-mem-keys chunk 2 — mem_find takes key: exact match, close rows derive
+// their key from the ref'd work row, a pure miss answers with knownKeys
+// (SPEC fail example), while v:1 rows keep matching files/text the old way.
+test("testMemFindByKeyKnownKeysAndCloseDerive", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memfind-key-"));
+  try {
+    writeLog(dir, [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "a",
+        kind: "bug",
+        id: "b1",
+        text: "dedupe stop hook",
+        key: "fix-stop-dedupe",
+        files: ["src/hook.ts"],
+      },
+      {
+        ts: "2026-01-02T00:00:00.000Z",
+        agent: "a",
+        kind: "note",
+        id: "n1",
+        text: "legacy v1 row",
+        files: ["src/hook.ts"],
+      },
+      {
+        ts: "2026-01-03T00:00:00.000Z",
+        agent: "a",
+        kind: "close",
+        ref: "b1",
+        text: "fixed in abc",
+      },
+    ]);
+
+    const hit = memFind({ worktree: dir, key: "fix-stop-dedupe" });
+    assert.equal(hit.total, 2, "keyed bug + close derived via ref");
+    assert.equal(hit.knownKeys, undefined, "hit carries no knownKeys");
+    assert.ok(
+      hit.rows.some((r) => r.kind === "close"),
+      "tombstone derives key from ref",
+    );
+    assert.ok(hit.rows.every((r) => r.text !== "legacy v1 row"));
+
+    // v:1 row still reachable via the unchanged files/text fallback
+    const fallback = memFind({ worktree: dir, files: ["src/hook.ts"] });
+    assert.ok(fallback.rows.some((r) => !r.key && r.text === "legacy v1 row"));
+
+    // pure key miss → knownKeys (invalid pattern reaches the server too)
+    const miss = memFind({ worktree: dir, key: "Fix-Stop" });
+    assert.equal(miss.total, 0);
+    assert.deepEqual(miss.knownKeys, ["fix-stop-dedupe"]);
+
+    // tool surface: non-string key rejected, string passes through both ways
+    const badShape = toolMemFind({ worktree: dir, key: 42 });
+    assert.equal(badShape.isError, true, "non-string key must be rejected");
+    const via = parseToolResult(
+      toolMemFind({ worktree: dir, key: "fix-stop-dedupe" }),
+    ) as { total: number; knownKeys?: string[] };
+    assert.equal(via.total, 2);
+    assert.equal(via.knownKeys, undefined);
+    const viaMiss = parseToolResult(
+      toolMemFind({ worktree: dir, key: "no-such-key" }),
+    ) as { total: number; knownKeys?: string[] };
+    assert.equal(viaMiss.total, 0);
+    assert.deepEqual(viaMiss.knownKeys, ["fix-stop-dedupe"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_find key exact-match, close derive, knownKeys on miss");
 });

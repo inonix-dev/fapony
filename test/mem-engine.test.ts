@@ -4,9 +4,18 @@ import { test } from "bun:test";
 // hint — wrappers add their own wording), and MEM_FORCE bypasses the caps.
 
 import assert from "node:assert";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readMemLog } from "../src/core/mem-log.js";
+import { cmdFind, cmdKickoff } from "../src/mem/commands/read.js";
 import {
   CAP_NEXT,
   CapError,
@@ -15,7 +24,12 @@ import {
   engineClose,
   engineFind,
 } from "../src/mem/engine.js";
+import { fmtRow } from "../src/mem/render.js";
+import { openKeys } from "../src/mem/selectors.js";
 import { initStore } from "../src/mem/store.js";
+import { captureLogs, withTempRepo } from "./helpers.js";
+
+const FAPONY = join(import.meta.dir, "..", "fapony.ts");
 
 test("testEngineCapThrowsBareCapError", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-engine-"));
@@ -164,4 +178,597 @@ test("testEngineFindOpenDropsClosedAndBookkeeping", () => {
   assert.equal(openBugs.total, 1);
   assert.equal(openBugs.rows[0].text, "open bug");
   console.log("  ✓ engineFind open:true drops closed + bookkeeping");
+});
+
+// PLAN-mem-keys chunk 1 — key on the write path: optional, validated against
+// KEY_RE when present, every new row stamped v:2, v:1 legacy rows unchanged.
+test("testEngineAddKeyValidationAndV2", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-engine-key-"));
+  try {
+    const memDir = join(dir, ".fapony", ".memory");
+    mkdirSync(memDir, { recursive: true });
+    // v:1 legacy row — no key, no v — must keep reading as-is
+    writeFileSync(
+      join(memDir, "log.jsonl"),
+      `${JSON.stringify({
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "old",
+        kind: "note",
+        text: "legacy v1 row",
+        files: ["a.ts"],
+      })}\n`,
+    );
+    initStore(dir);
+
+    // valid key → written with key + v:2
+    const keyed = engineAdd({
+      kind: "note",
+      text: "with key",
+      files: ["b.ts"],
+      key: "fix-stop-dedupe",
+    });
+    assert.equal(keyed.key, "fix-stop-dedupe");
+
+    // no key → still v:2, key field absent (JSON.stringify drops undefined)
+    const bare = engineAdd({ kind: "note", text: "no key", files: ["c.ts"] });
+    assert.equal(bare.key, undefined);
+
+    // pattern violations reject loudly with a usable example — never silent.
+    // ("fix" in SPEC's fail example is a slip — it is 3 chars and valid;
+    //  the intent is < 3, so "fx" is what {3,40} actually rejects.)
+    for (const bad of ["Fix-Stop", "fx", "has_underscore", "a".repeat(41)]) {
+      assert.throws(
+        () => engineAdd({ kind: "note", text: "x", files: ["d.ts"], key: bad }),
+        (e: unknown) => {
+          const m = (e as Error).message;
+          assert.match(m, /key must match \[a-z0-9-\]\{3,40\}/);
+          assert.ok(
+            m.includes("fix-stop-dedupe"),
+            "reject message carries a working example",
+          );
+          return true;
+        },
+        `key "${bad}" must be rejected`,
+      );
+    }
+
+    // read back: keyed row has key+v:2, keyless new row has v:2, v:1 intact
+    const rows = readMemLog(dir).rows;
+    const legacy = rows.find((r) => r.text === "legacy v1 row");
+    assert.ok(legacy, "v:1 row still readable");
+    assert.equal(legacy.key, undefined);
+    assert.equal(legacy.v, undefined);
+    assert.deepEqual(legacy.files, ["a.ts"], "v:1 fields read unchanged");
+    const readKeyed = rows.find((r) => r.text === "with key");
+    assert.equal(readKeyed?.key, "fix-stop-dedupe");
+    assert.equal(readKeyed?.v, 2);
+    const readBare = rows.find((r) => r.text === "no key");
+    assert.equal(readBare?.v, 2);
+    assert.equal(readBare?.key, undefined);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ engineAdd validates key, stamps v:2, keeps v:1 readable");
+});
+
+// The CLI argv layer must extract --key without eating a text word that
+// happens to equal the key value, and must surface the engine's rejection
+// as exit 1 (rule 9: a wrong key never writes silently).
+test("testMemAddCliKeyFlagEndToEnd", () => {
+  withTempRepo((dir) => {
+    const add = (...extra: string[]) =>
+      Bun.spawnSync(["bun", FAPONY, "mem", "add", "note", ...extra], {
+        cwd: dir,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+    // key value also appears inside the text — position-based strip keeps it
+    const ok = add(
+      "same word fix-stop-dedupe in text too",
+      "--files",
+      "a.ts",
+      "--key",
+      "fix-stop-dedupe",
+    );
+    assert.equal(ok.exitCode, 0, ok.stderr.toString());
+    const memDir = join(dir, ".fapony", ".memory");
+    const logFile = readdirSync(memDir)
+      .filter((f) => f.endsWith(".jsonl"))
+      .map((f) => join(memDir, f))
+      .map((p) => readFileSync(p, "utf8"))
+      .join("\n");
+    const row = logFile
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as { text?: string; key?: string; v?: number })
+      .find((r) => r.text?.startsWith("same word"));
+    assert.ok(row, "row written");
+    assert.equal(row.key, "fix-stop-dedupe");
+    assert.equal(row.v, 2);
+    assert.ok(
+      row.text?.includes("same word fix-stop-dedupe in text too"),
+      "text keeps every word — only the flag tokens are stripped",
+    );
+
+    // no key → still a v:2 row, no key field
+    const noKey = add("plain row", "--files", "b.ts");
+    assert.equal(noKey.exitCode, 0, noKey.stderr.toString());
+
+    // bad pattern → exit 1 with the example-bearing message, row not written
+    const before = readdirSync(join(dir, ".fapony", ".memory")).length;
+    const bad = add("bad key row", "--files", "c.ts", "--key", "Fix-Stop");
+    assert.equal(bad.exitCode, 1, "pattern violation must exit 1");
+    assert.match(bad.stderr.toString(), /key must match/);
+    assert.match(bad.stderr.toString(), /fix-stop-dedupe/);
+
+    // --key without a value → usage error before any write
+    const missing = add("missing key value", "--files", "d.ts", "--key");
+    assert.equal(missing.exitCode, 1);
+    assert.match(missing.stderr.toString(), /--key needs a value/);
+    assert.equal(
+      readdirSync(join(dir, ".fapony", ".memory")).length,
+      before,
+      "failed adds write nothing",
+    );
+
+    // --key=value form (same as find) — must key the row, never leak the
+    // token into the text as a keyless row with exit 0
+    const eq = add(
+      "equals form row",
+      "--files",
+      "e.ts",
+      "--key=fix-stop-dedupe",
+    );
+    assert.equal(eq.exitCode, 0, eq.stderr.toString());
+    const eqLog = readdirSync(memDir)
+      .filter((f) => f.endsWith(".jsonl"))
+      .map((f) => join(memDir, f))
+      .map((p) => readFileSync(p, "utf8"))
+      .join("\n");
+    const eqRow = eqLog
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as { text?: string; key?: string })
+      .find((r) => r.text === "equals form row");
+    assert.ok(eqRow, "equals-form row written");
+    assert.equal(eqRow.key, "fix-stop-dedupe");
+    assert.ok(
+      !eqRow.text?.includes("--key="),
+      "flag token stays out of the text",
+    );
+
+    // --key= with a bad pattern still rejects loudly, writes nothing
+    const eqBad = add("equals bad row", "--files", "f.ts", "--key=Fix-Stop");
+    assert.equal(eqBad.exitCode, 1, "bad --key= value must exit 1");
+    assert.match(eqBad.stderr.toString(), /key must match/);
+
+    // bare --key= with no value → usage error, not a keyless row
+    const eqEmpty = add("equals empty row", "--files", "g.ts", "--key=");
+    assert.equal(eqEmpty.exitCode, 1);
+    assert.match(eqEmpty.stderr.toString(), /--key needs a value/);
+  });
+  console.log("  ✓ CLI --key writes v:2, rejects bad/missing key with exit 1");
+});
+
+// PLAN-mem-keys chunk 2 — key on the read path: exact match first (never a
+// substring fallback), close rows derive their key from the ref'd work row
+// at read time, and a pure key miss answers with knownKeys (SPEC fail
+// example: Fix-Stop → the list) instead of a silent empty.
+test("testEngineFindKeyExactAndKnownKeys", () => {
+  const rows = [
+    {
+      ts: "2026-01-01T00:00:00.000Z",
+      kind: "bug",
+      text: "dedupe stop hook",
+      id: "b1",
+      key: "fix-stop-dedupe",
+      files: ["a.ts"],
+    },
+    {
+      ts: "2026-01-02T00:00:00.000Z",
+      kind: "note",
+      text: "same problem follow-up",
+      id: "n1",
+      key: "fix-stop-dedupe",
+      files: ["b.ts"],
+    },
+    {
+      ts: "2026-01-03T00:00:00.000Z",
+      kind: "note",
+      text: "other problem",
+      id: "n2",
+      key: "unify-mem-engine",
+    },
+    {
+      ts: "2026-01-04T00:00:00.000Z",
+      kind: "note",
+      text: "legacy v1 row",
+      id: "v1",
+      files: ["a.ts"],
+    },
+    {
+      ts: "2026-01-05T00:00:00.000Z",
+      kind: "close",
+      text: "fixed in abc",
+      ref: "b1",
+    },
+  ];
+
+  // exact key: two keyed rows + the close deriving it via ref, no keyless
+  // leak, hit carries no knownKeys
+  const byKey = engineFind(rows, { key: "fix-stop-dedupe" });
+  assert.equal(byKey.total, 3, "two keyed rows + the close deriving via ref");
+  assert.ok(byKey.rows.some((r) => r.text === "dedupe stop hook"));
+  assert.ok(byKey.rows.some((r) => r.text === "same problem follow-up"));
+  assert.ok(byKey.rows.some((r) => r.kind === "close"));
+  assert.ok(byKey.rows.every((r) => r.text !== "other problem"));
+  assert.ok(byKey.rows.every((r) => r.text !== "legacy v1 row"));
+  assert.equal(byKey.knownKeys, undefined, "hit carries no knownKeys");
+
+  // v:1 row falls out of the key query but stays findable via files/text —
+  // the fallback path never involved key, so nothing about it changed
+  const legacy = engineFind(rows, { files: ["a.ts"] });
+  assert.equal(legacy.total, 2, "v:1 still reachable via files fallback");
+  assert.ok(legacy.rows.some((r) => !r.key));
+
+  // AND with other filters
+  const anded = engineFind(rows, { key: "fix-stop-dedupe", files: ["b.ts"] });
+  assert.equal(anded.total, 1);
+  assert.equal(anded.rows[0].text, "same problem follow-up");
+
+  // close tombstone matches through the ref'd row's key (derive at read time)
+  const closes = engineFind(rows, { key: "fix-stop-dedupe", kind: ["close"] });
+  assert.equal(closes.total, 1, "close derives key from ref");
+  assert.equal(closes.rows[0].kind, "close");
+
+  // pure key miss → knownKeys (distinct, sorted), never silent
+  const miss = engineFind(rows, { key: "Fix-Stop" });
+  assert.equal(miss.total, 0);
+  assert.deepEqual(miss.knownKeys, ["fix-stop-dedupe", "unify-mem-engine"]);
+
+  // key exists but another filter empties it → NOT a key miss, no knownKeys
+  const filteredOut = engineFind(rows, {
+    key: "unify-mem-engine",
+    kind: ["bug"],
+  });
+  assert.equal(filteredOut.total, 0);
+  assert.equal(filteredOut.knownKeys, undefined);
+
+  // no key arg → result shape unchanged (no knownKeys field)
+  const plain = engineFind(rows, {});
+  assert.equal(plain.total, 5);
+  assert.equal(plain.knownKeys, undefined);
+  console.log(
+    "  ✓ engineFind key exact-match, close derive, knownKeys on miss",
+  );
+});
+
+// The find surface must answer a wrong key with the list of real keys —
+// rule 9: a silent empty would read as "this problem never happened".
+test("testMemFindCliKeyFlagEndToEnd", () => {
+  withTempRepo((dir) => {
+    const run = (...args: string[]) =>
+      Bun.spawnSync(["bun", FAPONY, "mem", ...args], {
+        cwd: dir,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+    const add = run(
+      "add",
+      "note",
+      "stop hook dedupes now",
+      "--files",
+      "src/hook.ts",
+      "--key",
+      "fix-stop-dedupe",
+    );
+    assert.equal(add.exitCode, 0, add.stderr.toString());
+    const plain = run("add", "note", "legacy row text", "--files", "src/a.ts");
+    assert.equal(plain.exitCode, 0, plain.stderr.toString());
+
+    // hit: only the keyed row, and no miss hint pollutes the output
+    const hit = run("find", "--key", "fix-stop-dedupe");
+    assert.equal(hit.exitCode, 0, hit.stderr.toString());
+    const hitOut = hit.stdout.toString();
+    assert.ok(hitOut.includes("stop hook dedupes now"), hitOut);
+    assert.ok(!hitOut.includes("legacy row text"), hitOut);
+    assert.ok(!hitOut.includes("no key"), "hit must not print the miss hint");
+
+    // pure key miss (bad pattern never stored) → known-keys list, exit 0
+    const miss = run("find", "--key", "Fix-Stop");
+    assert.equal(miss.exitCode, 0, "find never rejects a key pattern");
+    assert.match(
+      miss.stdout.toString(),
+      /no key Fix-Stop; known keys: fix-stop-dedupe/,
+    );
+
+    // --key without a value → usage error
+    const missing = run("find", "--key");
+    assert.equal(missing.exitCode, 1);
+    assert.match(missing.stderr.toString(), /--key needs a value/);
+  });
+  console.log(
+    "  ✓ CLI find --key hits, misses with known keys, rejects no value",
+  );
+});
+
+// PLAN-mem-keys chunk 3 — important-index: openKeys derives distinct keys on
+// open rows; kickoff prints one line under the header; fmtRow/find show #key
+// only when present (keyless rows stay byte-identical).
+test("testOpenKeysImportantIndex", () => {
+  const rows = [
+    {
+      ts: "2026-01-01T00:00:00.000Z",
+      kind: "bug",
+      text: "dedupe stop hook",
+      id: "b1",
+      key: "fix-stop-dedupe",
+    },
+    {
+      ts: "2026-01-02T00:00:00.000Z",
+      kind: "note",
+      text: "same problem follow-up",
+      id: "n1",
+      key: "fix-stop-dedupe",
+    },
+    {
+      ts: "2026-01-03T00:00:00.000Z",
+      kind: "note",
+      text: "other problem",
+      id: "n2",
+      key: "unify-mem-engine",
+    },
+    {
+      ts: "2026-01-04T00:00:00.000Z",
+      kind: "note",
+      text: "legacy v1 row",
+      id: "v1",
+    },
+    {
+      ts: "2026-01-05T00:00:00.000Z",
+      kind: "close",
+      text: "fixed in abc",
+      ref: "b1",
+    },
+  ];
+
+  // b1 closed → only n1 remains under fix-stop-dedupe; sorted by key
+  const keys = openKeys(rows as never);
+  assert.deepEqual(keys, [
+    { key: "fix-stop-dedupe", open: 1 },
+    { key: "unify-mem-engine", open: 1 },
+  ]);
+  // every keyed row tombstoned (or only keyless left) → empty (kickoff silent)
+  assert.deepEqual(
+    openKeys([
+      rows[3],
+      { ts: "2026-01-06T00:00:00.000Z", kind: "close", text: "d", ref: "n1" },
+      { ts: "2026-01-07T00:00:00.000Z", kind: "close", text: "d", ref: "n2" },
+      { ts: "2026-01-08T00:00:00.000Z", kind: "close", text: "d", ref: "b1" },
+    ] as never),
+    [],
+  );
+
+  // fmtRow: #key only when present
+  const keyed = fmtRow(rows[1] as never);
+  assert.match(keyed, /note #fix-stop-dedupe same problem follow-up/);
+  const keyless = fmtRow(rows[3] as never);
+  assert.ok(!keyless.includes("#"), `keyless fmtRow stays clean: ${keyless}`);
+
+  // kickoff no-args: one open-keys line under the header, silent when none
+  withTempRepo((dir) => {
+    const memDir = join(dir, ".fapony", ".memory");
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(
+      join(memDir, "log.jsonl"),
+      `${[rows[1], rows[2], rows[3]].map((r) => JSON.stringify(r)).join("\n")}\n`,
+    );
+    initStore(dir);
+    const prev = process.cwd();
+    process.chdir(dir);
+    try {
+      const out = captureLogs(() => cmdKickoff([]));
+      assert.match(
+        out,
+        /^# .+ — 3 entries\nopen keys: fix-stop-dedupe\(1\), unify-mem-engine\(1\) — fapony mem find --key <key>/m,
+      );
+      // find prints #key on keyed rows
+      const findOut = captureLogs(() => cmdFind(["--key", "fix-stop-dedupe"]));
+      assert.match(findOut, /note #fix-stop-dedupe same problem follow-up/);
+    } finally {
+      process.chdir(prev);
+    }
+  });
+  console.log(
+    "  ✓ openKeys index, kickoff open-keys line, #key on fmtRow/find",
+  );
+});
+
+// PLAN-comma-x chunk 2 — repeated --files must accumulate into files[] and
+// never leak the extra value into the row text (live corruption, row
+// muds6zg5: `--files a --files b` wrote text "x b"). The positional reparse
+// replaces the old first-value-only filter for every edge it touched —
+// a text word equal to the files value, a trailing .md spec, hold, --stdin.
+test("testMemAddRepeatedFilesAccumulate", () => {
+  withTempRepo((dir) => {
+    const run = (...extra: string[]) =>
+      Bun.spawnSync(["bun", FAPONY, "mem", "add", ...extra], {
+        cwd: dir,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    const rows = (): {
+      kind: string;
+      text: string;
+      spec?: string;
+      files?: string[];
+    }[] => {
+      const memDir = join(dir, ".fapony", ".memory");
+      return readdirSync(memDir)
+        .filter((f) => f.endsWith(".jsonl"))
+        .map((f) => join(memDir, f))
+        .flatMap((p) =>
+          readFileSync(p, "utf8")
+            .split("\n")
+            .filter(Boolean)
+            .map((l) => JSON.parse(l)),
+        );
+    };
+    const last = () => {
+      const r = rows().at(-1);
+      assert.ok(r, "row written");
+      return r;
+    };
+
+    // done-criterion 4: text stays "x", files[] = [a.ts, b.ts]
+    const rep = run("note", "x", "--files", "a.ts", "--files", "b.ts");
+    assert.equal(rep.exitCode, 0, rep.stderr.toString());
+    let row = last();
+    assert.equal(row.text, "x");
+    assert.deepEqual(row.files, ["a.ts", "b.ts"]);
+
+    // comma form + repeat compose into one files[]
+    const mix = run("note", "mixed", "--files", "a.ts,b.ts", "--files", "c.ts");
+    assert.equal(mix.exitCode, 0, mix.stderr.toString());
+    row = last();
+    assert.equal(row.text, "mixed");
+    assert.deepEqual(row.files, ["a.ts", "b.ts", "c.ts"]);
+
+    // a text word equal to the files value is NOT eaten (old value-filter)
+    const same = run("note", "a.ts", "--files", "a.ts", "--files", "b.ts");
+    assert.equal(same.exitCode, 0, same.stderr.toString());
+    row = last();
+    assert.equal(row.text, "a.ts");
+    assert.deepEqual(row.files, ["a.ts", "b.ts"]);
+
+    // trailing .md spec survives a repeated --files (old filter left the 2nd
+    // value after the .md, so the spec was lost and the text corrupted)
+    const spec = run(
+      "note",
+      "look at this",
+      "plan.md",
+      "--files",
+      "a.ts",
+      "--files",
+      "b.ts",
+    );
+    assert.equal(spec.exitCode, 0, spec.stderr.toString());
+    row = last();
+    assert.equal(row.text, "look at this");
+    assert.equal(row.spec, "plan.md");
+    assert.deepEqual(row.files, ["a.ts", "b.ts"]);
+
+    // hold: spec required, text clean under repeated --files
+    const hold = run(
+      "hold",
+      "moving on",
+      "--files",
+      "a.ts",
+      "--files",
+      "b.ts",
+      "PLAN-x.md",
+    );
+    assert.equal(hold.exitCode, 0, hold.stderr.toString());
+    row = last();
+    assert.equal(row.kind, "hold");
+    assert.equal(row.text, "moving on");
+    assert.equal(row.spec, "PLAN-x.md");
+    assert.deepEqual(row.files, ["a.ts", "b.ts"]);
+
+    // --stdin: text from stdin, repeated --files still accumulate
+    const stdinRun = Bun.spawnSync(
+      [
+        "bun",
+        FAPONY,
+        "mem",
+        "add",
+        "note",
+        "--stdin",
+        "--files",
+        "a.ts",
+        "--files",
+        "b.ts",
+      ],
+      {
+        cwd: dir,
+        stdin: Buffer.from("from stdin"),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    assert.equal(stdinRun.exitCode, 0, stdinRun.stderr.toString());
+    row = last();
+    assert.equal(row.text, "from stdin");
+    assert.deepEqual(row.files, ["a.ts", "b.ts"]);
+
+    // a repeated --files missing its value dies before any write
+    const before = rows().length;
+    const bad = run("note", "no files val", "--files", "a.ts", "--files");
+    assert.equal(bad.exitCode, 1);
+    assert.match(bad.stderr.toString(), /--files is required/);
+    assert.equal(rows().length, before, "failed add writes nothing");
+  });
+  console.log(
+    "  ✓ CLI repeated --files accumulates; text/spec/stdin/hold edges stay clean",
+  );
+});
+
+// PLAN-comma-x chunk 2 — repeated list flags on find accumulate instead of
+// last-winning (`--kind bug --kind decision` used to keep only decision).
+test("testMemFindRepeatedFlagsAccumulate", () => {
+  withTempRepo((dir) => {
+    const memDir = join(dir, ".fapony", ".memory");
+    mkdirSync(memDir, { recursive: true });
+    const row = (o: Record<string, unknown>) =>
+      JSON.stringify({ ts: "2026-01-01T00:00:00.000Z", agent: "t", ...o });
+    writeFileSync(
+      join(memDir, "log.jsonl"),
+      `${[
+        row({ id: "b1", kind: "bug", text: "alpha bug", files: ["src/x.ts"] }),
+        row({
+          id: "d1",
+          kind: "decision",
+          text: "beta decision",
+          files: ["src/y.ts"],
+        }),
+        row({ id: "n1", kind: "note", text: "gamma note" }),
+      ].join("\n")}\n`,
+    );
+    initStore(dir);
+    const prev = process.cwd();
+    process.chdir(dir);
+    try {
+      // repeated --kind: BOTH named kinds show, unnamed kind stays hidden
+      const kinds = captureLogs(() =>
+        cmdFind(["--kind", "bug", "--kind", "decision"]),
+      );
+      assert.ok(kinds.includes("alpha bug"), `kind repeat 1:\n${kinds}`);
+      assert.ok(kinds.includes("beta decision"), `kind repeat 2:\n${kinds}`);
+      assert.ok(!kinds.includes("gamma note"), `no last-wins:\n${kinds}`);
+
+      // comma + repeat compose for --kind
+      const kindMix = captureLogs(() =>
+        cmdFind(["--kind", "bug,decision", "--kind", "note"]),
+      );
+      assert.ok(kindMix.includes("alpha bug"), kindMix);
+      assert.ok(kindMix.includes("beta decision"), kindMix);
+      assert.ok(kindMix.includes("gamma note"), kindMix);
+
+      // repeated --files: BOTH files' rows come back (was: only the last)
+      const filesOut = captureLogs(() =>
+        cmdFind(["--files", "src/x.ts", "--files", "src/y.ts"]),
+      );
+      assert.ok(filesOut.includes("alpha bug"), `files repeat 1:\n${filesOut}`);
+      assert.ok(
+        filesOut.includes("beta decision"),
+        `files repeat 2:\n${filesOut}`,
+      );
+      assert.ok(!filesOut.includes("gamma note"), filesOut);
+    } finally {
+      process.chdir(prev);
+    }
+  });
+  console.log("  ✓ find repeated --kind/--files accumulate, never last-win");
 });

@@ -34,6 +34,8 @@ type WorkRow = {
   text: string;
   spec?: string;
   files?: string[];
+  key?: string;
+  v?: number;
 };
 
 type CloseRow = {
