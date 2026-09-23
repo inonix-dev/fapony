@@ -623,3 +623,92 @@ test("testReviewSeedBodyAndCallers", () => {
     "  ✓ review-seed --body slices declarations, --callers scans importers",
   );
 });
+
+// --- Chunk 5: review-seed --plan fallback (no frontmatter → git log grep) ---
+
+test("testReviewSeedPlanFallbackGitLogGrep", () => {
+  withFixture((dir) => {
+    // Write a plan with no frontmatter, commit it with the plan filename in the message
+    const planDir = join(dir, ".fapony", "plan");
+    mkdirSync(planDir, { recursive: true });
+    const planPath = join(planDir, "PLAN-fallback.md");
+    writeFileSync(planPath, "# PLAN-fallback\n\n## TL;DR\n- [ ] chunk 1\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "add PLAN-fallback.md"', {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    const rel = ".fapony/plan/PLAN-fallback.md";
+    const out = renderSeed(["--plan", rel], dir);
+    // Should find commits via git log grep, not just "no files: frontmatter"
+    assert.match(
+      out,
+      /commits via git log grep/,
+      `label must indicate fallback source:\n${out}`,
+    );
+    assert.doesNotMatch(out, /no commits found/, `must find commits:\n${out}`);
+  });
+  console.log("  ✓ review-seed --plan fallback: git log grep finds commits");
+});
+
+test("testReviewSeedPlanFallbackHeaderCommits", () => {
+  withFixture((dir) => {
+    // Write a plan with > **Commits:** line but no files[] frontmatter
+    const planDir = join(dir, ".fapony", "plan");
+    mkdirSync(planDir, { recursive: true });
+    const planPath = join(planDir, "PLAN-header.md");
+    writeFileSync(
+      planPath,
+      "# PLAN-header\n\n> **Commits:** abc1234 def5678\n\n## TL;DR\n- [ ] chunk 1\n",
+    );
+    // abc1234/def5678 won't resolve as real commits, so it falls through to git log
+    // But let's test with a real commit
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "add PLAN-header.md"', {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    const sha = execSync("git rev-parse --short=7 HEAD", {
+      cwd: dir,
+      encoding: "utf-8",
+    }).trim();
+    // Rewrite with real sha in header
+    writeFileSync(
+      planPath,
+      `# PLAN-header\n\n> **Commits:** ${sha}\n\n## TL;DR\n- [ ] chunk 1\n`,
+    );
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync('git commit -m "update PLAN-header with real sha"', {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    const rel = ".fapony/plan/PLAN-header.md";
+    const out = renderSeed(["--plan", rel], dir);
+    assert.match(
+      out,
+      /commits via header/,
+      `label must indicate header source:\n${out}`,
+    );
+  });
+  console.log("  ✓ review-seed --plan fallback: header > **Commits:** line");
+});
+
+test("testReviewSeedPlanFallbackNoCommits", () => {
+  withFixture((dir) => {
+    // Plan with no frontmatter and no matching commits → falls back to default diff
+    const planDir = join(dir, ".fapony", "plan");
+    mkdirSync(planDir, { recursive: true });
+    const planPath = join(planDir, "PLAN-nomatch.md");
+    writeFileSync(planPath, "# PLAN-nomatch\n\n## TL;DR\n- [ ] chunk 1\n");
+    // Don't commit it — git log grep won't find it
+    const rel = ".fapony/plan/PLAN-nomatch.md";
+    const out = renderSeed(["--plan", rel], dir);
+    assert.match(out, /no commits found/, `must say no commits found:\n${out}`);
+    assert.match(
+      out,
+      /diff HEAD \+ untracked/,
+      `falls back to default diff:\n${out}`,
+    );
+  });
+  console.log("  ✓ review-seed --plan fallback: no commits → default diff");
+});

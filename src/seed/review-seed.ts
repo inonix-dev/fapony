@@ -21,7 +21,7 @@
 
 import type { Stats } from "node:fs";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import {
   buildGraph,
   collectSourceFiles,
@@ -376,6 +376,54 @@ function resolvePlanPath(arg: string, cwd: string, worktree: string): string {
   throw new SeedError(`review-seed: plan file not found: ${arg}`);
 }
 
+// Fallback commit resolution for --plan without files[] frontmatter.
+// Tries two sources in order:
+//   1. `> **Commits:** sha1 sha2 …` line in the plan header
+//   2. `git log --grep <PLAN-filename> --format=%h`
+// Returns the first source that yields commits, with metadata for the label.
+function isCommitObject(sha: string, cwd: string): boolean {
+  return execGit(`git cat-file -e ${sha}^{commit}`, cwd).ok;
+}
+
+function planFallbackCommits(
+  planText: string,
+  planBase: string,
+  cwd: string,
+): { sha: string; short: string; source: "header" | "git log grep" }[] {
+  // Source 1: > **Commits:** line in the plan header (first 2048 bytes)
+  const head = planText.slice(0, 2048);
+  const commitsLine = />\s*\*?\*?Commits:?\*?\*?\s+(.+)/i.exec(head);
+  if (commitsLine) {
+    const shas = commitsLine[1]
+      .match(/\b[0-9a-f]{7,12}\b/g)
+      ?.filter((s) => isCommitObject(s, cwd))
+      .map((s) => ({
+        sha: s,
+        short: s,
+        source: "header" as const,
+      }));
+    if (shas && shas.length > 0) return shas;
+  }
+  // Source 2: git log --grep for the plan filename
+  const logResult = execGit(
+    `git log --grep=${planBase} --format=%h --max-count=10`,
+    cwd,
+  );
+  if (logResult.ok && logResult.output.trim()) {
+    const shas = logResult.output
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((s) => ({
+        sha: s,
+        short: s,
+        source: "git log grep" as const,
+      }));
+    if (shas.length > 0) return shas;
+  }
+  return [];
+}
+
 function resolveScope(
   scope: Scope,
   cwd: string,
@@ -394,15 +442,33 @@ function resolveScope(
   }
   if (scope.kind === "plan") {
     const planPath = resolvePlanPath(scope.path, cwd, worktree);
-    const planFiles = planFrontFiles(readFileSync(planPath, "utf-8"));
+    const planText = readFileSync(planPath, "utf-8");
+    const planFiles = planFrontFiles(planText);
     if (planFiles === null) {
-      // No files[] to scope from — fall back to the default diff, say so.
+      // No files[] — try fallback commit sources before default diff.
+      const planBase = basename(planPath);
+      const fallbackCommits = planFallbackCommits(planText, planBase, cwd);
+      if (fallbackCommits.length > 0) {
+        // Use the fallback commits as the scope: get the files touched by those commits.
+        const shaList = fallbackCommits.map((c) => c.sha).join(" ");
+        const entries = parseNumstat(
+          execGit(`git diff-tree --no-commit-id --numstat -r ${shaList}`, cwd)
+            .output,
+        );
+        const source = fallbackCommits[0].source;
+        return {
+          label: `--plan ${scope.path} (commits via ${source}: ${fallbackCommits.map((c) => c.short).join(", ")})`,
+          entries,
+        };
+      }
+      // No commits found either — fall back to the default diff, say so.
       const entries = [
         ...parseNumstat(execGit("git diff HEAD --numstat -M", cwd).output),
         ...untrackedFiles(execGit("git status --porcelain -uall", cwd).output),
       ];
       return {
-        label: "--plan (no files: frontmatter) — diff HEAD + untracked",
+        label:
+          "--plan (no files: frontmatter, no commits found) — diff HEAD + untracked",
         entries,
       };
     }
