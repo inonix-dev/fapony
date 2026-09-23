@@ -1,7 +1,7 @@
 // src/install/detect.ts — detect which MCP clients are installed on this machine.
 //
 // Signal per client:
-//   antigravity = ~/.gemini exists (the app creates it on first run)
+//   antigravity = ~/.gemini exists (the app creates it on first run) OR `agy` on PATH
 //   claude      = `command -v claude` (CLI on PATH)
 //   cursor      = ~/.cursor exists (the app creates it on first run)
 //   opencode    = ~/.config/opencode/{opencode.json,opencode.jsonc} exists
@@ -28,14 +28,15 @@ export interface DetectedClient {
  * Returns one entry per platform, ordered: antigravity, claude, cursor, opencode, zcode, codex.
  *
  * Uses resolvers from each provider (file/dir-exists check) for
- * antigravity/cursor/opencode/zcode/codex, and `command -v claude` for claude — all
- * through injected deps for testability.
+ * antigravity/cursor/opencode/zcode/codex, and `command -v claude`/`command -v agy`
+ * for claude/antigravity — all through injected deps for testability.
  */
 export function detectClients(deps: InstallDeps = {}): DetectedClient[] {
   const getHome = deps.homedir ?? homedir;
   const checkCmd = deps.checkCmd ?? defaultCheckCmd;
 
   const claude = checkCmd("claude");
+  const agy = checkCmd("agy");
 
   const geminiDir = findGeminiDir(getHome);
   const cursorDir = findCursorDir(getHome);
@@ -46,10 +47,12 @@ export function detectClients(deps: InstallDeps = {}): DetectedClient[] {
   return [
     {
       platform: "antigravity",
-      installed: geminiDir !== null,
+      installed: geminiDir !== null || agy,
       why: geminiDir
         ? `dir at ${geminiDir}`
-        : "no ~/.gemini directory (open Antigravity once)",
+        : agy
+          ? "agy CLI on PATH"
+          : "no ~/.gemini directory (open Antigravity once)",
     },
     {
       platform: "claude",

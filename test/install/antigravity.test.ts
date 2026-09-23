@@ -19,7 +19,11 @@ test("testInstallAntigravityNoDirFails", () => {
     const err = silentErrors(() =>
       captureErrors(() => {
         try {
-          cmdInstallAntigravity(false, { exit: testExit, homedir: () => home });
+          cmdInstallAntigravity(false, {
+            exit: testExit,
+            homedir: () => home,
+            checkCmd: () => false,
+          });
         } catch (e) {
           code = (e as TestExit).code;
         }
@@ -169,13 +173,78 @@ test("testCmdInstallDispatchesAntigravity", () => {
   withTempHome((home) => {
     mkdirSync(join(home, ".gemini", "config"), { recursive: true });
     silentErrors(() =>
-      cmdInstall(["antigravity"], { exit: testExit, homedir: () => home }),
+      cmdInstall(["antigravity"], {
+        exit: testExit,
+        homedir: () => home,
+        checkCmd: () => false,
+      }),
     );
     const mcp = JSON.parse(
       readFileSync(join(home, ".gemini", "config", "mcp_config.json"), "utf-8"),
     ) as { mcpServers?: Record<string, unknown> };
     assert.ok(mcp.mcpServers?.fapony, "mcp.fapony should be written");
     console.log("  ✓ install dispatch routes --platform antigravity");
+  });
+});
+
+test("testCmdInstallDispatchesAgyAlias", () => {
+  withTempHome((home) => {
+    mkdirSync(join(home, ".gemini", "config"), { recursive: true });
+    silentErrors(() =>
+      cmdInstall(["agy"], {
+        exit: testExit,
+        homedir: () => home,
+        checkCmd: () => false,
+      }),
+    );
+    const mcp = JSON.parse(
+      readFileSync(join(home, ".gemini", "config", "mcp_config.json"), "utf-8"),
+    ) as { mcpServers?: Record<string, unknown> };
+    assert.ok(mcp.mcpServers?.fapony, "mcp.fapony should be written");
+    console.log("  ✓ install dispatch routes --platform agy alias");
+  });
+});
+
+test("testInstallAntigravityCreatesMissingConfigDir", () => {
+  withTempHome((home) => {
+    // ~/.gemini exists but ~/.gemini/config does not — the app's first run
+    // may stop short of creating the config dir (plan §5 escape hatch).
+    mkdirSync(join(home, ".gemini"), { recursive: true });
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallAntigravity(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const mcp = JSON.parse(
+      readFileSync(join(home, ".gemini", "config", "mcp_config.json"), "utf-8"),
+    ) as { mcpServers?: Record<string, unknown> };
+    assert.ok(mcp.mcpServers?.fapony, `got: ${err}`);
+    console.log(
+      "  ✓ install antigravity missing config/ → created recursively",
+    );
+  });
+});
+
+test("testInstallAntigravityAgyPathWithoutGeminiDir", () => {
+  withTempHome((home) => {
+    // No ~/.gemini at all, but `agy` on PATH → treated as installed,
+    // ~/.gemini/config created on write.
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallAntigravity(false, {
+          exit: testExit,
+          homedir: () => home,
+          checkCmd: (cmd) => cmd === "agy",
+        }),
+      ),
+    );
+    const mcp = JSON.parse(
+      readFileSync(join(home, ".gemini", "config", "mcp_config.json"), "utf-8"),
+    ) as { mcpServers?: Record<string, unknown> };
+    assert.ok(mcp.mcpServers?.fapony, `got: ${err}`);
+    console.log(
+      "  ✓ install antigravity agy on PATH, no ~/.gemini → creates tree",
+    );
   });
 });
 

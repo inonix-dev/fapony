@@ -5,9 +5,10 @@
 // Skills path). No hooks in the first phase — Antigravity's hook surface is
 // still evolving.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { defaultCheckCmd } from "../setup.js";
 import { agentsSkillsDir, linkSkills, reportSkills } from "./skills.js";
 import {
   CURSOR_MCP_ENTRY,
@@ -49,14 +50,20 @@ export function cmdInstallAntigravity(
 ): void {
   const exitFn = deps.exit ?? defaultExit;
   const getHome = deps.homedir ?? homedir;
-  const geminiDir = findGeminiDir(getHome);
+  const checkCmd = deps.checkCmd ?? defaultCheckCmd;
+  let geminiDir = findGeminiDir(getHome);
 
   if (!geminiDir) {
-    console.error(
-      `Antigravity not found — open Antigravity at least once to create ~/.gemini`,
-    );
-    exitFn(1);
-    return;
+    // Detect signal #2: the `agy` CLI on PATH — installed but never launched,
+    // so ~/.gemini doesn't exist yet; the write path below creates it.
+    if (!checkCmd("agy")) {
+      console.error(
+        `Antigravity not found — open Antigravity at least once to create ~/.gemini (or put the agy CLI on PATH)`,
+      );
+      exitFn(1);
+      return;
+    }
+    geminiDir = join(getHome(), ".gemini");
   }
 
   // --- 1. MCP server (mcpServers.fapony in ~/.gemini/config/mcp_config.json) ---
@@ -99,6 +106,10 @@ export function cmdInstallAntigravity(
         `── dry-run: would ${mcpIsNew ? "create" : "write"} ${mcpPath}${mcpIsNew ? "" : ` (mcpServers.${MCP_KEY})`} ──`,
       );
     } else {
+      // Escape hatch (plan §5): ~/.gemini/config may not exist yet — either
+      // the app never got as far as its config dir, or agy-on-PATH created
+      // nothing. Recursive mkdir is idempotent and non-destructive.
+      mkdirSync(configDir, { recursive: true });
       writeFileSync(mcpPath, `${JSON.stringify(after, null, 2)}\n`, "utf-8");
       console.error(`✓ added mcpServers.${MCP_KEY} to ${mcpPath}`);
       console.error(`  restart Antigravity to load the MCP server`);
