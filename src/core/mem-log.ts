@@ -24,6 +24,9 @@ export interface MemRow {
   files?: string[];
 }
 
+/** One mem-row text budget for any hint/seed surface that shows a row (was context-data's private const). */
+export const MEM_TEXT_MAX = 120;
+
 interface RawMemRow {
   ts?: string;
   agent?: string;

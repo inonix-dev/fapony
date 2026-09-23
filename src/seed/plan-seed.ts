@@ -43,8 +43,9 @@ import {
   planDir,
   specDir,
 } from "../core/config.js";
+import { MEM_TEXT_MAX } from "../core/mem-log.js";
 import { extractExports } from "../map.js";
-import { readRecentMemDecisions } from "../memory.js";
+import { readMemLog, readRecentMemDecisions } from "../memory.js";
 import { capLines, execGit, SIG_MAX } from "./primitives.js";
 
 // One chunk = one module's signatures — past ~40 lines a module is its own
@@ -507,6 +508,7 @@ function specTemplate(
   name: string,
   chunks: Chunk[],
   scopeEcho: string | null,
+  traps: string[],
 ): string {
   const index = chunks.map((c) => `- [${c.title}](#${c.slug})`).join("\n");
   // The index is one string with a newline per chunk; budgeting it as one line
@@ -534,12 +536,18 @@ function specTemplate(
   const tail = [
     "## (agent fills in — wireframes / edge cases / API shapes the plan references)",
   ];
-  const bodyLines = chunks.flatMap((c) => [
-    `## <a id="${c.slug}"></a>${c.title}`,
-    "",
-    ...c.body.split("\n"),
-    "",
-  ]);
+  const bodyLines = [
+    // Known traps sit after the index, before the first chunk body — budgeted
+    // with the bodies so the whole-SPEC cap still cuts from the tail and the
+    // count line above survives (a silent section would teach skipping it).
+    ...(traps.length > 0 ? [...traps, ""] : []),
+    ...chunks.flatMap((c) => [
+      `## <a id="${c.slug}"></a>${c.title}`,
+      "",
+      ...c.body.split("\n"),
+      "",
+    ]),
+  ];
   // Whole-file cap runs last and the agent section survives it, same way
   // review-seed reserves its disclaimer: reserve the tail, cut the middle,
   // say how much was dropped.
@@ -550,6 +558,102 @@ function specTemplate(
     "lines (narrow with --scope <path>)",
   );
   return `${[...head, ...cappedBody, ...tail].join("\n")}\n`;
+}
+
+// --- Known traps (PLAN-active-pain chunk 2): mem rows on this scope ---
+//
+// The one place a seed is allowed to be opinionated: past pain about exactly
+// these files. bug rows first, then decision (note carries no "this hurt"
+// signal), newest first within a kind. Match mirrors mem_find: files[] first;
+// the text/spec fallback runs ONLY for rows with no files[] at all — a row
+// that named files already spoke, its text may quote any path.
+//
+// Measured base rate on this repo before building (rule 2, 2026-09-23):
+// 248 rows total; scope src/seed → 5 matched (3 bug/2 decision, 0 lacked) ·
+// src/mem → 12 (4/8, 0) · src/adapters/hooks → 6 (2/4, 0) · whole repo → 61
+// (20/41, 0). The "M lacked files[]" fallback layer fired 0/4 scopes here —
+// kept because a pre-files[] repo (vela's 2,672 rows) depends on it.
+const MAX_TRAP_ROWS = 5;
+
+interface TrapHit {
+  row: {
+    ts: string;
+    kind: string;
+    text: string;
+    files?: string[];
+    spec?: string;
+  };
+  /** First in-scope file[] entry that matched — null for the text fallback. */
+  file: string | null;
+  viaText: boolean;
+}
+
+export function renderKnownTraps(
+  worktree: string,
+  cwd: string,
+  roots: string[],
+  scoped: boolean,
+): { lines: string[]; matched: number; lacked: number } {
+  const empty = { lines: [], matched: 0, lacked: 0 };
+  try {
+    const { rows, filesFound } = readMemLog(worktree);
+    if (filesFound === 0 || rows.length === 0) return empty;
+
+    const scopeFiles = new Set<string>();
+    for (const r of roots)
+      for (const f of scopeSourceFiles(r)) scopeFiles.add(relative(cwd, f));
+    if (scopeFiles.size === 0) return empty;
+    const scopeKeys = roots
+      .map((r) => relative(cwd, r))
+      .filter((k) => k !== "" && k !== ".");
+
+    const hits: TrapHit[] = [];
+    for (const row of rows) {
+      if (row.kind !== "bug" && row.kind !== "decision") continue;
+      const files = row.files ?? [];
+      const inScope = files.find((f) => scopeFiles.has(f));
+      if (inScope) {
+        hits.push({ row, file: inScope, viaText: false });
+        continue;
+      }
+      // Fallback: only a row with NO files[] — see comment above.
+      if (files.length === 0 && scoped) {
+        const hay = `${row.text}\n${row.spec ?? ""}`;
+        if (scopeKeys.some((k) => hay.includes(k))) {
+          hits.push({ row, file: null, viaText: true });
+        }
+      }
+    }
+    if (hits.length === 0) return empty;
+
+    // Stable sort: bug before decision, recency preserved inside each kind.
+    hits.sort((a, b) =>
+      a.row.kind === b.row.kind ? 0 : a.row.kind === "bug" ? -1 : 1,
+    );
+    const lacked = hits.filter((h) => h.viaText).length;
+    const lines = [
+      "## Known traps (fapony mem)",
+      "",
+      `- ${hits.length} relevant row(s) on this scope (${lacked} lacked files[]${lacked > 0 ? " — matched via text" : ""})`,
+    ];
+    for (const h of hits.slice(0, MAX_TRAP_ROWS)) {
+      const text =
+        h.row.text.length > MEM_TEXT_MAX
+          ? `${h.row.text.slice(0, MEM_TEXT_MAX - 1)}…`
+          : h.row.text;
+      lines.push(
+        `- ${h.row.ts.slice(0, 10)} ${h.row.kind} — ${text}${h.file ? ` (${h.file})` : ""}`,
+      );
+    }
+    if (hits.length > MAX_TRAP_ROWS) {
+      lines.push(
+        `- … +${hits.length - MAX_TRAP_ROWS} more at cap ${MAX_TRAP_ROWS} (bug first, then decision)`,
+      );
+    }
+    return { lines, matched: hits.length, lacked };
+  } catch {
+    return empty; // no mem log / unreadable = a seed with no traps, never an error
+  }
 }
 
 // --- CLI entry ---
@@ -643,6 +747,7 @@ export function cmdPlanSeed(args: string[]): void {
   );
 
   let specLink: string | null = null;
+  let traps = { lines: [] as string[], matched: 0, lacked: 0 };
   if (withSpec) {
     const specDirAbs = join(cwd, specDir());
     const specPath = join(specDirAbs, `SPEC-${name}.md`);
@@ -652,6 +757,7 @@ export function cmdPlanSeed(args: string[]): void {
       );
       process.exit(1);
     }
+    traps = renderKnownTraps(worktree, cwd, roots, scoped);
     const chunks = buildChunks(roots, cwd);
     mkdirSync(specDirAbs, { recursive: true });
     writeFileSync(
@@ -662,6 +768,7 @@ export function cmdPlanSeed(args: string[]): void {
         requested.length > 0
           ? roots.map((r) => relative(cwd, r) || ".").join(", ")
           : null,
+        traps.lines,
       ),
     );
     specLink = `../${specDir().split("/").pop()}/SPEC-${name}.md`;
@@ -691,6 +798,13 @@ export function cmdPlanSeed(args: string[]): void {
   }
   writeFileSync(planPath, planBody);
   console.log(`wrote ${planPath}${specLink ? ` + SPEC-${name}.md` : ""}`);
+  // Measurement surface (plan §3): a silent section is indistinguishable from
+  // "no mem log" — say what was injected so a week of seeds is countable.
+  if (traps.matched > 0) {
+    console.log(
+      `Known traps: ${traps.matched} row(s) injected (${traps.lacked} lacked files[])`,
+    );
+  }
   console.log("Existing plans:");
   for (const l of listExistingPlans(cwd, config, `PLAN-${name}.md`))
     console.log(l);

@@ -6,12 +6,11 @@
 import { realpathSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { collectSourceFiles, SCAN_EXTS } from "../../analyze.js";
+import { MEM_TEXT_MAX, readMemLog } from "../../core/mem-log.js";
 import { debtForFile, resolveDebtScope } from "../../debt/index.js";
-import { readMemLog } from "../../memory.js";
 
 const DEBT_HINT_MAX = 3;
 const MEM_HINT_MAX = 2;
-const MEM_TEXT_MAX = 120;
 
 export interface ContextLineData {
   worktree: string;
