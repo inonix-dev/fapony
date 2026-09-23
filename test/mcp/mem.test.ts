@@ -15,6 +15,7 @@ import {
   memAdd,
   memClose,
   memFind,
+  toolMemAdd,
   toolMemClose,
   toolMemFind,
 } from "../../src/adapters/mcp/tools/mem.js";
@@ -317,6 +318,81 @@ test("testMemCloseRejectsUnknownIdAndEmptyText", () => {
     rmSync(dir, { recursive: true, force: true });
   }
   console.log("  ✓ mem_close rejects unknown id, empty text, bad worktree");
+});
+
+// PLAN-mem-keys chunk 1 — mem_add carries key: engine validates the pattern,
+// the tool rejects a non-string key instead of silently dropping it, and the
+// row comes back from mem_find with key + v:2 while v:1 rows read unchanged.
+test("testMemAddKeyWritesV2AndRejectsBadShape", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memadd-key-"));
+  try {
+    writeLog(dir, [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "old",
+        kind: "note",
+        text: "legacy v1 row",
+        files: ["old.ts"],
+      },
+    ]);
+    const added = memAdd({
+      worktree: dir,
+      kind: "note",
+      text: "keyed row",
+      files: ["src/x.ts"],
+      key: "fix-stop-dedupe",
+    });
+    assert.equal(added.key, "fix-stop-dedupe");
+    const found = memFind({ worktree: dir, files: ["src/x.ts"] });
+    assert.equal(found.rows[0].key, "fix-stop-dedupe");
+    assert.equal(found.rows[0].v, 2);
+    // v:1 legacy row untouched by the schema bump
+    const legacy = memFind({ worktree: dir, text: "legacy v1 row" });
+    assert.equal(legacy.rows[0].key, undefined);
+    assert.equal(legacy.rows[0].v, undefined);
+
+    // pattern violation → engine rejects, tool surfaces the message
+    assert.throws(
+      () =>
+        memAdd({
+          worktree: dir,
+          kind: "note",
+          text: "x",
+          files: ["a.ts"],
+          key: "Fix-Stop",
+        }),
+      /key must match/,
+    );
+    const badShape = toolMemAdd({
+      worktree: dir,
+      kind: "note",
+      text: "x",
+      files: ["a.ts"],
+      key: 42,
+    });
+    assert.equal(badShape.isError, true, "non-string key must be rejected");
+    const badPattern = toolMemAdd({
+      worktree: dir,
+      kind: "note",
+      text: "x",
+      files: ["a.ts"],
+      key: "Fix-Stop",
+    });
+    assert.equal(badPattern.isError, true, "bad pattern must be rejected");
+    const ok = parseToolResult(
+      toolMemAdd({
+        worktree: dir,
+        kind: "note",
+        text: "schema ok",
+        files: ["b.ts"],
+        key: "mem-keys-chunk1",
+      }),
+    ) as { key?: string; id: string };
+    assert.equal(ok.key, "mem-keys-chunk1");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_add writes key+v:2, rejects bad key shape and pattern");
 });
 
 // Regression 2026-09-19 (review-pony): mem_add resolved its mem dir by walking

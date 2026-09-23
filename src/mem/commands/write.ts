@@ -37,11 +37,27 @@ export const cmdAdd = async (a: string[]) => {
     );
     process.exit(1);
   }
+  // --key is optional; pattern validation lives in engineAdd (one checker,
+  // both surfaces — PLAN-mem-keys chunk 1). argv layer only extracts it.
+  const keyFlagIdx = a.indexOf("--key");
+  const keyVal = keyFlagIdx >= 0 ? a[keyFlagIdx + 1] : undefined;
+  if (keyFlagIdx >= 0 && (!keyVal || keyVal.startsWith("--"))) {
+    console.error(
+      `--key needs a value — usage: ${memCmd} add ${a[0]} "<text>" --files f1,f2 --key fix-stop-dedupe`,
+    );
+    process.exit(1);
+  }
   const arg = a.slice(1);
   const useStdin = arg.includes("--stdin");
-  const filtered = arg.filter(
-    (x) => x !== "--stdin" && x !== "--files" && x !== filesVal,
-  );
+  // --key/--stdin strip by position, not by value: a key like "fix" could
+  // legitimately appear in the text, and value-matching would eat it.
+  const filtered = arg.filter((x, i) => {
+    const orig = i + 1;
+    if (keyFlagIdx >= 0 && (orig === keyFlagIdx || orig === keyFlagIdx + 1)) {
+      return false;
+    }
+    return x !== "--stdin" && x !== "--files" && x !== filesVal;
+  });
   const spec = filtered.at(-1)?.endsWith(".md") ? filtered.pop() : undefined;
   if (a[0] === "hold" && !spec) {
     console.error(
@@ -69,7 +85,7 @@ export const cmdAdd = async (a: string[]) => {
   // Domain rules (caps, id) live in the shared engine — this wrapper owns
   // only argv surface and the MEM_FORCE hint wording (PLAN-unify-mem-engine).
   try {
-    const { id } = engineAdd({ kind: a[0], text, spec, files });
+    const { id } = engineAdd({ kind: a[0], text, spec, files, key: keyVal });
     console.log(id);
   } catch (e) {
     if (e instanceof CapError) {

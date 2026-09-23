@@ -112,6 +112,7 @@ export function memAdd(args: {
   text: string;
   files: string[];
   spec?: string;
+  key?: string;
 }): MemAddResult {
   initStore(args.worktree);
   return engineAdd({
@@ -119,6 +120,7 @@ export function memAdd(args: {
     text: args.text,
     files: args.files,
     spec: args.spec,
+    key: args.key,
   });
 }
 
@@ -166,8 +168,17 @@ export function toolMemAdd(args: Record<string, unknown>): ToolResult {
       ? args.spec.trim()
       : undefined;
 
+  // Shape gate here, pattern check in engineAdd — a non-string key must not
+  // slip through as undefined (silent drop = reject-without-saying, SPEC §Validation).
+  if (args.key !== undefined && typeof args.key !== "string") {
+    return errorResult(
+      'key must be a string matching [a-z0-9-]{3,40} — e.g. "fix-stop-dedupe"',
+    );
+  }
+  const key = typeof args.key === "string" ? args.key : undefined;
+
   try {
-    const result = memAdd({ worktree, kind, text, files, spec });
+    const result = memAdd({ worktree, kind, text, files, spec, key });
     return jsonResult(result);
   } catch (e) {
     return errorResult(e instanceof Error ? e.message : String(e));

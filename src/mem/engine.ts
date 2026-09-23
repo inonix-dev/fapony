@@ -10,6 +10,7 @@
 // does it at dispatch, the MCP wrapper does it per call with its worktree.
 // (PLAN-unify-mem-engine chunk 1)
 
+import { KEY_RE } from "../core/mem-log.js";
 import { openRows } from "./selectors.js";
 import { KINDS, nextId, put, rows, type WorkKind } from "./store.js";
 
@@ -35,6 +36,8 @@ export interface EngineAddArgs {
   text: string;
   files: string[];
   spec?: string;
+  /** Problem identity — optional, but validated against KEY_RE whenever present. */
+  key?: string;
 }
 
 export interface EngineAddResult {
@@ -43,6 +46,7 @@ export interface EngineAddResult {
   text: string;
   files: string[];
   spec?: string;
+  key?: string;
   ts: string;
 }
 
@@ -59,6 +63,13 @@ export function engineAdd(a: EngineAddArgs): EngineAddResult {
   // Without a spec a hold can never be resolved by rotate — reject at write.
   if (a.kind === "hold" && !a.spec) {
     throw new Error("hold requires a spec — pass spec: <path/to/SPEC.md>");
+  }
+  // One validator for both surfaces (CLI argv reaches here too) — reject loudly
+  // with a usable example, never silently drop the key (SPEC-mem-keys §Validation).
+  if (a.key !== undefined && !KEY_RE.test(a.key)) {
+    throw new Error(
+      `key must match [a-z0-9-]{3,40} — e.g. "fix-stop-dedupe", got "${a.key}"`,
+    );
   }
 
   const all = rows();
@@ -83,14 +94,27 @@ export function engineAdd(a: EngineAddArgs): EngineAddResult {
 
   const id = nextId(all);
   const ts = new Date().toISOString();
+  // Every row written from here on is v:2 — key optional, but the version
+  // stamps the schema so a reader can tell new rows from v:1 legacy ones.
+  // JSON.stringify drops the undefined key, so keyless rows carry only v.
   put({
     id,
     kind: a.kind as WorkKind,
     text: a.text,
     spec: a.spec,
     files: a.files,
+    key: a.key,
+    v: 2,
   });
-  return { id, kind: a.kind, text: a.text, files: a.files, spec: a.spec, ts };
+  return {
+    id,
+    kind: a.kind,
+    text: a.text,
+    files: a.files,
+    spec: a.spec,
+    key: a.key,
+    ts,
+  };
 }
 
 export interface EngineCloseArgs {

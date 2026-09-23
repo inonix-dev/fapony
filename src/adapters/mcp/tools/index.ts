@@ -104,6 +104,12 @@ export const TOOLS = [
           type: "string",
           description: "Optional spec/plan .md path",
         },
+        key: {
+          type: "string",
+          pattern: "^[a-z0-9-]{3,40}$",
+          description:
+            "Problem identity (not kind, not files) — same problem, same key",
+        },
       },
       required: ["worktree", "kind", "text", "files"],
     },

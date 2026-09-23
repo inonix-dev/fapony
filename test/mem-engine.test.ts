@@ -4,9 +4,17 @@ import { test } from "bun:test";
 // hint — wrappers add their own wording), and MEM_FORCE bypasses the caps.
 
 import assert from "node:assert";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readMemLog } from "../src/core/mem-log.js";
 import {
   CAP_NEXT,
   CapError,
@@ -16,6 +24,9 @@ import {
   engineFind,
 } from "../src/mem/engine.js";
 import { initStore } from "../src/mem/store.js";
+import { withTempRepo } from "./helpers.js";
+
+const FAPONY = join(import.meta.dir, "..", "fapony.ts");
 
 test("testEngineCapThrowsBareCapError", () => {
   const dir = mkdtempSync(join(tmpdir(), "fapony-engine-"));
@@ -164,4 +175,139 @@ test("testEngineFindOpenDropsClosedAndBookkeeping", () => {
   assert.equal(openBugs.total, 1);
   assert.equal(openBugs.rows[0].text, "open bug");
   console.log("  ✓ engineFind open:true drops closed + bookkeeping");
+});
+
+// PLAN-mem-keys chunk 1 — key on the write path: optional, validated against
+// KEY_RE when present, every new row stamped v:2, v:1 legacy rows unchanged.
+test("testEngineAddKeyValidationAndV2", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-engine-key-"));
+  try {
+    const memDir = join(dir, ".fapony", ".memory");
+    mkdirSync(memDir, { recursive: true });
+    // v:1 legacy row — no key, no v — must keep reading as-is
+    writeFileSync(
+      join(memDir, "log.jsonl"),
+      `${JSON.stringify({
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "old",
+        kind: "note",
+        text: "legacy v1 row",
+        files: ["a.ts"],
+      })}\n`,
+    );
+    initStore(dir);
+
+    // valid key → written with key + v:2
+    const keyed = engineAdd({
+      kind: "note",
+      text: "with key",
+      files: ["b.ts"],
+      key: "fix-stop-dedupe",
+    });
+    assert.equal(keyed.key, "fix-stop-dedupe");
+
+    // no key → still v:2, key field absent (JSON.stringify drops undefined)
+    const bare = engineAdd({ kind: "note", text: "no key", files: ["c.ts"] });
+    assert.equal(bare.key, undefined);
+
+    // pattern violations reject loudly with a usable example — never silent.
+    // ("fix" in SPEC's fail example is a slip — it is 3 chars and valid;
+    //  the intent is < 3, so "fx" is what {3,40} actually rejects.)
+    for (const bad of ["Fix-Stop", "fx", "has_underscore", "a".repeat(41)]) {
+      assert.throws(
+        () => engineAdd({ kind: "note", text: "x", files: ["d.ts"], key: bad }),
+        (e: unknown) => {
+          const m = (e as Error).message;
+          assert.match(m, /key must match \[a-z0-9-\]\{3,40\}/);
+          assert.ok(
+            m.includes("fix-stop-dedupe"),
+            "reject message carries a working example",
+          );
+          return true;
+        },
+        `key "${bad}" must be rejected`,
+      );
+    }
+
+    // read back: keyed row has key+v:2, keyless new row has v:2, v:1 intact
+    const rows = readMemLog(dir).rows;
+    const legacy = rows.find((r) => r.text === "legacy v1 row");
+    assert.ok(legacy, "v:1 row still readable");
+    assert.equal(legacy.key, undefined);
+    assert.equal(legacy.v, undefined);
+    assert.deepEqual(legacy.files, ["a.ts"], "v:1 fields read unchanged");
+    const readKeyed = rows.find((r) => r.text === "with key");
+    assert.equal(readKeyed?.key, "fix-stop-dedupe");
+    assert.equal(readKeyed?.v, 2);
+    const readBare = rows.find((r) => r.text === "no key");
+    assert.equal(readBare?.v, 2);
+    assert.equal(readBare?.key, undefined);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ engineAdd validates key, stamps v:2, keeps v:1 readable");
+});
+
+// The CLI argv layer must extract --key without eating a text word that
+// happens to equal the key value, and must surface the engine's rejection
+// as exit 1 (rule 9: a wrong key never writes silently).
+test("testMemAddCliKeyFlagEndToEnd", () => {
+  withTempRepo((dir) => {
+    const add = (...extra: string[]) =>
+      Bun.spawnSync(["bun", FAPONY, "mem", "add", "note", ...extra], {
+        cwd: dir,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+    // key value also appears inside the text — position-based strip keeps it
+    const ok = add(
+      "same word fix-stop-dedupe in text too",
+      "--files",
+      "a.ts",
+      "--key",
+      "fix-stop-dedupe",
+    );
+    assert.equal(ok.exitCode, 0, ok.stderr.toString());
+    const memDir = join(dir, ".fapony", ".memory");
+    const logFile = readdirSync(memDir)
+      .filter((f) => f.endsWith(".jsonl"))
+      .map((f) => join(memDir, f))
+      .map((p) => readFileSync(p, "utf8"))
+      .join("\n");
+    const row = logFile
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as { text?: string; key?: string; v?: number })
+      .find((r) => r.text?.startsWith("same word"));
+    assert.ok(row, "row written");
+    assert.equal(row.key, "fix-stop-dedupe");
+    assert.equal(row.v, 2);
+    assert.ok(
+      row.text?.includes("same word fix-stop-dedupe in text too"),
+      "text keeps every word — only the flag tokens are stripped",
+    );
+
+    // no key → still a v:2 row, no key field
+    const noKey = add("plain row", "--files", "b.ts");
+    assert.equal(noKey.exitCode, 0, noKey.stderr.toString());
+
+    // bad pattern → exit 1 with the example-bearing message, row not written
+    const before = readdirSync(join(dir, ".fapony", ".memory")).length;
+    const bad = add("bad key row", "--files", "c.ts", "--key", "Fix-Stop");
+    assert.equal(bad.exitCode, 1, "pattern violation must exit 1");
+    assert.match(bad.stderr.toString(), /key must match/);
+    assert.match(bad.stderr.toString(), /fix-stop-dedupe/);
+
+    // --key without a value → usage error before any write
+    const missing = add("missing key value", "--files", "d.ts", "--key");
+    assert.equal(missing.exitCode, 1);
+    assert.match(missing.stderr.toString(), /--key needs a value/);
+    assert.equal(
+      readdirSync(join(dir, ".fapony", ".memory")).length,
+      before,
+      "failed adds write nothing",
+    );
+  });
+  console.log("  ✓ CLI --key writes v:2, rejects bad/missing key with exit 1");
 });

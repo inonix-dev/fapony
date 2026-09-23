@@ -25,7 +25,7 @@ const MEM_HELP = `usage: fapony mem [--mem-dir <path>] <sub> [args]
 subcommands:
   where                       show the resolved mem dir and which step won
   kickoff [<plan.md>] [--pick <n>]   open a session + a next-up list
-  add <kind> "<text>" --files f1,f2 [spec.md]
+  add <kind> "<text>" --files f1,f2 [--key k] [spec.md]
   close <id> "<msg>"          close a bug
   find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n]
                           substring-search every row (archives included)
@@ -49,11 +49,12 @@ open a session and print a "next up" list (priority plans, unchecked chunks, ope
   <plan.md>   plan whose first unchecked chunk is offered as a context line
   --pick <n>  run suggestion [n] non-interactively; refuses context/template items
 example: fapony mem kickoff .fapony/plan/PLAN-x.md`,
-  add: `usage: fapony mem add <next|bug|decision|note|hold> "<text>" --files f1,f2 [spec.md]
+  add: `usage: fapony mem add <next|bug|decision|note|hold> "<text>" --files f1,f2 [--key k] [spec.md]
 append one row to the mem log
   --files f1,f2   repo-relative paths this row is about (required)
+  --key k         problem identity, [a-z0-9-]{3,40} — same problem = same key (optional)
   --stdin         read <text> from stdin (avoids shell metachar)
-example: fapony mem add decision "chose X because Y" --files src/a.ts,src/b.ts`,
+example: fapony mem add decision "chose X because Y" --files src/a.ts,src/b.ts --key unify-mem-engine`,
   close: `usage: fapony mem close <id> "<what was done | commit>"
 tombstone a bug so it stops showing as open work
   --stdin         read the message from stdin

@@ -22,10 +22,21 @@ export interface MemRow {
   ref?: string;
   /** Files the row is about — written by `mem add --files` (PLAN-convention-debt chunk 3). */
   files?: string[];
+  /** Problem identity, distinct from kind (action) and files[] (place) — written by `mem add --key` (PLAN-mem-keys chunk 1). */
+  key?: string;
+  /** Row schema version: 2 = may carry `key`; absent = v:1 legacy row, read as-is. */
+  v?: number;
 }
 
 /** One mem-row text budget for any hint/seed surface that shows a row (was context-data's private const). */
 export const MEM_TEXT_MAX = 120;
+
+/**
+ * The only accepted shape of a mem row `key` — problem identity, not action
+ * (kind) and not place (files[]). Lives here in core so CLI and MCP validate
+ * through one regex (PLAN-unify-mem-engine: one engine, both surfaces).
+ */
+export const KEY_RE = /^[a-z0-9-]{3,40}$/;
 
 interface RawMemRow {
   ts?: string;
@@ -36,6 +47,8 @@ interface RawMemRow {
   id?: string;
   ref?: string;
   files?: unknown;
+  key?: unknown;
+  v?: unknown;
 }
 
 /**
@@ -322,6 +335,8 @@ export function readMemLog(
         ...(Array.isArray(parsed.files)
           ? { files: parsed.files.filter((f) => typeof f === "string") }
           : {}),
+        ...(typeof parsed.key === "string" ? { key: parsed.key } : {}),
+        ...(typeof parsed.v === "number" ? { v: parsed.v } : {}),
       });
     }
   }

@@ -7,12 +7,27 @@ import { dispatch } from "../../src/adapters/mcp/transport.js";
 test("testMcpToolsList", () => {
   const result = dispatch("tools/list", {});
   assert.ok(result && typeof result === "object");
-  const r = result as { tools: { name: string }[] };
+  const r = result as {
+    tools: {
+      name: string;
+      inputSchema: { properties: Record<string, unknown> };
+    }[];
+  };
   assert.deepEqual(
     r.tools.map((t) => t.name),
     ["mem_find", "mem_add", "mem_close"],
   );
-  console.log("  ✓ mcp tools/list returns 3 tools");
+  // PLAN-mem-keys chunk 1: mem_add's schema advertises key with the pattern —
+  // clients validate before the call, engineAdd still validates after it.
+  const memAdd = r.tools.find((t) => t.name === "mem_add");
+  const key = memAdd?.inputSchema.properties.key as
+    | { pattern?: string }
+    | undefined;
+  assert.ok(key, "mem_add schema must expose key");
+  assert.equal(key?.pattern, "^[a-z0-9-]{3,40}$");
+  console.log(
+    "  ✓ mcp tools/list returns 3 tools (mem_add carries key pattern)",
+  );
 });
 
 test("testMcpInitialize", () => {
