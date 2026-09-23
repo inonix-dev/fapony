@@ -17,6 +17,33 @@ test("testHasBugMarkerFindsAnnouncementPhrases", () => {
   console.log("  ✓ hasBugMarker finds Thai + English announcement phrases");
 });
 
+// Real misses/false fires measured on wt-vela, 551 sessions (mem key bug-marker-recall).
+test("testHasBugMarkerCatchesMeasuredMisses", () => {
+  for (const s of [
+    "Found the real bug in the reducer",
+    "พบว่าเป็นบั๊กจริงใน totals",
+    "Bug confirmed and fixed",
+    "Confirmed real bug in auth",
+    "**Bug (สาเหตุที่ totals เพี้ยน):** tax counted twice",
+    "บั๊กที่เจอระหว่างทาง: null guard",
+    "ไม่พบบั๊กใหม่ แต่เจอบั๊กที่ totalsRow",
+  ])
+    assert.ok(hasBugMarker(s) !== null, `should fire: ${s}`);
+  console.log("  ✓ hasBugMarker catches measured miss shapes");
+});
+
+test("testHasBugMarkerSkipsNegatedAndHypothetical", () => {
+  for (const s of [
+    "ไม่พบบั๊กใหม่ใน diff นี้",
+    "นี่คือจุดที่จะเจอบั๊กจริง",
+    "ไม่ใช่บั๊ก เป็น behavior ตั้งใจ",
+    "ยังไม่เจอบั๊ก",
+    "this is not a bug",
+  ])
+    assert.strictEqual(hasBugMarker(s), null, `should stay silent: ${s}`);
+  console.log("  ✓ hasBugMarker skips negated/hypothetical phrasing");
+});
+
 test("testHasBugMarkerIgnoresSymptomWords", () => {
   assert.strictEqual(
     hasBugMarker("the value dies silently on the pre-existing path"),
