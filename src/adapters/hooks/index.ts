@@ -85,6 +85,7 @@ export {
   isCursorPayload,
   isPlanPath,
   memHasHandoffForPlan,
+  mergeStopReasons,
   type NormalizedStopInput,
   normalizeStopInput,
   type RawStopPayload,

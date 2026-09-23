@@ -1,6 +1,7 @@
 // test/hook/handoff.test.ts — PLAN-active-pain chunk 1: handoff enforcement.
 import { test } from "bun:test";
 import assert from "node:assert";
+import { readFileSync } from "node:fs";
 import type { MemRow } from "../../src/core/mem-log.js";
 import {
   countTicks,
@@ -9,7 +10,11 @@ import {
   hasHandoffLiteral,
   isPlanPath,
   memHasHandoffForPlan,
+  mergeStopReasons,
+  stopBlockedBefore,
+  stopBlockPath,
 } from "../../src/hook.js";
+import { withStateDir } from "./helpers.js";
 
 const SINCE_MS = new Date("2026-09-23T10:00:00.000Z").getTime();
 const REL = ".fapony/plan/PLAN-x.md";
@@ -174,8 +179,7 @@ test("testHandoffBlockMessageNamesPlanAndCommand", () => {
   assert.ok(!/bun fapony\.ts/.test(msg), "repo-neutral: no runner prefix");
 });
 
-test("testMemHandoffMatchesBareBasename", () => {
-  assert.ok(
+test("testMemHandoffMatchesBareBasename", () => {  assert.ok(
     memHasHandoffForPlan(
       [row("note", "2026-09-23T10:30:00.000Z", { spec: "PLAN-x.md" })],
       REL,
@@ -193,4 +197,71 @@ test("testMemHandoffMatchesBareBasename", () => {
     ),
     "a row for another plan does not satisfy",
   );
+});
+
+// Regression: a handoff block once fell into the shared commit dedupe and
+// recorded kind:"commit" for a handoff block — spending the commit quota so
+// the next commit-without-mem turn sailed through. mergeStopReasons keeps
+// each kind on its own quota: this fails on the old single-variable shape.
+test("testHandoffBlockNeverConsumesCommitQuota", () => {
+  withStateDir(() => {
+    const session = "/tmp/transcripts/sess-handoff-quota.jsonl";
+    const wt = "/repo";
+    // What cmdHookStop does on a handoff block: record kind handoff first…
+    assert.equal(
+      stopBlockedBefore(session, wt, "handoff"),
+      false,
+      "first handoff block goes through",
+    );
+    // …then merge with no commit reason competing.
+    const merged = mergeStopReasons({
+      commitReason: null,
+      handoffReason: "Chunk ticked in .fapony/plan/PLAN-x.md …",
+      session,
+      worktree: wt,
+      bugSignal: null,
+    });
+    assert.equal(merged, "Chunk ticked in .fapony/plan/PLAN-x.md …");
+    const kinds = readFileSync(stopBlockPath(session), "utf-8")
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => (JSON.parse(l) as { kind?: string }).kind ?? "commit");
+    assert.deepEqual(
+      kinds,
+      ["handoff"],
+      "merging a handoff reason must not write a commit row",
+    );
+  });
+});
+
+test("testMergePrefersCommitAndDedupesPerKind", () => {
+  withStateDir(() => {
+    const session = "/tmp/transcripts/sess-merge-prio.jsonl";
+    const wt = "/repo";
+    const first = mergeStopReasons({
+      commitReason: "2 commits landed …",
+      handoffReason: "Chunk ticked …",
+      session,
+      worktree: wt,
+      bugSignal: null,
+    });
+    assert.equal(first, "2 commits landed …", "commit wins while fresh");
+    // Repeating the same commit reason is deduped — and must NOT fall
+    // through to handoff here either: the handoff path only offers its
+    // reason when the commit path allowed the turn (its own quota, recorded
+    // at creation). So a lone repeat allows.
+    const second = mergeStopReasons({
+      commitReason: "2 commits landed …",
+      handoffReason: null,
+      session,
+      worktree: wt,
+      bugSignal: null,
+    });
+    assert.strictEqual(second, null, "repeated commit reason allows");
+    const kinds = readFileSync(stopBlockPath(session), "utf-8")
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => (JSON.parse(l) as { kind?: string }).kind ?? "commit");
+    assert.deepEqual(kinds, ["commit"], "one commit row, nothing else");
+  });
 });

@@ -466,6 +466,40 @@ export function handoffBlockMessage(planRel: string): string {
   ].join("\n");
 }
 
+/**
+ * Merge the commit/bug reason with the handoff reason. Each blocking kind
+ * owns its own dedupe quota (commit / bug / handoff fire once per session):
+ * the commit/bug dedupe below must only ever see a commit/bug-derived
+ * reason, and a handoff reason only fills an otherwise-allowed turn.
+ *
+ * The shape this replaces shared one `reason` variable for both, so a
+ * handoff block fell into the commit dedupe and recorded a kind:"commit"
+ * row for a handoff block — spending the commit quota without a commit
+ * block ever firing, and letting the next quota-less turn through.
+ */
+export function mergeStopReasons(opts: {
+  commitReason: string | null;
+  handoffReason: string | null;
+  session: string | null;
+  worktree: string | null;
+  bugSignal: string | null;
+}): string | null {
+  let reason = opts.commitReason;
+  if (
+    reason &&
+    opts.worktree &&
+    stopBlockedBefore(
+      opts.session,
+      opts.worktree,
+      opts.bugSignal ? "bug" : "commit",
+    )
+  ) {
+    reason = null;
+  }
+  if (!reason) reason = opts.handoffReason;
+  return reason;
+}
+
 /** Plan files this session wrote: committed since birthtime, unstaged, or brand-new. */
 export function sessionPlanFiles(
   cwd: string,
@@ -673,20 +707,15 @@ export async function cmdHookStop(): Promise<void> {
       }
     }
 
-    if (
-      reason &&
-      worktree &&
-      stopBlockedBefore(
-        norm.transcriptPath,
-        worktree,
-        bugSignal ? "bug" : "commit",
-      )
-    ) {
-      reason = null;
-    }
     // Handoff merges last and only fills an otherwise-allowed turn — the
-    // commit/bug dedupe above never sees (or consumes) its quota.
-    if (!reason) reason = handoffReason;
+    // commit/bug dedupe never sees (or consumes) a handoff-derived reason.
+    reason = mergeStopReasons({
+      commitReason: reason,
+      handoffReason,
+      session: norm.transcriptPath,
+      worktree,
+      bugSignal,
+    });
   } catch {
     reason = null;
   }
