@@ -25,8 +25,21 @@ test("testMcpToolsList", () => {
     | undefined;
   assert.ok(key, "mem_add schema must expose key");
   assert.equal(key?.pattern, "^[a-z0-9-]{3,40}$");
+  // PLAN-mem-keys chunk 2: mem_find advertises key WITHOUT a pattern — a
+  // wrong-pattern query must reach the server and answer with knownKeys.
+  const memFind = r.tools.find((t) => t.name === "mem_find");
+  const findKey = memFind?.inputSchema.properties.key as
+    | { type?: string; pattern?: string }
+    | undefined;
+  assert.ok(findKey, "mem_find schema must expose key");
+  assert.equal(findKey?.type, "string");
+  assert.equal(
+    findKey?.pattern,
+    undefined,
+    "find must not pattern-reject a query",
+  );
   console.log(
-    "  ✓ mcp tools/list returns 3 tools (mem_add carries key pattern)",
+    "  ✓ mcp tools/list: mem_add carries key pattern, mem_find carries key",
   );
 });
 

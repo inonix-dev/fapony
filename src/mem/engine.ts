@@ -189,11 +189,20 @@ export interface EngineFindArgs {
    * qualify. Default false — recall shows closed rows too.
    */
   open?: boolean;
+  /**
+   * Exact problem-identity match — rows whose effective key differs fall out
+   * (v:1 rows included; they stay reachable via files/text). A close row
+   * matches through the key of the work row its ref points at (derived at
+   * read time, never stored). A pure miss also returns knownKeys.
+   */
+  key?: string;
 }
 
 export interface EngineFindResult<T> {
   rows: T[];
   total: number;
+  /** Present only on a pure key miss — every distinct key in `all`, sorted. */
+  knownKeys?: string[];
 }
 
 export type FindableRow = {
@@ -202,6 +211,7 @@ export type FindableRow = {
   spec?: string;
   ref?: string;
   files?: string[];
+  key?: string;
   ts: string;
 };
 
@@ -238,6 +248,34 @@ export function engineFind<T extends FindableRow>(
     out = out.filter((r) => !drop.has(r.kind));
   }
 
+  // Exact key match, before text/files — a wrong key must never fall through
+  // to substring luck. Close rows derive their key from the ref'd work row
+  // (read-time derive: match only; the row itself stays keyless). knownKeys
+  // fires only on a pure key miss — answer a wrong guess with the real list.
+  let knownKeys: string[] | undefined;
+  if (a.key) {
+    const want = a.key;
+    const idKey = new Map<string, string>();
+    for (const r of all) {
+      if ("id" in r && typeof r.id === "string" && r.key) {
+        idKey.set(r.id, r.key);
+      }
+    }
+    const eff = (r: T): string | undefined =>
+      r.key ??
+      (r.kind === "close" && typeof r.ref === "string"
+        ? idKey.get(r.ref)
+        : undefined);
+    out = out.filter((r) => eff(r) === want);
+    if (!all.some((r) => eff(r) === want)) {
+      const distinct = new Set<string>();
+      for (const r of all) {
+        if (r.key) distinct.add(r.key);
+      }
+      knownKeys = [...distinct].sort();
+    }
+  }
+
   if (a.text?.trim()) {
     const needle = a.text.toLowerCase();
     out = out.filter((r) =>
@@ -269,5 +307,9 @@ export function engineFind<T extends FindableRow>(
 
   const total = out.length;
   const limit = Math.max(0, a.limit ?? FIND_DEFAULT_LIMIT);
-  return { rows: out.slice(0, limit), total };
+  return {
+    rows: out.slice(0, limit),
+    total,
+    ...(knownKeys ? { knownKeys } : {}),
+  };
 }

@@ -311,3 +311,146 @@ test("testMemAddCliKeyFlagEndToEnd", () => {
   });
   console.log("  ✓ CLI --key writes v:2, rejects bad/missing key with exit 1");
 });
+
+// PLAN-mem-keys chunk 2 — key on the read path: exact match first (never a
+// substring fallback), close rows derive their key from the ref'd work row
+// at read time, and a pure key miss answers with knownKeys (SPEC fail
+// example: Fix-Stop → the list) instead of a silent empty.
+test("testEngineFindKeyExactAndKnownKeys", () => {
+  const rows = [
+    {
+      ts: "2026-01-01T00:00:00.000Z",
+      kind: "bug",
+      text: "dedupe stop hook",
+      id: "b1",
+      key: "fix-stop-dedupe",
+      files: ["a.ts"],
+    },
+    {
+      ts: "2026-01-02T00:00:00.000Z",
+      kind: "note",
+      text: "same problem follow-up",
+      id: "n1",
+      key: "fix-stop-dedupe",
+      files: ["b.ts"],
+    },
+    {
+      ts: "2026-01-03T00:00:00.000Z",
+      kind: "note",
+      text: "other problem",
+      id: "n2",
+      key: "unify-mem-engine",
+    },
+    {
+      ts: "2026-01-04T00:00:00.000Z",
+      kind: "note",
+      text: "legacy v1 row",
+      id: "v1",
+      files: ["a.ts"],
+    },
+    {
+      ts: "2026-01-05T00:00:00.000Z",
+      kind: "close",
+      text: "fixed in abc",
+      ref: "b1",
+    },
+  ];
+
+  // exact key: two keyed rows + the close deriving it via ref, no keyless
+  // leak, hit carries no knownKeys
+  const byKey = engineFind(rows, { key: "fix-stop-dedupe" });
+  assert.equal(byKey.total, 3, "two keyed rows + the close deriving via ref");
+  assert.ok(byKey.rows.some((r) => r.text === "dedupe stop hook"));
+  assert.ok(byKey.rows.some((r) => r.text === "same problem follow-up"));
+  assert.ok(byKey.rows.some((r) => r.kind === "close"));
+  assert.ok(byKey.rows.every((r) => r.text !== "other problem"));
+  assert.ok(byKey.rows.every((r) => r.text !== "legacy v1 row"));
+  assert.equal(byKey.knownKeys, undefined, "hit carries no knownKeys");
+
+  // v:1 row falls out of the key query but stays findable via files/text —
+  // the fallback path never involved key, so nothing about it changed
+  const legacy = engineFind(rows, { files: ["a.ts"] });
+  assert.equal(legacy.total, 2, "v:1 still reachable via files fallback");
+  assert.ok(legacy.rows.some((r) => !r.key));
+
+  // AND with other filters
+  const anded = engineFind(rows, { key: "fix-stop-dedupe", files: ["b.ts"] });
+  assert.equal(anded.total, 1);
+  assert.equal(anded.rows[0].text, "same problem follow-up");
+
+  // close tombstone matches through the ref'd row's key (derive at read time)
+  const closes = engineFind(rows, { key: "fix-stop-dedupe", kind: ["close"] });
+  assert.equal(closes.total, 1, "close derives key from ref");
+  assert.equal(closes.rows[0].kind, "close");
+
+  // pure key miss → knownKeys (distinct, sorted), never silent
+  const miss = engineFind(rows, { key: "Fix-Stop" });
+  assert.equal(miss.total, 0);
+  assert.deepEqual(miss.knownKeys, ["fix-stop-dedupe", "unify-mem-engine"]);
+
+  // key exists but another filter empties it → NOT a key miss, no knownKeys
+  const filteredOut = engineFind(rows, {
+    key: "unify-mem-engine",
+    kind: ["bug"],
+  });
+  assert.equal(filteredOut.total, 0);
+  assert.equal(filteredOut.knownKeys, undefined);
+
+  // no key arg → result shape unchanged (no knownKeys field)
+  const plain = engineFind(rows, {});
+  assert.equal(plain.total, 5);
+  assert.equal(plain.knownKeys, undefined);
+  console.log(
+    "  ✓ engineFind key exact-match, close derive, knownKeys on miss",
+  );
+});
+
+// The find surface must answer a wrong key with the list of real keys —
+// rule 9: a silent empty would read as "this problem never happened".
+test("testMemFindCliKeyFlagEndToEnd", () => {
+  withTempRepo((dir) => {
+    const run = (...args: string[]) =>
+      Bun.spawnSync(["bun", FAPONY, "mem", ...args], {
+        cwd: dir,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+    const add = run(
+      "add",
+      "note",
+      "stop hook dedupes now",
+      "--files",
+      "src/hook.ts",
+      "--key",
+      "fix-stop-dedupe",
+    );
+    assert.equal(add.exitCode, 0, add.stderr.toString());
+    const plain = run("add", "note", "legacy row text", "--files", "src/a.ts");
+    assert.equal(plain.exitCode, 0, plain.stderr.toString());
+
+    // hit: only the keyed row, and no miss hint pollutes the output
+    const hit = run("find", "--key", "fix-stop-dedupe");
+    assert.equal(hit.exitCode, 0, hit.stderr.toString());
+    const hitOut = hit.stdout.toString();
+    assert.ok(hitOut.includes("stop hook dedupes now"), hitOut);
+    assert.ok(!hitOut.includes("legacy row text"), hitOut);
+    assert.ok(!hitOut.includes("no key"), "hit must not print the miss hint");
+
+    // pure key miss (bad pattern never stored) → known-keys list, exit 0
+    const miss = run("find", "--key", "Fix-Stop");
+    assert.equal(miss.exitCode, 0, "find never rejects a key pattern");
+    assert.match(
+      miss.stdout.toString(),
+      /no key Fix-Stop; known keys: fix-stop-dedupe/,
+    );
+
+    // --key without a value → usage error
+    const missing = run("find", "--key");
+    assert.equal(missing.exitCode, 1);
+    assert.match(missing.stderr.toString(), /--key needs a value/);
+  });
+  console.log(
+    "  ✓ CLI find --key hits, misses with known keys, rejects no value",
+  );
+});

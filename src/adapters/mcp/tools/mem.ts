@@ -23,6 +23,8 @@ export interface MemFindResult {
   filesFound: number;
   skipped: number;
   memDir: string | null;
+  /** Present only when a key query missed — every distinct key in the log. */
+  knownKeys?: string[];
 }
 
 export function memFind(args: {
@@ -33,6 +35,7 @@ export function memFind(args: {
   since?: string;
   limit?: number;
   open?: boolean;
+  key?: string;
 }): MemFindResult {
   // Query logic lives in the shared engine (src/mem/engine.ts) — this wrapper
   // owns only the read (readMemLog sees live + rotated archives via its loose
@@ -40,22 +43,24 @@ export function memFind(args: {
   // omitting kind returns every kind (locked by test). CLI cmdFind calls the
   // same engine with its own bookkeeping exclude.
   const read = readMemLog(args.worktree);
-  const { rows: matched, total } = engineFind(read.rows, {
+  const found = engineFind(read.rows, {
     text: args.text,
     files: args.files,
     kind: args.kind,
     sinceIso: args.since,
+    key: args.key,
     limit: args.limit,
     open: args.open,
   });
   return {
-    rows: matched,
-    total,
+    rows: found.rows,
+    total: found.total,
     filesFound: read.filesFound,
     skipped: read.skipped,
     // memDir separates "no mem at all" from "nothing matched" (spec §3) and
     // makes the monorepo single-log limit visible (spec §5.1).
     memDir: resolveMemDir(args.worktree),
+    ...(found.knownKeys ? { knownKeys: found.knownKeys } : {}),
   };
 }
 
@@ -93,9 +98,18 @@ export function toolMemFind(args: Record<string, unknown>): ToolResult {
   }
   const limit = typeof args.limit === "number" ? args.limit : undefined;
   const open = typeof args.open === "boolean" ? args.open : undefined;
+  // Shape gate like mem_add — a non-string key must not coerce to undefined
+  // (silent drop = reject-without-saying). Pattern is NOT checked here: find
+  // answers a wrong-pattern key with knownKeys, not a reject (SPEC fail example).
+  if (args.key !== undefined && typeof args.key !== "string") {
+    return errorResult(
+      'key must be a string matching [a-z0-9-]{3,40} — e.g. "fix-stop-dedupe"',
+    );
+  }
+  const key = typeof args.key === "string" ? args.key : undefined;
 
   return jsonResult(
-    memFind({ worktree, files, text, kind, since, limit, open }),
+    memFind({ worktree, files, text, kind, since, limit, open, key }),
   );
 }
 

@@ -67,7 +67,7 @@ export const cmdStale = () => {
 };
 
 export const cmdFind = (a: string[]) => {
-  // mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]
+  // mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--key k] [--open]
   // Query logic lives in the shared engine (../engine.ts) — this wrapper owns
   // only argv parsing + the single-line print. MCP memFind calls the same
   // engine with no kind default (contract); CLI keeps its legacy default of
@@ -88,6 +88,7 @@ export const cmdFind = (a: string[]) => {
   let sinceRaw: string | undefined;
   let limit: number | undefined;
   let open = false;
+  let key: string | undefined;
   const positional: string[] = [];
 
   for (let i = 0; i < a.length; ) {
@@ -118,6 +119,18 @@ export const cmdFind = (a: string[]) => {
         .map((s) => s.trim().replace(/^\.\//, ""))
         .filter(Boolean);
       i += consumed("--files", i);
+    } else if (t === "--key" || t.startsWith("--key=")) {
+      const v = flagVal("--key", i);
+      if (!v || v.startsWith("--")) {
+        console.error(
+          `--key needs a value — usage: ${memCmd} find --key fix-stop-dedupe`,
+        );
+        process.exit(1);
+      }
+      // No KEY_RE validation on the read side — a wrong-pattern key never
+      // exists in the log, so the engine answers with knownKeys instead.
+      key = v;
+      i += consumed("--key", i);
     } else if (t === "--since" || t.startsWith("--since=")) {
       const v = flagVal("--since", i);
       if (!v || v.startsWith("--")) {
@@ -151,12 +164,13 @@ export const cmdFind = (a: string[]) => {
     !q &&
     !kind?.length &&
     !files?.length &&
+    !key &&
     !sinceRaw &&
     limit === undefined &&
     !open
   ) {
     console.error(
-      `usage: ${memCmd} find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]`,
+      `usage: ${memCmd} find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--key k] [--open]`,
     );
     process.exit(1);
   }
@@ -172,17 +186,18 @@ export const cmdFind = (a: string[]) => {
   }
 
   // allRows, not rows: find is recall — rotated history counts
-  const { rows: newest } = engineFind(allRows(), {
+  const result = engineFind(allRows(), {
     text: q || undefined,
     files,
     kind,
     excludeKind: kind?.length ? undefined : CLI_FIND_EXCLUDE,
     sinceIso,
+    key,
     limit,
     open: open || undefined,
   });
   // Legacy order: oldest first (engine returns newest first — same set, CLI print order unchanged)
-  const hits = [...newest].reverse();
+  const hits = [...result.rows].reverse();
   for (const r of hits) {
     if ("id" in r) {
       console.log(
@@ -194,7 +209,19 @@ export const cmdFind = (a: string[]) => {
       console.log(`- [${label}] ${r.ts.slice(0, 10)} ${r.kind} ${body}`);
     }
   }
-  if (!hits.length) console.log("(no matches)");
+  if (!hits.length) {
+    // A wrong key answers with the real ones (SPEC fail example) — a silent
+    // empty would read as "this problem never happened" (rule 9).
+    if (key && result.knownKeys) {
+      console.log(
+        `no key ${key}; known keys: ${
+          result.knownKeys.length ? result.knownKeys.join(", ") : "(none)"
+        }`,
+      );
+    } else {
+      console.log("(no matches)");
+    }
+  }
 };
 
 /** Read a plan file and extract checked + unchecked items from the first ## section. */

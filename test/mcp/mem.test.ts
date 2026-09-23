@@ -534,3 +534,73 @@ test("testMemIdentityNeverCollapsesToUnknown", () => {
   }
   console.log("  ✓ mem identity falls back to a machine tag, never 'unknown'");
 });
+
+// PLAN-mem-keys chunk 2 — mem_find takes key: exact match, close rows derive
+// their key from the ref'd work row, a pure miss answers with knownKeys
+// (SPEC fail example), while v:1 rows keep matching files/text the old way.
+test("testMemFindByKeyKnownKeysAndCloseDerive", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-memfind-key-"));
+  try {
+    writeLog(dir, [
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        agent: "a",
+        kind: "bug",
+        id: "b1",
+        text: "dedupe stop hook",
+        key: "fix-stop-dedupe",
+        files: ["src/hook.ts"],
+      },
+      {
+        ts: "2026-01-02T00:00:00.000Z",
+        agent: "a",
+        kind: "note",
+        id: "n1",
+        text: "legacy v1 row",
+        files: ["src/hook.ts"],
+      },
+      {
+        ts: "2026-01-03T00:00:00.000Z",
+        agent: "a",
+        kind: "close",
+        ref: "b1",
+        text: "fixed in abc",
+      },
+    ]);
+
+    const hit = memFind({ worktree: dir, key: "fix-stop-dedupe" });
+    assert.equal(hit.total, 2, "keyed bug + close derived via ref");
+    assert.equal(hit.knownKeys, undefined, "hit carries no knownKeys");
+    assert.ok(
+      hit.rows.some((r) => r.kind === "close"),
+      "tombstone derives key from ref",
+    );
+    assert.ok(hit.rows.every((r) => r.text !== "legacy v1 row"));
+
+    // v:1 row still reachable via the unchanged files/text fallback
+    const fallback = memFind({ worktree: dir, files: ["src/hook.ts"] });
+    assert.ok(fallback.rows.some((r) => !r.key && r.text === "legacy v1 row"));
+
+    // pure key miss → knownKeys (invalid pattern reaches the server too)
+    const miss = memFind({ worktree: dir, key: "Fix-Stop" });
+    assert.equal(miss.total, 0);
+    assert.deepEqual(miss.knownKeys, ["fix-stop-dedupe"]);
+
+    // tool surface: non-string key rejected, string passes through both ways
+    const badShape = toolMemFind({ worktree: dir, key: 42 });
+    assert.equal(badShape.isError, true, "non-string key must be rejected");
+    const via = parseToolResult(
+      toolMemFind({ worktree: dir, key: "fix-stop-dedupe" }),
+    ) as { total: number; knownKeys?: string[] };
+    assert.equal(via.total, 2);
+    assert.equal(via.knownKeys, undefined);
+    const viaMiss = parseToolResult(
+      toolMemFind({ worktree: dir, key: "no-such-key" }),
+    ) as { total: number; knownKeys?: string[] };
+    assert.equal(viaMiss.total, 0);
+    assert.deepEqual(viaMiss.knownKeys, ["fix-stop-dedupe"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ mem_find key exact-match, close derive, knownKeys on miss");
+});
