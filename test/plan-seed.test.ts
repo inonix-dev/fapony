@@ -528,8 +528,10 @@ test("testPlanSeedExistingPlansCap", () => {
 });
 
 test("testPlanSeedScopeCommaList", () => {
-  // Agents type `--scope a,b,c` — the comma shape --files already accepts.
-  // It fails on a path that never is unless the split happens at parse time.
+  // Agents type `--scope a,b,c` — the comma shape --files already accepts
+  // (measured 3 failures in one session → 2d28ed7) — and `--scope a, b`
+  // with the space. Splitting without trimming makes " b" a path that is
+  // not (PLAN-comma-x).
   const dir = mkdtempSync(join(tmpdir(), "fapony-plan-seed-comma-"));
   try {
     mkdirSync(join(dir, "src"), { recursive: true });
@@ -537,7 +539,7 @@ test("testPlanSeedScopeCommaList", () => {
     writeFileSync(join(dir, "src", "a.ts"), "export const a = 1;\n");
     writeFileSync(join(dir, "other", "b.ts"), "export const b = 1;\n");
     withCwd(dir, () => {
-      cmdPlanSeed(["comma", "--scope", "src,other"]);
+      cmdPlanSeed(["comma", "--scope", "src, other"]);
       const plan = readFileSync(
         join(dir, ".fapony", "plan", "PLAN-comma.md"),
         "utf-8",
@@ -550,5 +552,5 @@ test("testPlanSeedScopeCommaList", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-  console.log("  ✓ plan-seed --scope accepts comma lists");
+  console.log("  ✓ plan-seed --scope accepts comma lists (space trimmed)");
 });

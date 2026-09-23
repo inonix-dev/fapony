@@ -679,7 +679,17 @@ export function cmdPlanSeed(args: string[]): void {
       // Agents expect `--scope a,b,c` — same comma shape as `--files` — so a
       // comma list is split here instead of failing on a path that never is.
       // A real repo dir can't contain a literal ",x" tail; any comma splits.
-      scopeArgs.push(...v.split(",").filter(Boolean));
+      // Trim each segment too: `a, b` is the same habit as `a,b`, and the
+      // space must not become part of the path (PLAN-comma-x).
+      const syms = v
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (syms.length === 0) {
+        console.error(`plan-seed: --scope needs a path\n${usage}`);
+        process.exit(1);
+      }
+      scopeArgs.push(...syms);
       i++;
     } else if (a.startsWith("--")) {
       console.error(`plan-seed: unknown flag "${a}"\n${usage}`);

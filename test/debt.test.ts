@@ -10,6 +10,7 @@ import assert from "node:assert";
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  cmdDebt,
   debtForFile,
   debtScan,
   findPromotions,
@@ -20,7 +21,7 @@ import {
   resolveDebtScope,
   worktreeOf,
 } from "../src/debt/index.js";
-import { withTempRepo, withTmpDb } from "./helpers.js";
+import { captureLogs, withTempRepo, withTmpDb } from "./helpers.js";
 
 function seed(
   repo: string,
@@ -92,6 +93,56 @@ test("testDebtDerivesListAndDropsWithTheFile", () => {
     assert.equal(after.entries[0].files.length, 0);
   });
   console.log("  ✓ debt → derives from the repo, drops when a file migrates");
+});
+
+test("testDebtIdCommaList", () => {
+  // `--id a,b` compared as ONE literal id → silent 0 rows, the same
+  // typo-vs-empty shape as a wrong subcommand (PLAN-comma-x).
+  withTempRepo((repo) => {
+    seed(
+      repo,
+      [
+        {
+          id: "service-errors",
+          rule: "use failWith instead of throw new Error",
+          where: "src",
+          stale: "throw new Error",
+          ok: "failWith",
+        },
+        {
+          id: "money-format",
+          rule: "use formatMoney instead of toFixed",
+          where: "src",
+          stale: "toFixed",
+          ok: "formatMoney",
+        },
+      ],
+      {
+        "src/a.ts": `throw new Error("x");\ntoFixed(2);\n`,
+      },
+    );
+    const ids = (args: string[]): string[] =>
+      withTmpDb(() => {
+        const out = captureLogs(() => cmdDebt(args));
+        return JSON.parse(out).entries.map(
+          (e: { conv: { id: string } }) => e.conv.id,
+        ) as string[];
+      });
+    assert.deepEqual(ids([repo, "--id", "service-errors", "--json"]), [
+      "service-errors",
+    ]);
+    assert.deepEqual(
+      ids([repo, "--id", "service-errors,money-format", "--json"]),
+      ["service-errors", "money-format"],
+      "comma list keeps every named id",
+    );
+    assert.deepEqual(
+      ids([repo, "--id", "money-format,nonexistent", "--json"]),
+      ["money-format"],
+      "unknown names drop silently; known ones survive",
+    );
+  });
+  console.log("  ✓ debt --id accepts comma lists");
 });
 
 test("testDebtCheckerRowsStaySilent", () => {

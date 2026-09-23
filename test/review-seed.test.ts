@@ -553,7 +553,7 @@ test("testReviewSeedBodyAndCallers", () => {
     );
     writeFileSync(
       join(dir, "src", "user.ts"),
-      'import { outer } from "./multi.js";\n// outer mention\nconst s = "outer in a string";\nconsole.log(outer(1));\n',
+      'import { outer, helper } from "./multi.js";\n// outer mention\nconst s = "outer in a string";\nconsole.log(outer(1));\n',
     );
     execSync("git add -A", { cwd: dir, stdio: "ignore" });
 
@@ -604,6 +604,25 @@ test("testReviewSeedBodyAndCallers", () => {
       `textual caveat must be stated:\n${callers}`,
     );
 
+    // Comma list: one section per symbol, single-symbol output unchanged
+    // (PLAN-comma-x — today `a,b` errors as one invalid symbol).
+    const two = renderSeed(
+      ["--files", "src/multi.ts", "--callers", "outer,helper"],
+      dir,
+    );
+    assert.ok(
+      two.includes("callers of outer") && two.includes("callers of helper"),
+      `multi --callers keeps a section per symbol:\n${two}`,
+    );
+    assert.ok(
+      two.includes("src/user.ts:1,2,3,4"),
+      `outer hits identical in multi mode:\n${two}`,
+    );
+    assert.ok(
+      two.split("\n").some((l) => l === "  src/user.ts:1"),
+      `helper hits its own importer line:\n${two}`,
+    );
+
     const missing = renderSeed(
       ["--files", "src/multi.ts", "--body", "nope"],
       dir,
@@ -620,7 +639,7 @@ test("testReviewSeedBodyAndCallers", () => {
     );
   });
   console.log(
-    "  ✓ review-seed --body slices declarations, --callers scans importers",
+    "  ✓ review-seed --body slices declarations, --callers scans importers (comma list too)",
   );
 });
 

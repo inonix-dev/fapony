@@ -61,7 +61,7 @@ const LOOKUP_OUTPUT_CAP = 120;
 const DISCLAIMER =
   "static graph only — seed is where to enter, not what is verified";
 const USAGE =
-  "usage: fapony review-seed [--staged | --commit <sha> | --range <a...b> | --files f1,f2,dir | --plan <PLAN.md>] [--body sym[,sym]] [--callers sym]";
+  "usage: fapony review-seed [--staged | --commit <sha> | --range <a...b> | --files f1,f2,dir | --plan <PLAN.md>] [--body sym[,sym]] [--callers sym[,sym]]";
 // --body / --callers are the executor's lookup, not the reviewer's seed: when
 // either is present the output is only those sections (plus worktree line and
 // disclaimer) — the standard sections would be a wall around the one answer.
@@ -82,13 +82,13 @@ type Scope =
 interface LookupFlags {
   /** --body sym[,sym] — declaration slices from the named file(s). */
   body: string[];
-  /** --callers sym — symbol→symbol grep over importer files. */
-  callers: string | null;
+  /** --callers sym[,sym] — symbol→symbol grep over importer files. */
+  callers: string[];
 }
 
 function parseLookup(args: string[]): LookupFlags {
   const body: string[] = [];
-  let callers: string | null = null;
+  const callers: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--body" || a === "--callers") {
@@ -97,29 +97,21 @@ function parseLookup(args: string[]): LookupFlags {
         throw new SeedError(`review-seed: ${a} needs a value\n${USAGE}`);
       }
       i++;
-      if (a === "--body") {
-        for (const s of v
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)) {
-          if (!/^[A-Za-z_$][\w$]*$/.test(s)) {
-            throw new SeedError(`review-seed: invalid symbol: ${s}`);
-          }
-          body.push(s);
+      // Both flags take the same comma shape --files takes: split, trim,
+      // drop empties, validate each symbol (PLAN-comma-x).
+      const syms = v
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (syms.length === 0) {
+        throw new SeedError(`review-seed: ${a} needs a symbol\n${USAGE}`);
+      }
+      for (const s of syms) {
+        if (!/^[A-Za-z_$][\w$]*$/.test(s)) {
+          throw new SeedError(`review-seed: invalid symbol: ${s}`);
         }
-        if (body.length === 0) {
-          throw new SeedError(`review-seed: --body needs a symbol\n${USAGE}`);
-        }
-      } else {
-        if (!/^[A-Za-z_$][\w$]*$/.test(v)) {
-          throw new SeedError(`review-seed: invalid symbol: ${v}`);
-        }
-        if (callers) {
-          throw new SeedError(
-            `review-seed: --callers takes one symbol\n${USAGE}`,
-          );
-        }
-        callers = v;
+        if (a === "--body") body.push(s);
+        else callers.push(s);
       }
     }
   }
@@ -666,7 +658,7 @@ function renderLookup(
   lines.push(`worktree: ${worktree} (${lookupLabel(flags)})`);
 
   let resolved: ResolvedScope | null = null;
-  if (flags.callers) {
+  if (flags.callers.length > 0) {
     resolved = resolveScope(scope, cwd, worktree);
   }
 
@@ -720,30 +712,34 @@ function renderLookup(
     }
   }
 
-  if (flags.callers) {
+  if (flags.callers.length > 0) {
     const graph = buildGraph(worktree);
     const targets = (resolved?.entries ?? [])
       .map((e) => e.path)
       .filter(hasGraph);
-    const found = findCallers(flags.callers, targets, graph, worktree);
-    if (targets.length === 0) {
-      lines.push(`callers of ${flags.callers}: no source files in scope`);
-    } else if (found.rows.length === 0) {
-      lines.push(
-        `callers of ${flags.callers}: none found in static importers (dynamic or non-importing use is out of reach)`,
-      );
-    } else {
-      lines.push(
-        `callers of ${flags.callers} (textual hits, may be comments/strings):`,
-      );
-      for (const f of found.rows) {
-        const more = f.more > 0 ? ` (+${f.more} more hits)` : "";
-        lines.push(`  ${f.file}:${f.hits.join(",")}${more}`);
-      }
-      if (found.filesCapped) {
+    // One section per symbol — a merged any-of scan would lose which
+    // symbol hit, and a single symbol's output stays byte-identical.
+    for (const sym of flags.callers) {
+      const found = findCallers(sym, targets, graph, worktree);
+      if (targets.length === 0) {
+        lines.push(`callers of ${sym}: no source files in scope`);
+      } else if (found.rows.length === 0) {
         lines.push(
-          `  ⚠ more importer files matched — capped at ${MAX_CALLER_FILES}`,
+          `callers of ${sym}: none found in static importers (dynamic or non-importing use is out of reach)`,
         );
+      } else {
+        lines.push(
+          `callers of ${sym} (textual hits, may be comments/strings):`,
+        );
+        for (const f of found.rows) {
+          const more = f.more > 0 ? ` (+${f.more} more hits)` : "";
+          lines.push(`  ${f.file}:${f.hits.join(",")}${more}`);
+        }
+        if (found.filesCapped) {
+          lines.push(
+            `  ⚠ more importer files matched — capped at ${MAX_CALLER_FILES}`,
+          );
+        }
       }
     }
   }
@@ -755,7 +751,9 @@ function renderLookup(
 function lookupLabel(flags: LookupFlags): string {
   const parts: string[] = [];
   if (flags.body.length > 0) parts.push(`--body ${flags.body.join(",")}`);
-  if (flags.callers) parts.push(`--callers ${flags.callers}`);
+  if (flags.callers.length > 0) {
+    parts.push(`--callers ${flags.callers.join(",")}`);
+  }
   return parts.join(" ");
 }
 
@@ -778,7 +776,7 @@ export function renderSeed(args: string[], cwd: string): string {
   // feeds --callers its targets), but the standard sections are suppressed —
   // the caller asked for one answer, not the review seed around it.
   const lookup = parseLookup(args);
-  if (lookup.body.length > 0 || lookup.callers) {
+  if (lookup.body.length > 0 || lookup.callers.length > 0) {
     return renderLookup(lookup, scope, cwd, worktree);
   }
 

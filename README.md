@@ -464,7 +464,7 @@ fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD
 fapony mem kickoff [<plan.md>]             # open a session + a next-up list
 fapony mem where                           # show the resolved mem dir and which step won
 fapony mem done | stale              # views
-fapony debt [--id <convention>] [--where <path>]   # ไฟล์ไหนยังไม่ย้ายไป convention ที่ประกาศไว้ (live, read-only)
+fapony debt [--id a,b] [--where <path>]   # ไฟล์ไหนยังไม่ย้ายไป convention ที่ประกาศไว้ (live, read-only)
 fapony lint-baseline [--cmd ...] [--diff]  # separate "already red" from "I made it red"
 
 # Hooks (wired by `fapony install`, not run by hand)

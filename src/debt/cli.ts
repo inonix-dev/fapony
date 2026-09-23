@@ -13,7 +13,7 @@ import { ZONE_CAP } from "./types.js";
 
 const USAGE = `usage: fapony debt [path] [options]
   --files f1,f2     check specific files instead of scanning
-  --id <conv>       show only this convention
+  --id a,b          show only these conventions
   --where <path>    narrow scope to files under this path
   --all             show all zones (default: cap at ${ZONE_CAP})
   --json            output raw JSON
@@ -68,7 +68,7 @@ export function cmdDebt(args: string[]): void {
   let path: string | undefined;
   let filesMode: string[] | null = null;
   let json = false;
-  let filterId: string | undefined;
+  let filterIds: string[] = [];
   let wherePath: string | undefined;
   let showAll = false;
   for (let i = 0; i < args.length; i++) {
@@ -95,7 +95,16 @@ export function cmdDebt(args: string[]): void {
         process.exit(1);
       }
       i++;
-      filterId = v;
+      // Comma list, same shape as --files: ids are slugs, an id can't hold
+      // a comma, so any comma splits (PLAN-comma-x).
+      filterIds = v
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (filterIds.length === 0) {
+        console.error(`fapony debt: --id needs a convention id\n${USAGE}`);
+        process.exit(1);
+      }
     } else if (a === "--where") {
       const v = args[i + 1];
       if (!v || v.startsWith("--")) {
@@ -171,12 +180,14 @@ export function cmdDebt(args: string[]): void {
   }
   const report = debtScan(worktree, loaded);
 
-  // --id filter: keep only the named convention
-  if (filterId) {
-    report.entries = report.entries.filter((e) => e.conv.id === filterId);
-    report.declared = report.declared.filter((c) => c.id === filterId);
+  // --id filter: keep only the named conventions (comma list allowed)
+  if (filterIds.length > 0) {
+    report.entries = report.entries.filter((e) =>
+      filterIds.includes(e.conv.id),
+    );
+    report.declared = report.declared.filter((c) => filterIds.includes(c.id));
     report.checkedCount = 0; // not relevant when filtering
-    report.dropped = report.dropped.filter((d) => d.id === filterId);
+    report.dropped = report.dropped.filter((d) => filterIds.includes(d.id));
   }
 
   // --where filter: narrow file lists to paths under the given prefix

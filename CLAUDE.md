@@ -405,7 +405,7 @@ fapony mem close <id> "<msg>"
 fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]
 fapony mem kickoff [<plan.md>] [--pick <n>]
 fapony mem done | stale | claim | release | synced | plan-sweep | plan-check | rotate
-fapony debt [--id <convention>] [--where <path>]   # which files haven't migrated to a declared convention (live, read-only)
+fapony debt [--id a,b] [--where <path>]   # which files haven't migrated to a declared convention (live, read-only)
 fapony lint-baseline [--cmd ...] [--diff]   # separate "already red" from "I made it red"
 fapony init-mem                     # delete legacy .memory/ dirs + warn call sites still referencing them (data files untouched)
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]
@@ -415,7 +415,7 @@ fapony usage-web [port]              # dashboard comparing usage from cache (nev
 fapony price-scan                    # refresh the model price table
 # ── lookup (read-only, never touches state) ──
 fapony analyze [path]                # hub/orphan/cycle/changed-untested — live graph, never persisted
-fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym]
+fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym[,sym]]
 fapony plan-seed <name> [--spec] [--scope <path>]...
 # ── ledger (frozen — bug fixes only) ──
 fapony mcp                           # MCP server — stdio JSON-RPC, 3 tools
