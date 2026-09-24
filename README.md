@@ -239,7 +239,7 @@ fapony price-scan                          # fetch model price table → prices.
 fapony usage-web [port]                    # usage comparison dashboard from cache
 
 # lookup (read-only, never touches state)
-fapony analyze [path]                      # live repo graph: hubs, orphans, cycles, changed-untested
+fapony analyze [path]                      # live repo graph: hubs, orphans, cycles, changed-untested (TS/JS + Python .py/.pyi; stdlib→external, no sys.path)
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]  # scope facts for a review
 fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...  # write PLAN (+SPEC): frontmatter, capped sections, prior-art list
 

@@ -416,7 +416,7 @@ fapony usage-scan                    # scan session logs → usage-cache.jsonl (
 fapony usage-web [port]              # dashboard comparing usage from cache (never touches session logs)
 fapony price-scan                    # refresh the model price table
 # ── lookup (read-only, never touches state) ──
-fapony analyze [path]                # hub/orphan/cycle/changed-untested — live graph, never persisted
+fapony analyze [path]                # hub/orphan/cycle/changed-untested — live graph, never persisted (TS/JS + Python .py/.pyi; stdlib→external, no sys.path)
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym[,sym]]
 fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...
 # ── ledger (frozen — bug fixes only) ──
