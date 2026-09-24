@@ -208,6 +208,41 @@ function stripPyComment(line: string): string {
   return line;
 }
 
+// Blank out triple-quoted string blocks, preserving the line count, so a
+// line-based scan never reads code (`def`, `from .x import y`) out of a
+// docstring or a multi-line string. Code before an opening `"""` on the same
+// line is kept; the block itself and its closing line become empty. Single
+// source of truth for both the export scan (below) and analyze's import scan.
+export function maskPyBlocks(source: string): string {
+  const out: string[] = [];
+  let block: string | null = null;
+  for (const raw of source.split("\n")) {
+    if (block) {
+      const end = raw.indexOf(block);
+      if (end < 0) {
+        out.push("");
+        continue;
+      }
+      block = null;
+      out.push(raw.slice(end + 3));
+      continue;
+    }
+    const code = stripPyComment(raw);
+    const triple = code.match(/("""|''')/);
+    if (triple) {
+      const q = triple[1];
+      const first = code.indexOf(q);
+      if (code.indexOf(q, first + 3) < 0) {
+        block = q;
+        out.push(code.slice(0, first));
+        continue;
+      }
+    }
+    out.push(raw);
+  }
+  return out.join("\n");
+}
+
 // String literals inside an `__all__ = [...]` (or `(...)`) assignment,
 // possibly spanning lines. Anything dynamic (`append`, `+=`, a variable)
 // yields nothing — the caller falls back to every top-level name.
@@ -237,13 +272,13 @@ function pyFromNames(rest: string): string[] {
 }
 
 export function extractPythonExports(source: string): ExportScan {
-  const lines = source.split("\n");
+  // Blank docstrings/strings first, preserving line numbers — a `def` inside
+  // a docstring is sample text, the same blind spot the TS path closes with
+  // the parse gate.
+  const lines = maskPyBlocks(source).split("\n");
   const found = new Map<string, { line: number; kind: ExportKind }>();
   let allNames: string[] = [];
   let allLine = 0;
-  // Triple-quote state across lines: a `def` inside a docstring is sample
-  // text, the same blind spot the TS path closes with the parse gate.
-  let block: string | null = null;
 
   const remember = (name: string, line: number, kind: ExportKind): void => {
     if (!found.has(name)) found.set(name, { line, kind });
@@ -251,30 +286,8 @@ export function extractPythonExports(source: string): ExportScan {
 
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
-    if (block) {
-      const end = raw.indexOf(block);
-      if (end < 0) continue;
-      // Code after the closing quotes on the same line is vanishingly rare
-      // (`"""doc"""; x = 1`) — skip the line rather than guess.
-      block = null;
-      continue;
-    }
-    // A line starting inside a string is skipped; detect a block that opens
-    // (and doesn't close) on this line via the comment stripper's remainder.
     const code = stripPyComment(raw).trimEnd();
     if (code === "") continue;
-    const triple = code.match(/("""|''')/);
-    if (triple) {
-      const q = triple[1];
-      const first = code.indexOf(q);
-      const second = code.indexOf(q, first + 3);
-      if (second < 0) {
-        // Opens here, closes later — but a same-line `def` before it (e.g.
-        // `x = """…`) is still real code, so fall through for this line and
-        // only then enter the block.
-        block = q;
-      }
-    }
     if (/^\s/.test(raw)) continue; // indented — not top level
     const t = code.trim();
     let m: RegExpMatchArray | null;
