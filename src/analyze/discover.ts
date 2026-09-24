@@ -7,7 +7,7 @@ import type { Dirent } from "node:fs";
 import { existsSync, readdirSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-export const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".py"]);
+export const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".pyi"]);
 
 // "templates" for the same reason knip.json ignores templates/**: those files
 // ship as a template copied into other repos by `fapony init-mem` and never
@@ -72,5 +72,13 @@ export function collectSourceFiles(
       }
     }
   }
-  return out.sort();
+  out.sort();
+  // Shadow rule: `x.py` wins over `x.pyi` — the stub is a fallback for
+  // stub-only distributions, never a second node (otherwise dependents
+  // double-count). The dropped `.pyi` still resolves via candidates.
+  if (out.some((f) => f.endsWith(".pyi"))) {
+    const has = new Set(out);
+    return out.filter((f) => !f.endsWith(".pyi") || !has.has(f.slice(0, -1)));
+  }
+  return out;
 }

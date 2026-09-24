@@ -22,7 +22,7 @@ const EXPORT_FROM_RE =
   /export\s+(?:\*|\{[^}]*\}|type\s+\*|type\s+\{[^}]*\})(?:\s+as\s+[\w$]+)?\s+from\s*["'][^"']+["']\s*;?/g;
 
 export function isBarrelSource(content: string, rel?: string): boolean {
-  if (rel?.endsWith("__init__.py")) {
+  if (rel?.endsWith("__init__.py") || rel?.endsWith("__init__.pyi")) {
     // A Python barrel re-exports instead of defining: every logical line is
     // an import, a from-import, or the `__all__` assignment. Docstrings are
     // stripped first (nearly every `__init__.py` has one); `#` is cut per

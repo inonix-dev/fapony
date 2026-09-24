@@ -288,10 +288,15 @@ export function resolvePythonRelative(
   const norm = posixNormalize(base);
   const candidates =
     norm === "."
-      ? ["__init__.py"]
+      ? ["__init__.py", "__init__.pyi"]
       : mod
-        ? [`${norm}.py`, `${norm}/__init__.py`]
-        : [`${norm}/__init__.py`];
+        ? [
+            `${norm}.py`,
+            `${norm}.pyi`,
+            `${norm}/__init__.py`,
+            `${norm}/__init__.pyi`,
+          ]
+        : [`${norm}/__init__.py`, `${norm}/__init__.pyi`];
   for (const c of candidates) {
     if (filesSet.has(c)) return c;
   }
@@ -302,7 +307,8 @@ export function resolvePythonRelative(
 // import x` resolves when the target is in this repo. A file is indexed under
 // each ancestor dir that is not itself a package (no `__init__.py`) — the repo
 // root and a `src`-style root both qualify, so `mypkg.core` finds
-// `src/mypkg/core.py` while a bare `core` never does. Shortest path wins a clash.
+// `src/mypkg/core.py` while a bare `core` never does. Shortest path wins a clash
+// (which also prefers `x.py` over `x.pyi` when both are present).
 export function buildPyModuleIndex(filesSet: Set<string>): Map<string, string> {
   const index = new Map<string, string>();
   const put = (mod: string, file: string): void => {
@@ -310,13 +316,22 @@ export function buildPyModuleIndex(filesSet: Set<string>): Map<string, string> {
     if (!prev || file.length < prev.length) index.set(mod, file);
   };
   for (const file of filesSet) {
-    if (!file.endsWith(".py")) continue;
-    const parts = file.slice(0, -3).split("/");
+    const ext = file.endsWith(".pyi")
+      ? ".pyi"
+      : file.endsWith(".py")
+        ? ".py"
+        : null;
+    if (!ext) continue;
+    const parts = file.slice(0, -ext.length).split("/");
     if (parts[parts.length - 1] === "__init__") parts.pop();
     for (let start = 0; start < parts.length; start++) {
       const rootDir = parts.slice(0, start).join("/");
       const prefix = rootDir ? `${rootDir}/` : "";
-      if (filesSet.has(`${prefix}__init__.py`)) continue; // a package, not a root
+      if (
+        filesSet.has(`${prefix}__init__.py`) ||
+        filesSet.has(`${prefix}__init__.pyi`)
+      )
+        continue; // a package, not a root
       put(parts.slice(start).join("."), file);
     }
   }
@@ -344,13 +359,23 @@ export function resolvePythonImport(
       ? posixNormalize(posixJoin(dir, ...imp.mod.split(".")))
       : dir;
     for (const name of imp.names) {
-      for (const c of [`${base}/${name}.py`, `${base}/${name}/__init__.py`]) {
+      for (const c of [
+        `${base}/${name}.py`,
+        `${base}/${name}.pyi`,
+        `${base}/${name}/__init__.py`,
+        `${base}/${name}/__init__.pyi`,
+      ]) {
         if (filesSet.has(c)) hits.add(c);
       }
     }
     const selfCands = imp.mod
-      ? [`${base}.py`, `${base}/__init__.py`]
-      : [`${base}/__init__.py`];
+      ? [
+          `${base}.py`,
+          `${base}.pyi`,
+          `${base}/__init__.py`,
+          `${base}/__init__.pyi`,
+        ]
+      : [`${base}/__init__.py`, `${base}/__init__.pyi`];
     for (const c of selfCands) {
       if (filesSet.has(c)) {
         hits.add(c);

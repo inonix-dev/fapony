@@ -365,7 +365,8 @@ export function extractExports(
   scanner?: ExportScanner,
   filename?: string,
 ): ExportScan {
-  if (filename?.endsWith(".py")) return extractPythonExports(source);
+  if (filename?.endsWith(".py") || filename?.endsWith(".pyi"))
+    return extractPythonExports(source);
   const s = scanner ?? getDefaultScanner();
   const scanned = scanSource(source, s);
   if (scanned.error) return { symbols: [], error: scanned.error };

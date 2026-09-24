@@ -44,7 +44,7 @@ export function buildGraph(dir: string): ImportGraph {
       continue;
     }
     if (isBarrelSource(content, rel)) barrels.add(rel);
-    if (rel.endsWith(".py")) {
+    if (rel.endsWith(".py") || rel.endsWith(".pyi")) {
       // No Transpiler here — it can't parse Python. Relative imports resolve
       // against the importer's package; same-repo absolute imports resolve
       // against the module index. An absolute miss whose root is in PY_STDLIB

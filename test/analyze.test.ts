@@ -633,3 +633,44 @@ test("testAnalyzePythonStdlibExternal", () => {
     "  ✓ analyze counts stdlib as external, third-party as unresolved",
   );
 });
+
+test("testAnalyzePythonPyiShadowAndStubOnly", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/x.py": "def f():\n    return 1\n",
+      "pkg/x.pyi": "def f() -> int: ...\n",
+      "pkg/user.py": "from .x import f\nprint(f)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(graph.files.includes("pkg/x.py"), "x.py is the node");
+      assert.ok(!graph.files.includes("pkg/x.pyi"), "shadowed stub is dropped");
+      assert.deepEqual(
+        [...(graph.deps.get("pkg/user.py") ?? [])],
+        ["pkg/x.py"],
+      );
+      assert.equal(
+        graph.dependents.get("pkg/x.py")?.size,
+        1,
+        "no double-count",
+      );
+    },
+  );
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/y.pyi": "def g() -> int: ...\n",
+      "pkg/user.py": "from .y import g\nprint(g)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(graph.files.includes("pkg/y.pyi"), "stub-only is scanned");
+      assert.deepEqual(
+        [...(graph.deps.get("pkg/user.py") ?? [])],
+        ["pkg/y.pyi"],
+      );
+    },
+  );
+  console.log("  ✓ analyze shadows x.pyi behind x.py, resolves stub-only");
+});
