@@ -7,7 +7,7 @@
 // §0 rule: add-only — never remove or rename exported symbols.
 
 import { execSync } from "node:child_process";
-import type { BlastEntry } from "../../analyze.js";
+import type { BlastEntry } from "../../analyze/index.js";
 import { ROOT } from "../../update.js";
 
 // ─── Server build identity ─────────────────────────────────────────────

@@ -5,7 +5,7 @@
 
 import { realpathSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
-import { collectSourceFiles, SCAN_EXTS } from "../../analyze.js";
+import { collectSourceFiles, SCAN_EXTS } from "../../analyze/index.js";
 import { MEM_TEXT_MAX, readMemLog } from "../../core/mem-log.js";
 import { debtForFile, resolveDebtScope } from "../../debt/index.js";
 

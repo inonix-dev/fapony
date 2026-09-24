@@ -4,7 +4,7 @@
 // run metrics + verdict into a single VerificationReport.
 // Calls existing primitives — no duplicate parser/conformance logic.
 
-import { blastRadiusForWorktree } from "../../../analyze.js";
+import { blastRadiusForWorktree } from "../../../analyze/index.js";
 import { loadConfig } from "../../../core/config.js";
 import { getEvents, getRun, openDb } from "../../../db/store.js";
 import { parseGateEventData } from "../../../parse.js";

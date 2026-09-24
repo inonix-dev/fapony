@@ -29,7 +29,7 @@ import {
   isTestedThroughBarrels,
   isTestFile,
   SCAN_EXTS,
-} from "../analyze.js";
+} from "../analyze/index.js";
 import { extractBody, extractExports } from "../map.js";
 import { assertSafe } from "../safety.js";
 import { execGit, gitOk, gitValue, SeedError, SIG_MAX } from "./primitives.js";
@@ -707,7 +707,7 @@ function renderLookup(
       } catch {
         continue;
       }
-      const scan = extractExports(source);
+      const scan = extractExports(source, undefined, path);
       if (scan.error) continue;
       for (const sym of scan.symbols) {
         if (!flags.body.includes(sym.name)) continue;
@@ -902,7 +902,7 @@ export function renderSeed(args: string[], cwd: string): string {
       } catch {
         continue;
       }
-      const scan = extractExports(source);
+      const scan = extractExports(source, undefined, e.path);
       if (scan.error) {
         sigLines.push(`  ${e.path} — ⚠ ${scan.error}`);
         continue;

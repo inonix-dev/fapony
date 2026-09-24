@@ -63,6 +63,8 @@ flowchart LR
     B[OpenCode] --> F
     C[ZCode] --> F
     D[Codex] --> F
+    E[Cursor] --> F
+    G[Antigravity] --> F
     F --> U[usage — tokens & cost]
     F --> M[mem log — what was decided here]
     F --> D[debt — how far the move has gone]
@@ -119,26 +121,28 @@ Stated up front, because the gap between these two things is where most tooling 
 
 ## What runs where
 
-`fapony install` wires five clients (Claude Code, OpenCode, Cursor, ZCode, Codex). MCP is the only
-piece all of them get — the hooks and in-process hints are per-client, and the read/edit hints
-arrive **before** the call on Claude Code but **after** it on OpenCode, whose only annotate channel
-is `tool.execute.after`. Nothing here is required: skip the hooks and every MCP tool still answers.
+`fapony install` wires six clients (Claude Code, OpenCode, Cursor, ZCode, Codex, Antigravity). MCP is
+the only piece all of them get — the hooks and in-process hints are per-client, and the read/edit
+hints arrive **before** the call on Claude Code but **after** it on OpenCode, whose only annotate
+channel is `tool.execute.after`. Nothing here is required: skip the hooks and every MCP tool still
+answers.
 
-| | Claude Code | OpenCode | Cursor | ZCode | Codex |
-|---|---|---|---|---|---|
-| MCP tools — `mem_find` `mem_add` `mem_close` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Stop hook — refuse to end a turn with commits but no new mem row | ✅ | — | ✅ | — | ✅ after trust |
-| Read hint — big-file pointer + debt/mem lines | ✅ before | ✅ after | — | — | — |
-| Re-read hint — unchanged repeat read | ✅ before | ✅ after | — | — | — |
-| Edit hint — importer count before a shape change | ✅ before | ✅ after | — | — | — |
-| Commit hint — `git commit` → record-a-mem-row nudge | — | ✅ after | — | — | — |
-| Skills symlinked into `~/.claude/skills` | ✅ | ✅ | — | — | — |
-| Skills symlinked into `~/.agents/skills` | — | — | — | ✅ | ✅ |
-| `usage-scan` reads this client's session log | ✅ | ✅ | — | ✅ | ✅ |
+| | Claude Code | OpenCode | Cursor | ZCode | Codex | Antigravity |
+|---|---|---|---|---|---|---|
+| MCP tools — `mem_find` `mem_add` `mem_close` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Stop hook — refuse to end a turn with commits but no new mem row | ✅ | — | ✅ | — | ✅ after trust | — |
+| Read hint — big-file pointer + debt/mem lines | ✅ before | ✅ after | — | — | — | — |
+| Re-read hint — unchanged repeat read | ✅ before | ✅ after | — | — | — | — |
+| Edit hint — importer count before a shape change | ✅ before | ✅ after | — | — | — | — |
+| Commit hint — `git commit` → record-a-mem-row nudge | — | ✅ after | — | — | — | — |
+| Skills symlinked into `~/.claude/skills` | ✅ | ✅ | — | — | — | — |
+| Skills symlinked into `~/.agents/skills` | — | — | — | ✅ | ✅ | ✅ |
+| `usage-scan` reads this client's session log | ✅ | ✅ | — | ✅ | ✅ | — |
 
 `—` means not wired, not impossible. Codex hooks require trust via `/hooks` before they run —
-`fapony install` tells you when. The hints live on hooks rather than MCP on purpose — they must
-fire mid-turn without the agent deciding to call anything.
+`fapony install` tells you when. Antigravity gets MCP + skills now; its hook surface is still
+evolving, and `usage-scan` can't read its session log yet. The hints live on hooks rather than MCP
+on purpose — they must fire mid-turn without the agent deciding to call anything.
 
 ## The ledger — one habit, 3 tools
 
@@ -235,7 +239,7 @@ fapony price-scan                          # fetch model price table → prices.
 fapony usage-web [port]                    # usage comparison dashboard from cache
 
 # lookup (read-only, never touches state)
-fapony analyze [path]                      # live repo graph: hubs, orphans, cycles, changed-untested
+fapony analyze [path]                      # live repo graph: hubs, orphans, cycles, changed-untested (TS/JS + Python .py/.pyi; stdlib→external, no sys.path)
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]  # scope facts for a review
 fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...  # write PLAN (+SPEC): frontmatter, capped sections, prior-art list
 
@@ -297,8 +301,9 @@ vendor-neutral skills (anything that reads stdin) · opt-in telemetry, off by de
 ([TELEMETRY.md](https://github.com/kire21b/fapony/blob/main/TELEMETRY.md) lists exactly what
 leaves the machine) · Bun-only; run state in SQLite via `bun:sqlite` (WAL mode).
 
-**Not supported (yet):** PreToolUse hints on Cursor, ZCode or Codex — Cursor has no such hook and
-the other two expose no in-process hook surface for read/edit hints. A hosted or shared ledger —
+**Not supported (yet):** PreToolUse hints on Cursor, ZCode, Codex or Antigravity — Cursor has no
+such hook, the other two expose no in-process hook surface for read/edit hints, and Antigravity's
+hook surface is still evolving. A hosted or shared ledger —
 `FAPONY_STATE_DIR` on a synced folder works as an experiment only; SQLite's WAL mode does not
 tolerate concurrent writers over NFS/Dropbox/iCloud Drive and can corrupt the db under real
 contention.

@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative, sep } from "node:path";
-import { buildGraphCached, SCAN_EXTS } from "../../analyze.js";
+import { buildGraphCached, SCAN_EXTS } from "../../analyze/index.js";
 import { recordHintFire } from "../../core/hint-log.js";
 import { sessionKey } from "../../core/hook-helpers.js";
 import { readContextData } from "./context-data.js";

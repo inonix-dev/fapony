@@ -5,7 +5,7 @@
 // argv routing.
 
 import { existsSync } from "node:fs";
-import { cmdAnalyze } from "../analyze.js";
+import { cmdAnalyze } from "../analyze/index.js";
 import { renderUsage, suggestCommand } from "../commands.js";
 import { cmdDebt } from "../debt/cli.js";
 import { cmdDigest } from "../digest/cli.js";

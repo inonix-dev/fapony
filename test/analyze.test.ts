@@ -23,7 +23,7 @@ import {
   graphCachePath,
   isTestFile,
   resetGraphCache,
-} from "../src/analyze.js";
+} from "../src/analyze/index.js";
 
 function withFixture(
   files: Record<string, string>,
@@ -137,9 +137,10 @@ test("testAnalyzeEmptyDir", () => {
     assert.equal(graph.files.length, 0);
     const text = formatAnalyze(graph, diagnose(graph));
     assert.ok(text.includes("0 files scanned"));
-    assert.ok(text.includes("no findings"));
+    assert.ok(text.includes("nothing analyzed"));
+    assert.ok(!text.includes("healthy"));
   });
-  console.log("  ✓ analyze on empty dir reports no findings");
+  console.log("  ✓ analyze on empty dir says nothing was analyzed");
 });
 
 test("testAnalyzeBlastRadius", () => {
@@ -412,4 +413,336 @@ test("testGraphCacheInProcessInvalidation", () => {
     rmSync(state, { recursive: true, force: true });
   }
   console.log("  ✓ graph cache: same-process call invalidates on edit");
+});
+
+test("testAnalyzePythonRelativeGraph", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/core.py": "VALUE = 1\ndef helper(): ...\n",
+      "pkg/user.py": "from .core import helper\nprint(helper)\n",
+      "pkg/sub/__init__.py": "",
+      "pkg/sub/sib.py": "SIB = 1\n",
+      "pkg/sub/deep.py":
+        "from ..core import helper\nfrom . import sib\nprint(helper, sib)\n",
+      // Absolute imports resolve when the target is in this repo (`pkg.core`
+      // → pkg/core.py); `import os` is stdlib → external, not unresolved.
+      "top.py": "import os\nfrom pkg.core import helper\nprint(os, helper)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(graph.files.includes("pkg/user.py"), "py files are scanned");
+      assert.deepEqual(
+        [...(graph.deps.get("pkg/user.py") ?? [])],
+        ["pkg/core.py"],
+      );
+      assert.deepEqual([...(graph.deps.get("pkg/sub/deep.py") ?? [])].sort(), [
+        "pkg/core.py",
+        "pkg/sub/__init__.py",
+        "pkg/sub/sib.py",
+      ]);
+      assert.deepEqual([...(graph.deps.get("top.py") ?? [])], ["pkg/core.py"]);
+      assert.equal(graph.unresolved, 0, "import os is stdlib, not unresolved");
+      assert.equal(graph.external, 1, "import os only");
+      assert.equal(graph.dependents.get("pkg/core.py")?.size, 3);
+      assert.equal(graph.dependents.get("pkg/sub/sib.py")?.size, 1);
+    },
+  );
+  console.log(
+    "  ✓ analyze resolves python relative imports (.py + __init__.py)",
+  );
+});
+
+test("testAnalyzePythonBarrel", () => {
+  withFixture(
+    {
+      "pkg/__init__.py":
+        '"""Pkg."""\nfrom .core import *\nfrom .extra import thing\n__all__ = ["helper", "thing"]\n',
+      "pkg/core.py": "def helper(): ...\n",
+      "pkg/extra.py": "thing = 1\n",
+      "plain/__init__.py": "VALUE = 1\ndef f(): ...\n",
+      "test_pkg.py": "from .pkg import helper\nassert helper\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(graph.barrels.has("pkg/__init__.py"), "re-export-only init");
+      assert.ok(
+        !graph.barrels.has("plain/__init__.py"),
+        "init with defs is not a barrel",
+      );
+      assert.deepEqual(
+        exportsThroughBarrels(
+          dir,
+          "pkg/__init__.py",
+          new Set(collectSourceFiles(dir)),
+        ).sort(),
+        ["helper", "thing"],
+      );
+      // The test reaches core.py only through the barrel — still coverage.
+      assert.equal(
+        blastRadius(graph, ["pkg/core.py"])["pkg/core.py"].tested,
+        true,
+      );
+    },
+  );
+  console.log("  ✓ analyze treats a re-export __init__.py as a barrel");
+});
+
+test("testAnalyzeIsTestFilePy", () => {
+  assert.equal(isTestFile("test_foo.py"), true);
+  assert.equal(isTestFile("pkg/foo_test.py"), true);
+  assert.equal(isTestFile("tests/test_bar.py"), true);
+  assert.equal(isTestFile("testing.py"), false);
+  assert.equal(isTestFile("contest.py"), false);
+  assert.equal(isTestFile("latest.py"), false);
+  assert.equal(isTestFile("src/foo.py"), false);
+  console.log("  ✓ analyze isTestFile covers test_*.py and *_test.py");
+});
+
+test("testAnalyzeSkipsVenv", () => {
+  withFixture(
+    {
+      "real.py": "X = 1\n",
+      ".venv/lib/site-packages/dep.py": "Y = 2\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.deepEqual(graph.files, ["real.py"]);
+    },
+  );
+  console.log("  ✓ analyze never walks .venv");
+});
+
+test("testAnalyzePythonFromImportSubmodule", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "from . import sub\n",
+      "pkg/sub.py": "SUB = 1\n",
+      "pkg/user.py": "from . import sub as s, missing\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      // `from . import sub` reaches sub.py, not the package __init__.py alone.
+      assert.ok(
+        graph.deps.get("pkg/user.py")?.has("pkg/sub.py"),
+        "named submodule is an edge",
+      );
+      assert.equal(graph.dependents.get("pkg/sub.py")?.size, 2);
+      // `from . import sub` inside __init__.py must not point at itself.
+      assert.ok(!graph.deps.get("pkg/__init__.py")?.has("pkg/__init__.py"));
+      // The module resolves, so `missing` is treated as a package attribute
+      // (not a submodule miss) — no unresolved edge.
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  console.log("  ✓ analyze resolves `from . import submodule` to the file");
+});
+
+test("testAnalyzePythonAbsoluteSrcLayout", () => {
+  withFixture(
+    {
+      "src/mypkg/__init__.py": "from .core import helper\n",
+      "src/mypkg/core.py": "def helper():\n    return 1\n",
+      "tests/test_core.py": "from mypkg.core import helper\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(
+        graph.deps.get("tests/test_core.py")?.has("src/mypkg/core.py"),
+        "src-layout absolute import resolves",
+      );
+      assert.equal(
+        blastRadius(graph, ["src/mypkg/core.py"])["src/mypkg/core.py"].tested,
+        true,
+      );
+    },
+  );
+  console.log("  ✓ analyze resolves same-repo absolute imports (src layout)");
+});
+
+test("testAnalyzePythonAbsoluteBareNameNotMatched", () => {
+  withFixture(
+    {
+      "src/mypkg/__init__.py": "",
+      "src/mypkg/core.py": "def helper():\n    return 1\n",
+      // A bare `import core` must NOT bind to src/mypkg/core.py — only the
+      // dotted `mypkg.core` is a real module path.
+      "src/mypkg/consumer.py": "import core\nprint(core)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.deepEqual(
+        [...(graph.deps.get("src/mypkg/consumer.py") ?? [])],
+        [],
+      );
+      assert.equal(graph.unresolved, 1);
+    },
+  );
+  console.log("  ✓ analyze does not resolve a bare name to a nested module");
+});
+
+test("testAnalyzePythonIgnoresImportsInStrings", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/core.py": "VALUE = 1\n",
+      "pkg/user.py":
+        '"""\nfrom .core import VALUE\n"""\nTEMPLATE = """\nfrom .core import VALUE\n"""\nprint(1)\n',
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.deepEqual([...(graph.deps.get("pkg/user.py") ?? [])], []);
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  console.log("  ✓ analyze ignores imports written inside strings/docstrings");
+});
+
+test("testAnalyzePythonStdlibExternal", () => {
+  withFixture(
+    {
+      "a.py": "import os, sys\nfrom json import dumps\nprint(os, sys, dumps)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.equal(graph.external, 3, "os + sys + json");
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  withFixture(
+    {
+      "b.py": "from os.path import join\nprint(join)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.equal(graph.external, 1, "root os of os.path");
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  withFixture(
+    {
+      "c.py": "import requests\nprint(requests)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.equal(graph.external, 0, "third-party is not stdlib");
+      assert.equal(graph.unresolved, 1);
+    },
+  );
+  console.log(
+    "  ✓ analyze counts stdlib as external, third-party as unresolved",
+  );
+});
+
+test("testAnalyzePythonPyiShadowAndStubOnly", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/x.py": "def f():\n    return 1\n",
+      "pkg/x.pyi": "def f() -> int: ...\n",
+      "pkg/user.py": "from .x import f\nprint(f)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(graph.files.includes("pkg/x.py"), "x.py is the node");
+      assert.ok(!graph.files.includes("pkg/x.pyi"), "shadowed stub is dropped");
+      assert.deepEqual(
+        [...(graph.deps.get("pkg/user.py") ?? [])],
+        ["pkg/x.py"],
+      );
+      assert.equal(
+        graph.dependents.get("pkg/x.py")?.size,
+        1,
+        "no double-count",
+      );
+    },
+  );
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/y.pyi": "def g() -> int: ...\n",
+      "pkg/user.py": "from .y import g\nprint(g)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(graph.files.includes("pkg/y.pyi"), "stub-only is scanned");
+      assert.deepEqual(
+        [...(graph.deps.get("pkg/user.py") ?? [])],
+        ["pkg/y.pyi"],
+      );
+    },
+  );
+  console.log("  ✓ analyze shadows x.pyi behind x.py, resolves stub-only");
+});
+
+test("testAnalyzePythonMainEntryPoint", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/__main__.py": "from .core import helper\nprint(helper)\n",
+      "pkg/core.py": "def helper():\n    return 1\n",
+      "pkg/cli.py": "CLI = 1\n",
+      "pkg/main.py": "MAIN = 1\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      const orphans = diagnose(graph)
+        .filter((f) => f.kind === "orphan")
+        .map((f) => f.file);
+      assert.ok(
+        !orphans.includes("pkg/__main__.py"),
+        "__main__.py is an entry point",
+      );
+      assert.ok(orphans.includes("pkg/cli.py"), "cli.py still orphan");
+      assert.ok(orphans.includes("pkg/main.py"), "main.py still orphan");
+    },
+  );
+  console.log("  ✓ analyze treats __main__.py as entry, not cli.py/main.py");
+});
+
+test("testAnalyzePythonParenthesizedSubmoduleImport", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/sub.py": "SUB = 1\n",
+      // A parenthesized name list spans lines — `sub` must still be read,
+      // or the submodule reads as an orphan.
+      "pkg/user.py": "from . import (\n    sub,\n)\nprint(sub)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(
+        graph.deps.get("pkg/user.py")?.has("pkg/sub.py"),
+        "multi-line parenthesized submodule is an edge",
+      );
+      assert.equal(graph.dependents.get("pkg/sub.py")?.size, 1);
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  console.log("  ✓ analyze resolves a multi-line `from . import (sub)`");
+});
+
+test("testAnalyzePythonTripleQuoteInsideString", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/core.py": "VALUE = 1\n",
+      // A triple quote inside a single-quoted string must not open a block and
+      // mask the rest of the file (imports silently lost → false orphans).
+      "pkg/user.py":
+        'x = \'contains """ here\'\nfrom .core import VALUE\nprint(x, VALUE)\n',
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(
+        graph.deps.get("pkg/user.py")?.has("pkg/core.py"),
+        "import after the string survives",
+      );
+      assert.equal(graph.dependents.get("pkg/core.py")?.size, 1);
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  console.log(
+    "  ✓ analyze keeps imports after a string holding a triple quote",
+  );
 });

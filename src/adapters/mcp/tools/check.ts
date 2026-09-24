@@ -1,6 +1,6 @@
 // src/mcp/tools/check.ts — handoff_check tool
 
-import { blastRadiusForWorktree } from "../../../analyze.js";
+import { blastRadiusForWorktree } from "../../../analyze/index.js";
 import type { CheckResult } from "../primitives.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
 
