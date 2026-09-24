@@ -430,7 +430,7 @@ fapony hook-session-start            # SessionStart — fire `mem kickoff` into 
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]
 fapony report <run-id>  ·  fapony report-web [file]
 # ── setup ──
-fapony init <path>  ·  fapony install [--all|--platform <name>|--dry-run]  ·  fapony setup
+fapony init <path> [--rules] [--yes]  ·  fapony install [--all|--platform <name>|--dry-run]  ·  fapony setup
 fapony update  ·  fapony telemetry show|send
 ```
 
