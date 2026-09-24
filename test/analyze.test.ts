@@ -699,3 +699,50 @@ test("testAnalyzePythonMainEntryPoint", () => {
   );
   console.log("  ✓ analyze treats __main__.py as entry, not cli.py/main.py");
 });
+
+test("testAnalyzePythonParenthesizedSubmoduleImport", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/sub.py": "SUB = 1\n",
+      // A parenthesized name list spans lines — `sub` must still be read,
+      // or the submodule reads as an orphan.
+      "pkg/user.py": "from . import (\n    sub,\n)\nprint(sub)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(
+        graph.deps.get("pkg/user.py")?.has("pkg/sub.py"),
+        "multi-line parenthesized submodule is an edge",
+      );
+      assert.equal(graph.dependents.get("pkg/sub.py")?.size, 1);
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  console.log("  ✓ analyze resolves a multi-line `from . import (sub)`");
+});
+
+test("testAnalyzePythonTripleQuoteInsideString", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/core.py": "VALUE = 1\n",
+      // A triple quote inside a single-quoted string must not open a block and
+      // mask the rest of the file (imports silently lost → false orphans).
+      "pkg/user.py":
+        'x = \'contains """ here\'\nfrom .core import VALUE\nprint(x, VALUE)\n',
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(
+        graph.deps.get("pkg/user.py")?.has("pkg/core.py"),
+        "import after the string survives",
+      );
+      assert.equal(graph.dependents.get("pkg/core.py")?.size, 1);
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  console.log(
+    "  ✓ analyze keeps imports after a string holding a triple quote",
+  );
+});

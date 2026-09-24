@@ -213,6 +213,31 @@ function stripPyComment(line: string): string {
 // docstring or a multi-line string. Code before an opening `"""` on the same
 // line is kept; the block itself and its closing line become empty. Single
 // source of truth for both the export scan (below) and analyze's import scan.
+// First triple quote that is NOT inside a single/double-quoted string on this
+// line — so `x = 'has """ inside'` never opens a block. `stripPyComment` walks
+// the same quote state; this reports where a block actually starts.
+function unquotedTriple(code: string): { at: number; q: string } | null {
+  let quote: string | null = null;
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i];
+    if (quote) {
+      if (c === "\\") {
+        i++;
+        continue;
+      }
+      if (code.startsWith(quote, i)) {
+        i += quote.length - 1;
+        quote = null;
+      }
+      continue;
+    }
+    if (code.startsWith('"""', i) || code.startsWith("'''", i))
+      return { at: i, q: code.slice(i, i + 3) };
+    if (c === '"' || c === "'") quote = c;
+  }
+  return null;
+}
+
 export function maskPyBlocks(source: string): string {
   const out: string[] = [];
   let block: string | null = null;
@@ -228,13 +253,12 @@ export function maskPyBlocks(source: string): string {
       continue;
     }
     const code = stripPyComment(raw);
-    const triple = code.match(/("""|''')/);
+    const triple = unquotedTriple(code);
     if (triple) {
-      const q = triple[1];
-      const first = code.indexOf(q);
-      if (code.indexOf(q, first + 3) < 0) {
+      const { at, q } = triple;
+      if (code.indexOf(q, at + 3) < 0) {
         block = q;
-        out.push(code.slice(0, first));
+        out.push(code.slice(0, at));
         continue;
       }
     }

@@ -4,8 +4,8 @@
 // `python -c "import ast"` is not the answer). The module part always sits on
 // the first line of a `from … import`, so a multi-line name list is a
 // non-issue for the edge itself; the imported names only matter to resolve a
-// submodule (`from . import sib` → `sib.py`), and the parenthesized form
-// carries them on the opening line.
+// submodule (`from . import sib` → `sib.py`), so a parenthesized list is
+// joined across lines before its names are read.
 
 import {
   dirname as posixDirname,
@@ -79,6 +79,7 @@ export const PY_STDLIB: Set<string> = new Set([
   "doctest",
   "email",
   "encodings",
+  "ensurepip",
   "enum",
   "errno",
   "faulthandler",
@@ -131,6 +132,7 @@ export const PY_STDLIB: Set<string> = new Set([
   "nntplib",
   "numbers",
   "operator",
+  "opcode",
   "optparse",
   "os",
   "ossaudiodev",
@@ -152,6 +154,7 @@ export const PY_STDLIB: Set<string> = new Set([
   "py_compile",
   "pyclbr",
   "pydoc",
+  "pyexpat",
   "queue",
   "quopri",
   "random",
@@ -253,13 +256,26 @@ export function scanPythonImports(content: string): PyImport[] {
   const out: PyImport[] = [];
   // Blank strings/docstrings first — a `from .x import y` written inside one
   // is sample text, not an edge.
-  for (const rawLine of maskPyBlocks(content).split("\n")) {
+  const lines = maskPyBlocks(content).split("\n");
+  const unbalanced = (s: string): boolean =>
+    (s.match(/\(/g) ?? []).length > (s.match(/\)/g) ?? []).length;
+  for (let i = 0; i < lines.length; i++) {
     // Safe to cut at the first `#`: import/from lines carry only
     // identifiers, dots, commas, parens, `as`, and `*` — never a `#` string.
-    const line = rawLine.split("#")[0];
+    const line = lines[i].split("#")[0];
     let m: RegExpMatchArray | null;
     if ((m = line.match(/^[ \t]*from\s*(\.+)?([\w.]*)\s+import\s+(.+)/))) {
-      out.push({ dots: m[1] ?? null, mod: m[2], names: pyImportNames(m[3]) });
+      // A parenthesized name list often spans lines — join until it closes
+      // (cap 20), the same shape the export scan uses. Without this a
+      // `from . import (sub)` loses `sub` and the submodule reads as orphan.
+      let rest = m[3];
+      let j = i;
+      while (unbalanced(rest) && j + 1 < lines.length && j - i < 20) {
+        j++;
+        rest += ` ${lines[j].split("#")[0].trim()}`;
+      }
+      out.push({ dots: m[1] ?? null, mod: m[2], names: pyImportNames(rest) });
+      i = j;
     } else if ((m = line.match(/^[ \t]*import\s+([\w.]+(?:\s*,\s*[\w.]+)*)/))) {
       // Plain `import` is always absolute in Python 3 (relative needs `from`).
       for (const part of m[1].split(",")) {

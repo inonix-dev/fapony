@@ -226,3 +226,23 @@ test("testMapPythonDispatch", () => {
   assert.ok(!ts.symbols.some((s) => s.name === "f"));
   console.log("  ✓ map dispatches to the python path on .py filenames only");
 });
+
+test("testMapPythonTripleQuoteInsideString", () => {
+  const src = [
+    'x = \'contains """ here\'', // 1 — a string, not a block opener
+    "from .core import helper", // 2
+    "def real(): ...", // 3
+  ].join("\n");
+  const { symbols } = extractPythonExports(src);
+  assert.ok(
+    symbols.some((s) => s.name === "real"),
+    "later def survives",
+  );
+  assert.ok(
+    symbols.some((s) => s.name === "helper"),
+    "later re-export survives",
+  );
+  console.log(
+    "  ✓ map does not open a block on a triple quote inside a string",
+  );
+});
