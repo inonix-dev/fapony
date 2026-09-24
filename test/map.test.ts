@@ -2,7 +2,11 @@ import { test } from "bun:test";
 // test/map.test.ts — tests for extractExports() (src/map.ts)
 
 import assert from "node:assert";
-import { type ExportScanner, extractExports } from "../src/map.js";
+import {
+  type ExportScanner,
+  extractExports,
+  extractPythonExports,
+} from "../src/map.js";
 
 test("testMapExtractExports", () => {
   const src = [
@@ -139,4 +143,86 @@ test("testMapExtractAcceptsInjectedScanner", () => {
   assert.equal(failed.error, "boom");
   assert.equal(failed.symbols.length, 0);
   console.log("  ✓ map honors an injected scanner (incl. its parse error)");
+});
+
+test("testMapPythonExports", () => {
+  const src = [
+    '"""Module docs with', // 1
+    "def fake(): ...", // 2 — sample text, not an export
+    '"""', // 3
+    "import os", // 4 — graph data, not an export
+    "from .core import helper as h, other", // 5
+    "from .multi import (", // 6
+    "    a,", // 7
+    "    b,", // 8
+    ")", // 9
+    "def real(): ...", // 10
+    "async def bg(): ...", // 11
+    "class Svc: ...", // 12
+    "x = 1", // 13
+    "y: int = 2", // 14
+    "_priv = 3", // 15 — private without __all__
+    "x == 1", // 16 — comparison, not an assignment
+    "if True:", // 17
+    "    indented = 4", // 18 — not top level
+  ].join("\n");
+  const { symbols, error } = extractPythonExports(src);
+  assert.equal(error, null);
+  const by = (n: string) => symbols.find((s) => s.name === n);
+
+  assert.deepEqual(by("real"), { name: "real", line: 10, kind: "fn" });
+  assert.deepEqual(by("bg"), { name: "bg", line: 11, kind: "fn" });
+  assert.deepEqual(by("Svc"), { name: "Svc", line: 12, kind: "class" });
+  assert.deepEqual(by("x"), { name: "x", line: 13, kind: "const" });
+  assert.deepEqual(by("y"), { name: "y", line: 14, kind: "const" });
+  assert.deepEqual(by("h"), { name: "h", line: 5, kind: "re-export" });
+  assert.deepEqual(by("other"), { name: "other", line: 5, kind: "re-export" });
+  assert.deepEqual(by("a"), { name: "a", line: 6, kind: "re-export" });
+  assert.deepEqual(by("b"), { name: "b", line: 6, kind: "re-export" });
+  assert.ok(!symbols.some((s) => s.name === "fake"), "docstring def kept out");
+  assert.ok(!symbols.some((s) => s.name === "os"), "plain import kept out");
+  assert.ok(!symbols.some((s) => s.name === "_priv"), "underscore kept out");
+  assert.ok(!symbols.some((s) => s.name === "indented"), "indented kept out");
+  console.log(
+    "  ✓ map extracts python top-level def/class/assign + re-exports",
+  );
+});
+
+test("testMapPythonAll", () => {
+  const src = [
+    "def real(): ...", // 1
+    "def hidden(): ...", // 2
+    "_priv = 3", // 3
+    "__all__ = [", // 4
+    '    "real",', // 5
+    '    "h",', // 6
+    "]", // 7
+    "from .core import h", // 8
+  ].join("\n");
+  const { symbols, error } = extractPythonExports(src);
+  assert.equal(error, null);
+  // `__all__` is authoritative: hidden drops out, listed _-names stay in.
+  assert.deepEqual(symbols, [
+    { name: "real", line: 1, kind: "fn" },
+    { name: "h", line: 8, kind: "re-export" },
+  ]);
+  console.log("  ✓ map treats __all__ as the authoritative export list");
+});
+
+test("testMapPythonDispatch", () => {
+  const { symbols, error } = extractExports(
+    "def f(): ...\nx = 1\n",
+    undefined,
+    "x.py",
+  );
+  assert.equal(error, null);
+  assert.deepEqual(symbols, [
+    { name: "f", line: 1, kind: "fn" },
+    { name: "x", line: 2, kind: "const" },
+  ]);
+  // Same source without a filename stays on the TS path (a parse error here,
+  // never python symbols leaking into it).
+  const ts = extractExports("def f(): ...\nx = 1\n");
+  assert.ok(!ts.symbols.some((s) => s.name === "f"));
+  console.log("  ✓ map dispatches to the python path on .py filenames only");
 });

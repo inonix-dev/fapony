@@ -221,7 +221,7 @@ function renderExistingInScope(
     } catch {
       continue;
     }
-    const scan = extractExports(source);
+    const scan = extractExports(source, undefined, rel);
     if (scan.error || scan.symbols.length === 0) continue;
     // Re-export-only files scan as one `*` per line — dedupe to a single `*`.
     const names = [
@@ -347,7 +347,7 @@ function fileLines(absFile: string): string[] {
   } catch {
     return ["_(unreadable)_"];
   }
-  const scan = extractExports(source);
+  const scan = extractExports(source, undefined, absFile);
   if (scan.error) return [`⚠ ${scan.error} — symbols not extractable`];
   if (scan.symbols.length === 0) return ["_(no exports)_"];
   let srcLines: string[] = [];

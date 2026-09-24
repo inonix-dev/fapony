@@ -300,7 +300,7 @@ function detectWrappers(root: string): SeedRow[] {
     } catch {
       continue;
     }
-    const scan = extractExports(source);
+    const scan = extractExports(source, undefined, rel);
     if (scan.error) continue;
     for (const sym of scan.symbols) {
       if (sym.kind !== "const" && sym.kind !== "fn") continue;

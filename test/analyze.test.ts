@@ -137,9 +137,10 @@ test("testAnalyzeEmptyDir", () => {
     assert.equal(graph.files.length, 0);
     const text = formatAnalyze(graph, diagnose(graph));
     assert.ok(text.includes("0 files scanned"));
-    assert.ok(text.includes("no findings"));
+    assert.ok(text.includes("nothing analyzed"));
+    assert.ok(!text.includes("healthy"));
   });
-  console.log("  ✓ analyze on empty dir reports no findings");
+  console.log("  ✓ analyze on empty dir says nothing was analyzed");
 });
 
 test("testAnalyzeBlastRadius", () => {
@@ -412,4 +413,98 @@ test("testGraphCacheInProcessInvalidation", () => {
     rmSync(state, { recursive: true, force: true });
   }
   console.log("  ✓ graph cache: same-process call invalidates on edit");
+});
+
+test("testAnalyzePythonRelativeGraph", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/core.py": "VALUE = 1\ndef helper(): ...\n",
+      "pkg/user.py": "from .core import helper\nprint(helper)\n",
+      "pkg/sub/__init__.py": "",
+      "pkg/sub/sib.py": "SIB = 1\n",
+      "pkg/sub/deep.py":
+        "from ..core import helper\nfrom . import sib\nprint(helper, sib)\n",
+      // Absolute imports (stdlib and same-repo) are unresolvable without
+      // sys.path knowledge — same bucket as TS path aliases.
+      "top.py": "import os\nfrom pkg.core import helper\nprint(os, helper)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(graph.files.includes("pkg/user.py"), "py files are scanned");
+      assert.deepEqual(
+        [...(graph.deps.get("pkg/user.py") ?? [])],
+        ["pkg/core.py"],
+      );
+      assert.deepEqual([...(graph.deps.get("pkg/sub/deep.py") ?? [])].sort(), [
+        "pkg/core.py",
+        "pkg/sub/__init__.py",
+      ]);
+      assert.equal(graph.unresolved, 2, "import os + absolute from-import");
+      assert.equal(graph.dependents.get("pkg/core.py")?.size, 2);
+    },
+  );
+  console.log(
+    "  ✓ analyze resolves python relative imports (.py + __init__.py)",
+  );
+});
+
+test("testAnalyzePythonBarrel", () => {
+  withFixture(
+    {
+      "pkg/__init__.py":
+        '"""Pkg."""\nfrom .core import *\nfrom .extra import thing\n__all__ = ["helper", "thing"]\n',
+      "pkg/core.py": "def helper(): ...\n",
+      "pkg/extra.py": "thing = 1\n",
+      "plain/__init__.py": "VALUE = 1\ndef f(): ...\n",
+      "test_pkg.py": "from .pkg import helper\nassert helper\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(graph.barrels.has("pkg/__init__.py"), "re-export-only init");
+      assert.ok(
+        !graph.barrels.has("plain/__init__.py"),
+        "init with defs is not a barrel",
+      );
+      assert.deepEqual(
+        exportsThroughBarrels(
+          dir,
+          "pkg/__init__.py",
+          new Set(collectSourceFiles(dir)),
+        ).sort(),
+        ["helper", "thing"],
+      );
+      // The test reaches core.py only through the barrel — still coverage.
+      assert.equal(
+        blastRadius(graph, ["pkg/core.py"])["pkg/core.py"].tested,
+        true,
+      );
+    },
+  );
+  console.log("  ✓ analyze treats a re-export __init__.py as a barrel");
+});
+
+test("testAnalyzeIsTestFilePy", () => {
+  assert.equal(isTestFile("test_foo.py"), true);
+  assert.equal(isTestFile("pkg/foo_test.py"), true);
+  assert.equal(isTestFile("tests/test_bar.py"), true);
+  assert.equal(isTestFile("testing.py"), false);
+  assert.equal(isTestFile("contest.py"), false);
+  assert.equal(isTestFile("latest.py"), false);
+  assert.equal(isTestFile("src/foo.py"), false);
+  console.log("  ✓ analyze isTestFile covers test_*.py and *_test.py");
+});
+
+test("testAnalyzeSkipsVenv", () => {
+  withFixture(
+    {
+      "real.py": "X = 1\n",
+      ".venv/lib/site-packages/dep.py": "Y = 2\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.deepEqual(graph.files, ["real.py"]);
+    },
+  );
+  console.log("  ✓ analyze never walks .venv");
 });

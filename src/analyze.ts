@@ -111,7 +111,38 @@ export function isTestFile(p: string): boolean {
 const EXPORT_FROM_RE =
   /export\s+(?:\*|\{[^}]*\}|type\s+\*|type\s+\{[^}]*\})(?:\s+as\s+[\w$]+)?\s+from\s*["'][^"']+["']\s*;?/g;
 
-export function isBarrelSource(content: string): boolean {
+export function isBarrelSource(content: string, rel?: string): boolean {
+  if (rel?.endsWith("__init__.py")) {
+    // A Python barrel re-exports instead of defining: every logical line is
+    // an import, a from-import, or the `__all__` assignment. Docstrings are
+    // stripped first (nearly every `__init__.py` has one); `#` is cut per
+    // line, which is safe here because import/`__all__` lines carry no `#`
+    // inside strings — only identifiers, dots, commas, and parens.
+    const code = content.replace(/"""[\s\S]*?"""|'''[\s\S]*?'''/g, "");
+    const logical: string[] = [];
+    let buf = "";
+    let open = 0;
+    const push = () => {
+      const t = buf.trim();
+      if (t) logical.push(t);
+      buf = "";
+      open = 0;
+    };
+    for (const rawLine of code.split("\n")) {
+      const line = rawLine.split("#")[0].trim();
+      if (!line) continue;
+      buf += (buf ? " " : "") + line;
+      open +=
+        (line.match(/[[(]/g) ?? []).length -
+        (line.match(/[\])]/g) ?? []).length;
+      if (!line.endsWith("\\") && open <= 0 && !line.endsWith(",")) push();
+    }
+    push();
+    if (logical.length === 0) return false;
+    return logical.every((l) =>
+      /^(?:import\s+[\w.]+|from\s+\.*[\w.]*\s+import\s+\S|__all__\s*=)/.test(l),
+    );
+  }
   const code = content
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^[ \t]*\/\/.*$/gm, "");
@@ -139,7 +170,7 @@ export function isTestedThroughBarrels(
   return false;
 }
 
-export const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx"]);
+export const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".py"]);
 
 // Always skipped, hardcoded — no config (per plan: no .faponyignore in v1).
 // "templates" for the same reason knip.json ignores templates/**: those files
@@ -154,6 +185,10 @@ const SKIP_DIRS = new Set([
   "build",
   ".git",
   "templates",
+  // A `.venv` holds thousands of third-party `.py` files — walking it would
+  // drown the graph the way node_modules would (which is skipped above).
+  // `__pycache__` needs no entry: it holds only `.pyc`, never scanned.
+  ".venv",
 ]);
 
 // A nested checkout (clone or `git worktree add`) is a different project that
@@ -234,6 +269,67 @@ function resolveRelative(
   return null;
 }
 
+// --- Python imports (line-based: Bun.Transpiler can't parse .py; see map.ts
+// for why `python -c "import ast"` is not the answer). Only the module part
+// (before `import`) matters for edges, and it always sits on the first line —
+// even when the imported names span lines with parens or a backslash.
+
+interface PyImport {
+  /** Leading dots (`from ..x import`) — null for absolute imports. */
+  dots: string | null;
+  /** Dotted module path after the dots ("" for `from . import y`). */
+  mod: string;
+}
+
+function scanPythonImports(content: string): PyImport[] {
+  const out: PyImport[] = [];
+  for (const rawLine of content.split("\n")) {
+    // Safe to cut at the first `#`: import/from lines carry only
+    // identifiers, dots, commas, parens, `as`, and `*` — never a `#` string.
+    const line = rawLine.split("#")[0];
+    let m: RegExpMatchArray | null;
+    if ((m = line.match(/^[ \t]*from\s*(\.+)?([\w.]*)\s+import\s+\S/))) {
+      out.push({ dots: m[1] ?? null, mod: m[2] });
+    } else if ((m = line.match(/^[ \t]*import\s+([\w.]+(?:\s*,\s*[\w.]+)*)/))) {
+      // Plain `import` is always absolute in Python 3 (relative needs `from`),
+      // so every entry here lands in the unresolved bucket below.
+      for (const part of m[1].split(",")) {
+        const name = part.trim().split(/\s+/)[0];
+        if (name) out.push({ dots: null, mod: name });
+      }
+    }
+  }
+  return out;
+}
+
+// Dots count folder levels: 1 = the importer's own dir, 2 = its parent, and
+// so on. Each level then tries `x.py` and `x/__init__.py`; `from . import y`
+// (empty module) resolves to the dir's own `__init__.py`.
+function resolvePythonRelative(
+  importerRel: string,
+  dots: string,
+  mod: string,
+  filesSet: Set<string>,
+): string | null {
+  let dir = posixDirname(importerRel);
+  for (let i = 1; i < dots.length; i++) {
+    if (dir === ".") return null; // climbs above the scanned root
+    dir = posixDirname(dir);
+  }
+  const base = mod ? posixJoin(dir, ...mod.split(".")) : dir;
+  const norm = posixNormalize(base);
+  const candidates =
+    norm === "."
+      ? ["__init__.py"]
+      : mod
+        ? [`${norm}.py`, `${norm}/__init__.py`]
+        : [`${norm}/__init__.py`];
+  for (const c of candidates) {
+    if (filesSet.has(c)) return c;
+  }
+  return null;
+}
+
 // --- Exports, seen through barrels ---
 
 // `export * from "./x"` is reported by Bun.Transpiler.scan as an IMPORT edge and
@@ -247,6 +343,10 @@ function resolveRelative(
 // for why that 1,145x is not worth paying here.
 const STAR_REEXPORT_RE =
   /^[ \t]*export\s+\*\s+(?:as\s+[\w$]+\s+)?from\s*["'](\.[^"']+)["']/gm;
+
+// `from .x import *` — the Python shape of a star re-export. Absolute star
+// imports can't resolve (same bucket as TS bare specifiers), so only relative.
+const PY_STAR_REEXPORT_RE = /^[ \t]*from\s*(\.+)((?:[\w.]*))\s+import\s+\*/gm;
 
 export function exportsThroughBarrels(
   absDir: string,
@@ -262,12 +362,17 @@ export function exportsThroughBarrels(
   } catch {
     return [];
   }
-  const out = extractExports(source)
+  const out = extractExports(source, undefined, rel)
     .symbols.filter((s) => s.name !== "*")
     .map((s) => s.name);
   STAR_REEXPORT_RE.lastIndex = 0;
   for (const m of source.matchAll(STAR_REEXPORT_RE)) {
     const hit = resolveRelative(rel, m[1], filesSet);
+    if (hit) out.push(...exportsThroughBarrels(absDir, hit, filesSet, seen));
+  }
+  PY_STAR_REEXPORT_RE.lastIndex = 0;
+  for (const m of source.matchAll(PY_STAR_REEXPORT_RE)) {
+    const hit = resolvePythonRelative(rel, m[1], m[2], filesSet);
     if (hit) out.push(...exportsThroughBarrels(absDir, hit, filesSet, seen));
   }
   return [...new Set(out)];
@@ -294,7 +399,25 @@ export function buildGraph(dir: string): ImportGraph {
       unresolved++;
       continue;
     }
-    if (isBarrelSource(content)) barrels.add(rel);
+    if (isBarrelSource(content, rel)) barrels.add(rel);
+    if (rel.endsWith(".py")) {
+      // No Transpiler here — it can't parse Python. Absolute imports (stdlib
+      // and same-repo `from pkg import`) are unresolvable without sys.path
+      // knowledge, so they join the same unresolved bucket as TS path
+      // aliases; only relative imports become edges.
+      const pyEdges = new Set<string>();
+      for (const imp of scanPythonImports(content)) {
+        if (imp.dots) {
+          const hit = resolvePythonRelative(rel, imp.dots, imp.mod, filesSet);
+          if (hit) pyEdges.add(hit);
+          else unresolved++;
+        } else {
+          unresolved++;
+        }
+      }
+      deps.set(rel, pyEdges);
+      continue;
+    }
     const raws: string[] = [];
     try {
       const scanned = transpiler.scan(content) as {
@@ -641,11 +764,16 @@ export function formatAnalyze(graph: ImportGraph, findings: Finding[]): string {
   for (const s of graph.deps.values()) imports += s.size;
   const lines: string[] = [];
   lines.push(
-    `fapony analyze — ${graph.files.length} files scanned (.ts/.tsx/.js/.jsx), ${imports} imports, ${graph.external} builtin, ${graph.unresolved} unresolved`,
+    `fapony analyze — ${graph.files.length} files scanned (.ts/.tsx/.js/.jsx/.py), ${imports} imports, ${graph.external} builtin, ${graph.unresolved} unresolved`,
   );
   lines.push("");
 
-  if (findings.length === 0) {
+  if (graph.files.length === 0) {
+    // Nothing read is not "healthy" — an unsupported-only repo used to get a clean bill here.
+    lines.push(
+      "no supported source files found — nothing analyzed (only .ts/.tsx/.js/.jsx/.py are read)",
+    );
+  } else if (findings.length === 0) {
     lines.push("no findings — structure looks healthy");
   } else {
     for (const f of findings.slice(0, 5)) {

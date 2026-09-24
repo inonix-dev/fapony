@@ -167,10 +167,192 @@ function braceNames(
 
 const VAR_DECL_RE = /^export\s+(?:const|let|var)\b/;
 
+// --- Python exports (no parser: Bun.Transpiler can't read .py, and shelling
+// out to `python -c "import ast"` was cut — a subprocess per file blows the
+// measured budgets (buildGraph ~50ms/150 files, review-seed 0.31–0.51s
+// uncached) and breaks the Bun-only constraint. Line-based, top level only.)
+
+const PY_DEF_RE = /^(?:async\s+)?def\s+([A-Za-z_]\w*)/;
+const PY_CLASS_RE = /^class\s+([A-Za-z_]\w*)/;
+// `x = …` and `x: T = …` — `=(?!=)` keeps `==`/`!=`/`>=` comparisons out.
+const PY_ASSIGN_RE = /^([A-Za-z_]\w*)\s*(?::\s*[^=;#]+?)?=(?!=)/;
+const PY_FROM_RE = /^from\s+(\S+)\s+import\s+(.+)$/;
+const PY_ALL_RE = /^__all__\s*=/;
+
+// Walk one line tracking quote state; returns the code before a `#` comment.
+// Triple quotes are handled for the single-line case (`x = """a#b"""`) —
+// multi-line strings are skipped by the block tracker below, not here.
+function stripPyComment(line: string): string {
+  let quote: string | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (quote) {
+      if (c === "\\") {
+        i++;
+        continue;
+      }
+      if (line.startsWith(quote, i)) {
+        i += quote.length - 1;
+        quote = null;
+      }
+      continue;
+    }
+    if (c === "#") return line.slice(0, i);
+    if (line.startsWith('"""', i) || line.startsWith("'''", i)) {
+      quote = line.slice(i, i + 3);
+      i += 2;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    }
+  }
+  return line;
+}
+
+// String literals inside an `__all__ = [...]` (or `(...)`) assignment,
+// possibly spanning lines. Anything dynamic (`append`, `+=`, a variable)
+// yields nothing — the caller falls back to every top-level name.
+function pyAllNames(text: string): string[] {
+  const open =
+    text.indexOf("[") >= 0 ? "[" : text.indexOf("(") >= 0 ? "(" : null;
+  if (!open) return [];
+  const close = open === "[" ? "]" : ")";
+  const body = text.slice(text.indexOf(open) + 1);
+  if (!body.includes(close)) return [];
+  const out: string[] = [];
+  for (const m of body.matchAll(/["']([A-Za-z_]\w*)["']/g)) out.push(m[1]);
+  return out;
+}
+
+function pyFromNames(rest: string): string[] {
+  const clean = rest.replace(/[()]/g, " ");
+  const out: string[] = [];
+  for (let part of clean.split(",")) {
+    part = part.trim().split("#")[0].trim();
+    if (!part || part === "*") continue;
+    const as = part.split(/\s+as\s+/);
+    const name = as[as.length - 1].trim();
+    if (/^[A-Za-z_]\w*$/.test(name)) out.push(name);
+  }
+  return out;
+}
+
+export function extractPythonExports(source: string): ExportScan {
+  const lines = source.split("\n");
+  const found = new Map<string, { line: number; kind: ExportKind }>();
+  let allNames: string[] = [];
+  let allLine = 0;
+  // Triple-quote state across lines: a `def` inside a docstring is sample
+  // text, the same blind spot the TS path closes with the parse gate.
+  let block: string | null = null;
+
+  const remember = (name: string, line: number, kind: ExportKind): void => {
+    if (!found.has(name)) found.set(name, { line, kind });
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    if (block) {
+      const end = raw.indexOf(block);
+      if (end < 0) continue;
+      // Code after the closing quotes on the same line is vanishingly rare
+      // (`"""doc"""; x = 1`) — skip the line rather than guess.
+      block = null;
+      continue;
+    }
+    // A line starting inside a string is skipped; detect a block that opens
+    // (and doesn't close) on this line via the comment stripper's remainder.
+    const code = stripPyComment(raw).trimEnd();
+    if (code === "") continue;
+    const triple = code.match(/("""|''')/);
+    if (triple) {
+      const q = triple[1];
+      const first = code.indexOf(q);
+      const second = code.indexOf(q, first + 3);
+      if (second < 0) {
+        // Opens here, closes later — but a same-line `def` before it (e.g.
+        // `x = """…`) is still real code, so fall through for this line and
+        // only then enter the block.
+        block = q;
+      }
+    }
+    if (/^\s/.test(raw)) continue; // indented — not top level
+    const t = code.trim();
+    let m: RegExpMatchArray | null;
+    if ((m = t.match(PY_DEF_RE))) {
+      remember(m[1], i + 1, "fn");
+      continue;
+    }
+    if ((m = t.match(PY_CLASS_RE))) {
+      remember(m[1], i + 1, "class");
+      continue;
+    }
+    if (PY_ALL_RE.test(t)) {
+      // `__all__` may span lines — join until the bracket closes (cap 20).
+      let joined = t;
+      let j = i;
+      while (!/[\])]/.test(joined) && j + 1 < lines.length && j - i < 20) {
+        j++;
+        joined += ` ${stripPyComment(lines[j]).trim()}`;
+      }
+      allNames = pyAllNames(joined);
+      allLine = i + 1;
+      i = j;
+      continue;
+    }
+    if ((m = t.match(PY_FROM_RE))) {
+      // Parenthesized lists often span lines — join until they close (cap 20),
+      // the same shape as the TS brace-block join above.
+      let rest = m[2];
+      let j = i;
+      const unbalanced = (s: string): boolean =>
+        (s.match(/\(/g) ?? []).length > (s.match(/\)/g) ?? []).length;
+      while (unbalanced(rest) && j + 1 < lines.length && j - i < 20) {
+        j++;
+        rest += ` ${stripPyComment(lines[j]).trim()}`;
+      }
+      for (const name of pyFromNames(rest)) remember(name, i + 1, "re-export");
+      i = j;
+      continue;
+    }
+    if (/^import\s+/.test(t)) continue; // graph data, not an export
+    if ((m = t.match(PY_ASSIGN_RE))) {
+      if (m[1] === "__all__") continue;
+      remember(m[1], i + 1, "const");
+    }
+  }
+
+  if (allNames.length > 0) {
+    // `__all__` is authoritative: undocumented underscore names listed there
+    // are public, and anything not listed is not — including real defs.
+    const out: ExportSymbol[] = [];
+    const seen = new Set<string>();
+    for (const name of allNames) {
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const f = found.get(name);
+      out.push(
+        f
+          ? { name, line: f.line, kind: f.kind }
+          : { name, line: allLine, kind: "re-export" },
+      );
+    }
+    return { symbols: out, error: null };
+  }
+  // No `__all__`: underscore-prefixed names are private by convention.
+  return {
+    symbols: [...found]
+      .filter(([name]) => !name.startsWith("_"))
+      .map(([name, f]) => ({ name, line: f.line, kind: f.kind })),
+    error: null,
+  };
+}
+
 export function extractExports(
   source: string,
   scanner?: ExportScanner,
+  filename?: string,
 ): ExportScan {
+  if (filename?.endsWith(".py")) return extractPythonExports(source);
   const s = scanner ?? getDefaultScanner();
   const scanned = scanSource(source, s);
   if (scanned.error) return { symbols: [], error: scanned.error };
