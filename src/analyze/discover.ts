@@ -40,7 +40,7 @@ export function isSkippedDir(name: string, parentDir: string): boolean {
 
 export function isEntryPoint(rel: string): boolean {
   const base = rel.slice(rel.lastIndexOf("/") + 1);
-  return base === "fapony.ts" || base === "index.ts";
+  return base === "fapony.ts" || base === "index.ts" || base === "__main__.py";
 }
 
 export function collectSourceFiles(

@@ -674,3 +674,28 @@ test("testAnalyzePythonPyiShadowAndStubOnly", () => {
   );
   console.log("  ✓ analyze shadows x.pyi behind x.py, resolves stub-only");
 });
+
+test("testAnalyzePythonMainEntryPoint", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/__main__.py": "from .core import helper\nprint(helper)\n",
+      "pkg/core.py": "def helper():\n    return 1\n",
+      "pkg/cli.py": "CLI = 1\n",
+      "pkg/main.py": "MAIN = 1\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      const orphans = diagnose(graph)
+        .filter((f) => f.kind === "orphan")
+        .map((f) => f.file);
+      assert.ok(
+        !orphans.includes("pkg/__main__.py"),
+        "__main__.py is an entry point",
+      );
+      assert.ok(orphans.includes("pkg/cli.py"), "cli.py still orphan");
+      assert.ok(orphans.includes("pkg/main.py"), "main.py still orphan");
+    },
+  );
+  console.log("  ✓ analyze treats __main__.py as entry, not cli.py/main.py");
+});
