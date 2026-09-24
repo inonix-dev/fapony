@@ -19,6 +19,9 @@ export interface ImportGraph {
   external: number;
   /** Files that only re-export (`export ... from`) — they hide the real importer. */
   barrels: Set<string>;
+  /** Python files that run on their own: `__main__` block or `[project.scripts]`.
+   * Optional — the graph cache doesn't carry it; only diagnose reads it. */
+  entries?: Set<string>;
 }
 
 export type FindingKind =
