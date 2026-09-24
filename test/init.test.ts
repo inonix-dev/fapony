@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -139,4 +140,17 @@ test("testWriteRulesAppendsOnceToExistingFile", () => {
     assert.equal(readFileSync(join(dir, "CLAUDE.md"), "utf-8"), once);
   });
   console.log("  ✓ existing rules file → appended once, rerun is a no-op");
+});
+
+// wt-falsify 2026-09-24: AGENTS.md -> CLAUDE.md symlink got the rules twice,
+// once through each name. One real file = one append.
+test("testWriteRulesSymlinkedRulesFilesAppendOnce", () => {
+  withTmpDir((dir) => {
+    writeFileSync(join(dir, "CLAUDE.md"), "# mine\n");
+    symlinkSync("CLAUDE.md", join(dir, "AGENTS.md"));
+    writeRules(dir);
+    const body = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
+    assert.equal(body.split("## Memory: .fapony/.memory").length - 1, 1);
+  });
+  console.log("  ✓ symlinked CLAUDE.md/AGENTS.md → rules appended once");
 });

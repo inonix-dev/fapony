@@ -8,6 +8,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
@@ -209,9 +210,16 @@ export function rulesTargets(targetPath: string): {
   create: boolean;
   append: string[];
 } {
-  const found = AGENT_RULE_FILES.map((f) => join(targetPath, f)).filter(
-    existsSync,
-  );
+  // one real file per entry: AGENTS.md -> CLAUDE.md symlinks are common, and
+  // appending through both names wrote the rules twice (wt-falsify 2026-09-24)
+  const seen = new Set<string>();
+  const found = AGENT_RULE_FILES.map((f) => join(targetPath, f)).filter((f) => {
+    if (!existsSync(f)) return false;
+    const real = realpathSync(f);
+    if (seen.has(real)) return false;
+    seen.add(real);
+    return true;
+  });
   const has = (f: string) => readFileSync(f, "utf-8").includes(RULES_MARKER);
   const agents = join(targetPath, "AGENTS.md");
   // a CLAUDE.md that imports a rules-carrying AGENTS.md already has them
