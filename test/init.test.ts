@@ -154,3 +154,30 @@ test("testWriteRulesSymlinkedRulesFilesAppendOnce", () => {
   });
   console.log("  ✓ symlinked CLAUDE.md/AGENTS.md → rules appended once");
 });
+
+test("testWriteRulesSeparateFilesBothGetRules", () => {
+  withTmpDir((dir) => {
+    writeFileSync(join(dir, "CLAUDE.md"), "# claude\n");
+    writeFileSync(join(dir, "AGENTS.md"), "# agents\n");
+    writeRules(dir);
+    for (const f of ["CLAUDE.md", "AGENTS.md"])
+      assert.equal(
+        readFileSync(join(dir, f), "utf-8").split("## Memory: .fapony/.memory")
+          .length - 1,
+        1,
+        f,
+      );
+  });
+  console.log("  ✓ two real rules files → each gets the rules once");
+});
+
+test("testWriteRulesReverseSymlinkWritesRealFileOnce", () => {
+  withTmpDir((dir) => {
+    writeFileSync(join(dir, "AGENTS.md"), "# mine\n");
+    symlinkSync("AGENTS.md", join(dir, "CLAUDE.md"));
+    writeRules(dir);
+    const body = readFileSync(join(dir, "AGENTS.md"), "utf-8");
+    assert.equal(body.split("## Memory: .fapony/.memory").length - 1, 1);
+  });
+  console.log("  ✓ CLAUDE.md -> AGENTS.md symlink → real file written once");
+});
