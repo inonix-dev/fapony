@@ -31,12 +31,31 @@ export interface MemRow {
 /** One mem-row text budget for any hint/seed surface that shows a row (was context-data's private const). */
 export const MEM_TEXT_MAX = 120;
 
+/** Cut a row's text to MEM_TEXT_MAX at a word boundary, marked with `…` — never mid-word. */
+export function clipMemText(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (flat.length <= MEM_TEXT_MAX) return flat;
+  const cut = flat.slice(0, MEM_TEXT_MAX - 1);
+  const space = cut.lastIndexOf(" ");
+  // ponytail: no space in the back half (one long token/path) = hard cut
+  return `${(space > MEM_TEXT_MAX / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
 /**
  * The only accepted shape of a mem row `key` — problem identity, not action
  * (kind) and not place (files[]). Lives here in core so CLI and MCP validate
  * through one regex (PLAN-unify-mem-engine: one engine, both surfaces).
+ *
+ * Bare (`fix-stop-dedupe`) or namespaced (`auth:login`, `nope:x`): the domain
+ * half is checked against `.fapony/keys.json` when that file exists
+ * (PLAN-mem-core chunk 4); the sub half is free (≥1 char — it names one
+ * problem, not a namespace). One colon at most — the engine splits on the
+ * first one, so a second colon never validates.
  */
-export const KEY_RE = /^[a-z0-9-]{3,40}$/;
+export const KEY_RE = /^[a-z0-9-]{3,40}(:[a-z0-9-]{1,40})?$/;
+
+/** A single key segment (domain in the registry, sub after the colon). */
+export const KEY_SEGMENT_RE = /^[a-z0-9-]{3,40}$/;
 
 interface RawMemRow {
   ts?: string;

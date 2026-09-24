@@ -1,6 +1,7 @@
 // commands/write.ts — mutating commands: add, close, claim, release, synced, hook
 
 import { CapError, engineAdd, engineClose } from "../engine.js";
+import { loadKeyRegistry } from "../key-registry.js";
 import { claimsOf, openRows } from "../selectors.js";
 import type { WorkKind } from "../store.js";
 import { KINDS, memCmd, put, root, rows } from "../store.js";
@@ -125,8 +126,18 @@ export const cmdAdd = async (a: string[]) => {
   }
   // Domain rules (caps, id) live in the shared engine — this wrapper owns
   // only argv surface and the MEM_FORCE hint wording (PLAN-unify-mem-engine).
+  // The registry lives beside the mem log; absent = free-form keys (never
+  // reject). root is set by initStore at dispatch; cwd covers direct calls.
   try {
-    const { id } = engineAdd({ kind: a[0], text, spec, files, key: keyVal });
+    const reg = loadKeyRegistry(root || process.cwd());
+    const { id } = engineAdd({
+      kind: a[0],
+      text,
+      spec,
+      files,
+      key: keyVal,
+      knownDomains: reg.path ? reg.domains : null,
+    });
     console.log(id);
   } catch (e) {
     if (e instanceof CapError) {

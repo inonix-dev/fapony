@@ -2,15 +2,39 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { collectSourceFiles } from "../../analyze/index.js";
 import { parseSince } from "../../core/since.js";
 import { baselinePath, readEvidenceLintCmd } from "../../lint-baseline.js";
 import { CLI_FIND_EXCLUDE, engineFind } from "../engine.js";
+import { loadKeyRegistry } from "../key-registry.js";
 import { doneLines, fmtClose, fmtRow } from "../render.js";
-import { claimsOf, openKeys, openRows, staleReport } from "../selectors.js";
+import {
+  claimsOf,
+  evictionReport,
+  openKeys,
+  openRows,
+  staleReport,
+} from "../selectors.js";
 import type { CloseRow, LogRow, WorkRow } from "../store.js";
-import { allRows, app, memCmd, planDir, root, rows } from "../store.js";
+import { allRows, app, LOG, memCmd, planDir, root, rows } from "../store.js";
 import { checkTickedLine, planSweepCmd, shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
+
+/**
+ * One ⚠ line when the mem log is gitignored — the log's promise is that a
+ * clone carries every decision; an ignored log keeps them on this machine
+ * only, and nothing else says so. Ignoring may be deliberate (a public repo),
+ * so this warns, never blocks.
+ */
+function ignoredLogLine(): string | null {
+  try {
+    const p = Bun.spawnSync(["git", "check-ignore", "-q", LOG], { cwd: root });
+    if (p.exitCode !== 0) return null;
+  } catch {
+    return null;
+  }
+  return `⚠ mem log is gitignored (${basename(LOG)}) — decisions and plan ticks stay on this machine; a clone gets none of them`;
+}
 
 /** Files changed on this branch vs dev — empty set when dev is missing or diff fails. */
 function getBranchDiffFiles(cwd: string): Set<string> {
@@ -65,6 +89,14 @@ const openKeysLine = (all: LogRow[]): string => {
   return `open keys: ${body}${more} — ${memCmd} find --key <key>`;
 };
 
+// Registry line (PLAN-mem-core chunk 4): one line naming the allowed domains
+// so the agent keys the row right the first time — silent with no registry.
+const keyDomainsLine = (): string => {
+  const reg = loadKeyRegistry(root || process.cwd());
+  if (!reg.path || !reg.domains.length) return "";
+  return `key domains: ${reg.domains.join(", ")} — use --key domain:sub`;
+};
+
 const shortText = (text: string, max = RECENT_OPEN_TEXT): string => {
   if (text.length <= max) return text;
   const cut = text.slice(0, max);
@@ -78,7 +110,23 @@ export const cmdDone = () => {
 };
 
 export const cmdStale = () => {
-  for (const l of staleReport(rows())) console.log(l);
+  const all = rows();
+  for (const l of staleReport(all)) console.log(l);
+  // Eviction (PLAN-mem-core chunk 5): rows whose files[] are all gone from
+  // disk, with unique-basename moves followed. Local only — existsSync +
+  // collectSourceFiles, never git. The tree walk runs only when some row
+  // actually names a missing file.
+  if (!root) return;
+  const exists = (f: string) => existsSync(join(root, f));
+  if (
+    !all.some(
+      (r) =>
+        "files" in r && ((r as WorkRow).files ?? []).some((f) => !exists(f)),
+    )
+  )
+    return;
+  for (const l of evictionReport(all, exists, collectSourceFiles(root)))
+    console.log(l);
 };
 
 export const cmdFind = (a: string[]) => {
@@ -553,8 +601,12 @@ export const cmdKickoff = (a: string[]) => {
   if (!arg && !planFile) {
     // no args = ranked open rows + next up + recent closes
     console.log(`# ${app} — ${all.length} entries`);
+    const ignored = ignoredLogLine();
+    if (ignored) console.log(ignored);
     const keys = openKeysLine(all);
     if (keys) console.log(keys);
+    const domains = keyDomainsLine();
+    if (domains) console.log(domains);
 
     const open = openRows(all);
     const claims = claimsOf(all);
@@ -714,6 +766,8 @@ export const cmdKickoff = (a: string[]) => {
   } else if (planFile) {
     const title = readPlanTitle(planFile);
     console.log(`# ${title || basename(planFile)} — plan`);
+    const ignored = ignoredLogLine();
+    if (ignored) console.log(ignored);
     if (planCheckboxes.length) {
       console.log(
         `\n## unchecked\n${planCheckboxes.map((c) => `- [ ] ${c}`).join("\n")}`,

@@ -24,7 +24,7 @@ test("testMcpToolsList", () => {
     | { pattern?: string }
     | undefined;
   assert.ok(key, "mem_add schema must expose key");
-  assert.equal(key?.pattern, "^[a-z0-9-]{3,40}$");
+  assert.equal(key?.pattern, "^[a-z0-9-]{3,40}(:[a-z0-9-]{1,40})?$");
   // PLAN-mem-keys chunk 2: mem_find advertises key WITHOUT a pattern — a
   // wrong-pattern query must reach the server and answer with knownKeys.
   const memFind = r.tools.find((t) => t.name === "mem_find");

@@ -133,7 +133,7 @@ export async function cmdHookEditHint(): Promise<void> {
     const parts: string[] = [];
     const hint = editHintFor({ filePath, cwd, session });
     if (hint) parts.push(hint);
-    const ctx = readContextData(filePath, cwd);
+    const ctx = readContextData(filePath, cwd, session);
     if (ctx) {
       for (const line of [...ctx.debtLines, ...ctx.memLines]) {
         parts.push(line);

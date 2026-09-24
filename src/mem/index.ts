@@ -52,7 +52,7 @@ example: fapony mem kickoff .fapony/plan/PLAN-x.md`,
   add: `usage: fapony mem add <next|bug|decision|note|hold> "<text>" --files f1,f2 [--key k] [spec.md]
 append one row to the mem log
   --files f1,f2   repo-relative paths this row is about (required)
-  --key k         problem identity, [a-z0-9-]{3,40} — same problem = same key (optional)
+  --key k         problem identity, bare or domain:sub (e.g. auth:login) — the domain must be in .fapony/keys.json when that file exists (optional)
   --stdin         read <text> from stdin (avoids shell metachar)
 example: fapony mem add decision "chose X because Y" --files src/a.ts,src/b.ts --key unify-mem-engine`,
   close: `usage: fapony mem close <id> "<what was done | commit>"
@@ -63,7 +63,7 @@ example: fapony mem close mt14 "fixed in a2c6beb"`,
 substring search over every row's text/spec/ref (rotated archives included) — bookkeeping kinds (close/synced/claim/release) hidden unless --kind names them
   --kind a,b    include only these kinds (overrides the bookkeeping default)
   --files f1,f2 rows about these paths (stored files[] first, text/spec/ref fallback)
-  --key k       exact problem-identity match — a miss prints the known keys
+  --key k       problem-identity match — a bare domain catches every domain:* (auth matches auth:login); a miss prints the known keys
   --since 7d    only rows at or after this time (<N>d or YYYY-MM-DD)
   --limit n     max rows returned (default 20, newest first)
 example: fapony mem find "usage-web" --kind bug,decision --limit 5`,
