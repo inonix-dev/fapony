@@ -2,12 +2,19 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { collectSourceFiles } from "../../analyze/index.js";
 import { parseSince } from "../../core/since.js";
 import { baselinePath, readEvidenceLintCmd } from "../../lint-baseline.js";
 import { CLI_FIND_EXCLUDE, engineFind } from "../engine.js";
 import { loadKeyRegistry } from "../key-registry.js";
 import { doneLines, fmtClose, fmtRow } from "../render.js";
-import { claimsOf, openKeys, openRows, staleReport } from "../selectors.js";
+import {
+  claimsOf,
+  evictionReport,
+  openKeys,
+  openRows,
+  staleReport,
+} from "../selectors.js";
 import type { CloseRow, LogRow, WorkRow } from "../store.js";
 import { allRows, app, LOG, memCmd, planDir, root, rows } from "../store.js";
 import { checkTickedLine, planSweepCmd, shippedNotMoved } from "./plan.js";
@@ -103,7 +110,23 @@ export const cmdDone = () => {
 };
 
 export const cmdStale = () => {
-  for (const l of staleReport(rows())) console.log(l);
+  const all = rows();
+  for (const l of staleReport(all)) console.log(l);
+  // Eviction (PLAN-mem-core chunk 5): rows whose files[] are all gone from
+  // disk, with unique-basename moves followed. Local only — existsSync +
+  // collectSourceFiles, never git. The tree walk runs only when some row
+  // actually names a missing file.
+  if (!root) return;
+  const exists = (f: string) => existsSync(join(root, f));
+  if (
+    !all.some(
+      (r) =>
+        "files" in r && ((r as WorkRow).files ?? []).some((f) => !exists(f)),
+    )
+  )
+    return;
+  for (const l of evictionReport(all, exists, collectSourceFiles(root)))
+    console.log(l);
 };
 
 export const cmdFind = (a: string[]) => {

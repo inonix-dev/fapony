@@ -15,6 +15,7 @@ import { collectSourceFiles, SCAN_EXTS } from "../../analyze/index.js";
 import { readTrackDir, sessionKey } from "../../core/hook-helpers.js";
 import { clipMemText, readMemLog } from "../../core/mem-log.js";
 import { debtForFile, resolveDebtScope } from "../../debt/index.js";
+import { movedTargets } from "../../mem/selectors.js";
 
 const DEBT_HINT_MAX = 3;
 const MEM_HINT_MAX = 2;
@@ -108,6 +109,26 @@ export function readContextData(
     // even though the file being touched sits right under its log (bug muc9q47r).
     const mem = readMemLog(dirname(abs));
     if (mem.rows.length > 0) {
+      // PLAN-mem-core chunk 5 — follow moves: a row naming old/a.ts still
+      // shows when the file now lives at new/a.ts, as long as no other a.ts
+      // exists on disk. Missing = stat-miss on the worktree-joined path; the
+      // tree walk runs only when some row actually names a missing file.
+      const missingOld = new Set<string>();
+      for (const r of mem.rows)
+        for (const f of r.files ?? [])
+          if (f !== rel && !existsSync(join(worktree, f))) missingOld.add(f);
+      const moved =
+        missingOld.size > 0
+          ? movedTargets([...missingOld], collectSourceFiles(worktree))
+          : null;
+      const filesOf = (r: (typeof mem.rows)[number]): string[] =>
+        (r.files ?? []).map((f) => moved?.get(f) ?? f);
+      const movedFrom = (r: (typeof mem.rows)[number]): string => {
+        const from = (r.files ?? []).find(
+          (f) => f !== rel && moved?.get(f) === rel,
+        );
+        return from ? ` (moved from ${from})` : "";
+      };
       // Open bugs first (PLAN-active-pain chunk 3): a kind:"bug" row whose id
       // is in no close row's ref — the same tombstone shape as openRows in
       // src/mem/selectors.ts, never a regex on text. Exact files[] match only:
@@ -119,9 +140,9 @@ export function readContextData(
       for (const r of mem.rows) {
         if (openLines.length >= MEM_HINT_MAX) break;
         if (r.kind !== "bug" || !r.id || closed.has(r.id)) continue;
-        if (!(r.files ?? []).includes(rel)) continue;
+        if (!filesOf(r).includes(rel)) continue;
         openLines.push(
-          `fapony mem: OPEN BUG ${r.id} — "${clipMemText(r.text)}" — ปิดด้วย fapony mem close ${r.id} "<msg>" เมื่อแก้แล้ว`,
+          `fapony mem: OPEN BUG ${r.id} — "${clipMemText(r.text)}" — ปิดด้วย fapony mem close ${r.id} "<msg>" เมื่อแก้แล้ว${movedFrom(r)}`,
         );
         openBugIds.push(r.id);
       }
@@ -135,7 +156,7 @@ export function readContextData(
         if (r.kind === "claim" || r.kind === "release" || r.kind === "close") {
           continue;
         }
-        if ((r.files ?? []).includes(rel)) {
+        if (filesOf(r).includes(rel)) {
           exact.push(r);
           continue;
         }
@@ -168,7 +189,7 @@ export function readContextData(
       for (const r of rest) {
         if (r.id) restIds.push(r.id);
         memLines.push(
-          `fapony mem: ${r.ts.slice(0, 10)} ${r.kind} — ${clipMemText(r.text)}`,
+          `fapony mem: ${r.ts.slice(0, 10)} ${r.kind} — ${clipMemText(r.text)}${movedFrom(r)}`,
         );
       }
       memIds.push(...restIds);

@@ -131,6 +131,73 @@ export const staleReport = (all: LogRow[]): string[] => {
   return out;
 };
 
+// Eviction (PLAN-mem-core chunk 5): rows whose files[] no longer resolve on
+// disk. Local only — the caller passes existence, this module never touches
+// fs or git (plan §4: eviction ไม่เรียก git เลย). Append-only: these selectors
+// report and redirect, they never delete rows.
+export const evictedRows = (
+  all: LogRow[],
+  exists: (rel: string) => boolean,
+): WorkRow[] =>
+  openRows(all).filter(
+    (r) =>
+      (r.files ?? []).length > 0 && (r.files ?? []).every((f) => !exists(f)),
+  );
+
+// Follow a move by basename: a missing path whose basename names exactly one
+// file on disk is treated as moved there. Two files sharing the basename =
+// ambiguous → no entry (silent, never guessed). A rename that changes the
+// basename itself is out of reach — said plainly, not guessed at.
+export const movedTargets = (
+  missing: string[],
+  onDisk: string[],
+): Map<string, string> => {
+  const byBase = new Map<string, string[]>();
+  for (const f of onDisk) {
+    const b = f.slice(f.lastIndexOf("/") + 1);
+    const list = byBase.get(b) ?? [];
+    list.push(f);
+    byBase.set(b, list);
+  }
+  const out = new Map<string, string>();
+  for (const old of missing) {
+    const b = old.slice(old.lastIndexOf("/") + 1);
+    const cands = (byBase.get(b) ?? []).filter((f) => f !== old);
+    if (cands.length === 1) out.set(old, cands[0]);
+  }
+  return out;
+};
+
+// One report for `mem stale`: EVICTED for open rows whose files[] are all
+// gone, MOVED for rows rescued by a unique-basename match. Rows with ≥1 file
+// still on disk stay silent — mem find --files still reaches them.
+export const evictionReport = (
+  all: LogRow[],
+  exists: (rel: string) => boolean,
+  onDisk: string[],
+): string[] => {
+  const open = openRows(all);
+  const gone = (files: string[]): string[] => files.filter((f) => !exists(f));
+  const moved = movedTargets(
+    [...new Set(open.flatMap((r) => gone(r.files ?? [])))],
+    onDisk,
+  );
+  const out: string[] = [];
+  for (const r of evictedRows(all, exists)) {
+    const missing = gone(r.files ?? []);
+    const rescued = missing.filter((f) => moved.has(f));
+    if (rescued.length === missing.length) {
+      const hops = rescued.map((f) => `${f} → ${moved.get(f)}`).join(", ");
+      out.push(`MOVED [${r.id}] ${r.kind} ${hops} — "${r.text}"`);
+    } else {
+      out.push(
+        `EVICTED [${r.id}] ${r.kind} files gone: ${missing.join(", ")} — "${r.text}"`,
+      );
+    }
+  }
+  return out;
+};
+
 // rotate: rows that must carry over into the new log file after archiving
 // - open next/bug/hold + still-active claims on those rows (close/claim of already-closed refs = discardable)
 // - decision/note has no "close" of its own (permanent history by design) but resolves indirectly via synced:
