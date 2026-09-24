@@ -1,7 +1,7 @@
 // src/mcp/tools/collect.ts — handoff_collect tool
 
 import { execSync } from "node:child_process";
-import { isTestFile } from "../../../analyze.js";
+import { isTestFile } from "../../../analyze/index.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
 
 // --- Git helper ---

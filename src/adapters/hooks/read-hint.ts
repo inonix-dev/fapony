@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
-import { SCAN_EXTS } from "../../analyze.js";
+import { SCAN_EXTS } from "../../analyze/index.js";
 import { recordHintFire } from "../../core/hint-log.js";
 import { sessionKey } from "../../core/hook-helpers.js";
 import { readMemLog } from "../../memory.js";

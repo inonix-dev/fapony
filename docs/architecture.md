@@ -63,7 +63,20 @@ fapony/
     context/           # project-health context block, keyed by files[] (any caller)
       projectHealth.ts # buildProjectHealthContext() — pure over StatsData, ~15 lines max; computeModelFit() (regime×model right-sizing, min-N=5) read by `fapony stats` — plan-seed stopped citing it 2026-09-22 (frozen ledger; cross-model ranking claims are off the table)
       index.ts         # barrel re-export
-    analyze.ts         # fapony analyze — buildGraph()/blastRadius()/diagnose() (hub/orphan/cycle/changed-untested), live import graph via Bun.Transpiler.scan(), never persisted
+    analyze/            # fapony analyze — one file per concern (mirrors install/, debt/)
+      types.ts          # ImportGraph / Finding / BlastEntry
+      criteria.ts       # isTestFile / isBarrelSource / isTestedThroughBarrels
+      discover.ts       # SCAN_EXTS / isSkippedDir / collectSourceFiles
+      resolve-ts.ts     # require()/import-type + resolveRelative
+      python.ts         # .py import scan + resolution
+      barrels.ts        # exportsThroughBarrels (star re-exports)
+      graph.ts          # buildGraph() — live via Bun.Transpiler.scan(), never persisted
+      cache.ts          # buildGraphCached() — session-scoped, state dir only
+      diagnose.ts       # diagnose() (hub/orphan/cycle/changed-untested)
+      blast.ts          # blastRadius() / blastRadiusForWorktree()
+      format.ts         # formatAnalyze()
+      cli.ts            # cmdAnalyze()
+      index.ts          # barrel re-export
     map.ts              # extractExports() — on-demand source index, library only; the `fapony map` command was deleted once plan-seed/review-seed were its only callers (see PLAN-code-map)
     detect.ts           # runtime test runner detection (bun/npm/pnpm/yarn) from package.json + lockfile — used by hook.ts and install.ts
     conventions-seed.ts # init-time wrapper detector → writes .fapony/conventions.json — reads snapshot only, never touches history

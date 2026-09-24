@@ -29,7 +29,7 @@ import {
   isTestedThroughBarrels,
   isTestFile,
   SCAN_EXTS,
-} from "../analyze.js";
+} from "../analyze/index.js";
 import { extractBody, extractExports } from "../map.js";
 import { assertSafe } from "../safety.js";
 import { execGit, gitOk, gitValue, SeedError, SIG_MAX } from "./primitives.js";

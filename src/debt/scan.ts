@@ -5,7 +5,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
-import { collectSourceFiles } from "../analyze.js";
+import { collectSourceFiles } from "../analyze/index.js";
 import {
   type Convention,
   DEBT_FILE_CAP,

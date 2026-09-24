@@ -14,7 +14,11 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
-import { collectSourceFiles, isSkippedDir, isTestFile } from "./analyze.js";
+import {
+  collectSourceFiles,
+  isSkippedDir,
+  isTestFile,
+} from "./analyze/index.js";
 import { CONVENTIONS_FILE, FAPONY_DIR } from "./core/config.js";
 import { extractBody, extractExports } from "./map.js";
 

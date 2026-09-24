@@ -23,7 +23,7 @@ import {
   graphCachePath,
   isTestFile,
   resetGraphCache,
-} from "../src/analyze.js";
+} from "../src/analyze/index.js";
 
 function withFixture(
   files: Record<string, string>,
@@ -425,8 +425,8 @@ test("testAnalyzePythonRelativeGraph", () => {
       "pkg/sub/sib.py": "SIB = 1\n",
       "pkg/sub/deep.py":
         "from ..core import helper\nfrom . import sib\nprint(helper, sib)\n",
-      // Absolute imports (stdlib and same-repo) are unresolvable without
-      // sys.path knowledge — same bucket as TS path aliases.
+      // Absolute imports resolve when the target is in this repo (`pkg.core`
+      // → pkg/core.py); `import os` stays unresolved — no os.py here.
       "top.py": "import os\nfrom pkg.core import helper\nprint(os, helper)\n",
     },
     (dir) => {
@@ -439,9 +439,12 @@ test("testAnalyzePythonRelativeGraph", () => {
       assert.deepEqual([...(graph.deps.get("pkg/sub/deep.py") ?? [])].sort(), [
         "pkg/core.py",
         "pkg/sub/__init__.py",
+        "pkg/sub/sib.py",
       ]);
-      assert.equal(graph.unresolved, 2, "import os + absolute from-import");
-      assert.equal(graph.dependents.get("pkg/core.py")?.size, 2);
+      assert.deepEqual([...(graph.deps.get("top.py") ?? [])], ["pkg/core.py"]);
+      assert.equal(graph.unresolved, 1, "import os only");
+      assert.equal(graph.dependents.get("pkg/core.py")?.size, 3);
+      assert.equal(graph.dependents.get("pkg/sub/sib.py")?.size, 1);
     },
   );
   console.log(
@@ -507,4 +510,89 @@ test("testAnalyzeSkipsVenv", () => {
     },
   );
   console.log("  ✓ analyze never walks .venv");
+});
+
+test("testAnalyzePythonFromImportSubmodule", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "from . import sub\n",
+      "pkg/sub.py": "SUB = 1\n",
+      "pkg/user.py": "from . import sub as s, missing\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      // `from . import sub` reaches sub.py, not the package __init__.py alone.
+      assert.ok(
+        graph.deps.get("pkg/user.py")?.has("pkg/sub.py"),
+        "named submodule is an edge",
+      );
+      assert.equal(graph.dependents.get("pkg/sub.py")?.size, 2);
+      // `from . import sub` inside __init__.py must not point at itself.
+      assert.ok(!graph.deps.get("pkg/__init__.py")?.has("pkg/__init__.py"));
+      // The module resolves, so `missing` is treated as a package attribute
+      // (not a submodule miss) — no unresolved edge.
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  console.log("  ✓ analyze resolves `from . import submodule` to the file");
+});
+
+test("testAnalyzePythonAbsoluteSrcLayout", () => {
+  withFixture(
+    {
+      "src/mypkg/__init__.py": "from .core import helper\n",
+      "src/mypkg/core.py": "def helper():\n    return 1\n",
+      "tests/test_core.py": "from mypkg.core import helper\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.ok(
+        graph.deps.get("tests/test_core.py")?.has("src/mypkg/core.py"),
+        "src-layout absolute import resolves",
+      );
+      assert.equal(
+        blastRadius(graph, ["src/mypkg/core.py"])["src/mypkg/core.py"].tested,
+        true,
+      );
+    },
+  );
+  console.log("  ✓ analyze resolves same-repo absolute imports (src layout)");
+});
+
+test("testAnalyzePythonAbsoluteBareNameNotMatched", () => {
+  withFixture(
+    {
+      "src/mypkg/__init__.py": "",
+      "src/mypkg/core.py": "def helper():\n    return 1\n",
+      // A bare `import core` must NOT bind to src/mypkg/core.py — only the
+      // dotted `mypkg.core` is a real module path.
+      "src/mypkg/consumer.py": "import core\nprint(core)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.deepEqual(
+        [...(graph.deps.get("src/mypkg/consumer.py") ?? [])],
+        [],
+      );
+      assert.equal(graph.unresolved, 1);
+    },
+  );
+  console.log("  ✓ analyze does not resolve a bare name to a nested module");
+});
+
+test("testAnalyzePythonIgnoresImportsInStrings", () => {
+  withFixture(
+    {
+      "pkg/__init__.py": "",
+      "pkg/core.py": "VALUE = 1\n",
+      "pkg/user.py":
+        '"""\nfrom .core import VALUE\n"""\nTEMPLATE = """\nfrom .core import VALUE\n"""\nprint(1)\n',
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.deepEqual([...(graph.deps.get("pkg/user.py") ?? [])], []);
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  console.log("  ✓ analyze ignores imports written inside strings/docstrings");
 });

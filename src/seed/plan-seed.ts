@@ -34,7 +34,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
-import { collectSourceFiles, isSkippedDir, SCAN_EXTS } from "../analyze.js";
+import {
+  collectSourceFiles,
+  isSkippedDir,
+  SCAN_EXTS,
+} from "../analyze/index.js";
 import {
   CONFIG_FILENAME,
   type Config,
