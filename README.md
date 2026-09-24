@@ -4,7 +4,7 @@
 
 # fapony
 
-[![npm](https://img.shields.io/npm/v/fapony.svg)](https://www.npmjs.com/package/fapony)
+[![npm](https://img.shields.io/npm/v/fapony.svg)](https://www.npmjs.com/package/fapony) [![GitHub](https://img.shields.io/github/stars/kire21b/fapony.svg)](https://github.com/kire21b/fapony)
 
 **See what your coding agents actually cost.** fapony reads the session logs Claude Code, Codex,
 OpenCode and ZCode already write, and puts them all on one yardstick — tokens, cost and time per
