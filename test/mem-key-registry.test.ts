@@ -65,7 +65,9 @@ test("testKeyRegistryLoadShapes", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-  console.log("  ✓ keys.json loads (object/array), drops bad entries, never throws");
+  console.log(
+    "  ✓ keys.json loads (object/array), drops bad entries, never throws",
+  );
 });
 
 test("testSplitKeyAndPrefixMatch", () => {
@@ -238,23 +240,47 @@ test("testMemAddCliAndMcpRejectUnknownDomain", () => {
       });
 
     // done criterion: mem_add key:"nope:x" rejects with the known list
-    const bad = run("note", "bad domain row", "--files", "a.ts", "--key", "nope:x");
+    const bad = run(
+      "note",
+      "bad domain row",
+      "--files",
+      "a.ts",
+      "--key",
+      "nope:x",
+    );
     assert.equal(bad.exitCode, 1, "unknown domain must exit 1");
     assert.match(bad.stderr.toString(), /unknown key domain "nope"/);
     assert.match(bad.stderr.toString(), /known domains: auth/);
 
     // listed domain + bare legacy key both write
-    const ok = run("note", "good domain row", "--files", "b.ts", "--key", "auth:login");
+    const ok = run(
+      "note",
+      "good domain row",
+      "--files",
+      "b.ts",
+      "--key",
+      "auth:login",
+    );
     assert.equal(ok.exitCode, 0, ok.stderr.toString());
-    const bare = run("note", "bare row", "--files", "c.ts", "--key", "fix-stop-dedupe");
+    const bare = run(
+      "note",
+      "bare row",
+      "--files",
+      "c.ts",
+      "--key",
+      "fix-stop-dedupe",
+    );
     assert.equal(bare.exitCode, 0, bare.stderr.toString());
 
     // CLI find: bare domain is a prefix
-    const found = Bun.spawnSync(["bun", FAPONY, "mem", "find", "--key", "auth"], {
-      cwd: dir,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const found = Bun.spawnSync(
+      ["bun", FAPONY, "mem", "find", "--key", "auth"],
+      {
+        cwd: dir,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     assert.equal(found.exitCode, 0, found.stderr.toString());
     assert.ok(found.stdout.toString().includes("good domain row"));
     assert.ok(!found.stdout.toString().includes("bare row"));
@@ -303,7 +329,10 @@ test("testKickoffShowsKeyDomains", () => {
     try {
       // no registry = silent (no domains line)
       const silent = captureLogs(() => cmdKickoff([]));
-      assert.ok(!silent.includes("key domains:"), `must stay silent:\n${silent}`);
+      assert.ok(
+        !silent.includes("key domains:"),
+        `must stay silent:\n${silent}`,
+      );
 
       // registry = exactly one domains line under the header
       seedKeys(dir, { domains: ["auth", "hook"] });
@@ -313,5 +342,7 @@ test("testKickoffShowsKeyDomains", () => {
       process.chdir(prev);
     }
   });
-  console.log("  ✓ kickoff prints one domains line with a registry, silent without");
+  console.log(
+    "  ✓ kickoff prints one domains line with a registry, silent without",
+  );
 });

@@ -10,11 +10,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  FAPONY_DIR,
-  KEYS_FILE,
-  KEYS_FILENAME,
-} from "../core/config.js";
+import { FAPONY_DIR, KEYS_FILE, KEYS_FILENAME } from "../core/config.js";
 import { KEY_SEGMENT_RE } from "../core/mem-log.js";
 import { resolveMemDir } from "../memory.js";
 
