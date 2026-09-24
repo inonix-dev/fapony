@@ -426,7 +426,7 @@ test("testAnalyzePythonRelativeGraph", () => {
       "pkg/sub/deep.py":
         "from ..core import helper\nfrom . import sib\nprint(helper, sib)\n",
       // Absolute imports resolve when the target is in this repo (`pkg.core`
-      // → pkg/core.py); `import os` stays unresolved — no os.py here.
+      // → pkg/core.py); `import os` is stdlib → external, not unresolved.
       "top.py": "import os\nfrom pkg.core import helper\nprint(os, helper)\n",
     },
     (dir) => {
@@ -442,7 +442,8 @@ test("testAnalyzePythonRelativeGraph", () => {
         "pkg/sub/sib.py",
       ]);
       assert.deepEqual([...(graph.deps.get("top.py") ?? [])], ["pkg/core.py"]);
-      assert.equal(graph.unresolved, 1, "import os only");
+      assert.equal(graph.unresolved, 0, "import os is stdlib, not unresolved");
+      assert.equal(graph.external, 1, "import os only");
       assert.equal(graph.dependents.get("pkg/core.py")?.size, 3);
       assert.equal(graph.dependents.get("pkg/sub/sib.py")?.size, 1);
     },
@@ -595,4 +596,40 @@ test("testAnalyzePythonIgnoresImportsInStrings", () => {
     },
   );
   console.log("  ✓ analyze ignores imports written inside strings/docstrings");
+});
+
+test("testAnalyzePythonStdlibExternal", () => {
+  withFixture(
+    {
+      "a.py": "import os, sys\nfrom json import dumps\nprint(os, sys, dumps)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.equal(graph.external, 3, "os + sys + json");
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  withFixture(
+    {
+      "b.py": "from os.path import join\nprint(join)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.equal(graph.external, 1, "root os of os.path");
+      assert.equal(graph.unresolved, 0);
+    },
+  );
+  withFixture(
+    {
+      "c.py": "import requests\nprint(requests)\n",
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      assert.equal(graph.external, 0, "third-party is not stdlib");
+      assert.equal(graph.unresolved, 1);
+    },
+  );
+  console.log(
+    "  ✓ analyze counts stdlib as external, third-party as unresolved",
+  );
 });

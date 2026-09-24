@@ -12,6 +12,8 @@ import { isBarrelSource } from "./criteria.js";
 import { collectSourceFiles } from "./discover.js";
 import {
   buildPyModuleIndex,
+  PY_STDLIB,
+  pyRootSegment,
   resolvePythonImport,
   scanPythonImports,
 } from "./python.js";
@@ -45,13 +47,15 @@ export function buildGraph(dir: string): ImportGraph {
     if (rel.endsWith(".py")) {
       // No Transpiler here — it can't parse Python. Relative imports resolve
       // against the importer's package; same-repo absolute imports resolve
-      // against the module index. Only what neither can place (stdlib, a
-      // third-party package, a miss) joins the unresolved bucket.
+      // against the module index. An absolute miss whose root is in PY_STDLIB
+      // is external; a third-party package or a real miss stays unresolved.
       pyIndex ??= buildPyModuleIndex(filesSet);
       const pyEdges = new Set<string>();
       for (const imp of scanPythonImports(content)) {
         const hits = resolvePythonImport(rel, imp, filesSet, pyIndex);
         if (hits.size > 0) for (const h of hits) pyEdges.add(h);
+        else if (!imp.dots && imp.mod && PY_STDLIB.has(pyRootSegment(imp.mod)))
+          external++;
         else unresolved++;
       }
       deps.set(rel, pyEdges);
