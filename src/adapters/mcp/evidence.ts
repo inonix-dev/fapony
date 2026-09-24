@@ -156,9 +156,17 @@ function runCommand(
   timeoutMs: number,
 ): CommandOutcome {
   const start = Date.now();
+  // A bare `pytest` otherwise hits a global one whose editable install may
+  // point at another worktree — tests the wrong code, silently.
+  // ponytail: .venv only; poetry/uv/conda when someone asks.
+  const venvBin = join(worktree, ".venv", "bin");
+  const env = existsSync(venvBin)
+    ? { ...process.env, PATH: `${venvBin}:${process.env.PATH ?? ""}` }
+    : undefined;
   try {
     execSync(cmd, {
       cwd: worktree,
+      env,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
       timeout: timeoutMs,

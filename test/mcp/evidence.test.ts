@@ -421,3 +421,28 @@ test("testCollectEvidenceAppScoped", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("testCollectEvidencePrefersWorktreeVenv", () => {
+  const dir = makeTmpWorktree();
+  try {
+    // A global `pytest` would test whichever worktree its editable install
+    // points at — the worktree's own .venv/bin must win.
+    mkdirSync(join(dir, ".venv/bin"), { recursive: true });
+    writeFileSync(
+      join(dir, ".venv/bin/fapony-fake-cmd"),
+      "#!/bin/sh\nexit 0\n",
+      {
+        mode: 0o755,
+      },
+    );
+    writeFileSync(
+      join(dir, ".fapony/evidence.json"),
+      JSON.stringify({ commands: [{ name: "t", cmd: "fapony-fake-cmd" }] }),
+    );
+    const items = collectEvidence({ worktree: dir });
+    assert.equal(items[0].status, "passed");
+    console.log("  ✓ evidence runs <worktree>/.venv/bin first on PATH");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
