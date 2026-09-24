@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { parseSince } from "../../core/since.js";
 import { baselinePath, readEvidenceLintCmd } from "../../lint-baseline.js";
 import { CLI_FIND_EXCLUDE, engineFind } from "../engine.js";
+import { loadKeyRegistry } from "../key-registry.js";
 import { doneLines, fmtClose, fmtRow } from "../render.js";
 import { claimsOf, openKeys, openRows, staleReport } from "../selectors.js";
 import type { CloseRow, LogRow, WorkRow } from "../store.js";
@@ -79,6 +80,14 @@ const openKeysLine = (all: LogRow[]): string => {
   const more =
     keys.length > OPEN_KEYS_LIMIT ? ` +${keys.length - OPEN_KEYS_LIMIT}` : "";
   return `open keys: ${body}${more} — ${memCmd} find --key <key>`;
+};
+
+// Registry line (PLAN-mem-core chunk 4): one line naming the allowed domains
+// so the agent keys the row right the first time — silent with no registry.
+const keyDomainsLine = (): string => {
+  const reg = loadKeyRegistry(root || process.cwd());
+  if (!reg.path || !reg.domains.length) return "";
+  return `key domains: ${reg.domains.join(", ")} — use --key domain:sub`;
 };
 
 const shortText = (text: string, max = RECENT_OPEN_TEXT): string => {
@@ -573,6 +582,8 @@ export const cmdKickoff = (a: string[]) => {
     if (ignored) console.log(ignored);
     const keys = openKeysLine(all);
     if (keys) console.log(keys);
+    const domains = keyDomainsLine();
+    if (domains) console.log(domains);
 
     const open = openRows(all);
     const claims = claimsOf(all);

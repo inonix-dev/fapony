@@ -112,9 +112,9 @@ export const TOOLS = [
         },
         key: {
           type: "string",
-          pattern: "^[a-z0-9-]{3,40}$",
+          pattern: "^[a-z0-9-]{3,40}(:[a-z0-9-]{1,40})?$",
           description:
-            "Problem identity (not kind, not files) — same problem, same key",
+            "Problem identity (not kind, not files) — same problem, same key; domain:sub (e.g. auth:login) when the repo declares domains",
         },
       },
       required: ["worktree", "kind", "text", "files"],

@@ -13,6 +13,7 @@ import {
   engineClose,
   engineFind,
 } from "../../../mem/engine.js";
+import { loadKeyRegistry } from "../../../mem/key-registry.js";
 import { initStore, KINDS, type WorkKind } from "../../../mem/store.js";
 import { type MemRow, readMemLog, resolveMemDir } from "../../../memory.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
@@ -101,9 +102,10 @@ export function toolMemFind(args: Record<string, unknown>): ToolResult {
   // Shape gate like mem_add — a non-string key must not coerce to undefined
   // (silent drop = reject-without-saying). Pattern is NOT checked here: find
   // answers a wrong-pattern key with knownKeys, not a reject (SPEC fail example).
+  // A bare domain doubles as a prefix — key:"auth" catches every auth:*.
   if (args.key !== undefined && typeof args.key !== "string") {
     return errorResult(
-      'key must be a string matching [a-z0-9-]{3,40} — e.g. "fix-stop-dedupe"',
+      'key must be a string matching [a-z0-9-]{3,40}(:[a-z0-9-]{1,40})? — e.g. "fix-stop-dedupe" or "auth:login"',
     );
   }
   const key = typeof args.key === "string" ? args.key : undefined;
@@ -129,12 +131,16 @@ export function memAdd(args: {
   key?: string;
 }): MemAddResult {
   initStore(args.worktree);
+  // Registry beside the mem log; absent = free-form keys (never reject).
+  // Loaded per call, not at MCP start (initialize budget ≤ ~100ms).
+  const reg = loadKeyRegistry(args.worktree);
   return engineAdd({
     kind: args.kind,
     text: args.text,
     files: args.files,
     spec: args.spec,
     key: args.key,
+    knownDomains: reg.path ? reg.domains : null,
   });
 }
 
@@ -186,7 +192,7 @@ export function toolMemAdd(args: Record<string, unknown>): ToolResult {
   // slip through as undefined (silent drop = reject-without-saying, SPEC §Validation).
   if (args.key !== undefined && typeof args.key !== "string") {
     return errorResult(
-      'key must be a string matching [a-z0-9-]{3,40} — e.g. "fix-stop-dedupe"',
+      'key must be a string matching [a-z0-9-]{3,40}(:[a-z0-9-]{3,40})? — e.g. "fix-stop-dedupe" or "auth:login"',
     );
   }
   const key = typeof args.key === "string" ? args.key : undefined;

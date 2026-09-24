@@ -11,6 +11,7 @@
 // (PLAN-unify-mem-engine chunk 1)
 
 import { KEY_RE } from "../core/mem-log.js";
+import { checkKeyDomain, keyMatchesQuery } from "./key-registry.js";
 import { openRows } from "./selectors.js";
 import { KINDS, nextId, put, rows, type WorkKind } from "./store.js";
 
@@ -38,6 +39,12 @@ export interface EngineAddArgs {
   spec?: string;
   /** Problem identity — optional, but validated against KEY_RE whenever present. */
   key?: string;
+  /**
+   * Registry domains for this repo (`.fapony/keys.json` via loadKeyRegistry).
+   * null/undefined = no registry on disk = free-form keys, never reject.
+   * Wrappers resolve it; the engine stays pure (no fs).
+   */
+  knownDomains?: string[] | null;
 }
 
 export interface EngineAddResult {
@@ -68,9 +75,13 @@ export function engineAdd(a: EngineAddArgs): EngineAddResult {
   // with a usable example, never silently drop the key (SPEC-mem-keys §Validation).
   if (a.key !== undefined && !KEY_RE.test(a.key)) {
     throw new Error(
-      `key must match [a-z0-9-]{3,40} — e.g. "fix-stop-dedupe", got "${a.key}"`,
+      `key must match [a-z0-9-]{3,40}(:[a-z0-9-]{1,40})? — e.g. "fix-stop-dedupe" or "auth:login", got "${a.key}"`,
     );
   }
+  // Registry gate (PLAN-mem-core chunk 4): the domain half must be declared.
+  const domainError =
+    a.key !== undefined ? checkKeyDomain(a.key, a.knownDomains) : null;
+  if (domainError) throw new Error(domainError);
 
   const all = rows();
   if (a.kind === "next" && !process.env.MEM_FORCE) {
@@ -190,10 +201,12 @@ export interface EngineFindArgs {
    */
   open?: boolean;
   /**
-   * Exact problem-identity match — rows whose effective key differs fall out
-   * (v:1 rows included; they stay reachable via files/text). A close row
-   * matches through the key of the work row its ref points at (derived at
-   * read time, never stored). A pure miss also returns knownKeys.
+   * Problem-identity match — a bare domain doubles as a prefix (`auth`
+   * catches every `auth:*`; `auth:login` is exact). Rows whose effective key
+   * differs fall out (v:1 rows included; they stay reachable via
+   * files/text). A close row matches through the key of the work row its
+   * ref points at (derived at read time, never stored). A pure miss also
+   * returns knownKeys.
    */
   key?: string;
 }
@@ -248,10 +261,11 @@ export function engineFind<T extends FindableRow>(
     out = out.filter((r) => !drop.has(r.kind));
   }
 
-  // Exact key match, before text/files — a wrong key must never fall through
-  // to substring luck. Close rows derive their key from the ref'd work row
-  // (read-time derive: match only; the row itself stays keyless). knownKeys
-  // fires only on a pure key miss — answer a wrong guess with the real list.
+  // Domain-prefix key match, before text/files — a wrong key must never fall
+  // through to substring luck. Close rows derive their key from the ref'd
+  // work row (read-time derive: match only; the row itself stays keyless).
+  // knownKeys fires only on a pure key miss — answer a wrong guess with the
+  // real list.
   let knownKeys: string[] | undefined;
   if (a.key) {
     const want = a.key;
@@ -266,8 +280,8 @@ export function engineFind<T extends FindableRow>(
       (r.kind === "close" && typeof r.ref === "string"
         ? idKey.get(r.ref)
         : undefined);
-    out = out.filter((r) => eff(r) === want);
-    if (!all.some((r) => eff(r) === want)) {
+    out = out.filter((r) => keyMatchesQuery(eff(r), want));
+    if (!all.some((r) => keyMatchesQuery(eff(r), want))) {
       const distinct = new Set<string>();
       for (const r of all) {
         if (r.key) distinct.add(r.key);

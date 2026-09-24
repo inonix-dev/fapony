@@ -92,8 +92,10 @@ export interface RolePricing {
 export const FAPONY_DIR = ".fapony";
 export const CONFIG_FILENAME = "fapony.config.json";
 export const CONVENTIONS_FILENAME = "conventions.json";
+export const KEYS_FILENAME = "keys.json";
 export const EVIDENCE_FILENAME = "evidence.json";
 export const CONVENTIONS_FILE = `${FAPONY_DIR}/${CONVENTIONS_FILENAME}`;
+export const KEYS_FILE = `${FAPONY_DIR}/${KEYS_FILENAME}`;
 // plan/spec live in .fapony/ — not configurable (gitignored = private).
 export const PLAN_DIR = `${FAPONY_DIR}/plan`;
 export const SPEC_DIR = `${FAPONY_DIR}/spec`;

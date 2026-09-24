@@ -45,8 +45,17 @@ export function clipMemText(text: string): string {
  * The only accepted shape of a mem row `key` — problem identity, not action
  * (kind) and not place (files[]). Lives here in core so CLI and MCP validate
  * through one regex (PLAN-unify-mem-engine: one engine, both surfaces).
+ *
+ * Bare (`fix-stop-dedupe`) or namespaced (`auth:login`, `nope:x`): the domain
+ * half is checked against `.fapony/keys.json` when that file exists
+ * (PLAN-mem-core chunk 4); the sub half is free (≥1 char — it names one
+ * problem, not a namespace). One colon at most — the engine splits on the
+ * first one, so a second colon never validates.
  */
-export const KEY_RE = /^[a-z0-9-]{3,40}$/;
+export const KEY_RE = /^[a-z0-9-]{3,40}(:[a-z0-9-]{1,40})?$/;
+
+/** A single key segment (domain in the registry, sub after the colon). */
+export const KEY_SEGMENT_RE = /^[a-z0-9-]{3,40}$/;
 
 interface RawMemRow {
   ts?: string;
