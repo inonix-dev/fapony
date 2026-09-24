@@ -8,9 +8,25 @@ import { CLI_FIND_EXCLUDE, engineFind } from "../engine.js";
 import { doneLines, fmtClose, fmtRow } from "../render.js";
 import { claimsOf, openKeys, openRows, staleReport } from "../selectors.js";
 import type { CloseRow, LogRow, WorkRow } from "../store.js";
-import { allRows, app, memCmd, planDir, root, rows } from "../store.js";
+import { allRows, app, LOG, memCmd, planDir, root, rows } from "../store.js";
 import { checkTickedLine, planSweepCmd, shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
+
+/**
+ * One ⚠ line when the mem log is gitignored — the log's promise is that a
+ * clone carries every decision; an ignored log keeps them on this machine
+ * only, and nothing else says so. Ignoring may be deliberate (a public repo),
+ * so this warns, never blocks.
+ */
+function ignoredLogLine(): string | null {
+  try {
+    const p = Bun.spawnSync(["git", "check-ignore", "-q", LOG], { cwd: root });
+    if (p.exitCode !== 0) return null;
+  } catch {
+    return null;
+  }
+  return `⚠ mem log is gitignored (${basename(LOG)}) — decisions and plan ticks stay on this machine; a clone gets none of them`;
+}
 
 /** Files changed on this branch vs dev — empty set when dev is missing or diff fails. */
 function getBranchDiffFiles(cwd: string): Set<string> {
@@ -553,6 +569,8 @@ export const cmdKickoff = (a: string[]) => {
   if (!arg && !planFile) {
     // no args = ranked open rows + next up + recent closes
     console.log(`# ${app} — ${all.length} entries`);
+    const ignored = ignoredLogLine();
+    if (ignored) console.log(ignored);
     const keys = openKeysLine(all);
     if (keys) console.log(keys);
 
@@ -714,6 +732,8 @@ export const cmdKickoff = (a: string[]) => {
   } else if (planFile) {
     const title = readPlanTitle(planFile);
     console.log(`# ${title || basename(planFile)} — plan`);
+    const ignored = ignoredLogLine();
+    if (ignored) console.log(ignored);
     if (planCheckboxes.length) {
       console.log(
         `\n## unchecked\n${planCheckboxes.map((c) => `- [ ] ${c}`).join("\n")}`,
