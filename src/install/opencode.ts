@@ -238,7 +238,7 @@ export const FaponyReadHint = async ({ directory }) => {
           session: input.sessionID,
         });
         if (reread) parts.push(reread);
-        const ctx = readContextData(filePath, directory);
+        const ctx = readContextData(filePath, directory, input.sessionID);
         if (ctx) {
           for (const line of [...ctx.debtLines, ...ctx.memLines]) {
             parts.push(line);
@@ -384,7 +384,7 @@ export const FaponyEditHint = async ({ directory }) => {
         });
         if (hint) parts.push(hint);
         // Attach mem/debt context (same as read hint — annotate only, cap 5 lines)
-        const ctx = readContextData(filePath, directory);
+        const ctx = readContextData(filePath, directory, input.sessionID);
         if (ctx) {
           for (const line of [...ctx.debtLines, ...ctx.memLines]) {
             parts.push(line);

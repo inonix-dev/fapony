@@ -11,11 +11,10 @@ import {
   realpathSync,
   statSync,
 } from "node:fs";
-import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { SCAN_EXTS } from "../../analyze/index.js";
 import { recordHintFire } from "../../core/hint-log.js";
-import { sessionKey } from "../../core/hook-helpers.js";
+import { readTrackDir, sessionKey } from "../../core/hook-helpers.js";
 import { readMemLog } from "../../memory.js";
 import { renderSeed } from "../../seed/review-seed.js";
 import { hasBugMarker, isBugfixCommit } from "./bug-markers.js";
@@ -105,19 +104,10 @@ export function readHintFor(opts: ReadHintInput): string | null {
 
 // --- Re-read tracking (mtime heuristic) ---
 
-const READ_TRACK_DIR = "read-track";
-
 export interface ReadTrackRow {
   ts: string;
   path: string;
   mtime: number;
-}
-
-/** Directory holding one read log per session. */
-function readTrackDir(): string {
-  const base =
-    process.env.FAPONY_STATE_DIR || join(homedir(), ".config", "fapony");
-  return join(base, READ_TRACK_DIR);
 }
 
 /** Absolute path of a session's read log — may not exist. */
@@ -324,7 +314,7 @@ export async function cmdHookReadHint(): Promise<void> {
       session,
     });
     if (reread) parts.push(reread);
-    const ctx = readContextData(filePath, cwd);
+    const ctx = readContextData(filePath, cwd, session);
     if (ctx) {
       for (const line of [...ctx.debtLines, ...ctx.memLines]) {
         parts.push(line);

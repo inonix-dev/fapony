@@ -4,7 +4,8 @@
 // feature imports and are reused by stop, read-hint, edit-hint, and
 // session-start adapters.
 
-import { basename } from "node:path";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 
 /** UTC 'YYYY-MM-DD HH:MM:SS' — the format events.ts is written in. */
 export function utcStamp(d: Date): string {
@@ -28,4 +29,11 @@ export function hookTsMs(ts: string): number {
 export function sessionKey(session: string): string {
   const base = basename(session).replace(/\.[^.]+$/, "");
   return base.replace(/[^A-Za-z0-9_-]/g, "-") || "unknown";
+}
+
+/** Per-session hint state dir (read log + shown mem ids) — disposable, never in a worktree. */
+export function readTrackDir(): string {
+  const base =
+    process.env.FAPONY_STATE_DIR || join(homedir(), ".config", "fapony");
+  return join(base, "read-track");
 }
