@@ -192,7 +192,9 @@ only place that ordering stays true.
 becomes a second copy of the plan, and then neither copy can be trusted. `fapony mem kickoff` reads the
 checkboxes in the **first `##` section only**, so section 6 stays detail rather than status.
 
-Section 6 — every step must be verifiable. Section 8 — must link back to anything it came from.
+Section 6 — every step must be verifiable. Section 8 — must link back to anything it came from. **A step that needs something the system does not store yet** ("the month the accountant has seen",
+"last synced") must say where it lives, who writes it, and who reads it — or the executing agent
+designs it alone, by exploring (measured: one such chunk burned ~250k tokens before a line of code).
 **Plan = what/why/order, spec = how in detail**: never paste API shapes, schemas, wireframes, or
 edge-case tables into section 7; link to the spec instead. Full template: `templates/PLAN.md`.
 

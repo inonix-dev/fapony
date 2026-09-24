@@ -51,6 +51,7 @@ Table with 3–5 rows: risk | likelihood | impact | escape hatch
 1. **<Step 1>** — has a clear deliverable
 2. **<Step 2>** — ...
 Each step must be verifiable before moving to the next
+A step needing state the system doesn't store yet must say where it lives, who writes it, who reads it
 
 ## 7. Examples (make it concrete)
 bash examples: before / after — **link into spec/, don't paste it.**
