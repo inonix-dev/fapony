@@ -184,6 +184,16 @@ export async function cmdHookEditHint(): Promise<void> {
             file: rel && !rel.startsWith("..") ? rel : null,
             count: 1,
           });
+          if (ctx && ctx.memLines.length > 0) {
+            recordHintFire({
+              ts: new Date().toISOString(),
+              worktree,
+              surface: "mem",
+              file: rel && !rel.startsWith("..") ? rel : null,
+              count: ctx.memLines.length,
+              ids: ctx.memIds,
+            });
+          }
           if (ctx && ctx.openBugIds.length > 0) {
             recordHintFire({
               ts: new Date().toISOString(),

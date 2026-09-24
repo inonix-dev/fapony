@@ -19,6 +19,8 @@ export interface ContextLineData {
   memLines: string[];
   /** Ids of open bugs actually emitted as OPEN BUG lines above (for the fire log). */
   openBugIds: string[];
+  /** Ids of every mem row emitted in memLines (open bugs first) — joined to authors offline. */
+  memIds: string[];
 }
 
 /** Structured data behind readContextLines — used by cmdHookReadHint for logging. */
@@ -45,6 +47,7 @@ export function readContextData(
     const debtLines: string[] = [];
     const memLines: string[] = [];
     const openBugIds: string[] = [];
+    const memIds: string[] = [];
 
     // convention debt — source files only, fresh from the repo. The scope
     // pairs the git root (repo-relative `where`) with the nearest
@@ -112,13 +115,15 @@ export function readContextData(
         .filter((r) => !(r.id && emitted.has(r.id)))
         .slice(0, MEM_HINT_MAX - openLines.length);
       for (const line of openLines) memLines.push(line);
+      memIds.push(...openBugIds);
       for (const r of rest) {
+        if (r.id) memIds.push(r.id);
         memLines.push(
           `fapony mem: ${r.ts.slice(0, 10)} ${r.kind} — ${r.text.slice(0, MEM_TEXT_MAX)}`,
         );
       }
     }
-    return { worktree, debtIds, debtLines, memLines, openBugIds };
+    return { worktree, debtIds, debtLines, memLines, openBugIds, memIds };
   } catch {
     return null;
   }
