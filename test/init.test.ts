@@ -1,9 +1,15 @@
 import { test } from "bun:test";
 import assert from "node:assert";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { initProject } from "../src/init.js";
+import { initProject, rulesTargets, writeRules } from "../src/init.js";
 
 function withTmpDir(fn: (dir: string) => void): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-init-"));
@@ -96,4 +102,41 @@ test("testInitSnippetPathMatchesScaffold", () => {
   });
 
   console.log("  ✓ init snippet uses fapony mem (built-in)");
+});
+
+// fapony init writes the memory loop into the agent-rules file itself — a
+// snippet that only gets printed is a step most users never take.
+test("testWriteRulesCreatesAgentsMdWhenNoRulesFile", () => {
+  withTmpDir((dir) => {
+    assert.deepEqual(rulesTargets(dir), { create: true, append: [] });
+    writeRules(dir);
+    const agents = readFileSync(join(dir, "AGENTS.md"), "utf-8");
+    assert.ok(agents.includes("## Memory: .fapony/.memory"));
+    assert.ok(agents.includes("mem_add"), "names the MCP tools");
+    // one copy of the rules: Claude Code imports AGENTS.md instead of a duplicate
+    assert.equal(readFileSync(join(dir, "CLAUDE.md"), "utf-8"), "@AGENTS.md\n");
+    // CLAUDE.md imports the rules, so a rerun must not paste a second copy in
+    assert.deepEqual(rulesTargets(dir), { create: false, append: [] });
+  });
+  console.log("  ✓ no rules file → AGENTS.md + CLAUDE.md importing it");
+});
+
+test("testWriteRulesAppendsOnceToExistingFile", () => {
+  withTmpDir((dir) => {
+    writeFileSync(join(dir, "CLAUDE.md"), "# mine\n");
+    assert.deepEqual(rulesTargets(dir), {
+      create: false,
+      append: [join(dir, "CLAUDE.md")],
+    });
+    writeRules(dir);
+    const once = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
+    assert.ok(once.startsWith("# mine\n"), "user's text kept");
+    assert.ok(once.includes("## Memory: .fapony/.memory"));
+    assert.equal(existsSync(join(dir, "AGENTS.md")), false);
+    // already carries the rules → nothing left to do, a rerun changes nothing
+    assert.deepEqual(rulesTargets(dir), { create: false, append: [] });
+    writeRules(dir);
+    assert.equal(readFileSync(join(dir, "CLAUDE.md"), "utf-8"), once);
+  });
+  console.log("  ✓ existing rules file → appended once, rerun is a no-op");
 });

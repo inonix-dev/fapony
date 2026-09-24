@@ -4,7 +4,7 @@
 
 # fapony
 
-[![npm](https://img.shields.io/npm/v/fapony.svg)](https://www.npmjs.com/package/fapony)
+[![npm](https://img.shields.io/npm/v/fapony.svg)](https://www.npmjs.com/package/fapony) [![GitHub](https://img.shields.io/github/stars/kire21b/fapony.svg)](https://github.com/kire21b/fapony)
 
 **See what your coding agents actually cost.** fapony reads the session logs Claude Code, Codex,
 OpenCode and ZCode already write, and puts them all on one yardstick — tokens, cost and time per
@@ -99,7 +99,11 @@ fapony install --all        # skip the prompt, wire everything detected
 # 4. Turn on the memory layer (per project you want it in)
 fapony init /path/to/your-worktree
 #    creates .fapony/ — .memory/ (the mem log the 3 MCP tools read and write)
-#    and conventions.json for `fapony debt` (shared rules: commit them)
+#    and conventions.json for `fapony debt` (shared rules: commit them),
+#    then offers to write the memory rules into CLAUDE.md / AGENTS.md
+#    (none yet = AGENTS.md + a CLAUDE.md that imports it) — agents only log
+#    what the rules they already read tell them to
+fapony init /path/to/your-worktree --rules --yes   # repo already set up: rules only, no prompt
 ```
 
 …or add it manually to any MCP client: `{ "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }`. Full protocol and adapter examples: [docs/mcp-handcheck.md](https://github.com/kire21b/fapony/blob/main/docs/mcp-handcheck.md).

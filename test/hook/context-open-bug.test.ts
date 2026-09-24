@@ -177,3 +177,25 @@ test("testOpenBugFireLogOnEditHint", () => {
   });
   console.log("  ✓ edit hint shows OPEN BUG + logs surface open-bug");
 });
+
+// Cross-author measurement: the fire log needs the ids of every mem row shown
+// (open bug + plain rows), so a later pass can join each id to its author.
+test("testMemIdsListEveryRowShown", () => {
+  withTempRepo((dir) => {
+    writeLog(dir, [
+      bug("b1", "2026-09-19T00:00:00Z", "drift here", ["a.ts"]),
+      {
+        ts: "2026-09-19T01:00:00Z",
+        agent: "t",
+        kind: "decision",
+        id: "d1",
+        text: "use x",
+        files: ["a.ts"],
+      },
+    ]);
+    writeFileSync(join(dir, "a.ts"), "export const a = 1;\n");
+    const ctx = readContextData(join(dir, "a.ts"), dir);
+    assert.deepEqual(ctx!.memIds, ["b1", "d1"]);
+  });
+  console.log("  ✓ memIds lists open bug + plain rows shown");
+});

@@ -390,6 +390,7 @@ export async function cmdHookReadHint(): Promise<void> {
           surface: "mem",
           file: rel,
           count: ctx.memLines.length,
+          ids: ctx.memIds,
         });
       }
       if (ctx && ctx.openBugIds.length > 0) {

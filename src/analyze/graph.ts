@@ -5,7 +5,7 @@
 // Same module also serves handoff_check / verification_report: blastRadius()
 // (see blast.ts) turns facts.files[] into per-file { dependents, tested } facts.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { isBarrelSource } from "./criteria.js";
@@ -20,6 +20,49 @@ import {
 import { IMPORT_TYPE_RE, REQUIRE_RE, resolveRelative } from "./resolve-ts.js";
 import type { ImportGraph } from "./types.js";
 
+// Root pyproject.toml only: declared deps (normalized to import-name guesses)
+// and `[project.scripts]` targets. A dist whose import name differs
+// (scikit-learn → sklearn) stays unresolved — fail-safe toward "don't know".
+function readPyproject(absDir: string): {
+  deps: Set<string>;
+  scripts: string[];
+} {
+  const deps = new Set<string>();
+  const scripts: string[] = [];
+  const path = join(absDir, "pyproject.toml");
+  if (!existsSync(path)) return { deps, scripts };
+  let project: {
+    dependencies?: unknown;
+    "optional-dependencies"?: Record<string, unknown>;
+    scripts?: Record<string, unknown>;
+  };
+  try {
+    project =
+      (
+        Bun.TOML.parse(readFileSync(path, "utf-8")) as {
+          project?: typeof project;
+        }
+      ).project ?? {};
+  } catch {
+    return { deps, scripts };
+  }
+  const specs = [
+    project.dependencies,
+    ...Object.values(project["optional-dependencies"] ?? {}),
+  ].flatMap((v) => (Array.isArray(v) ? v : []));
+  for (const spec of specs) {
+    const name =
+      typeof spec === "string" && spec.match(/^\s*([A-Za-z0-9._-]+)/)?.[1];
+    if (name) deps.add(name.toLowerCase().replace(/[-.]/g, "_"));
+  }
+  for (const target of Object.values(project.scripts ?? {})) {
+    if (typeof target === "string") scripts.push(target.split(":")[0].trim());
+  }
+  return { deps, scripts };
+}
+
+const PY_MAIN_RE = /^if\s+__name__\s*==\s*["']__main__["']\s*:/m;
+
 export function buildGraph(dir: string): ImportGraph {
   const absDir = resolve(dir);
   const files = collectSourceFiles(absDir);
@@ -32,6 +75,8 @@ export function buildGraph(dir: string): ImportGraph {
   let external = 0;
   // Built lazily — a TS-only repo never pays for it.
   let pyIndex: Map<string, string> | null = null;
+  let pyproject: ReturnType<typeof readPyproject> | null = null;
+  const entries = new Set<string>();
 
   const transpiler = new Bun.Transpiler({ loader: "ts" });
 
@@ -50,11 +95,18 @@ export function buildGraph(dir: string): ImportGraph {
       // against the module index. An absolute miss whose root is in PY_STDLIB
       // is external; a third-party package or a real miss stays unresolved.
       pyIndex ??= buildPyModuleIndex(filesSet);
+      pyproject ??= readPyproject(absDir);
+      if (PY_MAIN_RE.test(content)) entries.add(rel);
       const pyEdges = new Set<string>();
       for (const imp of scanPythonImports(content)) {
         const hits = resolvePythonImport(rel, imp, filesSet, pyIndex);
         if (hits.size > 0) for (const h of hits) pyEdges.add(h);
-        else if (!imp.dots && imp.mod && PY_STDLIB.has(pyRootSegment(imp.mod)))
+        else if (
+          !imp.dots &&
+          imp.mod &&
+          (PY_STDLIB.has(pyRootSegment(imp.mod)) ||
+            pyproject.deps.has(pyRootSegment(imp.mod).toLowerCase()))
+        )
           external++;
         else unresolved++;
       }
@@ -107,5 +159,12 @@ export function buildGraph(dir: string): ImportGraph {
     }
   }
 
-  return { files, deps, dependents, unresolved, external, barrels };
+  if (pyIndex && pyproject) {
+    for (const mod of pyproject.scripts) {
+      const hit = pyIndex.get(mod);
+      if (hit) entries.add(hit);
+    }
+  }
+
+  return { files, deps, dependents, unresolved, external, barrels, entries };
 }

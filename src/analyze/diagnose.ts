@@ -66,7 +66,7 @@ export function diagnose(
   for (const f of graph.files) {
     const deps = graph.dependents.get(f) ?? new Set<string>();
     if (deps.size === 0) {
-      if (!isEntryPoint(f) && !isTestFile(f)) {
+      if (!isEntryPoint(f) && !graph.entries?.has(f) && !isTestFile(f)) {
         findings.push({
           kind: "orphan",
           file: f,

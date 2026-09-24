@@ -269,7 +269,7 @@ export const FaponyReadHint = async ({ directory }) => {
             recordHintFire({ ts: new Date().toISOString(), worktree: ctx.worktree, surface: "debt", file: rel, count: ctx.debtIds.length, ids: ctx.debtIds });
           }
           if (ctx.memLines.length > 0) {
-            recordHintFire({ ts: new Date().toISOString(), worktree: ctx.worktree, surface: "mem", file: rel, count: ctx.memLines.length });
+            recordHintFire({ ts: new Date().toISOString(), worktree: ctx.worktree, surface: "mem", file: rel, count: ctx.memLines.length, ids: ctx.memIds });
           }
           if (ctx.openBugIds.length > 0) {
             recordHintFire({ ts: new Date().toISOString(), worktree: ctx.worktree, surface: "open-bug", file: rel, count: ctx.openBugIds.length, ids: ctx.openBugIds });
@@ -413,7 +413,7 @@ export const FaponyEditHint = async ({ directory }) => {
                 recordHintFire({ ts: new Date().toISOString(), worktree, surface: "debt", file: rel, count: ctx.debtIds.length, ids: ctx.debtIds });
               }
               if (ctx?.memLines?.length) {
-                recordHintFire({ ts: new Date().toISOString(), worktree, surface: "mem", file: rel, count: ctx.memLines.length });
+                recordHintFire({ ts: new Date().toISOString(), worktree, surface: "mem", file: rel, count: ctx.memLines.length, ids: ctx.memIds });
               }
               if (ctx?.openBugIds?.length) {
                 recordHintFire({ ts: new Date().toISOString(), worktree, surface: "open-bug", file: rel, count: ctx.openBugIds.length, ids: ctx.openBugIds });

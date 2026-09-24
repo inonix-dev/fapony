@@ -58,22 +58,23 @@ const EVIDENCE_JSON = `{
 }
 `;
 
-// Rules snippet for the user's own agent-rules file. Printed, never written:
-// nothing writes log.<person>.jsonl on its own — an agent does, because the rules
-// file it already reads says to. That file is the user's (CLAUDE.md / AGENTS.md /
-// opencode.json instructions), so fapony hands over the text and stays out of it.
-// Not in SERVER_INSTRUCTIONS either: that reaches every MCP session of every user,
-// and most of them never ran `fapony init` — it would tell them to run a command
-// that does not exist.
-const RULES_SNIPPET =
-  () => `## Memory: .fapony/.memory/log.<you>.jsonl (append-only)
+// Rules snippet for the user's own agent-rules file. Nothing writes
+// log.<person>.jsonl on its own — an agent does, because the rules file it already
+// reads says to. That file is the user's, so init asks before writing it (rule 6c)
+// and never writes it twice (RULES_MARKER). Not in SERVER_INSTRUCTIONS either: that
+// reaches every MCP session of every user, and most of them never ran `fapony init`
+// — it would tell them to run a command that does not exist.
+const RULES_MARKER = "## Memory: .fapony/.memory";
+const RULES_SNIPPET = () => `${RULES_MARKER}/log.<you>.jsonl (append-only)
 
 The log is this project's shared brain — it lives in git, so anyone who clones the
 repo gets every decision, bug and note with it. The filename comes from
 \`git config user.name\` — one file per person, and \`*.jsonl merge=union\` in
 .gitattributes keeps both sides when two people end up sharing a name anyway.
 
-Log as you work — do not wait to be asked. Nothing writes it for you:
+Log as you work — do not wait to be asked. Nothing writes it for you. With the
+fapony MCP server connected, call mem_add / mem_find / mem_close directly;
+otherwise the CLI:
 
     fapony mem kickoff <plan.md>      # start a session with this
     fapony mem add decision "what was locked, and why" --files src/x.ts
@@ -81,6 +82,14 @@ Log as you work — do not wait to be asked. Nothing writes it for you:
     fapony mem add note "state the next session needs" --files src/x.ts
     fapony mem close <id> "fixed in <sha>"
     fapony mem find "<text>"
+
+What goes in — would someone cloning this repo tomorrow need it, and can they not
+find it anywhere else?
+- bug — something broken, even when found mid-task on something else: add it now,
+  not at the end. Once fixed, close it — only close closes a bug.
+- decision — something agreed or locked that git and the plan do not say, with why.
+- note — state the next session needs (where a chunk stopped, what is half-done).
+Before ending a turn that committed work: at least one row about it.
 
 Write each entry standalone — it is read months later with no chat to refer to.
 --files is required: rows that name no file cannot be recalled when that file is
@@ -188,64 +197,117 @@ export function initProject(targetPath: string, config?: Config): void {
   );
   console.log(`\nNext: add "${targetPath}" to fapony.config.json worktrees`);
   console.log(
-    `\nThen paste this into your agent-rules file (CLAUDE.md / AGENTS.md / opencode.json\ninstructions) — the memory log only fills up if the rules your agent already reads\ntell it to write:\n`,
+    `\nThe memory log only fills up if the rules your agent already reads tell it\nto write — these go into CLAUDE.md / AGENTS.md next:\n`,
   );
   console.log(RULES_SNIPPET());
 }
 
 const AGENT_RULE_FILES = ["CLAUDE.md", "AGENTS.md"];
 
-export async function cmdInit(args: string[]): Promise<void> {
-  const targetPath = args[0];
-  if (!targetPath) {
-    console.error("usage: fapony init <path>");
-    process.exit(1);
-  }
-  try {
-    initProject(targetPath);
-  } catch (e) {
-    console.error((e as Error).message);
-    process.exit(1);
-  }
-
-  // --- conventions.json fill-signal (PLAN-convention-debt chunk 2) ---
-  // eslint no-restricted-* rows carry their checker; the wrapper detector adds
-  // live-migration candidates. Nothing derivable = empty file, never an error.
-  const seed = await seedConventionsFile(targetPath);
-  if (seed.kept) {
-    console.log(
-      `  ${relative(targetPath, seed.file)} — already exists, left untouched`,
-    );
-  } else {
-    console.log(
-      `  ${relative(targetPath, seed.file)} — ${seed.eslintRows} from eslint, ${seed.wrapperRows} from wrappers`,
-    );
-    console.log(
-      `    'fapony debt' reads it; commit it (!**/.fapony/conventions.json in .gitignore)`,
-    );
-  }
-  for (const s of seed.skipped) console.log(`    ⚠ eslint config ${s}`);
-
+/** Which rules files init would touch: existing ones lacking the rules, or create. */
+export function rulesTargets(targetPath: string): {
+  create: boolean;
+  append: string[];
+} {
   const found = AGENT_RULE_FILES.map((f) => join(targetPath, f)).filter(
     existsSync,
   );
-  if (found.length === 0) return;
+  const has = (f: string) => readFileSync(f, "utf-8").includes(RULES_MARKER);
+  const agents = join(targetPath, "AGENTS.md");
+  // a CLAUDE.md that imports a rules-carrying AGENTS.md already has them
+  const covered = (f: string) =>
+    has(f) ||
+    (/^@AGENTS\.md\s*$/m.test(readFileSync(f, "utf-8")) &&
+      existsSync(agents) &&
+      has(agents));
+  return {
+    create: found.length === 0,
+    append: found.filter((f) => !covered(f)),
+  };
+}
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await new Promise<string>((resolve) => {
-    rl.question(
-      `\nAppend the memory-logging rules above to ${found.map((f) => relative(targetPath, f)).join(" and ")}? [y/N] `,
-      (a) => {
+/**
+ * Write the memory rules into the agent-rules files. No file yet = AGENTS.md
+ * (read by OpenCode/Codex/Cursor) + a CLAUDE.md that imports it, so the rules
+ * exist once. Files that already carry the rules are left alone.
+ */
+export function writeRules(targetPath: string): void {
+  const { create, append } = rulesTargets(targetPath);
+  if (create) {
+    writeFileSync(join(targetPath, "AGENTS.md"), `${RULES_SNIPPET()}\n`);
+    writeFileSync(join(targetPath, "CLAUDE.md"), "@AGENTS.md\n");
+    console.log("  + AGENTS.md (memory rules) · CLAUDE.md → @AGENTS.md");
+    return;
+  }
+  for (const f of append) {
+    const body = readFileSync(f, "utf-8");
+    appendFileSync(
+      f,
+      `${body.endsWith("\n") ? "\n" : "\n\n"}${RULES_SNIPPET()}\n`,
+    );
+    console.log(`  appended memory rules to ${relative(targetPath, f)}`);
+  }
+}
+
+export async function cmdInit(args: string[]): Promise<void> {
+  const rulesOnly = args.includes("--rules");
+  const yes = args.includes("--yes");
+  const targetPath = args.find((a) => !a.startsWith("--"));
+  if (!targetPath) {
+    console.error("usage: fapony init <path> [--rules] [--yes]");
+    console.error(
+      "  --rules  only write the memory rules into CLAUDE.md / AGENTS.md (repo already set up)",
+    );
+    console.error("  --yes    write them without asking");
+    process.exit(1);
+  }
+  if (!rulesOnly) {
+    try {
+      initProject(targetPath);
+    } catch (e) {
+      console.error((e as Error).message);
+      process.exit(1);
+    }
+
+    // --- conventions.json fill-signal (PLAN-convention-debt chunk 2) ---
+    // eslint no-restricted-* rows carry their checker; the wrapper detector adds
+    // live-migration candidates. Nothing derivable = empty file, never an error.
+    const seed = await seedConventionsFile(targetPath);
+    if (seed.kept) {
+      console.log(
+        `  ${relative(targetPath, seed.file)} — already exists, left untouched`,
+      );
+    } else {
+      console.log(
+        `  ${relative(targetPath, seed.file)} — ${seed.eslintRows} from eslint, ${seed.wrapperRows} from wrappers`,
+      );
+      console.log(
+        `    'fapony debt' reads it; commit it (!**/.fapony/conventions.json in .gitignore)`,
+      );
+    }
+    for (const s of seed.skipped) console.log(`    ⚠ eslint config ${s}`);
+  }
+
+  const { create, append } = rulesTargets(targetPath);
+  if (!create && append.length === 0) {
+    console.log("  memory rules already in the agent-rules file");
+    return;
+  }
+  if (!yes) {
+    const what = create
+      ? "Create AGENTS.md with the memory-logging rules (+ CLAUDE.md → @AGENTS.md)"
+      : `Append the memory-logging rules to ${append.map((f) => relative(targetPath, f)).join(" and ")}`;
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    const answer = await new Promise<string>((resolve) => {
+      rl.question(`\n${what}? [y/N] `, (a) => {
         rl.close();
         resolve(a.trim());
-      },
-    );
-  });
-  if (!isAffirmative(answer)) return;
-
-  const snippet = `\n\n${RULES_SNIPPET()}\n`;
-  for (const f of found) {
-    appendFileSync(f, snippet);
-    console.log(`  appended to ${relative(targetPath, f)}`);
+      });
+    });
+    if (!isAffirmative(answer)) return;
   }
+  writeRules(targetPath);
 }

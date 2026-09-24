@@ -746,3 +746,40 @@ test("testAnalyzePythonTripleQuoteInsideString", () => {
     "  ✓ analyze keeps imports after a string holding a triple quote",
   );
 });
+
+test("testAnalyzePythonEntryPointsAndDeps", () => {
+  withFixture(
+    {
+      "pyproject.toml": [
+        "[project]",
+        'name = "demo"',
+        'dependencies = ["NumPy>=1.26", "scikit-learn"]',
+        "[project.optional-dependencies]",
+        "dev = [\"pandas ; python_version>'3.9'\"]",
+        "[project.scripts]",
+        'demo = "demo.cli:main"',
+      ].join("\n"),
+      "src/demo/__init__.py": "",
+      "src/demo/cli.py": "def main(): ...\n",
+      "examples/gen.py":
+        'import numpy\nimport pandas as pd\nimport requests\n\nif __name__ == "__main__":\n    print(numpy, pd)\n',
+    },
+    (dir) => {
+      const graph = buildGraph(dir);
+      const orphans = diagnose(graph)
+        .filter((f) => f.kind === "orphan")
+        .map((f) => f.file);
+      assert.ok(!orphans.includes("examples/gen.py"), "__main__ block = entry");
+      assert.ok(
+        !orphans.includes("src/demo/cli.py"),
+        "[project.scripts] = entry",
+      );
+      // numpy/pandas are declared deps → external; requests is not → unresolved.
+      assert.equal(graph.unresolved, 1);
+      assert.equal(graph.external, 2);
+      console.log(
+        "  ✓ analyze: python __main__/scripts entries, pyproject deps external",
+      );
+    },
+  );
+});
