@@ -47,7 +47,6 @@ import {
   planDir,
   specDir,
 } from "../core/config.js";
-import { MEM_TEXT_MAX } from "../core/mem-log.js";
 import { readFaelLog, recentDecisions } from "../fael.js";
 import { extractExports } from "../map.js";
 import { capLines, execGit, SIG_MAX } from "./primitives.js";
@@ -63,6 +62,8 @@ const SCOPE_WARN_FILES = 300;
 // Shipped plans/specs that already touched this scope. Capped low on purpose:
 // this is a "go read that first" pointer, not a bibliography.
 const MAX_PRIOR_ART = 5;
+// Mem-row text budget in the Known traps block.
+const MEM_TEXT_MAX = 120;
 // Chunk 4 (PLAN-seed-and-surface): the PLAN names what is already in scope —
 // one line per scope file with its export names. SPEC-only seeds never gave
 // PLAN-only readers this pointer, so agents re-derived what export-lines.ts

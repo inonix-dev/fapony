@@ -22,7 +22,7 @@ const HANDOFF_LIMIT = 5;
 const TEXT_MAX = 200;
 
 /** Checked + unchecked items of the first `##` section (the TL;DR). */
-export const readPlanSectionItems = (
+const readPlanSectionItems = (
   planPath: string,
 ): { checked: string[]; unchecked: string[] } => {
   try {
@@ -54,7 +54,7 @@ export const readPlanSectionItems = (
 
 // One line saying whether the last ticked chunk actually closed. Verified
 // shas stay silent; only the newest ticked chunk is ever mentioned.
-export const closureHint = (checked: string[]): string | null => {
+const closureHint = (checked: string[]): string | null => {
   const last = checked[checked.length - 1];
   if (!last) return null;
   const { missing, diverged, cited } = checkTickedLine(last, root);

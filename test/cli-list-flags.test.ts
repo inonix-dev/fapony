@@ -17,7 +17,6 @@ import { execSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -25,8 +24,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cmdDebt } from "../src/debt/index.js";
-import { cmdFind } from "../src/mem/commands/read.js";
-import { initStore } from "../src/mem/store.js";
 import { cmdPlanSeed } from "../src/seed/plan-seed.js";
 import { renderSeed } from "../src/seed/review-seed.js";
 import { captureLogs, withTempRepo, withTmpDb } from "./helpers.js";
@@ -34,11 +31,9 @@ import { captureLogs, withTempRepo, withTmpDb } from "./helpers.js";
 const root = join(import.meta.dir, "..");
 const read = (rel: string): string => readFileSync(join(root, rel), "utf8");
 
-/** The 9 list flags of PLAN-comma-x §2 — the closed inventory. */
+/** The list flags of PLAN-comma-x §2 — the closed inventory (the 3 mem
+ *  flags left with `fapony mem` when memory moved to fael). */
 const TABLE: Record<string, { flag: string; a: string; b: string }> = {
-  "mem add --files": { flag: "--files", a: "a.ts", b: "b.ts" },
-  "mem find --files": { flag: "--files", a: "src/x.ts", b: "src/y.ts" },
-  "mem find --kind": { flag: "--kind", a: "bug", b: "decision" },
   "debt --files": { flag: "--files", a: "src/a.ts", b: "src/b.ts" },
   "debt --id": { flag: "--id", a: "service-errors", b: "money-format" },
   "review-seed --files": {
@@ -61,107 +56,19 @@ function shapeArgs(flag: string, a: string, b: string, shape: Shape): string[] {
   return [flag, `${a}${sep}${b}`];
 }
 
-test("testCliListFlagTableIsTheNineFlags", () => {
+test("testCliListFlagTableIsTheSixFlags", () => {
   // The table IS the scope (§2). A tenth row needs a measured failure, not
   // a guess — a single-value flag in here would fake a contract it never had.
   assert.deepEqual(Object.keys(TABLE).sort(), [
     "debt --files",
     "debt --id",
-    "mem add --files",
-    "mem find --files",
-    "mem find --kind",
     "plan-seed --scope",
     "review-seed --body",
     "review-seed --callers",
     "review-seed --files",
   ]);
   assert.equal(SHAPES.length, 4);
-  console.log("  ✓ contract table = the 9 §2 list flags × 4 shapes");
-});
-
-// --- mem add --files: spawn (cmdAdd is async + process.exits) ---
-
-test("testCliListFlagMemAddFiles", () => {
-  withTempRepo((dir) => {
-    const rows = (): { text: string; files?: string[] }[] =>
-      readdirSync(join(dir, ".fapony", ".memory"))
-        .filter((f) => f.endsWith(".jsonl"))
-        .map((f) => join(dir, ".fapony", ".memory", f))
-        .flatMap((p) =>
-          readFileSync(p, "utf8")
-            .split("\n")
-            .filter(Boolean)
-            .map((l) => JSON.parse(l)),
-        );
-    const t = TABLE["mem add --files"];
-    for (const shape of SHAPES) {
-      const rep = Bun.spawnSync(
-        [
-          "bun",
-          join(root, "fapony.ts"),
-          "mem",
-          "add",
-          "note",
-          "x",
-          ...shapeArgs(t.flag, t.a, t.b, shape),
-        ],
-        { cwd: dir, stdout: "pipe", stderr: "pipe" },
-      );
-      assert.equal(rep.exitCode, 0, `${shape}: ${rep.stderr.toString()}`);
-      const row = rows().at(-1);
-      assert.ok(row, `${shape}: row written`);
-      // The chunk-2 corruption: a repeat used to leak the 2nd value into text.
-      assert.equal(row.text, "x", `${shape} — text must stay "x"`);
-      assert.deepEqual(row.files, [t.a, t.b], `${shape} — files set`);
-    }
-  });
-  console.log("  ✓ mem add --files × 4 shapes → same files[], text intact");
-});
-
-// --- mem find --files / --kind: direct cmdFind on a temp log ---
-
-test("testCliListFlagMemFind", () => {
-  withTempRepo((dir) => {
-    const memDir = join(dir, ".fapony", ".memory");
-    mkdirSync(memDir, { recursive: true });
-    const row = (o: Record<string, unknown>) =>
-      JSON.stringify({ ts: "2026-01-01T00:00:00.000Z", agent: "t", ...o });
-    writeFileSync(
-      join(memDir, "log.jsonl"),
-      `${[
-        row({ id: "b1", kind: "bug", text: "alpha bug", files: ["src/x.ts"] }),
-        row({
-          id: "d1",
-          kind: "decision",
-          text: "beta decision",
-          files: ["src/y.ts"],
-        }),
-        row({ id: "n1", kind: "note", text: "gamma note" }),
-      ].join("\n")}\n`,
-    );
-    initStore(dir);
-    const prev = process.cwd();
-    process.chdir(dir);
-    try {
-      for (const id of ["mem find --files", "mem find --kind"] as const) {
-        const t = TABLE[id];
-        for (const shape of SHAPES) {
-          const out = captureLogs(() =>
-            cmdFind(shapeArgs(t.flag, t.a, t.b, shape)),
-          );
-          const msg = `${id} ${shape}:\n${out}`;
-          assert.ok(out.includes("alpha bug"), msg);
-          assert.ok(out.includes("beta decision"), msg);
-          assert.ok(!out.includes("gamma note"), `last-wins? ${msg}`);
-        }
-      }
-    } finally {
-      process.chdir(prev);
-    }
-  });
-  console.log(
-    "  ✓ mem find --files/--kind × 4 shapes → same set, no last-wins",
-  );
+  console.log("  ✓ contract table = the 6 list flags × 4 shapes");
 });
 
 // --- debt --files / --id: direct cmdDebt --json on a seeded repo ---
@@ -452,7 +359,6 @@ test("testCliListFlagDocsShowCommaShape", () => {
     const doc = read(rel);
     for (const literal of [
       "--files f1,f2",
-      "--kind a,b",
       "--id a,b",
       "[--scope <path>[,<path>]]...",
     ]) {

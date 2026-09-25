@@ -31,8 +31,8 @@ test("testInitCreatesDirectories", () => {
     assert(existsSync(join(target, ".fapony", "spec")), ".fapony/spec/");
     assert(existsSync(join(target, ".fapony", "done")), ".fapony/done/");
     assert(
-      existsSync(join(target, ".fapony", ".memory")),
-      ".fapony/.memory directory",
+      !existsSync(join(target, ".fapony", ".memory")),
+      "no .fapony/.memory — memory is fael's",
     );
     assert(
       existsSync(join(target, ".fapony", "evidence.json")),
@@ -76,8 +76,8 @@ test("testInitNoArgs", () => {
   console.log("  ✓ init no path errors");
 });
 
-// The printed snippet is what the user pastes into their own rules file — it must
-// use `fapony mem` (built-in commands) instead of the old `bun <path>/mem.ts`.
+// The printed snippet is what the user pastes into their own rules file — plan
+// workflow via `fapony plan`, handoff notes via fael, never `fapony mem`.
 test("testInitSnippetPathMatchesScaffold", () => {
   withTmpDir((tmp) => {
     const target = join(tmp, "project");
@@ -93,27 +93,25 @@ test("testInitSnippetPathMatchesScaffold", () => {
 
     const printed = out.join("\n");
     assert(
-      printed.includes("fapony mem add decision"),
-      "snippet uses fapony mem (built-in), not bun <path>",
+      printed.includes("fapony plan PLAN-x.md"),
+      "snippet opens with fapony plan",
     );
-    assert(
-      !printed.includes("bun .fapony/.memory/mem.ts"),
-      "snippet no longer references bun .memory/mem.ts",
-    );
+    assert(printed.includes("fael add note"), "handoff note goes to fael");
+    assert(!printed.includes("fapony mem"), "no fapony mem left");
   });
 
-  console.log("  ✓ init snippet uses fapony mem (built-in)");
+  console.log("  ✓ init snippet: fapony plan + fael handoff");
 });
 
-// fapony init writes the memory loop into the agent-rules file itself — a
+// fapony init writes the plan loop into the agent-rules file itself — a
 // snippet that only gets printed is a step most users never take.
 test("testWriteRulesCreatesAgentsMdWhenNoRulesFile", () => {
   withTmpDir((dir) => {
     assert.deepEqual(rulesTargets(dir), { create: true, append: [] });
     writeRules(dir);
     const agents = readFileSync(join(dir, "AGENTS.md"), "utf-8");
-    assert.ok(agents.includes("## Memory: .fapony/.memory"));
-    assert.ok(agents.includes("mem_add"), "names the MCP tools");
+    assert.ok(agents.includes("## Plans: .fapony/plan (fapony)"));
+    assert.ok(agents.includes("fael add note"), "points handoff notes at fael");
     // one copy of the rules: Claude Code imports AGENTS.md instead of a duplicate
     assert.equal(readFileSync(join(dir, "CLAUDE.md"), "utf-8"), "@AGENTS.md\n");
     // CLAUDE.md imports the rules, so a rerun must not paste a second copy in
@@ -132,7 +130,7 @@ test("testWriteRulesAppendsOnceToExistingFile", () => {
     writeRules(dir);
     const once = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
     assert.ok(once.startsWith("# mine\n"), "user's text kept");
-    assert.ok(once.includes("## Memory: .fapony/.memory"));
+    assert.ok(once.includes("## Plans: .fapony/plan (fapony)"));
     assert.equal(existsSync(join(dir, "AGENTS.md")), false);
     // already carries the rules → nothing left to do, a rerun changes nothing
     assert.deepEqual(rulesTargets(dir), { create: false, append: [] });
@@ -150,7 +148,7 @@ test("testWriteRulesSymlinkedRulesFilesAppendOnce", () => {
     symlinkSync("CLAUDE.md", join(dir, "AGENTS.md"));
     writeRules(dir);
     const body = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
-    assert.equal(body.split("## Memory: .fapony/.memory").length - 1, 1);
+    assert.equal(body.split("## Plans: .fapony/plan (fapony)").length - 1, 1);
   });
   console.log("  ✓ symlinked CLAUDE.md/AGENTS.md → rules appended once");
 });
@@ -162,8 +160,9 @@ test("testWriteRulesSeparateFilesBothGetRules", () => {
     writeRules(dir);
     for (const f of ["CLAUDE.md", "AGENTS.md"])
       assert.equal(
-        readFileSync(join(dir, f), "utf-8").split("## Memory: .fapony/.memory")
-          .length - 1,
+        readFileSync(join(dir, f), "utf-8").split(
+          "## Plans: .fapony/plan (fapony)",
+        ).length - 1,
         1,
         f,
       );
@@ -177,7 +176,7 @@ test("testWriteRulesReverseSymlinkWritesRealFileOnce", () => {
     symlinkSync("AGENTS.md", join(dir, "CLAUDE.md"));
     writeRules(dir);
     const body = readFileSync(join(dir, "AGENTS.md"), "utf-8");
-    assert.equal(body.split("## Memory: .fapony/.memory").length - 1, 1);
+    assert.equal(body.split("## Plans: .fapony/plan (fapony)").length - 1, 1);
   });
   console.log("  ✓ CLAUDE.md -> AGENTS.md symlink → real file written once");
 });

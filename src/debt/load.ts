@@ -17,14 +17,12 @@ import {
   CONVENTIONS_FILENAME,
   FAPONY_DIR,
 } from "../core/config.js";
-import { resolveMemDir } from "../memory.js";
+import { faponyDirFrom } from "../core/fapony-dir.js";
 import type { Convention, LoadedConventions } from "./types.js";
 
 export function resolveConventionsPath(worktree: string): string | null {
-  // Conventions live in the same .fapony/ dir as the mem log — derive from
-  // the resolved mem dir so both resolvers cannot drift apart.
-  const memDir = resolveMemDir(worktree);
-  const base = memDir ? join(memDir, "..") : join(worktree, FAPONY_DIR);
+  // Conventions live in the nearest .fapony/ — the same dir `fapony plan` uses.
+  const base = faponyDirFrom(worktree);
   const app = join(base, CONVENTIONS_FILENAME);
   if (existsSync(app)) return app;
   // Monorepo where the app has not scaffolded .fapony/ yet, and single repos

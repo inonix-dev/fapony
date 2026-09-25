@@ -14,10 +14,9 @@ import {
   type Run,
 } from "../core/config.js";
 import { type HintImpact, hintLogPath } from "../core/hint-log.js";
-import type { MemRow } from "../core/mem-log.js";
 import { parseSince } from "../core/since.js";
 import { openDb } from "../db/store.js";
-import { readFaelLog } from "../fael.js";
+import { type MemRow, readFaelLog } from "../fael.js";
 import { computeHintImpact } from "../hook.js";
 import { isPassFamily, VERDICT_GRADES } from "../parse.js";
 import { imputeResult, loadPrices } from "../price/index.js";

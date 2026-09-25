@@ -11,7 +11,7 @@ blocked_by: <plan or sentence>    # required when status: blocked
 blocks: PLAN-<other>.md           # plans that cannot start until this one lands (comma-separated)
 superseded_by: PLAN-<other>.md    # required when status: superseded
 spec: SPEC-<feature>.md           # if any
-priority: high                    # optional: high = appears first in kickoff · omit = normal
+priority: high                    # optional: high = listed first by `fapony plan` · omit = normal
 ---
 
 # PLAN-<feature>.md — <short name>

@@ -401,15 +401,11 @@ at open, closed by `review-pony` — deterministic at both ends, no LLM in betwe
 ## CLI Commands
 
 ```bash
-# ── core: mem + debt ──
-fapony mem add <kind> "<text>" --files f1,f2 [--key k] [spec.md]
-fapony mem close <id> "<msg>"
-fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--key k] [--open]
-fapony mem kickoff [<plan.md>] [--pick <n>]
-fapony mem done | stale | claim | release | synced | plan-sweep | plan-check | rotate
+# ── core: plan + debt (memory is fael: fael add | find | close | kickoff) ──
+fapony plan [<PLAN.md>]              # active plans + next chunk · one plan: unchecked chunks + open fael rows
+fapony plan sweep [<PLAN.md>] [--apply]  ·  fapony plan check [--quiet]
 fapony debt [--id a,b] [--where <path>]   # which files haven't migrated to a declared convention (live, read-only)
 fapony lint-baseline [--cmd ...] [--diff]   # separate "already red" from "I made it red"
-fapony init-mem                     # delete legacy .memory/ dirs + warn call sites still referencing them (data files untouched)
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]
 # ── day-1: usage ──
 fapony usage-scan                    # scan session logs → usage-cache.jsonl (incremental)
@@ -420,9 +416,8 @@ fapony analyze [path]                # hub/orphan/cycle/changed-untested — liv
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym[,sym]]
 fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...
 # ── ledger (frozen — bug fixes only) ──
-fapony mcp                           # MCP server — stdio JSON-RPC, 3 tools
 fapony hook-edit-hint                # PreToolUse Edit — importer count + convention debt of the file being edited
-fapony hook-mv-guard                   # PreToolUse Bash — deny raw `git mv` of plan files into done/, use `plan-sweep --apply` instead (Claude)
+fapony hook-mv-guard                   # PreToolUse Bash — deny raw `git mv` of plan files into done/, use `fapony plan sweep --apply` instead (Claude)
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]
 fapony report <run-id>  ·  fapony report-web [file]
 # ── setup ──

@@ -225,16 +225,12 @@ move. Specs live in `.fapony/spec/` and are never archived.
 ## CLI
 
 ```bash
-# core: memory + debt
-fapony mem add <kind> "<text>" --files f1,f2 [--key k] [spec.md]   # append a mem row (decision/bug/note/next/hold)
-fapony mem close <id> "<msg>"              # close a row (a bug stays open without this)
-fapony mem find ["<text>"] [--kind a,b] [--files f1,f2] [--since <N>d|YYYY-MM-DD] [--limit n] [--open]  # search mem log
-fapony mem kickoff [<plan.md>] [--pick <n>]  # open a session + a next-up list
-fapony mem where                           # show the resolved mem dir and which step won
-fapony mem done | stale | claim | release | synced | plan-sweep | plan-check | rotate
+# core: plans + debt (memory — decisions, bugs, notes — lives in fael)
+fapony plan [<PLAN.md>]                    # active plans + next chunk; one plan: unchecked chunks + open fael rows
+fapony plan sweep [<PLAN.md>] [--apply]    # archive shipped plans into done/ + rewrite links
+fapony plan check [--quiet]                # deps, broken links, ticked-chunk shas (exit 1 on issues)
 fapony debt [--id a,b] [--where <path>]    # which files haven't migrated to a declared convention (live, read-only)
 fapony lint-baseline [--cmd ...] [--diff]  # separate "already red" from "I made it red"
-fapony init-mem                            # delete legacy .memory/ dirs + warn call sites still referencing them
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page summary from what's on disk
 
 # usage (day one)
@@ -247,8 +243,7 @@ fapony analyze [path]                      # live repo graph: hubs, orphans, cyc
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]  # scope facts for a review
 fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...  # write PLAN (+SPEC): frontmatter, capped sections, prior-art list
 
-# hooks & MCP (wired by `fapony install`, not run by hand)
-fapony mcp                                 # MCP server (stdio JSON-RPC — 3 tools)
+# hooks (wired by `fapony install`, not run by hand)
 fapony hook-edit-hint                      # importer count + convention debt before an edit
 fapony hook-mv-guard                       # deny raw git mv of plan files into done/
 

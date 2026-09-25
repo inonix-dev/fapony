@@ -10,7 +10,19 @@
 // not close-file rows, so a native `fael close` still reads as open here until
 // fael emits them; nothing to change on this side when it does.
 
-import type { MemRow } from "./core/mem-log.js";
+/** fapony's internal row shape — what every reader downstream consumes. */
+export interface MemRow {
+  ts: string;
+  agent: string;
+  kind: string;
+  text: string;
+  spec?: string;
+  id?: string;
+  /** On a kind:"close" row: the id of the row it closes. */
+  ref?: string;
+  files?: string[];
+  key?: string;
+}
 
 interface FaelRow {
   id: string;

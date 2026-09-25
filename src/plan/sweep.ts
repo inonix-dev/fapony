@@ -16,8 +16,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
-import type { MemRow } from "../core/mem-log.js";
-import { readFaelLog } from "../fael.js";
+import { type MemRow, readFaelLog } from "../fael.js";
 import { doneDir, planBase, planDir, rel, root } from "./store.js";
 
 // Open fael rows about a plan — matched by basename on files[] or spec, so a
