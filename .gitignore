@@ -35,3 +35,7 @@ scripts/*
 .windsurfrules
 opencode.jsonc
 .fapony/plan/PLAN-bun-test-migration.md
+
+# Agent rules — local to this machine (public repo; README is the public doc)
+CLAUDE.md
+AGENTS.md

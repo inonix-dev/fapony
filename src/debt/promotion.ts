@@ -12,7 +12,7 @@
 // short and don't count, to avoid over-matching)
 
 import { openDb } from "../db/store.js";
-import { readMemLog } from "../memory.js";
+import { readFaelLog } from "../fael.js";
 import {
   type Convention,
   type DebtReport,
@@ -57,7 +57,7 @@ interface EvidenceRow {
 function gatherEvidence(worktree: string): EvidenceRow[] {
   const out: EvidenceRow[] = [];
   try {
-    for (const r of readMemLog(worktree).rows) {
+    for (const r of readFaelLog(worktree).rows) {
       if (r.kind !== "bug" && r.kind !== "decision") continue;
       out.push({ ts: r.ts, files: r.files, hay: `${r.text}\n${r.spec ?? ""}` });
     }

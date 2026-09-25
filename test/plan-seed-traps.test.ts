@@ -3,36 +3,42 @@ import assert from "node:assert";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cmdPlanSeed, renderKnownTraps } from "../src/seed/plan-seed.js";
-import { captureLogs, withTempRepo } from "./helpers.js";
+import {
+  captureLogs,
+  type FaelFixtureRow,
+  withFakeFael,
+  withTempRepo,
+} from "./helpers.js";
 
 // --- helpers ---
 
+// Rows the fake `fael` prints — reset per test by withFaelRepo.
+let fixture: FaelFixtureRow[] = [];
+let publish: (rows: FaelFixtureRow[]) => void = () => {};
+
 function writeMemRow(
-  dir: string,
+  _dir: string,
   id: string,
   kind: string,
   text: string,
   files?: string[],
 ): void {
-  const memDir = join(dir, ".fapony", ".memory");
-  mkdirSync(memDir, { recursive: true });
-  const row = {
-    ts: "2026-09-22T12:00:00.000Z",
-    agent: "t",
-    kind,
-    text,
+  fixture.push({
     id,
+    ts: "2026-09-22T12:00:00.000Z",
+    kind: kind === "bug" ? "issue" : kind,
+    text,
     ...(files ? { files } : {}),
-  };
-  const log = join(memDir, "log.test.jsonl");
-  const prev = (() => {
-    try {
-      return readFileSync(log, "utf-8");
-    } catch {
-      return "";
-    }
-  })();
-  writeFileSync(log, `${prev}${JSON.stringify(row)}\n`);
+  });
+  publish(fixture);
+}
+
+function withFaelRepo(fn: (dir: string) => void): void {
+  withFakeFael((setRows) => {
+    fixture = [];
+    publish = setRows;
+    withTempRepo(fn);
+  });
 }
 
 function writeFixture(dir: string): void {
@@ -46,7 +52,7 @@ function writeFixture(dir: string): void {
 // --- renderKnownTraps unit tests ---
 
 test("testKnownTrapsInjectsRowsMatchingScope", () => {
-  withTempRepo((dir) => {
+  withFaelRepo((dir) => {
     writeFixture(dir);
     writeMemRow(dir, "t1", "bug", "fix crash in add", ["src/calc.ts"]);
     writeMemRow(dir, "t2", "decision", "use no new deps", ["src/other.ts"]);
@@ -59,7 +65,7 @@ test("testKnownTrapsInjectsRowsMatchingScope", () => {
     assert.equal(result.matched, 3, "bug + fallback bug + decision = 3");
     assert.equal(result.lacked, 1, "t3 has empty files[]");
     const spec = result.lines.join("\n");
-    assert.match(spec, /## Known traps \(fapony mem\)/);
+    assert.match(spec, /## Known traps \(fael\)/);
     assert.match(
       spec,
       /3 relevant row\(s\) on this scope \(1 lacked files\[\] — matched via text\)/,
@@ -71,7 +77,7 @@ test("testKnownTrapsInjectsRowsMatchingScope", () => {
 });
 
 test("testKnownTrapsBugBeforeDecision", () => {
-  withTempRepo((dir) => {
+  withFaelRepo((dir) => {
     writeFixture(dir);
     writeMemRow(dir, "d1", "decision", "old decision", ["src/calc.ts"]);
     writeMemRow(dir, "b1", "bug", "new bug", ["src/calc.ts"]);
@@ -85,7 +91,7 @@ test("testKnownTrapsBugBeforeDecision", () => {
 });
 
 test("testKnownTrapsSilentWhenNoMemLog", () => {
-  withTempRepo((dir) => {
+  withFaelRepo((dir) => {
     writeFixture(dir);
     const result = renderKnownTraps(dir, dir, [join(dir, "src")], true);
     assert.equal(result.matched, 0);
@@ -95,7 +101,7 @@ test("testKnownTrapsSilentWhenNoMemLog", () => {
 });
 
 test("testKnownTrapsSilentWhenNoMatch", () => {
-  withTempRepo((dir) => {
+  withFaelRepo((dir) => {
     writeFixture(dir);
     writeMemRow(dir, "z1", "bug", "about unrelated", ["src/nope.ts"]);
     const result = renderKnownTraps(dir, dir, [join(dir, "src")], true);
@@ -106,7 +112,7 @@ test("testKnownTrapsSilentWhenNoMatch", () => {
 });
 
 test("testKnownTrapsCapFive", () => {
-  withTempRepo((dir) => {
+  withFaelRepo((dir) => {
     writeFixture(dir);
     for (let i = 0; i < 8; i++) {
       writeMemRow(dir, `b${i}`, "bug", `crash ${i}`, ["src/calc.ts"]);
@@ -125,7 +131,7 @@ test("testKnownTrapsCapFive", () => {
 });
 
 test("testKnownTrapsSilentWhenUnscoped", () => {
-  withTempRepo((dir) => {
+  withFaelRepo((dir) => {
     writeFixture(dir);
     writeMemRow(dir, "b1", "bug", "about calc", ["src/calc.ts"]);
     // unscoped: scoped=false → whole repo; scopeFiles should be all source files,
@@ -138,7 +144,7 @@ test("testKnownTrapsSilentWhenUnscoped", () => {
 });
 
 test("testKnownTrapsFallbackOnlyForEmptyFiles", () => {
-  withTempRepo((dir) => {
+  withFaelRepo((dir) => {
     writeFixture(dir);
     // Row WITH files[] — should NOT fall back to text match
     writeMemRow(dir, "f1", "bug", "about calc", ["src/calc.ts"]);
@@ -163,7 +169,7 @@ test("testKnownTrapsFallbackOnlyForEmptyFiles", () => {
 // --- e2e: SPEC includes traps section ---
 
 test("testPlanSeedSpecInjectsTraps", () => {
-  withTempRepo((dir) => {
+  withFaelRepo((dir) => {
     writeFixture(dir);
     writeMemRow(dir, "t1", "bug", "fix crash in add()", ["src/calc.ts"]);
     writeMemRow(dir, "t2", "decision", "use no deps", ["src/calc.ts"]);
@@ -183,7 +189,7 @@ test("testPlanSeedSpecInjectsTraps", () => {
         join(dir, ".fapony", "spec", "SPEC-traps-test.md"),
         "utf-8",
       );
-      assert.match(spec, /## Known traps \(fapony mem\)/);
+      assert.match(spec, /## Known traps \(fael\)/);
       assert.match(spec, /2 relevant row\(s\) on this scope/);
       // traps appear after "## Chunk index" and before first chunk body
       const idx = spec.indexOf("## Chunk index");
@@ -201,7 +207,7 @@ test("testPlanSeedSpecInjectsTraps", () => {
 });
 
 test("testPlanSeedSpecNoTrapsWhenNoMatch", () => {
-  withTempRepo((dir) => {
+  withFaelRepo((dir) => {
     writeFixture(dir);
     mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
     const orig = process.cwd();
@@ -230,7 +236,7 @@ test("testPlanSeedSpecNoTrapsWhenNoMatch", () => {
 });
 
 test("testPlanSeedSpecNoTrapsWithoutFlag", () => {
-  withTempRepo((dir) => {
+  withFaelRepo((dir) => {
     writeFixture(dir);
     writeMemRow(dir, "t1", "bug", "fix crash", ["src/calc.ts"]);
     mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });

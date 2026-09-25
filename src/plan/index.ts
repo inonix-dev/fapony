@@ -1,0 +1,32 @@
+// src/plan/index.ts — `fapony plan [<PLAN.md>] | sweep | check`
+
+import { cmdPlanNext } from "./next.js";
+import { initPlanStore } from "./store.js";
+import { cmdPlanCheck, cmdPlanSweep } from "./sweep.js";
+
+const HELP = `usage: fapony plan [<PLAN.md>] | sweep [<PLAN.md>] [--apply] | check [--quiet]
+
+  fapony plan                 every active plan: progress + next unchecked chunk
+  fapony plan <PLAN.md>       one plan: unchecked chunks, last-tick sha check,
+                              open fael rows about it (the chunk handoff notes)
+  fapony plan sweep           shipped plans not yet archived (dry run)
+  fapony plan sweep <PLAN.md> --apply
+                              git mv into done/ + rewrite the links to it
+  fapony plan check           frontmatter deps, broken links, ticked-chunk shas
+                              (exit 1 on issues)
+
+close a chunk: tick it with its sha, commit, then
+  fael add note "<what chunk N+1 must know>" --files <f1>,<PLAN path>
+example: fapony plan .fapony/plan/PLAN-x.md`;
+
+export function cmdPlan(a: string[]): void {
+  const [sub, ...rest] = a;
+  if (sub === "-h" || sub === "--help" || rest.includes("--help")) {
+    console.log(HELP);
+    return;
+  }
+  initPlanStore();
+  if (sub === "sweep") cmdPlanSweep(rest);
+  else if (sub === "check") cmdPlanCheck(rest);
+  else cmdPlanNext(a);
+}

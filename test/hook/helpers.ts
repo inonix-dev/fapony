@@ -6,7 +6,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { READ_HINT_MIN_BYTES } from "../../src/hook.js";
 
 export {
   captureErrors,
@@ -45,19 +44,6 @@ export function withEditState(fn: () => void): void {
     else process.env.FAPONY_STATE_DIR = orig;
     rmSync(state, { recursive: true, force: true });
   }
-}
-
-/** > 2x threshold, so the fixture stays valid if the constant moves. */
-const PAD = Math.ceil(READ_HINT_MIN_BYTES / 20) * 20 + 40;
-
-export function padFile(dir: string, name: string): string {
-  const p = join(dir, name);
-  const body = Array.from(
-    { length: PAD },
-    (_, i) => `const pad${i} = ${i}; // padding`,
-  ).join("\n");
-  writeFileSync(p, `export const entry = () => {\n${body}\n};\n`);
-  return p;
 }
 
 export function editFixture(dir: string): {

@@ -1,6 +1,6 @@
 # fapony — Architecture (file-by-file)
 
-> **Used by:** [CLAUDE.md](../CLAUDE.md) — ย้ายออกมาเพราะเป็น *lookup* ไม่ใช่ *rule*
+> **Used by:** the local agent rules (CLAUDE.md, untracked) — ย้ายออกมาเพราะเป็น *lookup* ไม่ใช่ *rule*
 > อ่านตอนหาที่วางโค้ดใหม่ ไม่ใช่ทุก session
 
 
@@ -27,11 +27,12 @@ fapony/
   templates/
     PLAN.md / SPEC.md              # plan+spec templates for `fapony init`
   src/
-    mem/                # fapony mem <add|close|find|kickoff|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
+    plan/               # fapony plan [<PLAN.md>] | sweep | check — index / store (plan dirs) / next (plan view) / sweep (sweep + check)
+    fael.ts             # the one memory reader — `fael find --json` → MemRow; fapony never writes memory
     core/               # pure layer — no imports back to features/adapters/db-store (PLAN-lib-layer)
       config.ts         # Config/Run/Event types + defaults + getters + load (single source; db/* are shims)
       defaults.ts       # DEFAULT_SAFETY_DENY (single source)
-      mem-log.ts        # mem-log reader (resolveMemDir/readMemLog)
+      fapony-dir.ts     # faponyDirFrom — nearest .fapony/ up to the git root (plans + conventions)
       hint-log.ts       # hint-log pure helpers (hintLogPath)
       hook-helpers.ts   # hook pure helpers
       enums.ts          # REASON_CODES/REGIME_CODES
@@ -44,12 +45,12 @@ fapony/
       defaults.ts / types.ts / getters.ts / load.ts  # shims re-exporting core/config.ts
     adapters/           # I/O boundary — thin framing only, no logic (PLAN-lib-layer chunk 3)
       cli.ts            # fapony.ts dispatch target
-      hooks/            # hook-stop / hook-read-hint / hook-edit-hint / hook-session-start · bug-markers.ts (shared bug signal) + helpers
-      mcp/              # MCP server — stdio JSON-RPC, 3 mem tools (mem.ts); collect/check/report are engines only
+      hooks/            # hook-edit-hint (importers + debt) / hook-mv-guard / git-autonomy · memory hooks moved to fael
+      mcp/              # no server (removed 2026-09-25) — collect/check/report engines for `fapony report`
     gates.ts          # per-round gate enrichment — model + session tokens per gate; carries `sessionId` so callers can dedupe
     parse.ts          # parseGateVerdict() + qualityScore()
     gate.ts           # gateOnce() — frozen review-verdict engine (no live callers since verdict_submit left MCP 2026-09)
-    memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY
+    memory.ts         # config.memory shell helpers for gate.ts — user-configured commands only, no default wiring
     safety.ts         # assertSafe() deny-list (checked before any config-sourced shell cmd runs)
     session/           # passive usage readers — OpenCode (SQLite), ZCode (SQLite), Claude Code (JSONL), Codex (JSONL)
       activeSession.ts # loadSessionSpans/findSessionAt — which client session was live in a worktree at time T (model attribution without asking the caller)
@@ -78,28 +79,27 @@ fapony/
       cli.ts            # cmdAnalyze()
       index.ts          # barrel re-export
     map.ts              # extractExports() — on-demand source index, library only; the `fapony map` command was deleted once plan-seed/review-seed were its only callers (see PLAN-code-map)
-    detect.ts           # runtime test runner detection (bun/npm/pnpm/yarn) from package.json + lockfile — used by hook.ts and install.ts
+    detect.ts           # runtime test runner detection (bun/npm/pnpm/yarn) from package.json + lockfile — test-only caller left (was the Stop hook)
     conventions-seed.ts # init-time wrapper detector → writes .fapony/conventions.json — reads snapshot only, never touches history
     seed/               # seed commands — plan-seed + review-seed + shared primitives
       primitives.ts     # shared git helpers (execGit/gitOk/gitValue), capLines, SIG_MAX, SeedError
-      plan-seed.ts      # fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]... — writes PLAN(+SPEC): frontmatter, 8 empty sections, §8 prior art, Context (fapony: mem decisions + existing-in-scope), existing-plans stdout list; SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200
+      plan-seed.ts      # fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]... — writes PLAN(+SPEC): frontmatter, 8 empty sections, §8 prior art, Context (fapony: fael decisions + existing-in-scope), existing-plans stdout list; SPEC chunks hold signatures, hard caps PLAN ≤ ~60 / SPEC ≤ 200
       review-seed.ts    # fapony review-seed [--staged|--commit|--range|--files|--plan] — read-only scope facts for a review (changed/importers/untested/signatures/cross-check)
     price/              # model pricing data — fetch + resolve
       fetch.ts          # fetchPricing() — HTTP fetch from upstream price table
       resolve.ts        # resolvePrice() — lookup per-model cost from cached data
       index.ts          # barrel re-export
-    debt/               # fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย": live convention scan, never persisted; caller: hook read-hint
+    debt/               # fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย": live convention scan, never persisted; callers: fapony debt, hook-edit-hint
       types.ts          # DebtReport/Convention/Promotion + caps (DEBT_FILE_CAP, PROMOTION_THRESHOLD, ZONE_*)
       load.ts           # resolveConventionsPath + loadConventions
       scan.ts           # compile + debtScan + debtForFile
-      promotion.ts      # findPromotions + formatPromotions (mem fail-verdict recurrence)
+      promotion.ts      # findPromotions + formatPromotions (fael issue/decision + ledger fail recurrence)
       format.ts         # zone grouping + formatDebt
       cli.ts            # worktreeOf + cmdDebt
       index.ts          # barrel re-export
     hook.ts             # shim re-exporting adapters/hooks/* (see adapters/ above)
-    init.ts            # fapony init — scaffold .fapony/{plan,done,spec,.memory,evidence.json}
-    init-mem.ts        # init-mem — delete legacy .memory/ dirs + warn about stale package.json call sites
-    digest/               # fapony digest — merges mem log + plans + usage cache + verdicts into one page
+    init.ts            # fapony init — scaffold .fapony/{plan,done,spec,evidence.json} + plan-loop rules into AGENTS.md
+    digest/               # fapony digest — merges fael rows + plans + usage cache + verdicts into one page
     stats/                # fapony stats — KPI across runs
       data.ts             # getStatsData() + StatsData type + computeEfficiency() + reason_code/plan/escalation/best-passing queries
       format.ts           # formatStatsText() — CLI + MCP text mode
@@ -122,24 +122,22 @@ fapony/
     setup.ts            # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
     install.ts          # barrel — re-exports src/install/ (fapony install --platform …)
     install/            # one file per client + shared pieces
-      claude.ts         # `claude mcp add` (never writes ~/.claude.json directly)
-      opencode.ts       # ~/.config/opencode/opencode.json(c)
-      zcode.ts          # ~/.zcode/cli/config.json (fallback ~/.agents/mcp.json)
-      codex.ts          # ~/.codex/config.toml
+      claude.ts         # ~/.claude/settings.json hooks (edit hint, mv-guard) + removes retired fapony hooks
+      opencode.ts       # ~/.config/opencode/plugins (edit hint, opt-in git-autonomy) + removes retired plugins
+      zcode.ts / codex.ts / antigravity.ts  # detect + skills symlink only
+      detect.ts         # which clients exist on this machine
       skills.ts         # linkSkills() — symlinks skill/<name>/ into ~/.claude/skills, never overwrites
-      types.ts          # InstallDeps / ClaudeRunResult / defaultExit
-      utils.ts          # shared JSON(C) helpers
+      types.ts          # InstallDeps / defaultExit / INSTALL_ROOT
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT) + spawn a fresh install to refresh opencode's baked plugins
     util.ts               # templateArgs / fillPrompt / isAffirmative / minutesBetween / avg
     test.ts               # self-check ตัวเอง (thin wrapper → test/index.ts)
   test/
     *.test.ts              # one file per src module
-    mcp/                   # MCP tool tests
+    mcp/                   # ledger report/check/collect engine tests
     install/               # install provider tests (one file per src/install module)
     telemetry/             # telemetry tests
   docs/
     architecture.md        # this file — file-by-file layout
     edge-cases.md          # edge cases ที่จัดการแล้ว — lookup ตอนเจอพฤติกรรมแปลก
-    mcp-handcheck.md       # MCP protocol, adapter examples, safety rules
 ```
 

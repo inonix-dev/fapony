@@ -47,9 +47,8 @@ import {
   planDir,
   specDir,
 } from "../core/config.js";
-import { MEM_TEXT_MAX } from "../core/mem-log.js";
+import { readFaelLog, recentDecisions } from "../fael.js";
 import { extractExports } from "../map.js";
-import { readMemLog, readRecentMemDecisions } from "../memory.js";
 import { capLines, execGit, SIG_MAX } from "./primitives.js";
 
 // One chunk = one module's signatures — past ~40 lines a module is its own
@@ -63,6 +62,8 @@ const SCOPE_WARN_FILES = 300;
 // Shipped plans/specs that already touched this scope. Capped low on purpose:
 // this is a "go read that first" pointer, not a bibliography.
 const MAX_PRIOR_ART = 5;
+// Mem-row text budget in the Known traps block.
+const MEM_TEXT_MAX = 120;
 // Chunk 4 (PLAN-seed-and-surface): the PLAN names what is already in scope —
 // one line per scope file with its export names. SPEC-only seeds never gave
 // PLAN-only readers this pointer, so agents re-derived what export-lines.ts
@@ -241,7 +242,7 @@ function renderExistingInScope(
 
 function renderContextFapony(worktree: string): string {
   const lines: string[] = [];
-  const decisions = readRecentMemDecisions(worktree, 3).slice(0, 3);
+  const decisions = recentDecisions(readFaelLog(worktree).rows, 3);
   lines.push(
     decisions.length > 0
       ? `- Decisions on record (mem): ${decisions
@@ -250,7 +251,7 @@ function renderContextFapony(worktree: string): string {
               `"${d.text.length > 140 ? `${d.text.slice(0, 139)}…` : d.text}"`,
           )
           .join(" · ")}`
-      : "- Decisions on record (mem): _(none — no mem log or empty)_",
+      : "- Decisions on record (mem): _(none — no fael log or empty)_",
   );
   return lines.join("\n");
 }
@@ -305,7 +306,7 @@ One step = one chunk = one session: finish it, close it, **stop** — starting t
 
 1. _(agent fills in — each step must be verifiable)_
 
-**Closing a step:** tick TL;DR with sha · \`git commit\` files only · \`fapony mem add note "<what chunk N+1 must know>" --files <f1,f2> ${planRel}\` · next opens with \`kickoff ${planRel}\` (or \`kickoff PLAN-${name}.md\` — kickoff resolves by filename too).
+**Closing a step:** tick TL;DR with sha · \`git commit\` files only · \`fael add note "<what chunk N+1 must know>" --files <f1,f2>,${planRel}\` · next opens with \`fapony plan PLAN-${name}.md\` (unchecked chunks + those notes).
 - [ ] handoff: the mem note is the handoff — this box only opts the plan into the Stop-hook check
 
 ## 7. Examples
@@ -569,7 +570,7 @@ function specTemplate(
 //
 // The one place a seed is allowed to be opinionated: past pain about exactly
 // these files. bug rows first, then decision (note carries no "this hurt"
-// signal), newest first within a kind. Match mirrors mem_find: files[] first;
+// signal), newest first within a kind. Match mirrors fael find: files[] first;
 // the text/spec fallback runs ONLY for rows with no files[] at all — a row
 // that named files already spoke, its text may quote any path.
 //
@@ -601,8 +602,8 @@ export function renderKnownTraps(
 ): { lines: string[]; matched: number; lacked: number } {
   const empty = { lines: [], matched: 0, lacked: 0 };
   try {
-    const { rows, filesFound } = readMemLog(worktree);
-    if (filesFound === 0 || rows.length === 0) return empty;
+    const { rows } = readFaelLog(worktree);
+    if (rows.length === 0) return empty;
 
     const scopeFiles = new Set<string>();
     for (const r of roots)
@@ -637,7 +638,7 @@ export function renderKnownTraps(
     );
     const lacked = hits.filter((h) => h.viaText).length;
     const lines = [
-      "## Known traps (fapony mem)",
+      "## Known traps (fael)",
       "",
       `- ${hits.length} relevant row(s) on this scope (${lacked} lacked files[]${lacked > 0 ? " — matched via text" : ""})`,
     ];

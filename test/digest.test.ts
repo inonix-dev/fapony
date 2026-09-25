@@ -15,8 +15,12 @@ import { collectDigest } from "../src/digest/collect.js";
 import { renderDigestHtml } from "../src/digest/html.js";
 import { renderDigestText } from "../src/digest/text.js";
 import { recordHintFire } from "../src/hook.js";
+import { type FaelFixtureRow, withFakeFael } from "./helpers.js";
 
 // --- env isolation ---
+
+// What the fake `fael` prints for the current test (set by withIsolatedEnv).
+let publish: (rows: (FaelFixtureRow | string)[]) => void = () => {};
 
 function withIsolatedEnv(fn: () => void | Promise<void>): void | Promise<void> {
   const stateDir = mkdtempSync(join(tmpdir(), "fapony-digest-"));
@@ -39,7 +43,10 @@ function withIsolatedEnv(fn: () => void | Promise<void>): void | Promise<void> {
   process.env.FAPONY_CODEX_SESSIONS_DIR = "/nonexistent/codex";
   process.env.FAPONY_CONFIG = "/nonexistent/fapony.config.json";
   try {
-    return fn();
+    return withFakeFael((setRows) => {
+      publish = setRows;
+      return fn();
+    });
   } finally {
     for (const k of keys) {
       if (prev[k] === undefined) delete process.env[k];
@@ -53,7 +60,6 @@ function withIsolatedEnv(fn: () => void | Promise<void>): void | Promise<void> {
 
 function makeWorktree(): string {
   const dir = mkdtempSync(join(tmpdir(), "fapony-wt-"));
-  mkdirSync(join(dir, ".fapony", ".memory"), { recursive: true });
   mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
   mkdirSync(join(dir, ".fapony", "done"), { recursive: true });
   // fake git repo
@@ -62,10 +68,32 @@ function makeWorktree(): string {
   return dir;
 }
 
-function writeMemLog(dir: string, rows: Record<string, unknown>[]): void {
-  const logDir = join(dir, ".fapony", ".memory");
-  const lines = `${rows.map((r) => JSON.stringify(r)).join("\n")}\n`;
-  writeFileSync(join(logDir, "log.testuser.jsonl"), lines);
+/** Old-shape mem rows → what `fael find --json` prints (bug → issue, a
+ *  close row folds into its target's `closed`). */
+function writeMemLog(_dir: string, rows: Record<string, unknown>[]): void {
+  const out: FaelFixtureRow[] = [];
+  for (const r of rows) {
+    if (r.kind === "close") continue;
+    out.push({
+      id: String(r.id),
+      ts: String(r.ts),
+      by: String(r.agent),
+      kind: r.kind === "bug" ? "issue" : String(r.kind),
+      text: String(r.text),
+    });
+  }
+  for (const r of rows) {
+    if (r.kind !== "close") continue;
+    const target = out.find((o) => o.id === r.ref);
+    if (target)
+      target.closed = {
+        id: `c-${String(r.ref)}`,
+        ts: String(r.ts),
+        by: String(r.agent),
+        text: String(r.text),
+      };
+  }
+  publish(out);
 }
 
 function writePlanFile(dir: string, name: string, content: string): void {
@@ -81,6 +109,8 @@ test("testDigestEmptyRepo", async () => {
       const data = await collectDigest({ worktree: dir });
       assert.ok(data.sources.length >= 5, "should have at least 5 sources");
       for (const s of data.sources) {
+        // fael answering with 0 rows is a source that works, not a missing one
+        if (s.name === "memory") continue;
         assert.equal(s.ok, false, `${s.name} should be ok:false`);
       }
       assert.equal(data.decisions.length, 0);
@@ -94,7 +124,7 @@ test("testDigestEmptyRepo", async () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
-  console.log("  ✓ empty repo — all sources ok:false");
+  console.log("  ✓ empty repo — every non-memory source ok:false");
 });
 
 test("testDigestSinceFilter", async () => {
@@ -176,18 +206,15 @@ test("testDigestMalformedLine", async () => {
   await withIsolatedEnv(async () => {
     const dir = makeWorktree();
     try {
-      const logDir = join(dir, ".fapony", ".memory");
-      const goodRow = JSON.stringify({
-        ts: new Date().toISOString(),
-        agent: "ok",
-        kind: "note",
-        text: "good row",
-        id: "g1",
-      });
-      writeFileSync(
-        join(logDir, "log.testuser.jsonl"),
-        `bad json {{{\n${goodRow}\n`,
-      );
+      publish([
+        "bad json {{{",
+        {
+          id: "g1",
+          ts: new Date().toISOString(),
+          kind: "note",
+          text: "good row",
+        },
+      ]);
 
       const data = await collectDigest({ worktree: dir });
       assert.equal(data.skipped_malformed, 1, "should skip 1 malformed line");

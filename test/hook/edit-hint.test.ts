@@ -10,11 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  editHintFor,
-  editTrackPath,
-  READ_HINT_MIN_BYTES,
-} from "../../src/hook.js";
+import { editHintFor, editTrackPath } from "../../src/hook.js";
 import { editFixture, withEditState, withTempRepo } from "./helpers.js";
 
 // --- Edit hint (importer count + once-per-session dedupe) ---
@@ -63,7 +59,7 @@ test("testEditHintSkipsNonSourceAndMissing", () => {
     withEditState(() => {
       editFixture(dir);
       const md = join(dir, "NOTES.md");
-      writeFileSync(md, "x".repeat(READ_HINT_MIN_BYTES * 2));
+      writeFileSync(md, "x".repeat(48_000));
       assert.equal(
         editHintFor({ filePath: md, cwd: dir, session: "s" }),
         null,

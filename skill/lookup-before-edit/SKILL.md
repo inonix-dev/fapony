@@ -38,7 +38,8 @@ per file, the rest as `(+N)`, so the total is still readable. That is your entry
 
 ## History + debt (same paths, two calls)
 
-- `mem_find` with `files: [<same paths>]` — "what was ever decided about this file" (MCP, no CLI spawn).
+- fael `find` with `files: [<same paths>]` (or `fael find --files <paths>`) — "what was ever decided about
+  this file". fael already attaches these rows when you Read a file, so call it only for paths you skip reading.
 - `fapony debt --where <dir|file>` — conventions this path still violates; empty until `conventions.json` exists.
 
 ## After the lookup

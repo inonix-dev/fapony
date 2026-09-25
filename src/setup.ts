@@ -62,7 +62,6 @@ export interface SetupDeps {
 export interface SetupAnswers {
   worktreeName: string;
   worktreePath: string;
-  enableMemory: boolean;
 }
 
 /** Pure config builder — the config-write path of cmdSetup, minus prompting.
@@ -76,15 +75,6 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
     review: { maxRounds: 2 },
     memory: null,
   };
-
-  if (a.enableMemory) {
-    config.memory = {
-      claim: ["fapony", "mem", "claim", "{id}"],
-      close: ["fapony", "mem", "close", "{id}", "{msg}"],
-      add: ["fapony", "mem", "add", "{kind}", "{text}"],
-      kickoff: ["fapony", "mem", "kickoff"],
-    };
-  }
 
   return config;
 }
@@ -159,12 +149,6 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
       defaultName,
     );
 
-    // --- memory ---
-    console.log();
-    const enableMemory = isAffirmative(
-      await askFn("Enable project memory? (y/n)", "n"),
-    );
-
     // --- write config ---
     // loadConfig() resolves to FAPONY_CONFIG or cwd/fapony.config.json, so a
     // cwd write is consistent — but warn when cwd isn't a fapony checkout,
@@ -179,7 +163,6 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
     const config = buildSetupConfig({
       worktreeName,
       worktreePath,
-      enableMemory,
     });
 
     const configPath = join(process.cwd(), CONFIG_FILENAME);
@@ -224,12 +207,11 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
   ┌─────────────────────────────────────────┐
   │  Setup complete! Next steps:            │
   │                                         │
-  │  1. Wire fapony into your MCP client:   │
-  │     fapony install --platform opencode  │
-  │     fapony install --platform claude    │
+  │  1. Wire fapony into your clients:      │
+  │     fapony install                      │
   │                                         │
-  │  2. Ask your agent:                     │
-  │     "Find past decisions with mem_find" │
+  │  2. See where your plans stand:         │
+  │     fapony plan                         │
   │                                         │
   │  3. Read a run's report:                │
   │     fapony report <run-id>              │

@@ -8,6 +8,7 @@ import { test } from "bun:test";
 import assert from "node:assert";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { initPlanStore } from "../src/plan/store.js";
 import {
   cmdPlanSweep,
   collectBlockedTickedIssues,
@@ -15,8 +16,7 @@ import {
   countFirstSection,
   extractPlanRefs,
   parsePlanFrontmatter,
-} from "../src/mem/commands/plan.js";
-import { initStore } from "../src/mem/store.js";
+} from "../src/plan/sweep.js";
 import { captureLogs, withTempRepo } from "./helpers.js";
 
 const FAPONY = join(import.meta.dir, "..", "fapony.ts");
@@ -32,7 +32,7 @@ function inRepo(dir: string, fn: () => void): void {
   const prev = process.cwd();
   process.chdir(dir);
   try {
-    initStore(dir);
+    initPlanStore(dir);
     fn();
   } finally {
     process.chdir(prev);
@@ -193,7 +193,7 @@ test("testPlanCheckEndToEndDepGraph", () => {
         "- [x] chunk 1 — landed\n- [x] chunk 2 — landed\n",
       ),
     });
-    const proc = Bun.spawnSync(["bun", FAPONY, "mem", "plan-check"], {
+    const proc = Bun.spawnSync(["bun", FAPONY, "plan", "check"], {
       cwd: dir,
       stdout: "pipe",
       stderr: "pipe",
@@ -229,7 +229,7 @@ test("testPlanSweepBlockedViewAndUnblockHint", () => {
     });
     // --apply through the real CLI prints the 🔓 unblock hint
     const proc = Bun.spawnSync(
-      ["bun", FAPONY, "mem", "plan-sweep", "PLAN-ship-gate.md", "--apply"],
+      ["bun", FAPONY, "plan", "sweep", "PLAN-ship-gate.md", "--apply"],
       { cwd: dir, stdout: "pipe", stderr: "pipe" },
     );
     const out2 = proc.stdout.toString() + proc.stderr.toString();

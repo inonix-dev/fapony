@@ -32,9 +32,9 @@ const GROUP_ORDER: CommandGroup[] = [
 
 export const COMMANDS: CommandInfo[] = [
   {
-    name: "mem",
+    name: "plan",
     group: "core",
-    summary: "project pain memory: decisions, bugs, notes",
+    summary: "where plans stand: next chunk, sweep shipped, check links/shas",
   },
   {
     name: "debt",
@@ -46,7 +46,6 @@ export const COMMANDS: CommandInfo[] = [
     group: "core",
     summary: 'separate "already red" from "I made it red"',
   },
-  { name: "init-mem", group: "core", summary: "delete legacy .memory/ dirs" },
   {
     name: "digest",
     group: "core",
@@ -79,21 +78,6 @@ export const COMMANDS: CommandInfo[] = [
     summary: "write PLAN (+SPEC) with capped sections",
   },
   {
-    name: "mcp",
-    group: "hooks",
-    summary: "MCP server (stdio JSON-RPC, 3 tools)",
-  },
-  {
-    name: "hook-stop",
-    group: "hooks",
-    summary: "Stop hook: block turns with commits but no mem row",
-  },
-  {
-    name: "hook-read-hint",
-    group: "hooks",
-    summary: "read/re-read annotations",
-  },
-  {
     name: "hook-edit-hint",
     group: "hooks",
     summary: "importer count before editing shape",
@@ -103,16 +87,11 @@ export const COMMANDS: CommandInfo[] = [
     group: "hooks",
     summary: "deny raw git mv of plan files into done/",
   },
-  {
-    name: "hook-session-start",
-    group: "hooks",
-    summary: "SessionStart: kickoff into context",
-  },
   { name: "init", group: "setup", summary: "scaffold .fapony/ in a worktree" },
   {
     name: "install",
     group: "setup",
-    summary: "wire MCP + skills into clients",
+    summary: "wire skills + edit hint into clients",
   },
   { name: "setup", group: "setup", summary: "interactive wizard" },
   { name: "update", group: "setup", summary: "self-update via git pull" },
@@ -130,7 +109,7 @@ export const COMMANDS: CommandInfo[] = [
 // a `usage: fapony` line: scripts/smoke-publish.sh greps for it on a no-arg run.
 export const renderUsage = (): string => {
   const lines = [
-    "fapony — project pain memory for agent-written code",
+    "fapony — plan workflow + token-saving lookups for agent-written code",
     "usage: fapony <command> [args]",
     "",
   ];
@@ -140,7 +119,7 @@ export const renderUsage = (): string => {
   }
   lines.push(
     "",
-    "  fapony mem <sub> --help     per-subcommand details (only mem has --help)",
+    "  memory (decisions, bugs, notes) lives in fael — fael --help",
   );
   return lines.join("\n");
 };
@@ -162,18 +141,13 @@ export const levenshtein = (a: string, b: string): number => {
   return prev[b.length];
 };
 
-// Up to 3 suggestions within distance ≤ 2, against top-level names and mem
-// subs (so `fapony plan-check` offers `fapony mem plan-check`). Sorted by
-// distance, then alphabetically — deterministic for tests.
-export const suggestCommand = (cmd: string, memSubs: string[]): string[] => {
+// Up to 3 suggestions within distance ≤ 2 against top-level names. Sorted
+// by distance, then alphabetically — deterministic for tests.
+export const suggestCommand = (cmd: string): string[] => {
   const scored: Array<{ text: string; d: number }> = [];
   for (const c of COMMANDS) {
     const d = levenshtein(cmd, c.name);
     if (d <= 2) scored.push({ text: `fapony ${c.name}`, d });
-  }
-  for (const s of memSubs) {
-    const d = levenshtein(cmd, s);
-    if (d <= 2) scored.push({ text: `fapony mem ${s}`, d });
   }
   scored.sort((x, y) => x.d - y.d || (x.text < y.text ? -1 : 1));
   return scored.slice(0, 3).map((s) => s.text);

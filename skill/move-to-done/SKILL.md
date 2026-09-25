@@ -37,26 +37,26 @@ You are about to move a PLAN that has been shipped to the archive.
    A plan that is merely *waiting* (on a person, a customer, a decision) is **not** dead and does
    not move — mark it `status: blocked` + `blocked_by: <what you are waiting for>` and leave it in
    `plan/` — the frontmatter is for the next person reading the folder, and the plan stays out
-   of `done/`, which is what `plan-sweep` and `kickoff` go by. Never `--apply` a blocked file;
+   of `done/`, which is what `fapony plan` and `plan sweep` go by. Never `--apply` a blocked file;
    a blocked file with all chunks ticked is deferred doc debt — ask the user: ship it or keep
    waiting.
 
- 1c. **Check the dep graph before moving** — `fapony mem plan-check` reads `blocked_by`/`blocks`
+ 1c. **Check the dep graph before moving** — `fapony plan check` reads `blocked_by`/`blocks`
     and says what a human would miss: a `blocked_by` pointing at a file that is not in `plan/`
     or `done/`, a blocker already in `done/` while the dependent is still `status: blocked`,
     a waiter cycle, and a blocked plan with all chunks ticked. Fix its issues first — a move
     on top of a broken graph just relocates the confusion.
 
-2. **Run `plan-sweep --apply`** — this does the `git mv`, rewrites markdown links inside the
+2. **Run `fapony plan sweep --apply`** — this does the `git mv`, rewrites markdown links inside the
    file and inbound links from every `.md` under `.fapony/` (`plan/`, `done/`, `spec/`),
    warns about plain-text mentions and about tracked files outside `.fapony/` that still
    name the file, prints a `🔓 <shipped> — <waiter> lists it as blocker` line when the ship
    unblocks a waiting plan (copy that line into your summary — the waiter keeps
-   `status: blocked` until its owner clears it), and logs a decision row — all in one call:
+   `status: blocked` until its owner clears it) — all in one call:
    ```bash
-   fapony mem plan-sweep <PLAN-foo.md> --apply
+   fapony plan sweep <PLAN-foo.md> --apply
    ```
-   It refuses if the file lacks a shipped header or has open mem rows (next/bug/hold/decision/note).
+   It refuses if the file lacks a shipped header or fael still has open rows about it.
    If git refuses ("not under version control" — `.fapony/` is gitignored in this repo), plain
    `mv` instead; there's nothing to commit for an untracked path, so skip step 4 in that case.
    The filename gets no date prefix — the ship date is already in the header (step 1).
@@ -71,20 +71,17 @@ You are about to move a PLAN that has been shipped to the archive.
    chore(plan): archive PLAN-foo.md (shipped <hash>)
    ```
 
-5. **Leave a note when the ship taught something** — `plan-sweep --apply` (step 2)
-   already logged the ship itself as a decision row, so a clean ship needs nothing
-   more. When the plan hit something a reader could not get from the diff, call the
-   `mem_add` MCP tool (fapony) once:
+5. **Leave a note when the ship taught something** — the move itself is in git, so a
+   clean ship needs nothing more. When the plan hit something a reader could not get
+   from the diff, call fael's `add` tool (or `fael add`) once:
    - `kind`: `note`
    - `text`: what the symptom looked like, where the cause actually was, and the
      rule that follows. Standalone prose — it is read months later with no access
      to this conversation. Write one only then — "clean ship" files nothing, and a
      note that repeats the diff teaches the next session nothing
    - `files`: repo-relative paths this plan touched (`git diff --name-only <base>..HEAD`)
-   - `spec`: the archived plan's path (post-move, e.g. `.fapony/done/PLAN-foo.md`)
-   - `worktree`: **absolute path** (`git rev-parse --show-toplevel`) — every other
-     fapony tool scopes by absolute path too; a bare repo name won't match them
-   Skip only if fapony's MCP tools aren't available in this session — don't block the archive on it.
+     plus the archived plan's path (post-move, e.g. `.fapony/done/PLAN-foo.md`)
+   Skip only if fael isn't available in this session — don't block the archive on it.
 
 ## Example
 
@@ -92,25 +89,24 @@ You are about to move a PLAN that has been shipped to the archive.
 Input: .fapony/plan/PLAN-kickoff.md, no shipped header yet
 Steps:
 1. stamp header: > ✅ **shipped 2026-09-13** (a1b2c3)
-2. fapony mem plan-sweep .fapony/plan/PLAN-kickoff.md --apply
-   → moved, links rewritten, decision logged
+2. fapony plan sweep .fapony/plan/PLAN-kickoff.md --apply
+   → moved, links rewritten
 3. spec: untouched, stays in .fapony/spec/
 4. commit
-5. (clean ship — plan-sweep's decision row already recorded it, nothing more to file)
+5. (clean ship — the move is in git, nothing more to file)
 ```
 
 A ship worth a note looks like this instead:
 
 ```
-5. mem_add(kind="note",
+5. add(kind="note",
      text="sheet scroll reset on open, not close — the restore hook was on the wrong side; the router's own scrollRestoration resets on every navigate(). Check the router option before writing a restore hook.",
-     files=["src/routes/expenses/index.tsx"], spec=".fapony/done/PLAN-quick-nav.md",
-     worktree="/Users/you/Project/vela")
+     files=["src/routes/expenses/index.tsx", ".fapony/done/PLAN-quick-nav.md"])
 ```
 
 ## If fail
 
 - No git repo / no commits (can't derive a shipped hash) → tell user: "Add header > ✅ **shipped** (<hash>) first"
 - Stamped the header yourself → always say which hash you used
-- plan-sweep refuses (open mem rows) → close them or use `MEM_FORCE=1`
-- Too many inbound links → plan-sweep reports them; too many to fix → report the list
+- plan sweep refuses (open fael rows) → `fael close` them or use `MEM_FORCE=1`
+- Too many inbound links → plan sweep reports them; too many to fix → report the list

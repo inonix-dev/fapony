@@ -16,8 +16,8 @@ import {
 import { type HintImpact, hintLogPath } from "../core/hint-log.js";
 import { parseSince } from "../core/since.js";
 import { openDb } from "../db/store.js";
+import { type MemRow, readFaelLog } from "../fael.js";
 import { computeHintImpact } from "../hook.js";
-import { type MemRow, readMemLog } from "../memory.js";
 import { isPassFamily, VERDICT_GRADES } from "../parse.js";
 import { imputeResult, loadPrices } from "../price/index.js";
 import { EMPTY_RESULT, type PassiveUsageResult } from "../session/types.js";
@@ -528,15 +528,14 @@ export async function collectDigest(
   let skippedMalformed = 0;
 
   // 1. memory log
-  const mem = readMemLog(worktree, sinceIso);
+  const mem = readFaelLog(worktree, sinceIso);
   skippedMalformed += mem.skipped;
   sources.push({
     name: "memory",
-    ok: mem.filesFound > 0,
-    detail:
-      mem.filesFound > 0
-        ? `${mem.rows.length} rows from ${mem.filesFound} file${mem.filesFound > 1 ? "s" : ""}`
-        : "no memory log — run: fapony init <path>",
+    ok: mem.ok,
+    detail: mem.ok
+      ? `${mem.rows.length} rows from fael`
+      : "fael not found — memory lives in fael (npm i -g @inonix/fael)",
   });
 
   // 2. plans

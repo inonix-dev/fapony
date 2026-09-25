@@ -133,12 +133,8 @@ export async function cmdHookEditHint(): Promise<void> {
     const parts: string[] = [];
     const hint = editHintFor({ filePath, cwd, session });
     if (hint) parts.push(hint);
-    const ctx = readContextData(filePath, cwd, session);
-    if (ctx) {
-      for (const line of [...ctx.debtLines, ...ctx.memLines]) {
-        parts.push(line);
-      }
-    }
+    const ctx = readContextData(filePath, cwd);
+    if (ctx) parts.push(...ctx.debtLines);
     if (parts.length > 0) {
       console.log(
         JSON.stringify({
@@ -151,7 +147,7 @@ export async function cmdHookEditHint(): Promise<void> {
     }
 
     // --- hint-fire log ---
-    if (hint) {
+    if (parts.length > 0) {
       try {
         const g = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
           cwd,
@@ -177,31 +173,26 @@ export async function cmdHookEditHint(): Promise<void> {
           const rel = abs
             ? relative(worktree, abs).split("\\").join("/")
             : null;
-          recordHintFire({
-            ts: new Date().toISOString(),
-            worktree,
-            surface: "edit",
-            file: rel && !rel.startsWith("..") ? rel : null,
-            count: 1,
-          });
-          if (ctx && ctx.memLines.length > 0) {
+          const file = rel && !rel.startsWith("..") ? rel : null;
+          if (hint) {
             recordHintFire({
               ts: new Date().toISOString(),
               worktree,
-              surface: "mem",
-              file: rel && !rel.startsWith("..") ? rel : null,
-              count: ctx.memLines.length,
-              ids: ctx.memIds,
+              surface: "edit",
+              file,
+              count: 1,
             });
           }
-          if (ctx && ctx.openBugIds.length > 0) {
+          // Debt lines moved here from the retired read hint — log them so
+          // computeHintImpact keeps measuring debt precision.
+          if (ctx && ctx.debtIds.length > 0) {
             recordHintFire({
               ts: new Date().toISOString(),
               worktree,
-              surface: "open-bug",
-              file: rel && !rel.startsWith("..") ? rel : null,
-              count: ctx.openBugIds.length,
-              ids: ctx.openBugIds,
+              surface: "debt",
+              file,
+              count: ctx.debtIds.length,
+              ids: ctx.debtIds,
             });
           }
         }

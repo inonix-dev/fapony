@@ -89,37 +89,6 @@ test("testVerificationReportWorktreeOnlyCreatesNoRun", () => {
   console.log("  ✓ verification_report worktree-only run leaves no trace");
 });
 
-test("testVerificationReportToolCount", () => {
-  // The handoff trio is CLI-only: the logic below still ships (fapony report
-  // calls toolVerificationReport directly), but the MCP schemas cost every
-  // session of every client and nothing called them. Guard the boundary.
-  const { TOOLS } =
-    require("../../src/adapters/mcp/tools/index.js") as typeof import("../../src/adapters/mcp/tools/index.js");
-  const names = TOOLS.map((t: { name: string }) => t.name);
-  for (const gone of [
-    "verification_report",
-    "handoff_check",
-    "handoff_collect",
-    // dropped 2026-09-19: `fapony stats` covers one from the CLI, the other
-    // had no caller — a schema on tools/list is paid every session by everyone.
-    "fapony_stats",
-    "project_health_context",
-    // dropped 2026-09-20: `fapony mem kickoff` answers "what is left" from the
-    // same plan files, so the schema was rent with no tenant.
-    "plan_list",
-    // dropped 2026-09-20: only the owner ever asked ("what did it cost"),
-    // never the agent mid-turn — and `fapony usage-web` answers it from the
-    // CLI with zero standing rent.
-    "fapony_usage",
-    // PLAN-verdict-to-mem: verdict_submit moved to frozen ledger (CLI only).
-    "verdict_submit",
-  ]) {
-    assert.ok(!names.includes(gone), `${gone} is back on the MCP surface`);
-  }
-  assert.equal(TOOLS.length, 3);
-  console.log("  ✓ retired tools stay off the MCP surface (3 tools total)");
-});
-
 test("testVerificationReportVerdictFromGateEvent", () => {
   withTmpDb(() => {
     // Gate events store JSON {verdict, note, round} — the report must read

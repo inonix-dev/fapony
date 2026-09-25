@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-// test/install/detect.test.ts — detectClients (which MCP clients exist here)
+// test/install/detect.test.ts — detectClients (which agent clients exist here)
 
 import assert from "node:assert";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -12,8 +12,6 @@ test("testDetectClientsAllFound", () => {
     // claude: checkCmd returns true
     // antigravity: ~/.gemini exists
     mkdirSync(join(home, ".gemini"), { recursive: true });
-    // cursor: ~/.cursor exists
-    mkdirSync(join(home, ".cursor"), { recursive: true });
     // opencode: config exists
     const ocDir = join(home, ".config", "opencode");
     mkdirSync(ocDir, { recursive: true });
@@ -32,7 +30,7 @@ test("testDetectClientsAllFound", () => {
       checkCmd: () => true,
     };
     const result = detectClients(deps);
-    assert.equal(result.length, 6);
+    assert.equal(result.length, 5);
     assert.ok(
       result.every((d) => d.installed),
       "all should be installed",
@@ -48,7 +46,7 @@ test("testDetectClientsNoneFound", () => {
       checkCmd: () => false,
     };
     const result = detectClients(deps);
-    assert.equal(result.length, 6);
+    assert.equal(result.length, 5);
     assert.ok(
       result.every((d) => !d.installed),
       "none should be installed",

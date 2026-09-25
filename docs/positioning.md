@@ -2,6 +2,10 @@
 
 Read this before writing README, launch posts, or marketing copy. Not needed for a normal coding session.
 
+> **Status 2026-09-25:** the memory pitch below ("fapony remembers instead") moved with the mem log to
+> [fael](https://github.com/inonix-dev/fael); fapony is now the owner's plan/debt/usage tool, not a launch
+> product. Kept as the reasoning record — apply it to fael's copy, not fapony's.
+
 1. **Never headline with "verifies".** fapony never runs tests itself, never judges itself.
    It's **the memory, not the judge.** HN readers open the source for real — one overclaiming word burns the
    whole post's credit.

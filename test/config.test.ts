@@ -7,7 +7,6 @@ import {
   type Config,
   evidenceFile,
   loadConfig,
-  memoryDir,
   planDir,
   safetyDeny,
   specDir,
@@ -24,7 +23,6 @@ test("testConfigDefaults", () => {
   // planDir/specDir are hardcoded — not configurable (gitignored = private).
   assert.equal(planDir(), ".fapony/plan");
   assert.equal(specDir(), ".fapony/spec");
-  assert.equal(memoryDir(config), ".fapony/.memory");
   assert.equal(evidenceFile(config), ".fapony/evidence.json");
   assert.equal(safetyDeny(config).length, 4);
 
@@ -50,8 +48,6 @@ test("testConfigFileOverrides", () => {
     // planDir/specDir are always the same (hardcoded)
     assert.equal(planDir(), ".fapony/plan");
     assert.equal(specDir(), ".fapony/spec");
-    // unspecified sections keep defaults
-    assert.equal(memoryDir(config), ".fapony/.memory");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

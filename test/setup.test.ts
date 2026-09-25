@@ -16,36 +16,15 @@ import {
   validateWorktreePath,
 } from "../src/setup.js";
 
-test("testBuildSetupConfigNoMemory", () => {
+test("testBuildSetupConfigMemoryAlwaysNull", () => {
   const config = buildSetupConfig({
     worktreeName: "myapp",
     worktreePath: "/tmp/myapp",
-    enableMemory: false,
   });
   assert.deepStrictEqual(config.worktrees, { myapp: "/tmp/myapp" });
   assert.deepStrictEqual(config.review, { maxRounds: 2 });
   assert.equal(config.memory, null);
   console.log("  ✓ buildSetupConfig without memory");
-});
-
-test("testBuildSetupConfigWithMemory", () => {
-  const config = buildSetupConfig({
-    worktreeName: "myapp",
-    worktreePath: "/tmp/myapp",
-    enableMemory: true,
-  });
-  const mem = config.memory as Record<string, string[]>;
-  assert.deepStrictEqual(mem.claim, ["fapony", "mem", "claim", "{id}"]);
-  assert.deepStrictEqual(mem.close, [
-    "fapony",
-    "mem",
-    "close",
-    "{id}",
-    "{msg}",
-  ]);
-  assert.deepStrictEqual(mem.add, ["fapony", "mem", "add", "{kind}", "{text}"]);
-  assert.deepStrictEqual(mem.kickoff, ["fapony", "mem", "kickoff"]);
-  console.log("  ✓ buildSetupConfig with memory");
 });
 
 test("testValidateWorktreePath", () => {
@@ -116,7 +95,7 @@ async function captureSetupOutput(fn: () => Promise<void>): Promise<{
 }
 
 /** Queue-based fake ask — answers must follow the real question order:
- *  path, name, memory, [overwrite]. */
+ *  path, name, [overwrite]. */
 function queueAsk(answers: string[]): {
   ask: (q: string, def?: string) => Promise<string>;
   questions: string[];
@@ -154,7 +133,6 @@ async function withTempCwd<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 const SETUP_ANSWERS = (worktreePath: string): string[] => [
   worktreePath,
   "myapp",
-  "n",
 ];
 
 test("testCmdSetupGitMissing", async () => {
@@ -294,7 +272,6 @@ test("testCmdSetupHappyPathScaffolds", async () => {
     assert.deepStrictEqual(questions, [
       "Worktree path",
       "Worktree name (key for CLI)",
-      "Enable project memory? (y/n)",
     ]);
     const written = JSON.parse(
       readFileSync(join(cwd, "fapony.config.json"), "utf-8"),

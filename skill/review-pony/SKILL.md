@@ -1,6 +1,6 @@
 ---
 name: review-pony
-description: Review a plan, PR, diff, or design doc as a verification rather than an opinion — scope first, walk the real path, break it on paper, cite everything. Takes optional effort (low|medium|high|max, widens the walk only, never skips a pass) and --fix (apply CONFIRMED blocker/major findings after the report). Records surviving findings to the project's mem log after the report. Trigger on /review-pony and proactively whenever the user asks to review, audit, scrutinize, sanity-check, or get a second opinion on a plan, PR, diff, design doc, or proposed code change.
+description: Review a plan, PR, diff, or design doc as a verification rather than an opinion — scope first, walk the real path, break it on paper, cite everything. Takes optional effort (low|medium|high|max, widens the walk only, never skips a pass) and --fix (apply CONFIRMED blocker/major findings after the report). Records surviving findings to fael after the report. Trigger on /review-pony and proactively whenever the user asks to review, audit, scrutinize, sanity-check, or get a second opinion on a plan, PR, diff, design doc, or proposed code change.
 ---
 
 # Review Pony
@@ -84,7 +84,7 @@ Write down every place the walk surprises you. Surprises outrank style; chase th
 - `medium` (default) — as written above: full path, callers, tests on the path.
 - `high` — also second-degree callers, and read the tests that exercise them, not just the path.
 - `max` — also grep every changed file for second-degree callers, and re-open
-  every `deferred` line from the last review of this scope, if fapony has one.
+  every `deferred` line from the last review of this scope, if fael has one (`fael find --files <scope>`).
 
 Whatever level stopped you, say so in the one-line coverage note (see Report) — "walked to 1 hop"
 is honest, "walked" alone at `low` is not.
@@ -164,21 +164,20 @@ Fixing changes what actually shipped, not what the review found — re-run pass 
 check on the new state before calling it done, but don't re-run the whole review. Record
 what you found, not the post-fix state (the row's text can say the fix was applied).
 
-## After: record what the next session needs (fapony)
+## After: record what the next session needs (fael)
 
 If a blocker/major CONFIRMED finding survived, or the verdict is rework/reject,
-call `mem_add` once, after the report is shown. Don't block the report on it,
+call fael's `add` tool once (or `fael add` in the shell), after the report is shown. Don't block the report on it,
 and don't let it change the report's content. Clean reviews (ship, nit-only
 findings) record nothing — there is nothing the next session needs to find.
 
-kind is `bug` when a finding survived (something is broken), `decision` when
+kind is `issue` when a finding survived (something is broken), `decision` when
 the verdict turns on scope alone (rework/reject from pass 1 — the review locks
 a direction). text is the report's verdict line, standalone — what broke or was
 decided, not that a review happened. files are the repo-relative paths actually
-walked — required, a row without them is unfindable. worktree is the absolute
-path (`git rev-parse --show-toplevel`), never a bare name. Only record into a
-project that already has a mem log — never create one uninvited.
-If `mem_add` errors, say so in one line and move on — never re-run a review
+walked — required, a row without them is unfindable. No fael in this session
+(no tool, no `fael` on PATH) = skip the record, never install it uninvited.
+If `add` errors, say so in one line and move on — never re-run a review
 because storage failed.
 
 ---
@@ -201,10 +200,9 @@ The four passes are the rules. These three are what they fail on in practice:
 ```
 1-4.  scope holds; walked the new gate branch; ran the evidence command — it exits 0
       without running the suite (CONFIRMED: `bun test` with no test dir exits 0)
-post. mem_add(kind="bug",
+post. add(kind="issue",
         text="incremental scan replaces cached history with a delta — cache holds 500, truth 1500",
-        files=["cache.ts", "claude-code.ts"],
-        worktree="/Users/you/Project/fapony/wt-fapony")
+        files=["cache.ts", "claude-code.ts"])
 ```
 
 A report in budget — same review that, narrated, ran five paragraphs:

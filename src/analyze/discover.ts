@@ -10,7 +10,7 @@ import { join, relative, sep } from "node:path";
 export const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".pyi"]);
 
 // "templates" for the same reason knip.json ignores templates/**: those files
-// ship as a template copied into other repos by `fapony init-mem` and never
+// ship as a template laid down in other repos by `fapony init` and never
 // have real importers here — scanning them produces false wrapper/orphan
 // signals (measured: conventions-seed flagged 8 "wrappers" that were all
 // src/mem/commands/*.ts helpers matched against unrelated identically-

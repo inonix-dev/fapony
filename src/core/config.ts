@@ -66,7 +66,6 @@ export interface Config {
     stateDir?: string;
     // plan/spec live in .fapony/{plan,spec} — not configurable (gitignored = private).
     doneDir?: string;
-    memDir?: string;
     evidenceFile?: string;
   } | null;
   safety?: {
@@ -92,17 +91,14 @@ export interface RolePricing {
 export const FAPONY_DIR = ".fapony";
 export const CONFIG_FILENAME = "fapony.config.json";
 export const CONVENTIONS_FILENAME = "conventions.json";
-export const KEYS_FILENAME = "keys.json";
 export const EVIDENCE_FILENAME = "evidence.json";
 export const CONVENTIONS_FILE = `${FAPONY_DIR}/${CONVENTIONS_FILENAME}`;
-export const KEYS_FILE = `${FAPONY_DIR}/${KEYS_FILENAME}`;
 // plan/spec live in .fapony/ — not configurable (gitignored = private).
 export const PLAN_DIR = `${FAPONY_DIR}/plan`;
 export const SPEC_DIR = `${FAPONY_DIR}/spec`;
 // Archive sits beside plan/, not inside it, so archiving never changes a file's
 // depth and its relative links survive the move untouched.
 export const DEFAULT_DONE_DIR = `${FAPONY_DIR}/done`;
-export const DEFAULT_MEM_DIR = `${FAPONY_DIR}/.memory`;
 export const DEFAULT_EVIDENCE_FILE = `${FAPONY_DIR}/${EVIDENCE_FILENAME}`;
 
 export const DEFAULT_CONFIG: Config = {
@@ -136,10 +132,6 @@ export function specDir(): string {
 
 export function doneDir(config?: Config): string {
   return config?.paths?.doneDir ?? DEFAULT_DONE_DIR;
-}
-
-export function memoryDir(config?: Config): string {
-  return config?.paths?.memDir ?? DEFAULT_MEM_DIR;
 }
 
 export function evidenceFile(config?: Config): string {
