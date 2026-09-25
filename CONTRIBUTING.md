@@ -6,7 +6,7 @@ Thanks for your interest in contributing!
 
 ```bash
 # clone the repo
-git clone https://github.com/kire21b/fapony.git
+git clone https://github.com/inonix-dev/fapony.git
 cd fapony
 
 # install dependencies
