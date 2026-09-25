@@ -11,7 +11,9 @@ const HELP = `usage: fapony plan [<PLAN.md>] | sweep [<PLAN.md>] [--apply] | che
                               open fael rows about it (the chunk handoff notes)
   fapony plan sweep           shipped plans not yet archived (dry run)
   fapony plan sweep <PLAN.md> --apply
-                              git mv into done/ + rewrite the links to it
+                              move a shipped or superseded plan into done/
+                              (git mv; plain rename when .fapony/ is gitignored)
+                              + rewrite the links to it
   fapony plan check           frontmatter deps, broken links, ticked-chunk shas
                               (exit 1 on issues)
 
