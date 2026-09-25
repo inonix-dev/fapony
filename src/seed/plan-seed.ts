@@ -570,7 +570,7 @@ function specTemplate(
 //
 // The one place a seed is allowed to be opinionated: past pain about exactly
 // these files. bug rows first, then decision (note carries no "this hurt"
-// signal), newest first within a kind. Match mirrors mem_find: files[] first;
+// signal), newest first within a kind. Match mirrors fael find: files[] first;
 // the text/spec fallback runs ONLY for rows with no files[] at all — a row
 // that named files already spoke, its text may quote any path.
 //

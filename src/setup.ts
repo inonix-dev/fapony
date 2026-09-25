@@ -207,12 +207,11 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
   ┌─────────────────────────────────────────┐
   │  Setup complete! Next steps:            │
   │                                         │
-  │  1. Wire fapony into your MCP client:   │
-  │     fapony install --platform opencode  │
-  │     fapony install --platform claude    │
+  │  1. Wire fapony into your clients:      │
+  │     fapony install                      │
   │                                         │
-  │  2. Ask your agent:                     │
-  │     "Find past decisions with mem_find" │
+  │  2. See where your plans stand:         │
+  │     fapony plan                         │
   │                                         │
   │  3. Read a run's report:                │
   │     fapony report <run-id>              │

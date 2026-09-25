@@ -1,7 +1,7 @@
 {
   "name": "fapony",
   "version": "0.7.0",
-  "description": "Token usage across Claude Code, OpenCode, Codex & ZCode on one yardstick — plus a project mem log and convention-debt tracker agents query via 3 MCP tools. No server, your data stays local",
+  "description": "Token usage across Claude Code, OpenCode, Codex & ZCode on one yardstick — plus plans run chunk by chunk and a convention-debt tracker. No server, your data stays local",
   "license": "MIT",
   "author": "delamind (https://github.com/kire21b)",
   "homepage": "https://github.com/inonix-dev/fapony#readme",
@@ -10,9 +10,8 @@
     "url": "git+https://github.com/inonix-dev/fapony.git"
   },
   "keywords": [
-    "mcp",
-    "mcp-server",
     "agent",
+    "token-usage",
     "claude-code",
     "opencode",
     "coding-agent"

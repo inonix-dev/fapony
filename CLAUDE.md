@@ -2,15 +2,20 @@
 
 ## What is fapony
 
-**The project's pain memory, for teams that write code with agents** — a mem log (`.jsonl` in the repo)
-+ convention debt (`fapony debt`) + a lint baseline, plus a usage reader that reports what each of them
-costs in tokens · shipped as an MCP server (`fapony mcp` — stdio JSON-RPC) any agent can call.
+**The plan workflow and token-saving lookups for teams that write code with agents** — plans run
+chunk by chunk (`fapony plan`), convention debt (`fapony debt`), a lint baseline, code lookups
+(`review-seed`, `analyze`), plus a usage reader that reports what it all costs in tokens.
+**Memory — decisions, bugs, notes — is not fapony's any more:** it moved to **fael** on 2026-09-25
+(`~/Project/fael/cl-fael`; Rust, one binary, its own MCP server + Stop/SessionStart/read hooks).
+fapony reads fael (`src/fael.ts`) and never writes it. · fapony is now the owner's personal tool:
+bug fixes and workflow only.
 
 **North star:** **agents accumulate no pain — so they never build the abstraction themselves.**
 Every session one is born anew, writing its 37th `try/catch` as cheerfully as the first, while wrappers
 like `failWith` / `BaseInitClass` get built by *people* who were hurt repeatedly enough to remember.
-fapony is the only thing in the room that remembers instead. Its job:
-**remember the pain → say when a shared thing is due → track how far the migration has gone.**
+fael remembers the pain; fapony's job is the other two thirds:
+**say when a shared thing is due → track how far the migration has gone** — and keep plans cut into
+chunks so no session drags the last one's context along.
 
 **The unit of value is tokens, not quality** (pivoted 2026-09-19 — see "Why the core moved") — the people
 who actually hurt are the ones **paying for their own plan**, not devs on a company budget, so every feature
@@ -27,7 +32,7 @@ decided this 6 months ago and have moved 11 of 47.**
 
 ---
 
-## Why the core moved from ledger to mem + debt (2026-09-19)
+## Why the core moved from ledger to mem + debt (2026-09-19) — and mem to fael (2026-09-25)
 
 Ledger (agents grading their own work) capped out on 3 measured problems: self-grading bias differs per
 model (never cite cross-model quality ranking as fact) · grade inflation (24 fail rows all-time — too small
@@ -39,35 +44,34 @@ is worth it"). **What survived: tokens** — from session logs, can't be gamed.
 | tokens / cost from session logs · git facts (commits, files, shas) · checker results (eslint/knip/tsc) · debt regex matches | grades an agent gave itself · "typecheck fully passes" with no exit code · the word "fixed" |
 
 Ledger wasn't deleted, just frozen as a *pain sensor*: fail/`scope_mismatch`/`spec_gap` verdicts with
-`files[]`+`note` feed repeat-pain-zone clustering — never the grade itself. Full story: `fapony mem find "why the core moved"`.
+`files[]`+`note` feed repeat-pain-zone clustering — never the grade itself. Full story: `fael find "why the core moved"`.
 
 ---
 
 ## Three layers, and the lines that must never blur
 
-| | **core — mem + debt** | **usage — day one** | **ledger — frozen** |
+| | **core — plan + debt** | **usage — day one** | **ledger — frozen** |
 | --- | --- | --- | --- |
-| Code | `src/memory.ts` `src/debt/` `src/lint-baseline.ts` `src/adapters/mcp/tools/mem.ts` `src/init-mem.ts` | `src/session/` `src/usage/` `src/digest/` | `src/db/` (store only) `src/stats/` `src/report/` `src/context/` |
-| Writes | `.jsonl` in the measured repo (the team's) | read-only (cache) | 1 graded row into `~/.config/fapony/state.db` |
+| Code | `src/plan/` `src/debt/` `src/lint-baseline.ts` `src/fael.ts` (read-only) | `src/session/` `src/usage/` `src/digest/` | `src/db/` (store only) `src/stats/` `src/report/` `src/context/` `src/gate.ts` |
+| Writes | plan files it was told to move (`plan sweep --apply`) | read-only (cache) | 1 graded row into `~/.config/fapony/state.db` |
 | Status | where new work lands | the source of day-1 value | **no new features** — bug fixes only |
 | If deleted | no fapony left | installers see N=0 and walk away | core still answers everything |
 
 **The resulting rules:**
-1. **The ledger must never gate core, and vice versa** — `fapony debt` / `mem_find` must work
+1. **The ledger must never gate core, and vice versa** — `fapony debt` / `fapony plan` must work
    with no `state.db`.
-2. **The ledger must never write into a worktree** — a past proposal had `verdict_submit` auto-write
-   a mem row; **rejected**: it forces the hottest path to spawn a shell from config and breaks
-   wherever `.fapony/` is absent. · More importantly — a mem row is valuable because it is standalone
-   prose someone or some agent deliberately wrote, not a generated log.
+2. **Neither the ledger nor any fapony command writes memory** — a mem row is valuable because it is
+   standalone prose someone or some agent deliberately wrote, not a generated log. (`plan sweep --apply`
+   used to log a "shipped" decision row; dropped 2026-09-25 — the move is in git.)
 3. **A new feature gets exactly one owning layer.** If you can't tell which layer it belongs to,
-   you don't understand the problem well enough yet.
+   you don't understand the problem well enough yet. Anything that stores or pushes memory belongs to
+   fael, not here.
 
-**Runtime:** Bun-only · new deps must be `await import()`ed on the path that actually uses them — `fapony mcp`
-starts on every session of every client and `fapony.ts` static-imports every module.
-Check: initialize round trip ≤ ~100ms (measured 63ms · a lone `require("typescript")` = 92ms
-can break it single-handedly).
+**Runtime:** Bun-only · new deps must be `await import()`ed on the path that actually uses them —
+`hook-edit-hint` spawns on every Edit and `fapony.ts` static-imports every module, so startup stays
+≤ ~100ms (a lone `require("typescript")` = 92ms can break it single-handedly).
 **State:** SQLite at `~/.config/fapony/state.db` (WAL) — `FAPONY_STATE_DIR` can move it. ·
-`read-track/<session>.jsonl` in the same stateDir is the read-hint log (disposable per session).
+`edit-track/` and `hint-log/` in the same stateDir are the edit-hint dedupe + fire log (disposable).
 **Topology:** `Project/fapony/` is an empty folder holding two repos as siblings —
 `fapony/fapony/` = main checkout (the owner touches it alone) · `fapony/cl-fapony/` = dev
 (a separate `.git` clone — agents work here only) · **the parent must have no `CLAUDE.md`**, or an
@@ -83,11 +87,12 @@ not every session:
 
 ```
 fapony.ts       7-line dispatch → src/adapters/cli.ts
-src/mem/        fapony mem <add|close|find|kickoff|done|stale|claim|release|synced|plan-sweep|plan-check|rotate>
-src/memory.ts   shell adapter + config (mem-log reader lives in src/core/mem-log.ts)
-src/core/       pure layer — config/types/pricing/safety/parse/format/debt-*/enums/hint-log/hook-helpers (never import back up into features/adapters/db-store)
-src/adapters/   cli.ts + hooks/ (stop/read-hint/edit-hint/session-start) + mcp/ (transport, evidence allowlist, 3 tools)
-src/hook.ts     shim re-export → src/adapters/hooks/ (has real importers — don't delete)
+src/plan/       fapony plan [<PLAN.md>] | sweep | check — plan files + open fael rows about them
+src/fael.ts     the one memory reader: `fael find --json` → MemRow (fael missing = ok:false, never a throw)
+src/core/       pure layer — config/types/pricing/safety/parse/format/debt-*/enums/hint-log/hook-helpers/fapony-dir (never import back up into features/adapters/db-store)
+src/adapters/   cli.ts + hooks/ (edit-hint, mv-guard, git-autonomy) + mcp/ (ledger report tools only — no server)
+src/hook.ts     shim re-export → src/adapters/hooks/ (the OpenCode plugin imports it — don't delete)
+src/memory.ts   config.memory shell helpers for the frozen ledger gate (user-configured commands only)
 src/debt/       fapony debt — layer 3 "which files haven't migrated yet" (live, never persisted)
 src/lint-baseline.ts  separates "already red" from "I made it red"
 src/conventions-seed.ts  fill-signal at init — wrapper detector reads a snapshot, never touches history
@@ -95,10 +100,10 @@ src/map.ts      extractExports/extractBody (parse gate injectable via ExportScan
 src/seed/       plan-seed · review-seed (lookup at execute time)
 src/session/    per-client passive usage reader + activeSession
 src/usage/      fapony usage-web — reads the cache, never touches session logs
-src/digest/     fapony digest — mem log, plans, usage cache, and verdicts on one page
+src/digest/     fapony digest — fael rows, plans, usage cache, and verdicts on one page
 src/install/    one file per client + skills.ts
-src/db/ (store only) · src/stats/ src/report/ src/context/   ← ledger (frozen)
-src/*.ts        gates · math · init · init-mem · telemetry · setup · update · analyze · price/ · web/
+src/db/ (store only) · src/stats/ src/report/ src/context/ src/gate.ts   ← ledger (frozen)
+src/*.ts        math · init · telemetry · setup · update · analyze · price/ · web/
                 (root parse/safety/util are shims → core; don't edit the wrong copy)
 skill/          <name>/SKILL.md — symlinked into clients by `fapony install`
 templates/      PLAN.md / SPEC.md — what `fapony init` lays down
@@ -107,74 +112,46 @@ test/           one file per src module + test/mcp/ · test/install/ · test/tel
 
 ---
 
-## Client support — what works on whom (updated 2026-09-23)
+## Client support — what works on whom (updated 2026-09-25)
 
-`fapony install` knows 6 clients. · **MCP is the only piece all of them get.** · Hooks/hints are per-client
-and **fire in different order** — Claude Code fires *before* the tool call (`PreToolUse` → `additionalContext`)
-while OpenCode fires *after* (`tool.execute.after` — the only annotate channel available; must mutate
-`output.output`, never throw, or it blocks the tool). So OpenCode sees warnings one step later.
+`fapony install` knows 5 clients (Cursor dropped 2026-09-25 — MCP + Stop were all it got). **Memory
+wiring — MCP, Stop, SessionStart, per-file read context — is `fael install`'s job**; `fapony install`
+removes its own old entries for those (Claude settings.json, OpenCode plugins) and never writes them.
 
-| | claude | opencode | cursor | zcode | codex | antigravity |
-| --- | --- | --- | --- | --- | --- | --- |
-| MCP 3 tools | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Stop hook — refuse to end a turn with commits but no new mem row | ✅ | — | ✅ | — | ✅ after trust | — |
-| Read hint — big file + debt/mem lines | ✅ before | ✅ after | — | — | — | — |
-| Re-read hint — repeat read of the same file, mtime unmoved | ✅ before | ✅ after | — | — | — | — |
-| Edit hint — importer count before a shape change | ✅ before | ✅ after (edit+write) | — | — | — | — |
-| Commit hint — `git commit` → record a mem row (and `kind:bug` on a fix-type commit) | — | ✅ after | — | — | — | — |
-| SessionStart — fire `mem kickoff` as context | ✅ | ✅ first dispatch only | — | — | ✅ after trust | — |
-| Skill symlink → `~/.claude/skills` | ✅ | ✅ | — | — | — | — |
-| Skill symlink → `~/.agents/skills` | — | — | — | ✅ | ✅ | ✅ |
-| `usage-scan` reads that client's session log | ✅ | ✅ | — | ✅ | ✅ | — |
+| | claude | opencode | zcode | codex | antigravity |
+| --- | --- | --- | --- | --- | --- |
+| Edit hint — importer count + convention debt before a shape change | ✅ before | ✅ after (edit+write) | — | — | — |
+| Plan-mv guard — deny raw `git mv` of a plan into done/ | ✅ | — | — | — | — |
+| Skill symlink → `~/.claude/skills` | ✅ | ✅ | — | — | — |
+| Skill symlink → `~/.agents/skills` | — | — | ✅ | ✅ | ✅ |
+| `usage-scan` reads that client's session log | ✅ | ✅ | ✅ | ✅ | — |
 
-`—` = not wired yet, not impossible. **Hints live on hooks, not MCP, on purpose** — they must fire mid-turn
-without the agent thinking of it (the MCP-vs-CLI test, rule 13). · **OpenCode is the only client whose hooks
-are baked files**; every other client writes a `fapony hook-*` command resolved at run time, so `git pull`
-refreshes it for free — `fapony update`/`fapony install --platform opencode` refresh OpenCode's baked plugin
-in a fresh process instead. Full mechanics: `fapony mem find "hook mechanics"`.
+Claude Code fires *before* the tool call (`PreToolUse` → `additionalContext`); OpenCode fires *after*
+(`tool.execute.after` — mutate `output.output`, never throw, or it blocks the tool), so OpenCode sees the
+hint one step later. · **OpenCode is the only client whose hooks are baked files** — `fapony update` /
+`fapony install --platform opencode` refresh them in a fresh process; every other client runs a
+`fapony hook-*` command resolved at run time, so `git pull` refreshes it for free.
 
-## Memory: `.fapony/.memory/log.<you>.jsonl` (append-only)
+## Memory lives in fael
 
-**This is the core** — the log is designed as the project's shared brain, kept in the repo rather than in
-`state.db` (per-machine, never cloned). · File names come from `git config user.name` — one file per person,
-so nothing ever merge-conflicts, and any repo that commits its `decision` / `bug` / `note` rows carries them to
-every clone.
-
-**Record while you work — don't wait to be asked.** Nothing writes rows for you; only the agent running does:
+Record while you work, always with `--files` — through fael's MCP tools (`add` / `find` / `close`) or its CLI:
 
 ```bash
-fapony mem kickoff .fapony/plan/PLAN-x.md   # open a session with this
-fapony mem add decision "what was decided, and why" --files a.ts,b.ts
-fapony mem add bug "what broke" --files a.ts
-fapony mem add note "state the next session must know"
-fapony mem add note "about a known problem" --files a.ts --key fix-stop-dedupe  # key = problem identity
-fapony mem close <id> "fixed in <sha>"
-fapony mem find "usage-web"
-fapony mem find --key fix-stop-dedupe
+fael kickoff                                   # what this session should know
+fael add decision "what was decided, and why" --files a.ts,b.ts
+fael add issue "what broke" --files a.ts       # kind issue = a bug
+fael add note "what chunk N+1 must know" --files a.ts,.fapony/plan/PLAN-x.md
+fael close <id> "fixed in <sha>"
+fael find --files a.ts
 ```
 
-- **`--files` matters most** — without it the row falls through the floor when clustering for repeat-pain
-  zones. · A repo whose log predates `--files` gets one `fapony init-mem` **before** anyone concludes anything
-  from the log (measured: vela had 2,672 rows with zero `files[]` for exactly this reason).
-- Write every row **standalone** — it gets read months later with none of this conversation attached.
-- `close` is the only thing that closes a `bug`. Without it the list only grows.
-- **Every kind is live; none deprecated** — `decision` / `bug` / `note` are the agent's own call, while
-  `next` / `hold` / `claim` / `release` / `synced` / `stale` are `mem.ts`'s own bookkeeping.
-- **Read back via MCP `mem_find`** (`files[]` / `text` / `kind` / `key` / `since` / `limit` — no default filter).
-- **The cluster unit is the *zone*, not the file**, and count **1 row = 1 event** — counting
-  file-hits once gave `layouts/quick 10×`, which was inflated (one verdict touching 9 files counted 9);
-  recounting gave `server/services` 6× · `server/routes/v1` 6× with only **2 zones** at ≥5 hits
-  (fixed 2026-09-19 after re-measuring with `.fapony/plan/pain-cluster.ts`).
-
-**This repo's `.gitignore` ignores `.fapony/` wholesale** (public repo — mem/plans are internal notes),
-so here the log is readable from this machine only, never shared via clone. · `.fapony/evidence.json`
-is likewise uncommitted even though the evidence rule says commit it — the exception holds because one person
-edits here; multi-person repos must add the negation themselves.
-
-**Why this rule isn't in `SERVER_INSTRUCTIONS`:** mem.ts belongs to the *project*, not to fapony,
-and exists only for whoever ran `fapony init`. · `SERVER_INSTRUCTIONS` is paid every session by everyone
-connected over MCP — most of them have no such file, and the text would become an instruction to run a command
-that fails.
+- **Plan handoff notes put the PLAN path in `--files`** — that is how `fapony plan PLAN-x.md` finds them
+  (basename match, so they survive the move to done/).
+- **Here `.fapony/` is gitignored and `.fael/` is excluded via `.git/info/exclude`** (public repo — plans and
+  memory are internal notes), so both are readable from this machine only. `.fapony/evidence.json` is likewise
+  uncommitted — the exception holds because one person edits here.
+- Known gap (fael 0.0.4): `fael find --json --all` prints inline `closed` but not close-file rows, so
+  digest still counts a natively closed issue as open until fael emits them.
 
 ---
 
@@ -182,8 +159,8 @@ that fails.
 
 Layer 3, which nobody answers: *"we decided this 6 months ago — how far along is the move?"*
 
-- A convention is defined in the **repo being measured** (`<repo>/.fapony/conventions.json` — same resolver
-  as the mem log). · **fapony knows neither React nor Hono, and must not.**
+- A convention is defined in the **repo being measured** (`<repo>/.fapony/conventions.json` — the nearest
+  `.fapony/`, same resolver as `fapony plan`). · **fapony knows neither React nor Hono, and must not.**
 - 1 convention = the pattern to use (ok) + the pattern meaning not-yet-migrated (stale) + scope (where)
   + file conditions (guard).
 - **Iron rule: `checker != null` = fapony stays silent.** Re-reporting what eslint already reports is an
@@ -221,26 +198,20 @@ Every field optional, `fapony.config.json` itself optional — `src/core/config.
 {
   "worktrees": { "<key>": "<absolute-path>" },
   "review": { "maxRounds": 2 },
-  "memory": {
-    "claim": ["fapony", "mem", "claim", "{id}"],
-    "close": ["fapony", "mem", "close", "{id}", "{msg}"],
-    "add":   ["fapony", "mem", "add", "{kind}", "{text}"],
-    "kickoff": ["fapony", "mem", "kickoff"]
-  },
+  "memory": { "close": ["..."], "kickoff": ["..."] },
   "telemetry": { "enabled": false, "endpoint": "https://your-server/ingest" },
-  "paths": { "stateDir": "~/.config/fapony", "planDir": ".fapony/plan", "doneDir": ".fapony/done", "specDir": ".fapony/spec", "memDir": ".fapony/.memory" },
+  "paths": { "stateDir": "~/.config/fapony", "doneDir": ".fapony/done" },
   "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] },
   "usageWeb": { "port": 8080, "hostname": "127.0.0.1" }
 }
 ```
 
-- `memory: null` = the whole layer off, no error.
+- `memory` — commands the frozen ledger gate runs on a pass (close/kickoff); **no default wiring** since
+  2026-09-25. Omitted or `null` = off.
 - `telemetry` — opt-in only (omitted or `null` = off), see [TELEMETRY.md](TELEMETRY.md).
-- env overrides: `FAPONY_CONFIG` · `FAPONY_STATE_DIR` (beats `paths.stateDir`) ·
-  `FAPONY_NO_REREAD_HINT=1` (kill switch for the re-read hint — neither fires nor logs) ·
-  `FAPONY_NO_BUG_BLOCK=1` (kill switch for the bug-signal block — no forced `kind:bug` row).
+- env overrides: `FAPONY_CONFIG` · `FAPONY_STATE_DIR` (beats `paths.stateDir`).
 - Getters are centralized in `src/core/config.ts` — never re-hardcode defaults at call sites.
-- **Never add a config field derivable from structure** (`plan/done` and `.memory` already work this way).
+- **Never add a config field derivable from structure** (`plan/` `spec/` already work this way).
 
 ---
 
@@ -255,9 +226,10 @@ paid into context every time.
 ## History
 
 Execute→review→fix CLI loop → deleted (client's own model does it better) → ledger (agents grading
-themselves) → capped out → today's mem + debt, which is where fapony began. Surviving relics: the
+themselves) → capped out → mem + debt, which is where fapony began → mem moved out to fael
+(2026-09-25), fapony keeps plans + debt + lookups. Surviving relics: the
 `runs`/`events` schema, `review.maxRounds`, plan/spec templates, all skills. **Both core moves came from
-measurement, not feeling.** Full story: `fapony mem find "History"`.
+measurement, not feeling.** Full story: `fael find "History"`.
 
 ---
 
@@ -274,44 +246,36 @@ measurement, not feeling.** Full story: `fapony mem find "History"`.
    passes + `bun run test` passes** (the script = `--parallel` + `--timeout 20000` against flakes on slow machines —
    never use bare `bun test` as a gate) · while iterating use `bun run test:changed` (only files the diff touches);
    still red = not done, don't commit over it.
-5. **`assertSafe()` on every shell command** spawned from config (memory/evidence/install), including ones from
+5. **`assertSafe()` on every shell command** spawned from config (ledger memory/evidence/install), including ones from
    templates.
 6. **fapony may write files in the target worktree when the owner says so** — restated as three checkable rules:
    - **6a runtime state never lives in a worktree** — `state.db` is `~/.config/fapony/` only
-     (the mem log is a different thing — it is the *team's*, so it belongs in the repo). · Check: the db path
+     (fael's log is a different thing — it is the *team's*, so it belongs in the repo). · Check: the db path
      must never come from an arg/config pointing at a worktree.
    - **6b commands that read code must have no write side effects** — `analyze` `debt` `lint-baseline`
-     `review-seed` `stats` `digest` `report` may write only paths the user pointed at (`--out` /
+     `review-seed` `stats` `digest` `report` `plan` (not `plan sweep --apply`) may write only paths the user pointed at (`--out` /
      a filename in argv). · New commands that read code fall under this automatically.
    - **6c overwriting what exists = ask first, or refuse.** · **Consent is not prohibition.**
-7. **Record mem while you work, always with `--files`.** This is the rule that replaces "file a verdict every
-   time" as the core habit. · Write `decision` when you decide something the next session would puzzle over,
-   `bug` when you find something broken, `note` when a chunk lands. · A row without `--files` falls through the
-   floor at cluster time = writing it was writing nothing.
-8. **The Stop hook enforces a mem row** ([src/hook.ts](src/hook.ts) — shim; logic in `src/adapters/hooks/`):
-   ending a turn with commits but no new mem row = blocked once. · **Ending a turn that declares a bug with no
-   `kind:bug` row = blocked once per session.** · What counts as "a bug" lives in one place —
-   [src/adapters/hooks/bug-markers.ts](src/adapters/hooks/bug-markers.ts): `BUG_MARKERS` (announcement phrases,
-   multi-language, open for extension) **or** a `fix:` / `bugfix:` / `hotfix:` commit type (language-independent
-   — only the type token is English). Free-text phrases can never be universal, so extend the list per language
-   instead of inventing a new row kind — and never add symptom words ("broken", "dies silently"), which would
-   fire on any turn that merely reads a bug report. · OpenCode has no stop hook, so its commit hint carries the
-   same `kind:bug` nudge instead (rule 13). · No mem log at all = no block. ·
-   `verdict_submit` is off the MCP surface (PLAN-verdict-to-mem) — the engine is in git, revivable as a CLI. ·
-   The hook never grades in anyone's place — "who judges" stays separate from "who enforces recording"; only the
-   latter can be automated. · Kill switch: `FAPONY_NO_BUG_BLOCK=1`.
+7. **Record memory in fael while you work, always with `--files`.** Write `decision` when you decide
+   something the next session would puzzle over, `issue` when you find something broken, `note` when a chunk
+   lands. · A row without `--files` is unfindable when that file is touched next = writing it was writing nothing.
+8. **fael's Stop hook enforces the row, not fapony.** fapony's Stop / SessionStart / read-hint / bug-marker
+   hooks were deleted 2026-09-25 (e0910f9) — measured: re-read hint never broke a 111-read loop, size hint
+   only added 2KB on top of the full read, mem lines duplicated fael's own push. Anything that nags an agent
+   to record belongs in fael. · `verdict_submit` stays off every surface — the engine is in git, revivable
+   as a CLI.
 9. **Asking doesn't work; enforcing does.** Measured: exactly two things actually change behavior —
    required + enum + reject (`regime`) and the Stop hook. · Everything a rule file says agents "should" do has no
    measurable effect. · **So a feature that relies on "the agent will remember to do it" = not done.**
 10. **`project_health_context` is not a pre-edit reflex.** The true rework base rate is
-    1% (canalis) / 9% (fapony) — too low to warn on. · The tool still exists; call it if you want, but
-    **never enforce it, never put it back in `SERVER_INSTRUCTIONS`.**
+    1% (canalis) / 9% (fapony) — too low to warn on. · The engine still exists (`src/context/`); **never
+    enforce it, never wire it back into any hook or MCP surface.**
 11. **Execute plans one chunk at a time — never one long session.** Context in a single session only grows,
     never shrinks (measured: 300–500-step sessions burn tokens wildly out of proportion to the work done).
     Closing 1 chunk: tick the checkbox + stamp the TL;DR → its own commit →
-    `mem.ts add note "<what chunk N+1 must know>" --files f1,f2 <path/to/PLAN-x.md>` (retype the path
-    identically every time — `kickoff` compares raw strings) → **stop**. · The next session opens with
-    `mem.ts kickoff <same path>` instead of hauling the old transcript. · **If `review-seed` was run
+    `fael add note "<what chunk N+1 must know>" --files f1,f2,<path/to/PLAN-x.md>` → **stop**. · The next
+    session opens with `fapony plan PLAN-x.md` (unchecked chunks + those notes) instead of hauling the old
+    transcript. · **If `review-seed` was run
     this chunk, paste its file:line facts (signatures/importers) into the note, not just "what to do
     next"** — `review-seed` is stateless by design (no cache — measured 0.31-0.51s uncached even on a
     2,952-file repo, no scaling with file count, closed, don't re-propose without new data), so the note
@@ -327,7 +291,8 @@ measurement, not feeling.** Full story: `fapony mem find "History"`.
     - **MCP vs CLI splits here:** a schema in `tools/list` is **fixed rent** paid every session
       of every client even when never called, while a CLI command is **0 until run**. · Hence
       **what a human orders = CLI · what the agent must think of mid-turn unasked = MCP.** ·
-      `mem_find` passes this; `fapony_stats` didn't because only a human ever asks it.
+      fael's `find` passes this; everything fapony still does is ordered by a human or fires from a hook,
+      so fapony has **no MCP server** (removed 2026-09-25).
     - **Store enough; don't explain at length.** A field needing three paragraphs of explanation means you don't
       know what you're storing yet. · **If it can't be summarized in one sentence, the problem isn't understood
       well enough** (same shape as rule 3).
@@ -347,8 +312,8 @@ the same shape that already absorbed the execute→review loop once. See History
 1. **Cross-client** — one yardstick over Claude Code + OpenCode (primary), ZCode, Codex.
    No client's session logs will ever cross to another, because nobody benefits from making them cross. ·
    `src/session/`'s 2,450 lines are this moat entire, and the most expensive thing to rewrite.
-2. **Cross-project / cross-machine** — `runs.worktree` has been the key from the start. · The mem log lives in
-   the repo, so it crosses machines over git for free.
+2. **Cross-project / cross-machine** — `runs.worktree` has been the key from the start. · Plans (and fael's
+   log) live in the repo, so they cross machines over git for free.
 3. **The owner holds their own data** — the db is on the user's machine at `~/.config/fapony/`, no server, no
    account. Telemetry opt-in, allowlist only.
 
@@ -356,7 +321,7 @@ Every feature must hold at least two. Holding none = one client could do it = do
 
 **On new fields:** what holds is rule 1 (prove necessity) and required+enum+reject as the strongest tool —
 "optional kills fill rate" was tried and measured wrong (`files[]` is optional yet fills 88%). Full
-miscounting story: `fapony mem find "miscounted twice"`.
+miscounting story: `fael find "miscounted twice"`.
 
 ---
 
@@ -376,15 +341,15 @@ plan section 7 directly; link to the spec.
 
 **Frontmatter + TL;DR:** the header carries `kind` / `status` / `blocked_by` / `blocks` / `superseded_by` / `spec` / `priority`
 (values always EN — an enum the tool reads), then a `## TL;DR` ≤15 lines that is the **only part allowed to
-change mid-flight**. · `fapony mem kickoff` counts checkboxes of the first `##` section only —
+change mid-flight**. · `fapony plan` counts checkboxes of the first `##` section only —
 **never create MASTER.md**; every line of it is derivable anyway, and a hand-kept file always rots. ·
-`status` / `blocked_by` / `blocks` / `superseded_by` are read by `mem plan-check` (dangling refs,
+`status` / `blocked_by` / `blocks` / `superseded_by` are read by `fapony plan check` (dangling refs,
 blocker shipped but dependent still blocked, waiter cycles, blocked with all chunks ticked) and by
-`mem plan-sweep` (blocked view + `🔓` unblock hint on `--apply`).
+`fapony plan sweep` (blocked view + `🔓` unblock hint on `--apply`).
 
-**Ticked shas are verified, not trusted:** `mem plan-check` scans ticked lines in plan/ + done/ — a sha missing
+**Ticked shas are verified, not trusted:** `fapony plan check` scans ticked lines in plan/ + done/ — a sha missing
 from git history or not an ancestor of HEAD becomes an issue (bare hex words git never heard of stay silent unless
-cited next to a real sha). · `kickoff` prints one ⚠ closure line for the last ticked chunk when its sha doesn't
+cited next to a real sha). · `fapony plan <PLAN.md>` prints one ⚠ closure line for the last ticked chunk when its sha doesn't
 verify, and stays silent when it does. · A ticked box with no sha to check is a claim, not a close.
 
 **Layout `.fapony/{plan,done,spec}`:** `done/` sits **beside** `plan/`, not inside — every relative
@@ -415,9 +380,10 @@ fapony price-scan                    # refresh the model price table
 fapony analyze [path]                # hub/orphan/cycle/changed-untested — live graph, never persisted (TS/JS + Python .py/.pyi; stdlib→external, no sys.path)
 fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym[,sym]]
 fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...
-# ── ledger (frozen — bug fixes only) ──
+# ── hooks (wired by `fapony install`) ──
 fapony hook-edit-hint                # PreToolUse Edit — importer count + convention debt of the file being edited
-fapony hook-mv-guard                   # PreToolUse Bash — deny raw `git mv` of plan files into done/, use `fapony plan sweep --apply` instead (Claude)
+fapony hook-mv-guard                 # PreToolUse Bash — deny raw `git mv` of plan files into done/, use `fapony plan sweep --apply` instead (Claude)
+# ── ledger (frozen — bug fixes only) ──
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]
 fapony report <run-id>  ·  fapony report-web [file]
 # ── setup ──
@@ -440,32 +406,21 @@ fapony review-seed --files src/x.ts --body resolveScope,findScope --callers reso
 the static graph sees (dynamic use is out of reach). · **Exports only** — a function that isn't exported
 answers "no export named X in scope", not "doesn't exist".
 
-**Dead code goes through `bunx knip@6`** ([knip.json](knip.json) ignores `templates/**` because `init-mem`
-copies that folder into other repos, so it can never have an importer here). · Never gate CI on it — a gate that
+**Dead code goes through `bunx knip@6`** ([knip.json](knip.json) ignores `templates/**` because `fapony init`
+lays that folder down in other repos, so it can never have an importer here). · Never gate CI on it — a gate that
 must be unlocked every time just teaches skipping. · **Read the output right: it reports _unused exports_, not
 unused functions.** Remove the word `export`, not the function.
 
 ---
 
-## MCP Tools: fapony
+## No MCP server (removed 2026-09-25)
 
-`fapony mcp` — stdio JSON-RPC, **3 tools** (`mem_add` arrived with PLAN-agent-one-call ·
-`plan_list` left 2026-09-20 · `fapony_usage` left 2026-09-20 for CLI · `mem_close`
-arrived 2026-09-21 as a separate tool because a close row carries no `files[]` — see rules 12/13):
-
-| Tool | Purpose |
-|------|---------|
-| `mem_find` | **The core** — search the mem log read-only: `key` exact-first (wrong key answers `known keys`), then match the row's stored `files[]`, then fall back to substring of text/spec/ref for old rows written before `--files` existed · every kind, no default filter · `memDir:null` = no mem (not "no match") |
-| `mem_add` | **The core — the write half of `mem_find`.** Appends a mem row (`decision` / `bug` / `note` / `next` / `hold`) with `files[]` **required, rejected when empty** (rule 9: required works, asking doesn't) — a row that names no file is unfindable when you next touch that file · optional `key` `[a-z0-9-]{3,40}` = problem identity, rejected on pattern |
-| `mem_close` | **The core — the close half of `mem_add`.** Closes a row by id with a tombstone message (`ref` + `text`, no `files[]`) — a separate tool, not `kind:"close"`, because a schema whose required fields depend on another field's value is the most-miscalled shape there is |
-
-**Removed and never coming back:** `verdict_submit`, `fapony_usage`, `plan_list`, `fapony_stats`,
-`project_health_context`, `verification_report`, `handoff_check`, `handoff_collect` — each failed rule 13
-(only a human ever called it, or the CLI already answers it at zero rent) or rule 2 (measured value was
-tiny). Engines mostly stay in git/CLI, revivable if the shape of use changes. Full removal-by-removal
-rationale: `fapony mem find "MCP tools removal"`.
-
-See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for protocol, adapter examples, safety rules.
+fapony's MCP server carried only memory tools (`mem_find` / `mem_add` / `mem_close`); those are fael's now
+(`find` / `add` / `close`). **Removed and never coming back:** `verdict_submit`, `fapony_usage`, `plan_list`,
+`fapony_stats`, `project_health_context`, `verification_report`, `handoff_check`, `handoff_collect` — each
+failed rule 13 (only a human ever called it, or the CLI already answers it at zero rent) or rule 2 (measured
+value was tiny). The report/check/collect engines under `src/adapters/mcp/tools/` stay because
+`fapony report` calls them. Full rationale: `fael find "MCP tools removal"`.
 
 ---
 

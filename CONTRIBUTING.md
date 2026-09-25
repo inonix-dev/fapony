@@ -24,18 +24,17 @@ bun run check
 
 ## Project Rules
 
-- **Dependencies are allowed — but they must not reach `fapony mcp` startup** — every MCP client
-  launches that server on every session, and `fapony.ts` static-imports every module, so anything
-  new is `await import()`ed on the CLI path that needs it. Budget: the `initialize` round trip
-  stays under ~100ms (63ms as of 2026-09-17)
+- **Dependencies are allowed — but they must not reach hook startup** — `fapony hook-edit-hint`
+  spawns on every Edit, and `fapony.ts` static-imports every module, so anything new is
+  `await import()`ed on the CLI path that needs it. Budget: startup stays under ~100ms
 - **No abstraction for abstraction's sake** — don't scaffold for a future that may not come
 - **Push only the branch you are working on** — never `main`, never `--force` or
   `--force-with-lease`. Opening a PR is fine (`gh pr create` needs the branch on the remote first);
   merging it is the maintainer's call
 - **Runtime state never lives in a worktree** — the ledger DB is `~/.config/fapony/` only, and its
   path must never come from an argument or config field pointing at a worktree. fapony *may* write
-  into a target worktree when the user asks for it (`init`, `init-mem`, `setup`, `plan-seed` all
-  do), under two limits: a command that reads code writes only to a path the user named (`--out`,
+  into a target worktree when the user asks for it (`init`, `setup`, `plan-seed`, `plan sweep --apply`
+  all do), under two limits: a command that reads code writes only to a path the user named (`--out`,
   a filename in argv), and anything that would overwrite an existing file asks first or refuses
 - **assertSafe() must be called on every command** before spawn, including config-sourced ones
 
