@@ -355,26 +355,20 @@ test("testCliListFlagDocsShowCommaShape", () => {
   // Every list flag printed in the CLI fences carries the comma shape — a
   // doc that teaches only one of the two accepted shapes is how the habit
   // (mudqc686) keeps hitting flags that "don't support commas".
-  for (const rel of ["CLAUDE.md", "README.md"]) {
-    const doc = read(rel);
-    for (const literal of [
-      "--files f1,f2",
-      "--id a,b",
-      "[--scope <path>[,<path>]]...",
-    ]) {
-      assert.ok(
-        doc.includes(literal),
-        `${rel} must print the comma shape \`${literal}\` (PLAN-comma-x)`,
-      );
-    }
+  // README only — CLAUDE.md / AGENTS.md are local agent rules, not in git
+  const readme = read("README.md");
+  for (const literal of [
+    "--files f1,f2",
+    "--id a,b",
+    "[--scope <path>[,<path>]]...",
+    "--body sym[,sym]",
+    "--callers sym[,sym]",
+  ]) {
+    assert.ok(
+      readme.includes(literal),
+      `README.md must print the comma shape \`${literal}\` (PLAN-comma-x)`,
+    );
   }
-  // lookup flags print only in CLAUDE.md's fence
-  const claude = read("CLAUDE.md");
-  assert.ok(claude.includes("--body sym[,sym]"), "CLAUDE.md --body comma");
-  assert.ok(
-    claude.includes("--callers sym[,sym]"),
-    "CLAUDE.md --callers comma",
-  );
   // the installed skills teach the same shapes (chunk-3 note: skill/ sweep)
   const lookup = read("skill/lookup-before-edit/SKILL.md");
   assert.ok(lookup.includes("--body <sym>[,<sym>]"), "lookup-before-edit body");

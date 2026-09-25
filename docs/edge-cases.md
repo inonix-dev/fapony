@@ -1,6 +1,6 @@
 # fapony — Edge Cases, Handled
 
-> **Used by:** [CLAUDE.md](../CLAUDE.md) — moved out because this is a *lookup*, not a *rule*.
+> **Used by:** the local agent rules (CLAUDE.md, untracked) — moved out because this is a *lookup*, not a *rule*.
 > `grep` here when you hit strange behavior that feels familiar. Do not load every session.
 
 | Edge Case | Handling |

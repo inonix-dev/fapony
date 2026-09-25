@@ -1,6 +1,6 @@
 # fapony — Architecture (file-by-file)
 
-> **Used by:** [CLAUDE.md](../CLAUDE.md) — ย้ายออกมาเพราะเป็น *lookup* ไม่ใช่ *rule*
+> **Used by:** the local agent rules (CLAUDE.md, untracked) — ย้ายออกมาเพราะเป็น *lookup* ไม่ใช่ *rule*
 > อ่านตอนหาที่วางโค้ดใหม่ ไม่ใช่ทุก session
 
 

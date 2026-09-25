@@ -45,10 +45,7 @@ function assertEnumListed(
 }
 
 test("testRegimeCodesListedInDocs", () => {
-  assertEnumListed("REGIME_CODES", REGIME_CODES, [
-    { path: "CLAUDE.md" },
-    { path: "README.md" },
-  ]);
+  assertEnumListed("REGIME_CODES", REGIME_CODES, [{ path: "README.md" }]);
 });
 
 test("testAddingFakeEnumValueFailsDocsCheck", () => {
@@ -69,13 +66,8 @@ test("testAddingFakeEnumValueFailsDocsCheck", () => {
  */
 function assertCommandsListed(): void {
   assert.ok(COMMANDS.length > 0, "COMMANDS must be non-empty");
-  const claude = read("CLAUDE.md");
   const readme = read("README.md");
   for (const c of COMMANDS) {
-    assert.ok(
-      claude.includes(c.name),
-      `COMMANDS drift: CLAUDE.md §CLI Commands is missing "${c.name}" — list every command there (chunk 3)`,
-    );
     assert.ok(
       readme.includes(c.name),
       `COMMANDS drift: README.md §CLI is missing "${c.name}" — list every command there (chunk 3)`,
@@ -91,7 +83,6 @@ test("testAddingFakeCommandFailsDocsCheck", () => {
   // The mechanism itself: a command name no doc mentions is exactly what the
   // guard above catches (simulate one).
   const fake = "not_a_real_command";
-  assert.ok(!read("CLAUDE.md").includes(fake));
   assert.ok(!read("README.md").includes(fake));
 });
 
@@ -124,10 +115,7 @@ function cliFenceCommands(doc: string, header: string): string[] {
 
 test("testDocsAdvertiseNoPhantomCommands", () => {
   const known = new Set(COMMANDS.map((c) => c.name));
-  const found = [
-    ...cliFenceCommands(read("CLAUDE.md"), "## CLI Commands"),
-    ...cliFenceCommands(read("README.md"), "## CLI"),
-  ];
+  const found = [...cliFenceCommands(read("README.md"), "## CLI")];
   assert.ok(found.length > 0, "expected fapony <cmd> mentions in CLI fences");
   for (const n of found) {
     assert.ok(
