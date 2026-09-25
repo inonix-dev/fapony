@@ -11,7 +11,6 @@ export {
   type MemDirResult,
   type MemRow,
   readMemLog,
-  readRecentMemDecisions,
   resolveMemDir,
   whereMemDir,
 } from "./core/mem-log.js";

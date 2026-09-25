@@ -21,7 +21,13 @@ import {
   resolveDebtScope,
   worktreeOf,
 } from "../src/debt/index.js";
-import { captureLogs, withTempRepo, withTmpDb } from "./helpers.js";
+import {
+  captureLogs,
+  type FaelFixtureRow,
+  withFakeFael,
+  withTempRepo,
+  withTmpDb,
+} from "./helpers.js";
 
 function seed(
   repo: string,
@@ -334,123 +340,134 @@ test("testDebtForFileAndMonorepoResolution", () => {
 });
 
 test("testDebtPromotionAsksAtThresholdOnly", () => {
-  withTempRepo((repo) => {
-    seed(
-      repo,
-      [
-        {
-          id: "money-format",
-          rule: "no bare toLocaleString",
-          where: "src",
-          stale: "toLocaleString\\(\\)",
-          ok: "fmtMoney",
-        },
-        {
-          id: "settled",
-          rule: "x",
-          where: "src",
-          stale: "zz",
-          decided: "no-checker",
-        },
-      ],
-      { "src/a.ts": "n.toLocaleString();\n" },
-    );
-    const report = debtScan(repo, loadConventions(repo));
-    const rows = (ts: string, kind: string, text: string, files?: string[]) =>
-      JSON.stringify({
+  withFakeFael((setRows) =>
+    withTempRepo((repo) => {
+      seed(
+        repo,
+        [
+          {
+            id: "money-format",
+            rule: "no bare toLocaleString",
+            where: "src",
+            stale: "toLocaleString\\(\\)",
+            ok: "fmtMoney",
+          },
+          {
+            id: "settled",
+            rule: "x",
+            where: "src",
+            stale: "zz",
+            decided: "no-checker",
+          },
+        ],
+        { "src/a.ts": "n.toLocaleString();\n" },
+      );
+      const report = debtScan(repo, loadConventions(repo));
+      const rows = (
+        ts: string,
+        kind: string,
+        text: string,
+      ): FaelFixtureRow => ({
+        id: ts,
         ts,
-        agent: "t",
         kind,
         text,
-        ...(files ? { files } : {}),
       });
-    mkdirSync(join(repo, ".fapony", ".memory"), { recursive: true });
-    const memLog = join(repo, ".fapony", ".memory", "log.test.jsonl");
-    const two = [
-      rows("2026-08-30T00:00:00Z", "bug", "money wrong via toLocaleString"),
-      rows(
-        "2026-09-12T00:00:00Z",
-        "decision",
-        "fmtMoney for all money display",
-      ),
-    ];
-    const three = [
-      ...two,
-      rows("2026-09-17T00:00:00Z", "bug", "bare toLocaleString drifted again"),
-    ];
-    const run = (lines: string[]) => {
-      writeFileSync(memLog, `${lines.join("\n")}\n`);
-      return findPromotions(repo, report);
-    };
-    assert.equal(run(two).length, 0, "below threshold stays silent");
-    const ps = run(three);
-    assert.equal(ps.length, 1);
-    assert.equal(ps[0].convId, "money-format");
-    assert.equal(ps[0].occurrences, 3);
-    assert.ok(ps[0].dates.join(",").includes("2026-09-17"));
-    // settled (decided) never appears even though its regex would match nothing anyway
-    assert.ok(!ps.some((p) => p.convId === "settled"));
-  });
+      const two = [
+        rows("2026-08-30T00:00:00Z", "issue", "money wrong via toLocaleString"),
+        rows(
+          "2026-09-12T00:00:00Z",
+          "decision",
+          "fmtMoney for all money display",
+        ),
+      ];
+      const three = [
+        ...two,
+        rows(
+          "2026-09-17T00:00:00Z",
+          "issue",
+          "bare toLocaleString drifted again",
+        ),
+      ];
+      const run = (fixture: FaelFixtureRow[]) => {
+        setRows(fixture);
+        return findPromotions(repo, report);
+      };
+      assert.equal(run(two).length, 0, "below threshold stays silent");
+      const ps = run(three);
+      assert.equal(ps.length, 1);
+      assert.equal(ps[0].convId, "money-format");
+      assert.equal(ps[0].occurrences, 3);
+      assert.ok(ps[0].dates.join(",").includes("2026-09-17"));
+      // settled (decided) never appears even though its regex would match nothing anyway
+      assert.ok(!ps.some((p) => p.convId === "settled"));
+    }),
+  );
   console.log(
     `  ✓ debt → promotion asks at ${PROMOTION_THRESHOLD}×, decided:no-checker stays silent`,
   );
 });
 
 test("testDebtPromotionCountsLedgerFails", () => {
-  withTempRepo((repo) => {
-    seed(
-      repo,
-      [
-        {
-          id: "money-format",
-          rule: "money",
-          where: "src",
-          stale: "toLocaleString",
-        },
-      ],
-      { "src/a.ts": "n.toLocaleString();\n" },
-    );
-    const report = debtScan(repo, loadConventions(repo));
-    mkdirSync(join(repo, ".fapony", ".memory"), { recursive: true });
-    writeFileSync(join(repo, ".fapony", ".memory", "log.test.jsonl"), "");
-    withTmpDb((db) => {
-      const newRun = (id: number, wt: string) =>
-        db
-          .prepare(
-            `INSERT INTO runs (id, worktree, plan, mem_id, status) VALUES (?, ?, NULL, NULL, 'passed')`,
-          )
-          .run(id, wt);
-      const gate = (id: number, data: object) =>
-        db
-          .prepare(
-            `INSERT INTO events (run_id, kind, data) VALUES (?, 'gate', ?)`,
-          )
-          .run(id, JSON.stringify(data));
-      newRun(1, repo);
-      newRun(2, "/elsewhere");
-      gate(1, { verdict: "fail", note: "money drifted", files: ["src/a.ts"] });
-      gate(1, {
-        reason_code: "scope_mismatch",
-        note: "money again",
-        files: ["src/a.ts"],
+  // empty fael log — only ledger fails count here
+  withFakeFael(() =>
+    withTempRepo((repo) => {
+      seed(
+        repo,
+        [
+          {
+            id: "money-format",
+            rule: "money",
+            where: "src",
+            stale: "toLocaleString",
+          },
+        ],
+        { "src/a.ts": "n.toLocaleString();\n" },
+      );
+      const report = debtScan(repo, loadConventions(repo));
+      withTmpDb((db) => {
+        const newRun = (id: number, wt: string) =>
+          db
+            .prepare(
+              `INSERT INTO runs (id, worktree, plan, mem_id, status) VALUES (?, ?, NULL, NULL, 'passed')`,
+            )
+            .run(id, wt);
+        const gate = (id: number, data: object) =>
+          db
+            .prepare(
+              `INSERT INTO events (run_id, kind, data) VALUES (?, 'gate', ?)`,
+            )
+            .run(id, JSON.stringify(data));
+        newRun(1, repo);
+        newRun(2, "/elsewhere");
+        gate(1, {
+          verdict: "fail",
+          note: "money drifted",
+          files: ["src/a.ts"],
+        });
+        gate(1, {
+          reason_code: "scope_mismatch",
+          note: "money again",
+          files: ["src/a.ts"],
+        });
+        gate(2, {
+          verdict: "fail",
+          note: "money elsewhere",
+          files: ["src/other.ts"],
+        });
+        const ps = findPromotions(repo, report);
+        assert.equal(ps.length, 0, "2 hits in this worktree < threshold");
+        gate(1, {
+          reason_code: "spec_gap",
+          note: "money third time",
+          files: ["src/a.ts"],
+        });
+        const ps3 = findPromotions(repo, report);
+        assert.equal(ps3.length, 1, "third hit crosses the threshold");
+        assert.equal(ps3[0].occurrences, 3);
       });
-      gate(2, {
-        verdict: "fail",
-        note: "money elsewhere",
-        files: ["src/other.ts"],
-      });
-      const ps = findPromotions(repo, report);
-      assert.equal(ps.length, 0, "2 hits in this worktree < threshold");
-      gate(1, {
-        reason_code: "spec_gap",
-        note: "money third time",
-        files: ["src/a.ts"],
-      });
-      const ps3 = findPromotions(repo, report);
-      assert.equal(ps3.length, 1, "third hit crosses the threshold");
-      assert.equal(ps3[0].occurrences, 3);
-    });
-  });
+    }),
+  );
   console.log("  ✓ debt → fail verdicts on the same files count as recurrence");
 });
 

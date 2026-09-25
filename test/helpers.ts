@@ -154,3 +154,59 @@ export function withTempConfig(configObj: unknown, fn: () => void): void {
     rmSync(cfgPath, { force: true });
   }
 }
+
+/** One row as `fael find --json` prints it (fael's shape, not MemRow). */
+export interface FaelFixtureRow {
+  id: string;
+  ts: string;
+  kind: string;
+  text: string;
+  by?: string;
+  files?: string[];
+  spec?: string;
+  closed?: { id: string; ts: string; by: string; text: string };
+}
+
+/**
+ * Run fn with a fake `fael` first on PATH — it prints whatever `setRows` last
+ * wrote, for any subcommand. Keeps tests off the real binary and the real
+ * .fael/ log. Handles async fn; PATH is restored when it settles.
+ */
+export function withFakeFael<T>(
+  fn: (setRows: (rows: (FaelFixtureRow | string)[]) => void) => T,
+): T {
+  const bin = mkdtempSync(join(tmpdir(), "fapony-fake-fael-"));
+  const rowsPath = join(bin, "rows.jsonl");
+  writeFileSync(rowsPath, "");
+  writeFileSync(join(bin, "fael"), `#!/bin/sh\ncat "${rowsPath}"\n`, {
+    mode: 0o755,
+  });
+  // A string row is written raw (malformed-line fixtures).
+  const setRows = (rows: (FaelFixtureRow | string)[]): void =>
+    writeFileSync(
+      rowsPath,
+      rows
+        .map((r) =>
+          typeof r === "string" ? r : JSON.stringify({ by: "t", ...r }),
+        )
+        .join("\n"),
+    );
+  const origPath = process.env.PATH;
+  process.env.PATH = `${bin}:${origPath ?? ""}`;
+  const restore = (): void => {
+    process.env.PATH = origPath;
+    rmSync(bin, { recursive: true, force: true });
+  };
+  let out: T;
+  try {
+    out = fn(setRows);
+  } catch (e) {
+    restore();
+    throw e;
+  }
+  if (out instanceof Promise) {
+    return out.finally(restore) as T;
+  }
+  restore();
+  return out;
+}

@@ -353,32 +353,3 @@ export function readMemLog(
   all.sort((a, b) => b.ts.localeCompare(a.ts)); // newest first
   return { rows: all, skipped, filesFound: files.length };
 }
-
-/**
- * Decisions for the pre-edit context summary — newest first, capped at `limit`.
- */
-export function readRecentMemDecisions(
-  worktree: string,
-  limit: number,
-  keywords?: string[],
-): MemRow[] {
-  let decisions: MemRow[];
-  try {
-    decisions = readMemLog(worktree).rows.filter((r) => r.kind === "decision");
-  } catch {
-    return [];
-  }
-  if (decisions.length === 0) return [];
-
-  const kws = (keywords ?? [])
-    .map((k) => k.toLowerCase())
-    .filter((k) => k.length > 0);
-  if (kws.length > 0) {
-    const hits = decisions.filter((r) => {
-      const hay = `${r.text}\n${r.spec ?? ""}`.toLowerCase();
-      return kws.some((k) => hay.includes(k));
-    });
-    if (hits.length > 0) return hits.slice(0, limit);
-  }
-  return decisions.slice(0, limit);
-}

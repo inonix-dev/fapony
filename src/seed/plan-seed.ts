@@ -48,8 +48,8 @@ import {
   specDir,
 } from "../core/config.js";
 import { MEM_TEXT_MAX } from "../core/mem-log.js";
+import { readFaelLog, recentDecisions } from "../fael.js";
 import { extractExports } from "../map.js";
-import { readMemLog, readRecentMemDecisions } from "../memory.js";
 import { capLines, execGit, SIG_MAX } from "./primitives.js";
 
 // One chunk = one module's signatures — past ~40 lines a module is its own
@@ -241,7 +241,7 @@ function renderExistingInScope(
 
 function renderContextFapony(worktree: string): string {
   const lines: string[] = [];
-  const decisions = readRecentMemDecisions(worktree, 3).slice(0, 3);
+  const decisions = recentDecisions(readFaelLog(worktree).rows, 3);
   lines.push(
     decisions.length > 0
       ? `- Decisions on record (mem): ${decisions
@@ -250,7 +250,7 @@ function renderContextFapony(worktree: string): string {
               `"${d.text.length > 140 ? `${d.text.slice(0, 139)}…` : d.text}"`,
           )
           .join(" · ")}`
-      : "- Decisions on record (mem): _(none — no mem log or empty)_",
+      : "- Decisions on record (mem): _(none — no fael log or empty)_",
   );
   return lines.join("\n");
 }
@@ -601,8 +601,8 @@ export function renderKnownTraps(
 ): { lines: string[]; matched: number; lacked: number } {
   const empty = { lines: [], matched: 0, lacked: 0 };
   try {
-    const { rows, filesFound } = readMemLog(worktree);
-    if (filesFound === 0 || rows.length === 0) return empty;
+    const { rows } = readFaelLog(worktree);
+    if (rows.length === 0) return empty;
 
     const scopeFiles = new Set<string>();
     for (const r of roots)
@@ -637,7 +637,7 @@ export function renderKnownTraps(
     );
     const lacked = hits.filter((h) => h.viaText).length;
     const lines = [
-      "## Known traps (fapony mem)",
+      "## Known traps (fael)",
       "",
       `- ${hits.length} relevant row(s) on this scope (${lacked} lacked files[]${lacked > 0 ? " — matched via text" : ""})`,
     ];
