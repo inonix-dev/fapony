@@ -44,7 +44,7 @@ fapony/
       defaults.ts / types.ts / getters.ts / load.ts  # shims re-exporting core/config.ts
     adapters/           # I/O boundary — thin framing only, no logic (PLAN-lib-layer chunk 3)
       cli.ts            # fapony.ts dispatch target
-      hooks/            # hook-stop / hook-read-hint / hook-edit-hint / hook-session-start · bug-markers.ts (shared bug signal) + helpers
+      hooks/            # hook-edit-hint (importers + debt) / hook-mv-guard / git-autonomy · memory hooks moved to fael
       mcp/              # MCP server — stdio JSON-RPC, 3 mem tools (mem.ts); collect/check/report are engines only
     gates.ts          # per-round gate enrichment — model + session tokens per gate; carries `sessionId` so callers can dedupe
     parse.ts          # parseGateVerdict() + qualityScore()

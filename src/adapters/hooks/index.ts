@@ -15,16 +15,10 @@ export {
   sessionKey,
   utcStamp,
 } from "../../core/hook-helpers.js";
-export {
-  BUG_MARKERS,
-  hasBugMarker,
-  isBugfixCommit,
-} from "./bug-markers.js";
 export { computeHintImpact } from "./compute-hint-impact.js";
 export {
   type ContextLineData,
   readContextData,
-  readContextLines,
 } from "./context-data.js";
 export {
   cmdHookEditHint,
@@ -48,53 +42,3 @@ export {
   rewriteGitAutonomyTool,
 } from "./git-autonomy.js";
 export { cmdHookMvGuard, mvGuardDecision } from "./mv-guard.js";
-export {
-  COMMIT_HINT_MIN_COMMITS,
-  type CommitHintInput,
-  cmdHookReadHint,
-  commitHintFor,
-  READ_HINT_MIN_BYTES,
-  READ_HINT_MIN_LIMIT,
-  type ReadHintInput,
-  type ReadTrackRow,
-  type RereadHintInput,
-  readHintFor,
-  readTrackPath,
-  rereadHintFor,
-} from "./read-hint.js";
-export {
-  capContext,
-  cmdHookSessionStart,
-  SESSION_START_MAX_CHARS,
-  sessionStartContext,
-} from "./session-start.js";
-export {
-  bugDedupeKey,
-  bugSignalFromTranscript,
-  cmdHookStop,
-  countTicks,
-  cursorTranscriptPath,
-  decideHandoff,
-  decideStop,
-  fileAtRevision,
-  type HandoffDecision,
-  type HandoffPlanFile,
-  handoffBaseSha,
-  handoffBlockMessage,
-  handoffDedupeKey,
-  hasHandoffLiteral,
-  isCodexPayload,
-  isCursorPayload,
-  isPlanPath,
-  memHasHandoffForPlan,
-  mergeStopReasons,
-  type NormalizedStopInput,
-  normalizeStopInput,
-  type RawStopPayload,
-  type StopClient,
-  sessionPlanFiles,
-  stopBlockedBefore,
-  stopBlockPath,
-  stopBlockSurface,
-  stopOutput,
-} from "./stop.js";

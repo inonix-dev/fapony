@@ -84,16 +84,6 @@ export const COMMANDS: CommandInfo[] = [
     summary: "MCP server (stdio JSON-RPC, 3 tools)",
   },
   {
-    name: "hook-stop",
-    group: "hooks",
-    summary: "Stop hook: block turns with commits but no mem row",
-  },
-  {
-    name: "hook-read-hint",
-    group: "hooks",
-    summary: "read/re-read annotations",
-  },
-  {
     name: "hook-edit-hint",
     group: "hooks",
     summary: "importer count before editing shape",
@@ -103,16 +93,11 @@ export const COMMANDS: CommandInfo[] = [
     group: "hooks",
     summary: "deny raw git mv of plan files into done/",
   },
-  {
-    name: "hook-session-start",
-    group: "hooks",
-    summary: "SessionStart: kickoff into context",
-  },
   { name: "init", group: "setup", summary: "scaffold .fapony/ in a worktree" },
   {
     name: "install",
     group: "setup",
-    summary: "wire MCP + skills into clients",
+    summary: "wire skills + edit hint into clients",
   },
   { name: "setup", group: "setup", summary: "interactive wizard" },
   { name: "update", group: "setup", summary: "self-update via git pull" },

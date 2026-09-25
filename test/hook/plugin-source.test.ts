@@ -22,8 +22,8 @@ test("testEditHintPluginSource", () => {
     "must log through the edit fire surface",
   );
   assert.ok(
-    src.includes('surface: "open-bug"'),
-    "must log open-bug fires (PLAN-active-pain chunk 3)",
+    src.includes('surface: "debt"') && !src.includes("memLines"),
+    "logs debt fires; mem context moved to fael",
   );
   assert.ok(
     src.includes("pjoin(directory, filePath)"),

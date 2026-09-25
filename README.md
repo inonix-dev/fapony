@@ -249,11 +249,8 @@ fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...  # write PLAN (+SP
 
 # hooks & MCP (wired by `fapony install`, not run by hand)
 fapony mcp                                 # MCP server (stdio JSON-RPC — 3 tools)
-fapony hook-stop                           # Stop hook: block turns with commits but no mem row
-fapony hook-read-hint                      # read/re-read annotations
-fapony hook-edit-hint                      # importer count before editing shape
+fapony hook-edit-hint                      # importer count + convention debt before an edit
 fapony hook-mv-guard                       # deny raw git mv of plan files into done/
-fapony hook-session-start                  # SessionStart: kickoff into context
 
 # frozen ledger (reads history only — the grading tool left the MCP surface in 2026-09)
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]  # KPIs from old graded runs

@@ -421,12 +421,8 @@ fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--
 fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...
 # ── ledger (frozen — bug fixes only) ──
 fapony mcp                           # MCP server — stdio JSON-RPC, 3 tools
-fapony hook-stop                     # Stop hook — block turns with commits but no new mem row
-fapony hook-read-hint                # 2 annotation kinds: whole-file read of a big file → review-seed ·
-                                     # re-read of the same file in one session with unmoved mtime → grep
-fapony hook-edit-hint                # PreToolUse Edit — importer count of the file being edited (Claude)
+fapony hook-edit-hint                # PreToolUse Edit — importer count + convention debt of the file being edited
 fapony hook-mv-guard                   # PreToolUse Bash — deny raw `git mv` of plan files into done/, use `plan-sweep --apply` instead (Claude)
-fapony hook-session-start            # SessionStart — fire `mem kickoff` into context (silent with no mem log)
 fapony stats [--mode verdict [--regime code|fix|review|plan|inquiry|test]]
 fapony report <run-id>  ·  fapony report-web [file]
 # ── setup ──

@@ -8,7 +8,6 @@ import { test } from "bun:test";
 import assert from "node:assert";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readContextData } from "../src/adapters/hooks/context-data.js";
 import { cmdStale } from "../src/mem/commands/read.js";
 import {
   evictedRows,
@@ -113,38 +112,4 @@ test("testCmdStaleReportsEviction", () => {
     assert.match(out, /EVICTED \[n1\] note files gone: gone\.ts/);
   });
   console.log("  ✓ mem stale prints the EVICTED line");
-});
-
-test("testReadHintFollowsMove", () => {
-  withTempRepo((dir) => {
-    writeLog(dir, [note("n1", "about a", ["old/a.ts"])]);
-    mkdirSync(join(dir, "new"), { recursive: true });
-    writeFileSync(join(dir, "new/a.ts"), "export const a = 1;\n");
-    const ctx = readContextData(join(dir, "new/a.ts"), dir);
-    assert.ok(ctx, "context must resolve");
-    assert.deepEqual(ctx!.memIds, ["n1"]);
-    assert.equal(ctx!.memLines.length, 1);
-    assert.match(
-      ctx!.memLines[0],
-      /fapony mem: 2026-09-19 note — about a \(moved from old\/a\.ts\)/,
-    );
-  });
-  console.log("  ✓ read hint shows the row on the new path with moved-from");
-});
-
-test("testReadHintIgnoresAmbiguousMove", () => {
-  withTempRepo((dir) => {
-    writeLog(dir, [note("n1", "about a", ["old/a.ts"])]);
-    mkdirSync(join(dir, "x"), { recursive: true });
-    mkdirSync(join(dir, "y"), { recursive: true });
-    writeFileSync(join(dir, "x/a.ts"), "export const a = 1;\n");
-    writeFileSync(join(dir, "y/a.ts"), "export const a = 2;\n");
-    const ctx = readContextData(join(dir, "x/a.ts"), dir);
-    assert.ok(ctx, "context must resolve");
-    assert.ok(
-      !ctx!.memIds.includes("n1"),
-      "ambiguous move must not attach the row",
-    );
-  });
-  console.log("  ✓ ambiguous basename → row stays off the new path");
 });
