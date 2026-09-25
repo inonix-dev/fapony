@@ -1,160 +1,88 @@
 // src/install/claude.ts — Claude Code install provider
 //
-// Shells out to `claude mcp add` (never parses/writes ~/.claude.json directly).
+// Skills symlink + the PreToolUse hooks fapony still owns. Memory (MCP, Stop,
+// SessionStart, per-file read context) moved to fael — `fael install` wires it.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { assertSafe } from "../safety.js";
 import { claudeSkillsDir, linkSkills, reportSkills } from "./skills.js";
-import {
-  type ClaudeRunResult,
-  defaultExit,
-  INSTALL_ROOT,
-  type InstallDeps,
-} from "./types.js";
-
-function defaultRun(argv: string[]): ClaudeRunResult {
-  assertSafe(argv);
-  try {
-    const proc = Bun.spawnSync(argv, {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    return {
-      exitCode: proc.exitCode,
-      stdout: proc.stdout.toString(),
-      stderr: proc.stderr.toString(),
-    };
-  } catch (e) {
-    // `claude` binary missing (ENOENT) or spawn failed outright.
-    return { exitCode: 127, stdout: "", stderr: (e as Error).message };
-  }
-}
-
-/** `claude mcp get fapony` — read-only probe. exit 0 = an entry named fapony exists. */
-export function claudeGetArgs(): string[] {
-  return ["claude", "mcp", "get", "fapony"];
-}
-
-/** Absolute-path add command — works even before `bun link` puts `fapony` on PATH. */
-export function claudeAddArgs(): string[] {
-  return [
-    "claude",
-    "mcp",
-    "add",
-    "fapony",
-    "-s",
-    "user",
-    "--",
-    "bun",
-    join(INSTALL_ROOT, "fapony.ts"),
-    "mcp",
-  ];
-}
-
-function isClaudeMissing(res: ClaudeRunResult): boolean {
-  return (
-    res.exitCode === 127 ||
-    /ENOENT|command not found|not found/i.test(res.stderr) ||
-    /ENOENT|command not found|not found/i.test(res.stdout)
-  );
-}
-
-/**
- * An existing `fapony` entry counts as ours when its Command:/Args: lines
- * mention fapony (covers both `bun <abs>/fapony.ts mcp` and `fapony mcp`
- * launchers). Only those lines are inspected — the `fapony:` header matches
- * trivially and proves nothing. Anything else under our name is someone
- * else's entry — never overwrite it silently.
- */
-export function claudeGetPointsToFapony(getOutput: string): boolean {
-  const cmdLines = getOutput
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.startsWith("Command:") || l.startsWith("Args:"));
-  return cmdLines.join("\n").includes("fapony");
-}
+import { INSTALL_ROOT, type InstallDeps } from "./types.js";
 
 export function cmdInstallClaude(
   dryRun: boolean,
   deps: InstallDeps = {},
 ): void {
-  const run = deps.run ?? defaultRun;
-  const exitFn = deps.exit ?? defaultExit;
-
-  const getArgs = claudeGetArgs();
-  assertSafe(getArgs);
-  const get = run(getArgs);
-  if (isClaudeMissing(get)) {
-    console.error(`claude CLI not found — install Claude Code first`);
-    exitFn(1);
-    return;
-  }
-
-  if (get.exitCode === 0) {
-    if (claudeGetPointsToFapony(`${get.stdout}\n${get.stderr}`)) {
-      console.error(`✓ mcp.fapony already configured — no change needed`);
-      console.error(`  (Claude Code user scope)`);
-      const dir = claudeSkillsDir(deps.homedir ?? homedir);
-      reportSkills(linkSkills(dir, dryRun), dir, dryRun);
-      // MCP is already wired, but a hook can be new since the last install
-      // (e.g. the Edit hint) — always ensure the hook wiring, not only on a
-      // fresh MCP add. This is the upgrade path for existing installs.
-      installClaudeHooks(dryRun, deps);
-      return;
-    }
-    console.error(
-      `an MCP server named "fapony" exists but points elsewhere — not overwriting.`,
-    );
-    console.error(`  inspect with: claude mcp get fapony`);
-    console.error(`  then remove it first: claude mcp remove fapony -s user`);
-    exitFn(1);
-    return;
-  }
-
-  const addArgs = claudeAddArgs();
-  if (dryRun) {
-    console.error(`── dry-run: would run ──`);
-    console.error(`  ${addArgs.join(" ")}`);
-    // Dry-run shows the hook wiring too — the installers are dry-run-safe
-    // ("would write", no writes), so the preview stays truthful.
-    installClaudeHooks(dryRun, deps);
-    return;
-  }
-
-  assertSafe(addArgs);
-  const add = run(addArgs);
-  if (isClaudeMissing(add)) {
-    console.error(`claude CLI not found — install Claude Code first`);
-    exitFn(1);
-    return;
-  }
-  if (add.exitCode !== 0) {
-    console.error(
-      `failed to add mcp.fapony to Claude Code (exit ${add.exitCode})`,
-    );
-    const detail = `${add.stdout}\n${add.stderr}`.trim();
-    if (detail) console.error(detail);
-    console.error(`verify with: claude mcp add --help`);
-    exitFn(1);
-    return;
-  }
-  console.error(`✓ mcp.fapony configured for Claude Code (user scope)`);
-  const skillsDir = claudeSkillsDir(deps.homedir ?? homedir);
-  reportSkills(linkSkills(skillsDir, dryRun), skillsDir, dryRun);
-
-  // Wire the Stop hook that refuses to end a turn with ungraded commits,
-  // and the Read/Edit hints that annotate reads of large files and edits to
-  // files with importers (both annotate-only).
+  const dir = claudeSkillsDir(deps.homedir ?? homedir);
+  reportSkills(linkSkills(dir, dryRun), dir, dryRun);
+  removeRetiredClaudeHooks(dryRun, deps);
   installClaudeHooks(dryRun, deps);
 }
 
+/** Hook subcommands fapony used to register — memory now owned by fael. The
+ *  commands are gone, so a leftover entry would error on every tool call. */
+const RETIRED_SUBCOMMANDS = [
+  "hook-read-hint",
+  "hook-stop",
+  "hook-session-start",
+];
+
+function isRetired(command: unknown): boolean {
+  return (
+    typeof command === "string" &&
+    command.includes("fapony") &&
+    RETIRED_SUBCOMMANDS.some((sub) => command.endsWith(` ${sub}`))
+  );
+}
+
+/** Drop fapony's own retired hook entries from settings.json; foreign entries
+ *  are never touched. An unreadable settings.json is left alone. */
+function removeRetiredClaudeHooks(dryRun: boolean, deps: InstallDeps): void {
+  const home = deps.homedir ? deps.homedir() : homedir();
+  const settingsPath = join(home, ".claude", "settings.json");
+  let settings: { hooks?: Record<string, unknown> };
+  try {
+    settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
+  } catch {
+    return;
+  }
+  const hooks = settings.hooks;
+  if (!hooks || typeof hooks !== "object") return;
+  let removed = 0;
+  for (const [event, list] of Object.entries(hooks)) {
+    if (!Array.isArray(list)) continue;
+    const kept = list.flatMap((group: { hooks?: { command?: unknown }[] }) => {
+      if (!Array.isArray(group?.hooks)) return [group];
+      const inner = group.hooks.filter((h) => !isRetired(h?.command));
+      removed += group.hooks.length - inner.length;
+      return inner.length === 0 ? [] : [{ ...group, hooks: inner }];
+    });
+    if (kept.length === 0) delete hooks[event];
+    else hooks[event] = kept;
+  }
+  if (removed === 0) return;
+  if (!dryRun) {
+    try {
+      writeFileSync(
+        settingsPath,
+        `${JSON.stringify(settings, null, 2)}\n`,
+        "utf-8",
+      );
+    } catch (e) {
+      console.error(
+        `  retired hooks: failed to write — ${(e as Error).message}`,
+      );
+      return;
+    }
+  }
+  console.error(
+    `  retired hooks: ${dryRun ? "would remove" : "removed"} ${removed} fapony entr${removed === 1 ? "y" : "ies"} (memory moved to fael)`,
+  );
+}
+
 /**
- * Shared append-to-settings.json hook installer. Both fapony hooks live
- * here now (Stop since PLAN-mem-mcp, PreToolUse read hint since the
- * large-file annotate feature) — the read/write/idempotence/append shape
- * is one implementation with two callers, not a scaffold.
+ * Shared append-to-settings.json hook installer — one implementation, two
+ * callers (edit hint, plan-mv guard).
  * Never touch a hook someone else registered, never fail the install over it.
  */
 function ensureClaudeHook(
@@ -223,43 +151,12 @@ function ensureClaudeHook(
 }
 
 /**
- * Wire every hook fapony owns: the Stop hook that refuses to end a turn with
- * ungraded commits, and the Read/Edit PreToolUse hints (annotate-only).
- * Idempotent and dry-run-safe. Called on every install, not just a fresh MCP
- * add — an existing install must still pick up a hook added later.
+ * Wire every hook fapony owns: the Edit importer hint (annotate-only) and the
+ * plan-mv guard. Idempotent and dry-run-safe.
  */
 function installClaudeHooks(dryRun: boolean, deps: InstallDeps): void {
-  installStopHook(dryRun, deps);
-  installReadHintHook(dryRun, deps);
   installEditHintHook(dryRun, deps);
   installMvGuardHook(dryRun, deps);
-  installSessionStartHook(dryRun, deps);
-}
-
-function installStopHook(dryRun: boolean, deps: InstallDeps): void {
-  ensureClaudeHook(dryRun, deps, {
-    event: "Stop",
-    subcommand: "hook-stop",
-    label: "stop hook",
-  });
-}
-
-/**
- * PreToolUse hook on Read: annotates a full-file read with one factual line —
- * the size + the review-seed command when the file is large, and the re-read
- * line when the same path was already read this session and its mtime has not
- * moved (an unchanged file, so the second read buys nothing; a changed one
- * stays silent). Annotate only — no permissionDecision is ever returned, the
- * read always proceeds. The matcher "Read" keeps the spawn off every other
- * tool call.
- */
-function installReadHintHook(dryRun: boolean, deps: InstallDeps): void {
-  ensureClaudeHook(dryRun, deps, {
-    event: "PreToolUse",
-    matcher: "Read",
-    subcommand: "hook-read-hint",
-    label: "read hint",
-  });
 }
 
 /**
@@ -290,18 +187,5 @@ function installMvGuardHook(dryRun: boolean, deps: InstallDeps): void {
     matcher: "Bash",
     subcommand: "hook-mv-guard",
     label: "plan-mv guard",
-  });
-}
-
-/**
- * SessionStart hook: injects `fapony mem kickoff` as context when the repo has
- * a mem log, and stays silent when it does not. Context only — SessionStart
- * cannot block, and a repo without mem never sees a line.
- */
-function installSessionStartHook(dryRun: boolean, deps: InstallDeps): void {
-  ensureClaudeHook(dryRun, deps, {
-    event: "SessionStart",
-    subcommand: "hook-session-start",
-    label: "session start",
   });
 }

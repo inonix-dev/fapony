@@ -1,36 +1,6 @@
 import { test } from "bun:test";
 import assert from "node:assert";
-import {
-  commitHintPluginSource,
-  editHintPluginSource,
-  readHintPluginSource,
-} from "../../src/install/opencode.js";
-
-test("testReadHintPluginSource", () => {
-  const src = readHintPluginSource("/install/root");
-  assert.ok(
-    src.includes("/install/root/src/hook.ts"),
-    "bakes the install root",
-  );
-  assert.ok(src.includes('input.tool !== "read"'), "guards the tool name");
-  assert.ok(src.includes("output.output"), "mutates the tool output");
-  assert.ok(!src.includes("throw"), "must never throw into the tool call");
-  assert.ok(
-    src.includes("readContextData"),
-    "must also wire debt/mem context, matching Claude's cmdHookReadHint",
-  );
-  assert.ok(
-    src.includes("pjoin(directory, filePath)"),
-    "fire-log joins against directory, not worktree",
-  );
-  assert.ok(
-    src.includes('surface: "open-bug"'),
-    "must log open-bug fires (PLAN-active-pain chunk 3)",
-  );
-  console.log(
-    "  ✓ read hint opencode plugin imports shared logic, annotate-only",
-  );
-});
+import { editHintPluginSource } from "../../src/install/opencode.js";
 
 test("testEditHintPluginSource", () => {
   const src = editHintPluginSource("/install/root");
@@ -67,23 +37,5 @@ test("testEditHintPluginSource", () => {
   );
   console.log(
     "  ✓ edit hint opencode plugin imports shared logic, annotate-only",
-  );
-});
-
-test("testCommitHintPluginSource", () => {
-  const src = commitHintPluginSource("/install/root");
-  assert.ok(
-    src.includes("/install/root/src/hook.ts"),
-    "bakes the install root",
-  );
-  assert.ok(src.includes('input.tool !== "bash"'), "guards the bash tool");
-  assert.ok(src.includes("output.output"), "mutates the tool output");
-  assert.ok(!src.includes("throw"), "must never throw into the tool call");
-  assert.ok(
-    src.includes("commitHintFor"),
-    "must import commitHintFor from the shared module",
-  );
-  console.log(
-    "  ✓ commit hint opencode plugin imports shared logic, annotate-only",
   );
 });

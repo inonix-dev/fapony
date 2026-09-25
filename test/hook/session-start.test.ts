@@ -3,7 +3,6 @@ import assert from "node:assert";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { capContext, SESSION_START_MAX_CHARS } from "../../src/hook.js";
-import { sessionStartPluginSource } from "../../src/install/opencode.js";
 import { withTempRepo } from "./helpers.js";
 
 // SessionStart context is injected whole — a repo with a long open list must
@@ -180,36 +179,5 @@ test("testSessionStartSilentWithTwoAppScopedLogs", () => {
   });
   console.log(
     "  ✓ session-start stays silent when two app logs make it ambiguous",
-  );
-});
-
-test("testSessionStartPluginSource", () => {
-  const src = sessionStartPluginSource("/install/root");
-  assert.ok(
-    src.includes("/install/root/src/hook.ts"),
-    "imports the shared hook module",
-  );
-  assert.ok(src.includes("/install/root/fapony.ts"), "bakes the CLI path");
-  assert.ok(
-    src.includes("experimental.chat.system.transform"),
-    "injects via system.transform, the documented channel",
-  );
-  assert.ok(
-    src.includes("sessionStartContext"),
-    "calls the shared implementation, no baked logic",
-  );
-  assert.ok(
-    !src.includes("spawnSync"),
-    "no baked spawn — sessionStartContext owns the guard and the cap",
-  );
-  assert.ok(!src.includes("capContext"), "no second cap");
-  assert.ok(src.includes("output.system"), "pushes into system, never args");
-  assert.ok(
-    src.includes("sessionID") && src.includes("seen"),
-    "dedupes once per session",
-  );
-  assert.ok(!src.includes("throw"), "must never break a session start");
-  console.log(
-    "  ✓ session start opencode plugin defers to sessionStartContext",
   );
 });

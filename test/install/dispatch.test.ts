@@ -4,6 +4,7 @@ import { test } from "bun:test";
 
 import assert from "node:assert";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -32,7 +33,7 @@ test("testCmdInstallRejectsUnknownPlatform", async () => {
   const err = lines.join("\n");
   assert.equal(code, 1);
   assert.ok(err.includes("opencode|claude"), `got: ${err}`);
-  assert.ok(err.includes("|cursor|"), `got: ${err}`);
+  assert.ok(!err.includes("cursor"), `cursor support is gone: ${err}`);
   console.log("  ✓ install rejects unknown platform");
 });
 
@@ -173,12 +174,9 @@ test("testCmdInstallNoPlatformAllFlag", async () => {
       });
     }
 
-    // opencode config should now have mcp.fapony
-    const cfg = JSON.parse(readFileSync(join(ocDir, "opencode.json"), "utf-8"));
-    assert.ok(cfg.mcp, "opencode config should have mcp section");
     assert.ok(
-      (cfg.mcp as Record<string, unknown>).fapony,
-      "should have fapony entry",
+      existsSync(join(ocDir, "plugins", "fapony-edit-hint.ts")),
+      "detected opencode gets installed without a prompt",
     );
     console.log("  ✓ install --all → installs all detected without prompting");
   } finally {
@@ -206,7 +204,7 @@ test("testCmdInstallNoClientsFoundPrintsHelp", () => {
 
     const output = lines.join("\n");
     assert.ok(
-      output.includes("no MCP client found"),
+      output.includes("no agent client found"),
       `should say no client found: ${output}`,
     );
     assert.ok(

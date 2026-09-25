@@ -1,15 +1,10 @@
 import { test } from "bun:test";
-// test/install/zcode.test.ts — ZCode install provider
+// test/install/zcode.test.ts — ZCode install provider (skills only; memory moved to fael)
 
 import assert from "node:assert";
-import { lstatSync, mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import {
-  agentsSkillsDir,
-  cmdInstall,
-  cmdInstallZcode,
-  INSTALL_ROOT,
-} from "../../src/install.js";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { cmdInstall, cmdInstallZcode } from "../../src/install.js";
 import {
   captureErrors,
   silentErrors,
@@ -17,206 +12,96 @@ import {
   type TestExit,
   testExit,
   withTempHome,
-  writeJson,
 } from "./helpers.js";
 
-function zcodeEntry(): Record<string, unknown> {
-  return {
-    type: "stdio",
-    command: "bun",
-    args: ["run", join(INSTALL_ROOT, "fapony.ts"), "mcp"],
-  };
+/** join + mkdir -p of the parent — returns the file path. */
+function mkdir(...parts: string[]): string {
+  const p = join(...parts);
+  mkdirSync(dirname(p), { recursive: true });
+  return p;
 }
 
-test("testInstallZcodeNoConfigFails", () => {
+test("testInstallZCodeNotFoundFails", () => {
   withTempHome((home) => {
     let code: number | null = null;
-    const err = silentErrors(() =>
-      captureErrors(() => {
-        try {
-          cmdInstallZcode(false, { exit: testExit, homedir: () => home });
-        } catch (e) {
-          code = (e as TestExit).code;
-        }
-      }),
-    );
+    const err = captureErrors(() => {
+      try {
+        cmdInstallZcode(false, {
+          exit: testExit,
+          homedir: () => home,
+          checkCmd: () => false,
+        });
+      } catch (e) {
+        code = (e as TestExit).code;
+      }
+    });
     assert.equal(code, 1);
     assert.ok(err.includes("ZCode config not found"), `got: ${err}`);
-    console.log("  ✓ install zcode no config → clear error");
   });
 });
 
-test("testInstallZcodePrimaryPath", () => {
+test("testInstallZCodeLinksSkillsOnly", () => {
   withTempHome((home) => {
-    const configDir = join(home, ".zcode", "cli");
-    mkdirSync(configDir, { recursive: true });
-    const configPath = join(configDir, "config.json");
-    writeJson(configPath, {
-      mcp: {
-        servers: { other: { type: "stdio", command: "node", args: ["x.js"] } },
-      },
-    });
-
-    const err = silentErrors(() =>
-      captureErrors(() =>
-        cmdInstallZcode(false, { exit: testExit, homedir: () => home }),
-      ),
+    writeFileSync(mkdir(home, ".zcode", "cli", "config.json"), "{}\n");
+    const before = readFileSync(
+      join(home, ".zcode", "cli", "config.json"),
+      "utf-8",
     );
-    const cfg = JSON.parse(readFileSync(configPath, "utf-8")) as Record<
-      string,
-      unknown
-    >;
-    const servers = (cfg.mcp as Record<string, unknown>).servers as Record<
-      string,
-      unknown
-    >;
-    assert.deepStrictEqual(servers.fapony, zcodeEntry());
-    assert.deepStrictEqual(servers.other, {
-      type: "stdio",
-      command: "node",
-      args: ["x.js"],
-    });
-    assert.ok(err.includes("added mcp.fapony"), `got: ${err}`);
-    console.log(
-      "  ✓ install zcode primary path → writes ~/.zcode/cli/config.json",
-    );
-  });
-});
-
-test("testInstallZcodeFallbackPath", () => {
-  withTempHome((home) => {
-    const agentsDir = join(home, ".agents");
-    mkdirSync(agentsDir, { recursive: true });
-    const configPath = join(agentsDir, "mcp.json");
-    writeJson(configPath, {
-      mcpServers: { other: { type: "stdio", command: "node", args: ["x.js"] } },
-    });
-
-    const err = silentErrors(() =>
-      captureErrors(() =>
-        cmdInstallZcode(false, { exit: testExit, homedir: () => home }),
-      ),
-    );
-    const cfg = JSON.parse(readFileSync(configPath, "utf-8")) as Record<
-      string,
-      unknown
-    >;
-    const servers = cfg.mcpServers as Record<string, unknown>;
-    assert.deepStrictEqual(servers.fapony, zcodeEntry());
-    assert.ok(err.includes("fallback path: ~/.agents/mcp.json"), `got: ${err}`);
-    console.log("  ✓ install zcode fallback path → writes ~/.agents/mcp.json");
-  });
-});
-
-test("testInstallZcodeAlreadyConfiguredNoOp", () => {
-  withTempHome((home) => {
-    const configDir = join(home, ".zcode", "cli");
-    mkdirSync(configDir, { recursive: true });
-    const configPath = join(configDir, "config.json");
-    writeJson(configPath, { mcp: { servers: { fapony: zcodeEntry() } } });
-
-    const before = readFileSync(configPath, "utf-8");
-    const err = silentErrors(() =>
-      captureErrors(() =>
-        cmdInstallZcode(false, { exit: testExit, homedir: () => home }),
-      ),
-    );
-    const after = readFileSync(configPath, "utf-8");
-    assert.equal(before, after);
-    assert.ok(err.includes("already configured"), `got: ${err}`);
-    console.log("  ✓ install zcode already configured → no-op");
-  });
-});
-
-test("testInstallZcodeAlreadyConfiguredLinksSkills", () => {
-  withTempHome((home) => {
-    const configDir = join(home, ".zcode", "cli");
-    mkdirSync(configDir, { recursive: true });
-    writeJson(join(configDir, "config.json"), {
-      mcp: { servers: { fapony: zcodeEntry() } },
-    });
-
     silentErrors(() =>
-      captureErrors(() =>
-        cmdInstallZcode(false, { exit: testExit, homedir: () => home }),
-      ),
+      cmdInstallZcode(false, {
+        exit: testExit,
+        homedir: () => home,
+        checkCmd: () => false,
+      }),
     );
-    const dir = agentsSkillsDir(() => home);
-    for (const name of skillNames()) {
+    for (const s of skillNames()) {
       assert.ok(
-        lstatSync(join(dir, name)).isSymbolicLink(),
-        `${name} should be symlinked into ~/.agents/skills even when mcp is already configured`,
+        existsSync(join(home, ".agents", "skills", s)),
+        `skill ${s} linked`,
       );
     }
-    console.log("  ✓ install zcode already configured → still links skills");
-  });
-});
-
-test("testInstallZcodeDryRunNoWrite", () => {
-  withTempHome((home) => {
-    const configDir = join(home, ".zcode", "cli");
-    mkdirSync(configDir, { recursive: true });
-    const configPath = join(configDir, "config.json");
-    writeJson(configPath, {});
-
-    const before = readFileSync(configPath, "utf-8");
-    const err = silentErrors(() =>
-      captureErrors(() =>
-        cmdInstallZcode(true, { exit: testExit, homedir: () => home }),
-      ),
+    assert.equal(
+      readFileSync(join(home, ".zcode", "cli", "config.json"), "utf-8"),
+      before,
+      "client config must stay untouched",
     );
-    const after = readFileSync(configPath, "utf-8");
-    assert.equal(before, after);
-    assert.ok(err.includes("dry-run"), `got: ${err}`);
-    assert.ok(err.includes("mcp.servers.fapony"), `got: ${err}`);
-    console.log("  ✓ install zcode dry-run → no write");
   });
 });
 
-test("testInstallZcodeLinksSkillsIntoAgentsDir", () => {
+test("testInstallZCodeDryRunWritesNothing", () => {
   withTempHome((home) => {
-    const configDir = join(home, ".zcode", "cli");
-    mkdirSync(configDir, { recursive: true });
-    writeJson(join(configDir, "config.json"), {});
-
+    writeFileSync(mkdir(home, ".zcode", "cli", "config.json"), "{}\n");
     silentErrors(() =>
-      captureErrors(() =>
-        cmdInstallZcode(false, { exit: testExit, homedir: () => home }),
-      ),
+      cmdInstallZcode(true, {
+        exit: testExit,
+        homedir: () => home,
+        checkCmd: () => false,
+      }),
     );
-    const dir = agentsSkillsDir(() => home);
-    assert.equal(dir, join(home, ".agents", "skills"));
-    const names = skillNames();
-    assert.ok(names.length > 0, "repo should ship at least one skill");
-    for (const name of names) {
-      assert.ok(
-        lstatSync(join(dir, name)).isSymbolicLink(),
-        `${name} should be symlinked into ~/.agents/skills`,
-      );
-    }
-    console.log("  ✓ install zcode → symlinks skills into ~/.agents/skills");
+    assert.ok(!existsSync(join(home, ".agents", "skills")));
   });
 });
 
-test("testCmdInstallDispatchesZcode", () => {
+test("testInstallZcodeFallbackConfigCounts", () => {
   withTempHome((home) => {
-    const configDir = join(home, ".zcode", "cli");
-    mkdirSync(configDir, { recursive: true });
-    const configPath = join(configDir, "config.json");
-    writeJson(configPath, {});
-
+    writeFileSync(mkdir(home, ".agents", "mcp.json"), "{}\n");
     silentErrors(() =>
-      cmdInstall(["zcode"], { exit: testExit, homedir: () => home }),
+      cmdInstallZcode(false, { exit: testExit, homedir: () => home }),
     );
-    const cfg = JSON.parse(readFileSync(configPath, "utf-8")) as Record<
-      string,
-      unknown
-    >;
-    const servers = (cfg.mcp as Record<string, unknown>).servers as Record<
-      string,
-      unknown
-    >;
-    assert.deepStrictEqual(servers.fapony, zcodeEntry());
-    console.log("  ✓ install dispatch routes --platform zcode");
+    assert.ok(existsSync(join(home, ".agents", "skills", skillNames()[0])));
+  });
+});
+
+test("testCmdInstallDispatchesZCode", () => {
+  withTempHome((home) => {
+    writeFileSync(mkdir(home, ".zcode", "cli", "config.json"), "{}\n");
+    void silentErrors(() =>
+      cmdInstall(["zcode"], {
+        exit: testExit,
+        homedir: () => home,
+        checkCmd: () => false,
+      }),
+    );
+    assert.ok(existsSync(join(home, ".agents", "skills", skillNames()[0])));
   });
 });

@@ -1,21 +1,14 @@
-// src/install.ts — `fapony install --platform antigravity|agy|opencode|claude|cursor|zcode|codex` command.
-// opencode: adds mcp.fapony config to ~/.config/opencode/opencode.json or opencode.jsonc.
-// claude: shells out to `claude mcp add` (never parses/writes ~/.claude.json directly).
-// cursor: writes mcpServers.fapony to ~/.cursor/mcp.json directly and merges the
-//         fapony stop hook into the stop array in ~/.cursor/hooks.json.
-// zcode: reads/writes ~/.zcode/cli/config.json (fallback ~/.agents/mcp.json) directly,
-//        and symlinks skills into ~/.agents/skills.
-// codex: reads/writes ~/.codex/config.toml directly.
+// src/install.ts — `fapony install --platform antigravity|agy|opencode|claude|zcode|codex` command.
+// Every platform gets skill/<name>/ symlinked (claude/opencode → ~/.claude/skills,
+// zcode/codex/antigravity → ~/.agents/skills). claude + opencode also get the
+// edit hint (and claude the plan-mv guard). Memory — MCP, Stop, SessionStart —
+// moved to fael (`fael install`).
 // All platforms are idempotent + support --dry-run.
-// Claude/OpenCode also get skill/<name>/ symlinked into ~/.claude/skills so
-// `fapony update` reaches them without a second copy to keep in sync.
-// ZCode gets skill/<name>/ symlinked into ~/.agents/skills.
 
 import { createInterface } from "node:readline";
 import { cmdInstallAntigravity } from "./install/antigravity.js";
 import { cmdInstallClaude } from "./install/claude.js";
 import { cmdInstallCodex } from "./install/codex.js";
-import { cmdInstallCursor } from "./install/cursor.js";
 import { detectClients } from "./install/detect.js";
 import { cmdInstallOpencode } from "./install/opencode.js";
 import { defaultExit, type InstallDeps } from "./install/types.js";
@@ -24,24 +17,15 @@ import { ask } from "./setup.js";
 import { isAffirmative } from "./util.js";
 
 export { cmdInstallAntigravity } from "./install/antigravity.js";
-export {
-  claudeAddArgs,
-  claudeGetArgs,
-  claudeGetPointsToFapony,
-  cmdInstallClaude,
-} from "./install/claude.js";
-export { cmdInstallCodex, findCodexHooksJson } from "./install/codex.js";
-export { cmdInstallCursor } from "./install/cursor.js";
+export { cmdInstallClaude } from "./install/claude.js";
+export { cmdInstallCodex } from "./install/codex.js";
 export { detectClients } from "./install/detect.js";
 export {
   cmdInstallOpencode,
-  commitHintPluginSource,
   editHintPluginSource,
   gitAutonomyPluginSource,
   type OpencodeInstallOpts,
   opencodePluginFiles,
-  readHintPluginSource,
-  sessionStartPluginSource,
 } from "./install/opencode.js";
 export {
   agentsSkillsDir,
@@ -49,7 +33,6 @@ export {
   linkSkills,
 } from "./install/skills.js";
 export {
-  type ClaudeRunResult,
   INSTALL_ROOT,
   type InstallDeps,
 } from "./install/types.js";
@@ -80,10 +63,6 @@ export async function cmdInstall(
     cmdInstallClaude(dryRun, deps);
     return;
   }
-  if (platform === "cursor") {
-    cmdInstallCursor(dryRun, deps);
-    return;
-  }
   if (platform === "zcode") {
     cmdInstallZcode(dryRun, deps);
     return;
@@ -98,10 +77,10 @@ export async function cmdInstall(
   }
   if (platform !== undefined) {
     console.error(
-      `usage: fapony install --platform antigravity|agy|opencode|claude|cursor|zcode|codex [--dry-run] [--git-autonomy] [--plugins-only]`,
+      `usage: fapony install --platform antigravity|agy|opencode|claude|zcode|codex [--dry-run] [--git-autonomy] [--plugins-only]`,
     );
     console.error(
-      `  supported platforms: antigravity (agy), opencode, claude, cursor, zcode, codex`,
+      `  supported platforms: antigravity (agy), opencode, claude, zcode, codex`,
     );
     (deps.exit ?? defaultExit)(1);
     return;
@@ -125,7 +104,7 @@ export async function cmdInstall(
   if (found.length === 0) {
     console.error();
     console.error(
-      `  no MCP client found (looked for claude on PATH; config files for antigravity, cursor, opencode, zcode, codex).`,
+      `  no agent client found (looked for claude on PATH; config files for antigravity, opencode, zcode, codex).`,
     );
     console.error(
       `  open the app once, then re-run — or force with: fapony install --platform <name>`,
@@ -192,9 +171,6 @@ function installPlatform(
       break;
     case "claude":
       cmdInstallClaude(dryRun, deps);
-      break;
-    case "cursor":
-      cmdInstallCursor(dryRun, deps);
       break;
     case "opencode":
       cmdInstallOpencode(dryRun, deps, opts);

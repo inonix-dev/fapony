@@ -3,49 +3,11 @@
 import { join } from "node:path";
 
 /** Repo root (parent of src/) — absolute path to this fapony checkout,
- *  so `claude mcp add` works even before `bun link`. Same pattern as src/update.ts.
+ *  so hook commands work even before `bun link`. Same pattern as src/update.ts.
  *  Note: this file lives in src/install/, so ../.. reaches the repo root. */
 export const INSTALL_ROOT = join(import.meta.dir, "..", "..");
 
-export const MCP_KEY = "fapony";
-
-export const MCP_CONFIG = {
-  type: "local",
-  command: ["bun", "run", join(INSTALL_ROOT, "fapony.ts"), "mcp"],
-};
-
-/** ZCode uses the stdio MCP shape: command is a string, args is an array.
- *  See ~/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/...
- *  (do not use OpenCode-style `command: [...]` in ZCode's JSON editor). */
-export const ZCODE_MCP_CONFIG = {
-  type: "stdio",
-  command: "bun",
-  args: ["run", join(INSTALL_ROOT, "fapony.ts"), "mcp"],
-};
-
-export const CODEX_MCP_ENTRY = `[mcp_servers.fapony]
-command = "bun"
-args = ["run", "${INSTALL_ROOT}/fapony.ts", "mcp"]
-type = "stdio"
-`;
-
-/** Cursor's stdio MCP shape (mcpServers.fapony in ~/.cursor/mcp.json):
- *  command is a string, args is an array — same as ZCode, not OpenCode's
- *  `command: [...]`. */
-export const CURSOR_MCP_ENTRY = {
-  command: "bun",
-  args: ["run", join(INSTALL_ROOT, "fapony.ts"), "mcp"],
-};
-
-export interface ClaudeRunResult {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-}
-
 export interface InstallDeps {
-  /** Run argv synchronously. Defaults to Bun.spawnSync. Injected in tests. */
-  run?: (argv: string[]) => ClaudeRunResult;
   exit?: (code: number) => never;
   /** Override os.homedir() for tests. */
   homedir?: () => string;
