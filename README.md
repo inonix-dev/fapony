@@ -60,17 +60,49 @@ months ago — how far along is the move?* ESLint says this line is wrong; nothi
 files have migrated. Dead code and duplication it deliberately leaves to knip and friends —
 they already do that better.
 
+## The workflow — fapony + fael
+
+Two tools, one loop. **fapony is the workflow** — plans cut into chunks, convention debt, cheap
+lookups, what it all cost. **[fael](https://github.com/inonix-dev/fael) is the memory** — the
+decisions, bugs and notes the next session must see. Each is useful alone; together they close
+the loop: fapony says *what's next*, fael says *what the last session learned*.
+
+| | fapony — workflow | fael — memory |
+|---|---|---|
+| Owns | plans + chunk loop, `debt`, `lint-baseline`, `review-seed` / `analyze`, usage | decisions, issues, notes (`add` / `find` / `close`) |
+| Agent surface | edit hint + plan-mv guard hooks, skills — **no MCP server** | MCP tools + SessionStart / read / Stop hooks |
+| Writes | plan files, only when told (`plan sweep --apply`) | its log under `.fael/` in your repo |
+| Install | `npm i -g fapony && fapony install` | `npm i -g @inonix/fael && fael install` |
+
+One chunk, one session:
+
+```mermaid
+flowchart TD
+    S([new session]) --> K["fael kickoff — SessionStart hook<br/>open decisions + issues"]
+    K --> P["fapony plan PLAN-x.md<br/>unchecked chunks + handoff notes from fael"]
+    P --> L["fapony review-seed --files …<br/>exports + importers instead of whole-file reads"]
+    L --> E["edit<br/>fapony edit hint: importers + convention debt<br/>fael read hook: rows about that file"]
+    E --> C["tick the chunk with its sha → commit"]
+    C --> N["fael add note 'what chunk N+1 must know'<br/>--files f1,f2,PLAN-x.md"]
+    N --> X([stop — don't drag the transcript along])
+    X -->|next chunk| S
+    C -->|last chunk| W["fapony plan sweep PLAN-x.md --apply<br/>git mv into .fapony/done/"]
+```
+
+Who reads what:
+
 ```mermaid
 flowchart LR
-    A[Claude Code] --> F[fapony]
-    B[OpenCode] --> F
-    C[ZCode] --> F
-    D[Codex] --> F
-    G[Antigravity] --> F
+    CC[Claude Code] --> F[fapony]
+    OC[OpenCode] --> F
+    ZC[ZCode] --> F
+    CX[Codex] --> F
+    AG[Antigravity] --> F
     F --> U[usage — tokens & cost]
     F --> P[plans — next chunk, sweep, check]
     F --> D[debt — how far the move has gone]
-    X[fael — memory] -.read.-> F
+    M[(fael — memory)] -. read-only .-> F
+    CC & OC & CX --> M
 ```
 
 Adopting it doesn't change your workflow: install it, point your agent at it, read the reports.
@@ -217,7 +249,7 @@ fapony usage-web [port]                    # usage comparison dashboard from cac
 
 # lookup (read-only, never touches state)
 fapony analyze [path]                      # live repo graph: hubs, orphans, cycles, changed-untested (TS/JS + Python .py/.pyi; stdlib→external, no sys.path)
-fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>]  # scope facts for a review
+fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--plan <PLAN.md>] [--body sym[,sym]] [--callers sym[,sym]]  # scope facts for a review
 fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...  # write PLAN (+SPEC): frontmatter, capped sections, prior-art list
 
 # hooks (wired by `fapony install`, not run by hand)
