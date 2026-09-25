@@ -6,9 +6,8 @@
 //   by → agent · kind "issue" → "bug" · a close — inline `closed` (compacted
 //   rows) or a kindless row with `ref` (close file) — → a kind:"close" row
 //   with ref = the closed row's id (the old tombstone shape).
-// ponytail: `fael find --json --all` (fael 0.0.4) prints inline `closed` but
-// not close-file rows, so a native `fael close` still reads as open here until
-// fael emits them; nothing to change on this side when it does.
+// Close-file rows reach here from fael 0.0.5 on; 0.0.4 printed only inline
+// `closed`, so a native `fael close` read as open.
 
 /** fapony's internal row shape — what every reader downstream consumes. */
 export interface MemRow {
