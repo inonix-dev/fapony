@@ -12,6 +12,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
@@ -469,9 +470,11 @@ export const cmdPlanSweep = (a: string[]) => {
   }
   const name = basename(src);
   const srcDir = dirname(src);
-  const shipped = hasShippedHeader(src);
+  const fm = parsePlanFrontmatter(src);
+  // superseded = closed without shipping; done/ is where closed plans live
+  const superseded = fm.status === "superseded";
+  const shipped = hasShippedHeader(src) || superseded;
   if (!apply) {
-    const fm = parsePlanFrontmatter(src);
     if (fm.status === "blocked") {
       console.log(
         `${target}: status:blocked (blocked_by: ${fm.blockedByRaw ?? "?"}) — not a move candidate, stays in plan/`,
@@ -479,9 +482,11 @@ export const cmdPlanSweep = (a: string[]) => {
       return;
     }
     console.log(
-      shipped
-        ? `${target}: has a ✅ shipped header — ready to move (add --apply)`
-        : `${target}: no ✅ shipped header at the top — check the whole file is actually done`,
+      superseded
+        ? `${target}: status:superseded — ready to move (add --apply)`
+        : shipped
+          ? `${target}: has a ✅ shipped header — ready to move (add --apply)`
+          : `${target}: no ✅ shipped header at the top — check the whole file is actually done`,
     );
     return;
   }
@@ -490,7 +495,7 @@ export const cmdPlanSweep = (a: string[]) => {
   // but then run --apply directly and skip everything → risky when an agent ships automatically with no human check, so hard block
   if (!shipped && !process.env.MEM_FORCE) {
     console.error(
-      `${name}: no ✅ shipped header at the top — refusing to move (MEM_FORCE=1 to override)`,
+      `${name}: no ✅ shipped header and not status:superseded — refusing to move (MEM_FORCE=1 to override)`,
     );
     process.exit(1);
   }
@@ -513,11 +518,22 @@ export const cmdPlanSweep = (a: string[]) => {
   // ponytail: a file just written this round may not be git add'ed yet — `git mv` fails silently (exit 128, no throw)
   // then the next code hits ENOENT reading a dst that does not exist — always stage first (no-op if already tracked)
   mkdirSync(doneDir, { recursive: true });
-  Bun.spawnSync(["git", "add", src]);
-  const mv = Bun.spawnSync(["git", "mv", src, dst]);
-  if (mv.exitCode !== 0) {
-    console.error(`git mv failed (${mv.stderr.toString().trim()}) — not moved`);
-    process.exit(1);
+  // a repo that gitignores .fapony/ (public repo, private plans) has nothing
+  // for git to move — `git add` refuses an ignored path, so rename instead
+  if (gitOk(["check-ignore", "-q", src], root)) {
+    renameSync(src, dst);
+    console.log(
+      `${rel(src)} is not tracked by git — moved with a plain rename`,
+    );
+  } else {
+    Bun.spawnSync(["git", "add", src]);
+    const mv = Bun.spawnSync(["git", "mv", src, dst]);
+    if (mv.exitCode !== 0) {
+      console.error(
+        `git mv failed (${mv.stderr.toString().trim()}) — not moved`,
+      );
+      process.exit(1);
+    }
   }
 
   // own links always need re-relativizing — the file changed directory even in
