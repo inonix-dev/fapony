@@ -4,7 +4,7 @@
 
 # fapony
 
-[![npm](https://img.shields.io/npm/v/fapony.svg)](https://www.npmjs.com/package/fapony) [![GitHub](https://img.shields.io/github/stars/kire21b/fapony.svg)](https://github.com/kire21b/fapony)
+[![npm](https://img.shields.io/npm/v/fapony.svg)](https://www.npmjs.com/package/fapony) [![GitHub](https://img.shields.io/github/stars/inonix-dev/fapony.svg)](https://github.com/inonix-dev/fapony)
 
 **See what your coding agents actually cost.** fapony reads the session logs Claude Code, Codex,
 OpenCode and ZCode already write, and puts them all on one yardstick — tokens, cost and time per
@@ -80,7 +80,7 @@ every run after, which is exactly why they're retention, not the reason to insta
 # 1. Install (needs Bun — https://bun.sh)
 npm install -g fapony
 #    from source instead:
-#    git clone https://github.com/kire21b/fapony.git && cd fapony && bun install && bun link
+#    git clone https://github.com/inonix-dev/fapony.git && cd fapony && bun install && bun link
 #    (`bun link` claims the global `fapony` bin by package name, not path — re-run it in the
 #    checkout you want to be the one)
 
@@ -106,7 +106,7 @@ fapony init /path/to/your-worktree
 fapony init /path/to/your-worktree --rules --yes   # repo already set up: rules only, no prompt
 ```
 
-…or add it manually to any MCP client: `{ "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }`. Full protocol and adapter examples: [docs/mcp-handcheck.md](https://github.com/kire21b/fapony/blob/main/docs/mcp-handcheck.md).
+…or add it manually to any MCP client: `{ "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }`. Full protocol and adapter examples: [docs/mcp-handcheck.md](https://github.com/inonix-dev/fapony/blob/main/docs/mcp-handcheck.md).
 
 ## What fapony is not
 
@@ -197,7 +197,7 @@ expects, so a client can symlink the directory rather than copy the file:
 
 `plan-with-pony` is vendor-neutral — the SKILL.md *is* the prompt, so pipe it to any agent:
 `cat skill/plan-with-pony/SKILL.md | claude -p` (or `opencode run`, or anything that reads stdin).
-Example plans it produced: [examples/](https://github.com/kire21b/fapony/tree/main/examples).
+Example plans it produced: [examples/](https://github.com/inonix-dev/fapony/tree/main/examples).
 
 ### Plans your agent can answer questions about
 
@@ -291,7 +291,7 @@ capped at 180s — a command that doesn't fit reports as `timeout`, never as a p
 ## Config
 
 `fapony.config.json` lives in the fapony checkout and is gitignored (it's per-machine). Copy
-[fapony.config.example.json](https://github.com/kire21b/fapony/blob/main/fapony.config.example.json)
+[fapony.config.example.json](https://github.com/inonix-dev/fapony/blob/main/fapony.config.example.json)
 for a complete working reference; every section is optional. Key fields: `worktrees`
 (name → path), `memory` (shell commands, or `null` to disable), `paths` / `safety`,
 `usageWeb { port, hostname }`. Env overrides: `FAPONY_CONFIG`, `FAPONY_STATE_DIR` (state DB;
@@ -302,7 +302,7 @@ default `~/.config/fapony/`), `FAPONY_NO_REREAD_HINT=1`.
 **Supported:** MCP server (3 mem tools, any MCP client) · cross-client usage on one yardstick ·
 per-project mem log + convention debt · per-client hooks ([matrix above](#what-runs-where)) ·
 vendor-neutral skills (anything that reads stdin) · opt-in telemetry, off by default
-([TELEMETRY.md](https://github.com/kire21b/fapony/blob/main/TELEMETRY.md) lists exactly what
+([TELEMETRY.md](https://github.com/inonix-dev/fapony/blob/main/TELEMETRY.md) lists exactly what
 leaves the machine) · Bun-only; run state in SQLite via `bun:sqlite` (WAL mode).
 
 **Not supported (yet):** PreToolUse hints on Cursor, ZCode, Codex or Antigravity — Cursor has no
