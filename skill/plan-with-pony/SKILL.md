@@ -1,6 +1,6 @@
 ---
 name: plan-with-pony
-description: Draft a plan + spec from "what's in your head" — one question, then a draft you correct. Vendor-neutral — works with Claude Code, OpenCode, Codex, ZCode. Seeds the factual sections from the code and the fapony ledger when the CLI is wired up. Trigger on /plan-with-pony and when the user asks to plan or brainstorm a feature.
+description: Draft a plan + spec from "what's in your head" — one question, then a draft you correct. Vendor-neutral — works with Claude Code, OpenCode, Codex, ZCode. Seeds the factual sections from the code and fael memory when the CLI is wired up. Trigger on /plan-with-pony and when the user asks to plan or brainstorm a feature.
 ---
 
 # plan-with-pony — start from what's in your head
@@ -88,7 +88,7 @@ fapony plan-seed <feature> --spec --scope <path>
 One command, no MCP round trip. It writes `<planDir>/PLAN-<feature>.md` +
 `<specDir>/SPEC-<feature>.md` — the frontmatter, the 8 empty sections, a `## 8. References` list
 of shipped plans that already touched this scope, and a `## Context (fapony)` block under the
-TL;DR (recent mem decisions plus what is already in scope — one line per scope file with its
+TL;DR (recent fael decisions plus what is already in scope — one line per scope file with its
 exports; needs `--scope` to list anything). No ledger-ranking line: the ledger is frozen and
 cross-model ranking claims are off the table, so the seed does not point at them. SPEC chunks carry
 verbatim signatures, hard-capped (PLAN ≤ ~60 / SPEC ≤ 200 lines), and capped lines say what was
@@ -149,7 +149,7 @@ normal — writing to the default there scatters plans into a directory nobody r
 by hand, this check is yours.)
 
 **Editing a plan someone is executing right now is a different job from drafting one.** Ask the
-dev, or run `fapony mem kickoff` — it reads the same plan files and names the first unchecked
+dev, or run `fapony plan` — it reads the same plan files and names each plan's first unchecked
 chunk, so a plan already in flight is the one you are about to edit under someone. When that is the case:
 
 - **Anything you add is an instruction, not a note.** A measured fact parked under "don't do"
@@ -189,7 +189,7 @@ only place that ordering stays true.
 
 **The TL;DR is 15 lines, hard cap, and is the only part that changes while the work is in flight**
 (tick a box, stamp a short sha). Everything below it is the agreement. A TL;DR allowed to grow
-becomes a second copy of the plan, and then neither copy can be trusted. `fapony mem kickoff` reads the
+becomes a second copy of the plan, and then neither copy can be trusted. `fapony plan` reads the
 checkboxes in the **first `##` section only**, so section 6 stays detail rather than status.
 
 Section 6 — every step must be verifiable. Section 8 — must link back to anything it came from. **A step that needs something the system does not store yet** ("the month the accountant has seen",

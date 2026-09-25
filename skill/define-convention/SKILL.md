@@ -8,8 +8,8 @@ description: Turn "files that haven't migrated yet" into a tracked convention �
 One convention = the pattern to use (`ok`) + the pattern meaning not-yet-migrated
 (`stale`) + scope (`where`) + an optional file condition (`guard`). The output is
 one row in `<worktree>/.fapony/conventions.json` (`{"conventions": [...]}`), in the
-same `.fapony/` dir as the mem log — run `fapony mem where`, go up one level, that
-is where the file lives (app-scoped in a monorepo). No file there yet = create it;
+nearest `.fapony/` at or above the code — the same dir `fapony plan` lists plans
+from (app-scoped in a monorepo). No file there yet = create it;
 a file with rows = append only, never rewrite other rows.
 
 ## Phase 1 — One question, then the checker question
@@ -68,7 +68,7 @@ Read it literally — every outcome names its fix:
   Phase 3.
 - `0 convention(s)` after `--id` → that id does not exist (misspelling — a dropped
   row still prints its `⚠`). Only `no conventions.json in <dir>` means you wrote
-  to the wrong `.fapony/` (re-check `mem where`).
+  to the wrong `.fapony/` (the nearest one above the code — `fapony plan` names it).
 
 ## Later
 
