@@ -12,6 +12,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   writeFileSync,
 } from "node:fs";
@@ -742,6 +743,18 @@ export const cmdPlanCheck = (a: string[]) => {
     let m: RegExpExecArray | null;
     while ((m = linkRe.exec(src)) !== null) {
       const target = m[1];
+      if (target?.startsWith("file://")) {
+        // works on the machine that wrote it, nowhere else — name the
+        // relative path instead of calling an existing file "broken"
+        const [abs] = decodeURI(target.slice("file://".length)).split("#");
+        const at = `${f.replace(`${dir}/`, "")}:${src.slice(0, m.index).split("\n").length}`;
+        issues.push(
+          abs && existsSync(abs)
+            ? `${at} — absolute file:// link → ${target} (works on this machine only)\n   fix: use ${relative(realpathSync(dirname(f)), realpathSync(abs))}`
+            : `${at} — broken link → ${target}\n   fix: correct the path or create the file it points at`,
+        );
+        continue;
+      }
       if (!target || /^(https?:|mailto:|\/)/.test(target)) continue;
       const [pathPart] = target.split("#");
       if (!pathPart) continue;

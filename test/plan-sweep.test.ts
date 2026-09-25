@@ -277,3 +277,32 @@ test("testPlanSweepSupersededUntrackedPlan", () => {
     "  ✓ plan-sweep --apply archives a superseded plan in an untracked .fapony/",
   );
 });
+
+// An editor/agent that pastes file:///abs/path links writes a link that works
+// on one machine only. plan check used to call it "broken … no such file in
+// plan/" even when the file existed; it now names the relative path to use.
+test("testPlanCheckFileUrlLinkSuggestsRelativePath", () => {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src/x.ts"), "export {};\n");
+    writeFileSync(
+      join(dir, ".fapony/plan/PLAN-a.md"),
+      `# A\n\n- [x](file://${dir}/src/x.ts)\n- [gone](file://${dir}/src/gone.ts)\n`,
+    );
+    const p = Bun.spawnSync(["bun", FAPONY, "plan", "check"], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const err = p.stderr.toString();
+    assert.equal(p.exitCode, 1, err);
+    assert.match(
+      err,
+      /PLAN-a\.md:3 — absolute file:\/\/ link.*\n.*use \.\.\/\.\.\/src\/x\.ts/,
+    );
+    assert.match(err, /PLAN-a\.md:4 — broken link → file:\/\/.*gone\.ts/);
+    assert.doesNotMatch(err, /no such file in plan\//);
+  });
+  console.log("  ✓ plan check turns a file:// link into its relative path");
+});
