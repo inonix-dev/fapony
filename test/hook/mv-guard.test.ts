@@ -20,7 +20,7 @@ test("testMvGuardDeniesPlanIntoDone", () => {
   );
   assert.match(
     reason ?? "",
-    /plan-sweep --apply \.fapony\/plan\/PLAN-alerts\.md/,
+    /plan sweep --apply \.fapony\/plan\/PLAN-alerts\.md/,
   );
   console.log("  ✓ mvGuardDecision denies raw git mv of a plan into done/");
 });
@@ -67,7 +67,7 @@ test("testMvGuardClaudeOutputShape", () => {
     assert.equal(out.hookSpecificOutput.permissionDecision, "deny");
     assert.match(
       out.hookSpecificOutput.permissionDecisionReason ?? "",
-      /plan-sweep --apply/,
+      /plan sweep --apply/,
     );
   });
   console.log("  ✓ mv guard claude output = permissionDecision deny");

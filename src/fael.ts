@@ -86,10 +86,16 @@ export function faelLinesToMemRows(
   return { rows: kept, skipped };
 }
 
-/** Every row (open + closed) fael sees from `worktree`. Never throws. */
-export function readFaelLog(worktree: string, sinceIso?: string): FaelRead {
+/** Every row fael sees from `worktree` — or, with `openOnly`, only the rows
+ *  fael itself counts as open (not closed, not superseded). Never throws. */
+export function readFaelLog(
+  worktree: string,
+  sinceIso?: string,
+  openOnly = false,
+): FaelRead {
+  const argv = ["fael", "find", "--json", ...(openOnly ? [] : ["--all"])];
   try {
-    const p = Bun.spawnSync(["fael", "find", "--json", "--all"], {
+    const p = Bun.spawnSync(argv, {
       cwd: worktree,
       env: process.env, // resolve `fael` on the live PATH, not the startup one
       stdout: "pipe",

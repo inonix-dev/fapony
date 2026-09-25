@@ -350,10 +350,7 @@ test("testPlanSeedStepCloseCarriesLiteralPlanPath", () => {
       assert.ok(!s6.includes("<path"), "no path placeholder left in §6");
       // The close sequence is spelled out as commands, not implied.
       assert.ok(s6.includes("git commit"), "§6 names the commit step");
-      assert.ok(
-        s6.includes("fapony mem add note"),
-        "§6 names the handoff-note step",
-      );
+      assert.ok(s6.includes("fael add note"), "§6 names the handoff-note step");
     });
   });
   console.log("  ✓ plan-seed: §6 close block carries the literal plan path");

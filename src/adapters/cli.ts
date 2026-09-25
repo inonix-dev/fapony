@@ -15,6 +15,7 @@ import { cmdInstall } from "../install.js";
 import { cmdLintBaseline } from "../lint-baseline.js";
 import { cmdMem, MEM_SUBCOMMANDS } from "../mem/index.js";
 import { initStore } from "../mem/store.js";
+import { cmdPlan } from "../plan/index.js";
 import { cmdPriceScan } from "../price/index.js";
 import { cmdReport, cmdReportWeb } from "../report/index.js";
 import { cmdPlanSeed } from "../seed/plan-seed.js";
@@ -53,6 +54,8 @@ export async function cliMain(): Promise<void> {
     await cmdTelemetry(a);
   } else if (cmd === "init-mem") {
     cmdInitMem(a);
+  } else if (cmd === "plan") {
+    cmdPlan(a);
   } else if (cmd === "mem") {
     const memDirIdx = a.indexOf("--mem-dir");
     let overrideMemDir: string | undefined;

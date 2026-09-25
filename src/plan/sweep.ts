@@ -1,4 +1,5 @@
-// commands/plan.ts — plan-sweep: find PLAN-*.md whose header says shipped but not yet moved into done/
+// src/plan/sweep.ts — `fapony plan sweep` + `fapony plan check`.
+// sweep: find PLAN-*.md whose header says shipped but not yet moved into done/
 // rationale: moving by hand = chasing relative links yourself (in the file + files that link to it) → the step gets skipped often
 // no arg = report only (safe, shows every kickoff/stale run)
 // <file.md> = check a single file, is it ready to move
@@ -15,18 +16,21 @@ import {
 } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
-import { openRows } from "../selectors.js";
-import {
-  doneDir,
-  memCmd,
-  nextId,
-  planBase,
-  planDir,
-  put,
-  rel,
-  root,
-  rows,
-} from "../store.js";
+import type { MemRow } from "../core/mem-log.js";
+import { readFaelLog } from "../fael.js";
+import { doneDir, planBase, planDir, rel, root } from "./store.js";
+
+// Open fael rows about a plan — matched by basename on files[] or spec, so a
+// row still counts after the plan moves plan/ → done/. One fael call per run.
+let openCache: { root: string; rows: MemRow[] } | null = null;
+export const openRowsFor = (planPath: string): MemRow[] => {
+  if (openCache?.root !== root)
+    openCache = { root, rows: readFaelLog(root, undefined, true).rows };
+  const name = basename(planPath);
+  return openCache.rows.filter((r) =>
+    [...(r.files ?? []), r.spec ?? ""].some((f) => basename(f) === name),
+  );
+};
 
 const SHIPPED = /^>\s*✅/m;
 const FRONT = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -284,7 +288,7 @@ export const hasShippedHeader = (file: string): boolean => {
   return !HELD.test(FRONT.exec(head)?.[1] ?? "");
 };
 
-export const planSweepCmd = `${memCmd} plan-sweep`;
+export const planSweepCmd = "fapony plan sweep";
 
 const mdFiles = (dir: string): string[] =>
   existsSync(dir)
@@ -411,16 +415,15 @@ export const cmdPlanSweep = (a: string[]) => {
   const apply = a.includes("--apply");
 
   if (!target) {
-    const all = rows();
     if (candidates.length) {
       console.log(
         `# plan-sweep — ${candidates.length} file(s) marked shipped but not archived\n`,
       );
       for (const name of candidates) {
         const spec = `${rel(dir)}/${name}`;
-        const openN = openRows(all).filter((r) => r.spec === spec).length;
+        const openN = openRowsFor(spec).length;
         const warn = openN
-          ? `  ⚠ ${openN} open row(s) (next/bug/hold/decision/note) — check before moving`
+          ? `  ⚠ ${openN} open row(s) (fael) — check before moving`
           : "";
         console.log(`- ${rel(dir)}/${name}${warn}`);
       }
@@ -443,7 +446,7 @@ export const cmdPlanSweep = (a: string[]) => {
       for (const f of blocked) {
         const { checked, unchecked } = countFirstSection(f);
         const spec = rel(f);
-        const openN = openRows(all).filter((r) => r.spec === spec).length;
+        const openN = openRowsFor(spec).length;
         const by = parsePlanFrontmatter(f).blockedByRaw ?? "?";
         console.log(
           `- ${spec} — ${checked}/${checked + unchecked} chunks · blocked_by: ${by}${openN ? ` · ⚠ ${openN} open row(s)` : ""}`,
@@ -493,10 +496,10 @@ export const cmdPlanSweep = (a: string[]) => {
     process.exit(1);
   }
   const openSpec = rel(src);
-  const openN = openRows(rows()).filter((r) => r.spec === openSpec);
+  const openN = openRowsFor(openSpec);
   if (openN.length && !process.env.MEM_FORCE) {
     console.error(
-      `${name}: still has ${openN.length} open row(s) (next/bug/hold/decision/note) — close them or move the spec first (MEM_FORCE=1 to override):\n` +
+      `${name}: still has ${openN.length} open row(s) (fael) — close them or move the spec first (MEM_FORCE=1 to override):\n` +
         openN.map((r) => `  [${r.id}] ${r.kind} ${r.text}`).join("\n"),
     );
     process.exit(1);
@@ -542,18 +545,6 @@ export const cmdPlanSweep = (a: string[]) => {
   console.log(
     `inbound links rewritten: ${inbound} in ${inboundFiles} file(s) (scanned ${rel(planBase)}/**)`,
   );
-
-  // log decision — record ship event (reuse existing kind, no new schema)
-  const doneSpec = `${rel(dst)}`;
-  put({
-    id: nextId(rows()),
-    kind: "decision",
-    text: `${name} shipped → ${rel(dst)}`,
-    spec: doneSpec,
-  });
-  // ponytail: this decision *is* the move itself, nothing to write back into the spec — do not mark synced
-  // immediately or staleReport shows "decision never made it into the spec" on every ship (seen in kickoff 2026-09-02)
-  put({ kind: "synced", spec: doneSpec });
 
   // the ship may unblock waiting plans — the dep graph lives in frontmatter,
   // so say which active plans name this file as their blocker (or were named
@@ -811,14 +802,13 @@ export const cmdPlanCheck = (a: string[]) => {
       (f) => parsePlanFrontmatter(f).status === "blocked",
     );
     if (blocked.length) {
-      const all = rows();
       console.log(
         `\nblocked plans (${blocked.length}) — waiting, not candidates:`,
       );
       for (const f of blocked) {
         const { checked, unchecked } = countFirstSection(f);
         const spec = rel(f);
-        const openN = openRows(all).filter((r) => r.spec === spec).length;
+        const openN = openRowsFor(spec).length;
         const by = parsePlanFrontmatter(f).blockedByRaw ?? "?";
         console.log(
           `- ${spec} — ${checked}/${checked + unchecked} chunks · blocked_by: ${by}${openN ? ` · ⚠ ${openN} open row(s)` : ""}`,

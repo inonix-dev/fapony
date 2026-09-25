@@ -6,7 +6,6 @@
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { levenshtein } from "../commands.js";
-import { cmdPlanCheck, cmdPlanSweep } from "./commands/plan.js";
 import { cmdDone, cmdFind, cmdKickoff, cmdStale } from "./commands/read.js";
 import { cmdRotate } from "./commands/rotate.js";
 import { cmdWhere } from "./commands/where.js";
@@ -31,8 +30,6 @@ subcommands:
                           substring-search every row (archives included)
   done | stale              views
   claim <id> | release <id> | synced   bookkeeping
-  plan-sweep [<plan.md> [--apply]]     move shipped plans + fix links
-  plan-check <plan.md>        validate a plan's frontmatter/sections
   rotate                      archive the live log when it grows
   hook                        Stop-hook payload reader (installed, not run by hand)
 
@@ -82,13 +79,6 @@ example: fapony mem release mt14`,
   synced: `usage: fapony mem synced [<spec.md>]
 mark a spec as carried into the log
 example: fapony mem synced .fapony/spec/SPEC-x.md`,
-  "plan-sweep": `usage: fapony mem plan-sweep [<plan.md>] [--apply]
-find shipped plans (or move one) and fix the links that point at it
-  --apply   perform the git mv + link fixes (default = dry run)
-example: fapony mem plan-sweep .fapony/plan/PLAN-x.md --apply`,
-  "plan-check": `usage: fapony mem plan-check <plan.md>
-validate a plan's frontmatter and required sections
-example: fapony mem plan-check .fapony/plan/PLAN-x.md`,
   rotate: `usage: fapony mem rotate
 archive the live log to log.YYYY-MM-DD.jsonl once it crosses the threshold
 example: fapony mem rotate`,
@@ -169,10 +159,6 @@ export async function cmdMem(a: string[], memDir?: string): Promise<void> {
     cmdKickoff(rest);
   } else if (cmd === "where") {
     cmdWhere(rest, memDir);
-  } else if (cmd === "plan-sweep") {
-    cmdPlanSweep(rest);
-  } else if (cmd === "plan-check") {
-    cmdPlanCheck(rest);
   } else if (cmd === "rotate") {
     cmdRotate(rest);
   } else if (cmd === undefined) {

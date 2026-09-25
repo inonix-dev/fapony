@@ -5,6 +5,11 @@ import { basename, join } from "node:path";
 import { collectSourceFiles } from "../../analyze/index.js";
 import { parseSince } from "../../core/since.js";
 import { baselinePath, readEvidenceLintCmd } from "../../lint-baseline.js";
+import {
+  checkTickedLine,
+  planSweepCmd,
+  shippedNotMoved,
+} from "../../plan/sweep.js";
 import { CLI_FIND_EXCLUDE, engineFind } from "../engine.js";
 import { loadKeyRegistry } from "../key-registry.js";
 import { doneLines, fmtClose, fmtRow } from "../render.js";
@@ -17,7 +22,6 @@ import {
 } from "../selectors.js";
 import type { CloseRow, LogRow, WorkRow } from "../store.js";
 import { allRows, app, LOG, memCmd, planDir, root, rows } from "../store.js";
-import { checkTickedLine, planSweepCmd, shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
 
 /**

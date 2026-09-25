@@ -3,7 +3,7 @@
 // Extracted from src/memory.ts (PLAN-lib-layer chunk 2b). Shell adapter
 // helpers (closeMemory, kickoffMemory, claimMemory) stay in memory.ts.
 
-import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import {
   CONFIG_FILENAME,
@@ -11,6 +11,7 @@ import {
   FAPONY_DIR,
   loadConfig,
 } from "./config.js";
+import { repoRootOf } from "./fapony-dir.js";
 
 export interface MemRow {
   ts: string;
@@ -73,53 +74,6 @@ function hasMemLogs(dir: string): boolean {
     );
   } catch {
     return false;
-  }
-}
-
-/** Physical path (symlinks resolved) so start and repo root compare like with
- *  like; falls back to a lexical resolve when the path does not exist yet. */
-function physical(p: string): string {
-  try {
-    return realpathSync(p);
-  } catch {
-    return resolve(p);
-  }
-}
-
-/** `git rev-parse --show-toplevel` from a directory, or null outside a repo. */
-function gitRootOf(fromDir: string): string | null {
-  try {
-    const { execSync } =
-      require("node:child_process") as typeof import("node:child_process");
-    const root = execSync("git rev-parse --show-toplevel", {
-      cwd: fromDir,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    return root || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The lexical ancestor of `fromDir` that is the git repo root, or null outside
- * a repo. `git rev-parse` returns a physical path (it resolves /var → /private/
- * var on macOS), so the walk compares `physical(dir)` against it and returns the
- * path in the caller's own lexical form — the returned dir must match what the
- * caller passed in, not a canonicalized stranger.
- */
-function repoRootOf(fromDir: string): string | null {
-  const start = resolve(fromDir);
-  const gitRoot = gitRootOf(start);
-  if (!gitRoot) return null;
-  const physicalRoot = physical(gitRoot);
-  let dir = start;
-  while (true) {
-    if (physical(dir) === physicalRoot) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
   }
 }
 

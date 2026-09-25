@@ -19,12 +19,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { initPlanStore } from "../src/plan/store.js";
 import {
   cmdPlanSweep,
   rewriteMarkdownLinks,
   rewriteMovedFileLinks,
-} from "../src/mem/commands/plan.js";
-import { initStore } from "../src/mem/store.js";
+} from "../src/plan/sweep.js";
 import { withTempRepo } from "./helpers.js";
 
 const FAPONY = join(import.meta.dir, "..", "fapony.ts");
@@ -145,7 +145,7 @@ test("testPlanSweepApplyEndToEnd", () => {
     execSync('git commit -m "plans"', { cwd: dir, stdio: "ignore" });
 
     const proc = Bun.spawnSync(
-      ["bun", FAPONY, "mem", "plan-sweep", "PLAN-a.md", "--apply"],
+      ["bun", FAPONY, "plan", "sweep", "PLAN-a.md", "--apply"],
       { cwd: dir, stdout: "pipe", stderr: "pipe" },
     );
     const out = proc.stdout.toString() + proc.stderr.toString();
@@ -197,7 +197,7 @@ test("testPlanSweepAcceptsRepoRelativePath", () => {
       `# A\n> ✅ **shipped 2026-09-22** (abc1234)\n`,
     );
     const proc = Bun.spawnSync(
-      ["bun", FAPONY, "mem", "plan-sweep", ".fapony/plan/PLAN-a.md", "--apply"],
+      ["bun", FAPONY, "plan", "sweep", ".fapony/plan/PLAN-a.md", "--apply"],
       { cwd: dir, stdout: "pipe", stderr: "pipe" },
     );
     const out = proc.stdout.toString() + proc.stderr.toString();
@@ -207,8 +207,7 @@ test("testPlanSweepAcceptsRepoRelativePath", () => {
   console.log("  ✓ plan-sweep --apply accepts the repo-relative path form");
 });
 
-// The in-process entry (MCP mem path calls initStore + cmdPlanSweep the same
-// way) — guards the target-resolution fallback without spawning bun.
+// The in-process entry — guards the target-resolution fallback without spawning bun.
 test("testCmdPlanSweepInProcess", () => {
   withTempRepo((dir) => {
     mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
@@ -220,7 +219,7 @@ test("testCmdPlanSweepInProcess", () => {
     const prev = process.cwd();
     process.chdir(dir);
     try {
-      initStore(dir);
+      initPlanStore(dir);
       cmdPlanSweep(["PLAN-a.md", "--apply"]);
     } finally {
       process.chdir(prev);

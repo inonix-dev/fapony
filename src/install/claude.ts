@@ -176,7 +176,7 @@ function installEditHintHook(dryRun: boolean, deps: InstallDeps): void {
 
 /**
  * PreToolUse hook on Bash: denies a raw `git mv` of a plan file into a done/
- * directory, pointing at `fapony mem plan-sweep --apply` instead — that
+ * directory, pointing at `fapony plan sweep --apply` instead — that
  * command does the link rewrite a plain `git mv` skips. The one fapony hook
  * that blocks besides Stop; matcher "Bash" keeps the spawn off every other
  * tool call.

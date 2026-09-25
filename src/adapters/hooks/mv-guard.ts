@@ -1,5 +1,5 @@
 // src/adapters/hooks/mv-guard.ts — PreToolUse Bash guard: deny a raw `git mv`
-// of a plan file into a done/ directory, point at `fapony mem plan-sweep
+// of a plan file into a done/ directory, point at `fapony plan sweep
 // --apply` instead.
 //
 // Manual `git mv` skips the link rewrite plan-sweep does — that produced two
@@ -23,7 +23,7 @@ export function mvGuardDecision(command: unknown): string | null {
   const [, src] = m;
   return (
     `fapony: raw \`git mv\` of a plan into done/ skips the link rewrite — ` +
-    `run \`fapony mem plan-sweep --apply ${src}\` instead, it moves the file ` +
+    `run \`fapony plan sweep --apply ${src}\` instead, it moves the file ` +
     `and fixes inbound/outbound links together.`
   );
 }

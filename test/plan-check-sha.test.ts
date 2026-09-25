@@ -7,9 +7,9 @@ import assert from "node:assert";
 import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { checkTickedLine, extractShas } from "../src/mem/commands/plan.js";
-import { cmdKickoff } from "../src/mem/commands/read.js";
-import { initStore } from "../src/mem/store.js";
+import { cmdPlanNext } from "../src/plan/next.js";
+import { initPlanStore } from "../src/plan/store.js";
+import { checkTickedLine, extractShas } from "../src/plan/sweep.js";
 import { captureLogs, withTempRepo } from "./helpers.js";
 
 const FAPONY = join(import.meta.dir, "..", "fapony.ts");
@@ -110,7 +110,7 @@ test("testPlanCheckShaEndToEnd", () => {
       join(dir, ".fapony/done/PLAN-old.md"),
       `# OLD\n\n## TL;DR\n- [x] chunk 1 — old but good (${good})\n`,
     );
-    const proc = Bun.spawnSync(["bun", FAPONY, "mem", "plan-check"], {
+    const proc = Bun.spawnSync(["bun", FAPONY, "plan", "check"], {
       cwd: dir,
       stdout: "pipe",
       stderr: "pipe",
@@ -144,7 +144,7 @@ test("testPlanCheckShaClean", () => {
       join(dir, ".fapony/plan/PLAN-t.md"),
       `# T\n\n## TL;DR\n- [x] chunk 1 — good (${good})\n- [ ] chunk 2 — next\n`,
     );
-    const proc = Bun.spawnSync(["bun", FAPONY, "mem", "plan-check"], {
+    const proc = Bun.spawnSync(["bun", FAPONY, "plan", "check"], {
       cwd: dir,
       stdout: "pipe",
       stderr: "pipe",
@@ -165,8 +165,8 @@ function kickoffOutput(dir: string, planBody: string): string {
   const prev = process.cwd();
   process.chdir(dir);
   try {
-    initStore(dir);
-    return captureLogs(() => cmdKickoff([plan]));
+    initPlanStore(dir);
+    return captureLogs(() => cmdPlanNext([plan]));
   } finally {
     process.chdir(prev);
   }
@@ -209,7 +209,7 @@ test("testKickoffClosureHint", () => {
 
 // --- Chunk 4: plan-check drift warns (W1 + W2) ---
 
-import { collectDriftWarns } from "../src/mem/commands/plan.js";
+import { collectDriftWarns } from "../src/plan/sweep.js";
 
 test("testDriftWarnW1NotStartedWithTicks", () => {
   withTempRepo((dir) => {
@@ -317,7 +317,7 @@ test("testDriftWarnE2E", () => {
       join(dir, ".fapony/plan/PLAN-clean.md"),
       `---\nkind: unit\n---\n\n# Clean\n\n> **Status:** 🚧 in-progress\n\n## TL;DR\n- [x] chunk 1 — done\n- [ ] chunk 2 — next\n`,
     );
-    const proc = Bun.spawnSync(["bun", FAPONY, "mem", "plan-check"], {
+    const proc = Bun.spawnSync(["bun", FAPONY, "plan", "check"], {
       cwd: dir,
       stdout: "pipe",
       stderr: "pipe",

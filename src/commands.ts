@@ -37,6 +37,11 @@ export const COMMANDS: CommandInfo[] = [
     summary: "project pain memory: decisions, bugs, notes",
   },
   {
+    name: "plan",
+    group: "core",
+    summary: "where plans stand: next chunk, sweep shipped, check links/shas",
+  },
+  {
     name: "debt",
     group: "core",
     summary: "which files haven't migrated to a declared convention",
