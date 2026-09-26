@@ -422,9 +422,9 @@ export const cmdPlanSweep = (a: string[]) => {
       );
       for (const name of candidates) {
         const spec = `${rel(dir)}/${name}`;
-        const openN = openRowsFor(spec).length;
+        const openN = openRowsFor(spec).filter((r) => r.kind === "bug").length;
         const warn = openN
-          ? `  ⚠ ${openN} open row(s) (fael) — check before moving`
+          ? `  ⚠ ${openN} open issue(s) (fael) — close before moving`
           : "";
         console.log(`- ${rel(dir)}/${name}${warn}`);
       }
@@ -500,11 +500,13 @@ export const cmdPlanSweep = (a: string[]) => {
     );
     process.exit(1);
   }
-  const openSpec = rel(src);
-  const openN = openRowsFor(openSpec);
+  // Notes and decisions are the plan's history and travel with it (basename
+  // match survives the move); only an open issue (MemRow kind "bug") is
+  // unfinished work.
+  const openN = openRowsFor(rel(src)).filter((r) => r.kind === "bug");
   if (openN.length && !process.env.MEM_FORCE) {
     console.error(
-      `${name}: still has ${openN.length} open row(s) (fael) — close them or move the spec first (MEM_FORCE=1 to override):\n` +
+      `${name}: still has ${openN.length} open issue(s) (fael) — close them first (MEM_FORCE=1 to override):\n` +
         openN.map((r) => `  [${r.id}] ${r.kind} ${r.text}`).join("\n"),
     );
     process.exit(1);

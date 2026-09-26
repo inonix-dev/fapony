@@ -56,7 +56,7 @@ You are about to move a PLAN that has been shipped to the archive.
    ```bash
    fapony plan sweep <PLAN-foo.md> --apply
    ```
-   It refuses if the file lacks a shipped header or fael still has open rows about it.
+   It refuses if the file lacks a shipped header or fael still has an open issue about it (notes and decisions travel with the plan).
    If git refuses ("not under version control" — `.fapony/` is gitignored in this repo), plain
    `mv` instead; there's nothing to commit for an untracked path, so skip step 4 in that case.
    The filename gets no date prefix — the ship date is already in the header (step 1).
@@ -108,5 +108,5 @@ A ship worth a note looks like this instead:
 
 - No git repo / no commits (can't derive a shipped hash) → tell user: "Add header > ✅ **shipped** (<hash>) first"
 - Stamped the header yourself → always say which hash you used
-- plan sweep refuses (open fael rows) → `fael close` them or use `MEM_FORCE=1`
+- plan sweep refuses (open fael issue) → fix and `fael close` it, or `MEM_FORCE=1`
 - Too many inbound links → plan sweep reports them; too many to fix → report the list

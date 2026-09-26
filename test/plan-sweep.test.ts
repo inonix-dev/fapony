@@ -25,7 +25,7 @@ import {
   rewriteMarkdownLinks,
   rewriteMovedFileLinks,
 } from "../src/plan/sweep.js";
-import { withTempRepo } from "./helpers.js";
+import { withFakeFael, withTempRepo } from "./helpers.js";
 
 const FAPONY = join(import.meta.dir, "..", "fapony.ts");
 
@@ -275,6 +275,68 @@ test("testPlanSweepSupersededUntrackedPlan", () => {
   });
   console.log(
     "  ✓ plan-sweep --apply archives a superseded plan in an untracked .fapony/",
+  );
+});
+
+// Handoff notes and decisions about a plan are its history — they travel with
+// it (basename match survives the move). Only an open issue is unfinished work.
+// Closing PLAN-convention-debt took 4 hand-closed notes + MEM_FORCE (2026-09-26).
+test("testPlanSweepBlocksOnOpenIssuesOnly", () => {
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
+    mkdirSync(join(dir, ".fapony", "done"), { recursive: true });
+    const plan = (n: string) =>
+      writeFileSync(
+        join(dir, `.fapony/plan/${n}`),
+        `# ${n}\n> ✅ **shipped 2026-09-26** (abc1234)\n`,
+      );
+    plan("PLAN-a.md");
+    plan("PLAN-b.md");
+    const files = (n: string) => [`.fapony/plan/${n}`];
+    const sweep = (n: string) =>
+      Bun.spawnSync(["bun", FAPONY, "plan", "sweep", n, "--apply"], {
+        cwd: dir,
+        env: process.env, // the fake fael lives on the live PATH
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    withFakeFael((setRows) => {
+      setRows([
+        {
+          id: "n1",
+          ts: "2026-09-26T00:00:00Z",
+          kind: "note",
+          text: "handoff",
+          files: files("PLAN-a.md"),
+        },
+        {
+          id: "d1",
+          ts: "2026-09-26T00:00:00Z",
+          kind: "decision",
+          text: "why",
+          files: files("PLAN-a.md"),
+        },
+        {
+          id: "i1",
+          ts: "2026-09-26T00:00:00Z",
+          kind: "issue",
+          text: "still broken",
+          files: files("PLAN-b.md"),
+        },
+      ]);
+      const a = sweep("PLAN-a.md");
+      assert.equal(
+        a.exitCode,
+        0,
+        `notes/decisions must not block:\n${a.stderr}`,
+      );
+      const b = sweep("PLAN-b.md");
+      assert.equal(b.exitCode, 1, "an open issue blocks");
+      assert.match(b.stderr.toString(), /open issue.*\n.*\[i1\]/);
+    });
+  });
+  console.log(
+    "  ✓ plan-sweep --apply blocks on open issues, not notes/decisions",
   );
 });
 
