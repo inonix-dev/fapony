@@ -6,64 +6,19 @@
 
 [![npm](https://img.shields.io/npm/v/fapony.svg)](https://www.npmjs.com/package/fapony) [![GitHub](https://img.shields.io/github/stars/inonix-dev/fapony.svg)](https://github.com/inonix-dev/fapony)
 
-**See what your coding agents actually cost.** fapony reads the session logs Claude Code, Codex,
-OpenCode and ZCode already write, and puts them all on one yardstick — tokens, cost and time per
-model, per client, per workflow. Nothing to instrument, no per-project setup: it runs on the
-history already sitting on your disk.
+**The dev workflow for writing code with agents** — plans cut into one-session chunks, lookups
+that cost a fraction of reading the files, convention debt you can count, and what it all cost in
+tokens. It is one developer's daily flow made into commands; adopting fapony means adopting that
+flow. Memory — decisions, bugs, notes — is [fael](https://github.com/inonix-dev/fael)'s, never
+fapony's.
 
-<p align="center">
-  <img src="images/summary.webp" width="800" alt="fapony usage-web summary cards">
-</p>
-
-```bash
-npm install -g fapony       # needs Bun — https://bun.sh
-fapony usage-scan           # read the session logs already on your disk
-fapony price-scan           # fetch the price table (needed once, for cost)
-fapony usage-web            # every session you already have, all clients, one page
-```
-
-**Cost is the part your client probably isn't logging.** Of the four, only OpenCode writes a real
-dollar figure into its session log — the others record `0`. fapony prices those sessions at
-published list rates and labels the number `imputed`; a model it can't find a rate for stays
-`unpriced` — nothing is quietly counted as free.
-
-<details>
-<summary>full usage-web dashboard preview</summary>
-
-<p align="center">
-  <img src="images/sample.webp" width="800" alt="fapony usage-web dashboard">
-</p>
-
-</details>
-
-Raw facts from logs are hard to argue with — a vendor can dispute a verdict as unfair; they can't
-dispute their own token count. That is the whole measurement layer: tokens and cost, nothing
-self-graded.
-
-## Past day one
-
-Two more layers, both optional, both compounding:
-
-**Plans, run one chunk at a time.** A long plan in one unbroken session only accumulates context.
-`fapony plan` shows every active plan, its progress and next unchecked chunk; `fapony plan PLAN-x.md`
-opens one chunk with just the facts it needs — the unchecked boxes, whether the last ticked chunk's
-commit really exists, and the notes the previous session left for it — instead of dragging the old
-transcript along.
-
-**Memory lives in [fael](https://github.com/inonix-dev/fael).** Decisions, bugs and notes that the
-next agent must see used to be fapony's mem log; since 2026-09-25 they are fael's — a single binary
-with its own MCP tools and hooks that push the rows about a file when an agent reads it. fapony
-reads fael (plan handoff notes, digest, debt recurrence) and never writes it.
-
-**Convention debt.** `fapony debt` answers the question nothing else does: *we decided this six
-months ago — how far along is the move?* ESLint says this line is wrong; nothing says 11 of 47
-files have migrated. Dead code and duplication it deliberately leaves to knip and friends —
-they already do that better.
+Why chunks: a long plan run in one unbroken session only accumulates context. Every chunk here is
+its own session that opens with just the facts it needs and stops when the chunk lands.
 
 ## The workflow — fapony + fael
 
-Two tools, one loop. **fapony is the workflow** — plans cut into chunks, convention debt, cheap
-lookups, what it all cost. **[fael](https://github.com/inonix-dev/fael) is the memory** — the
+Two tools, one loop, no overlap. **fapony is the workflow** — plans cut into chunks, convention
+debt, cheap lookups, what it all cost. **[fael](https://github.com/inonix-dev/fael) is the memory** — the
 decisions, bugs and notes the next session must see. Each is useful alone; together they close
 the loop: fapony says *what's next*, fael says *what the last session learned*.
 
@@ -105,9 +60,58 @@ flowchart LR
     CC & OC & CX --> M
 ```
 
-Adopting it doesn't change your workflow: install it, point your agent at it, read the reports.
-Both layers above are per-project (`fapony init`) — plans and debt pay off from the first plan you
-cut into chunks and the first convention you declare.
+fapony is opinionated: the loop above is the product, and the commands exist to make each step
+cheap. Plans and debt are per-project (`fapony init`); usage needs no setup at all.
+
+## The pieces
+
+**Plans, one chunk at a time.** `fapony plan` shows every active plan, its progress and next
+unchecked chunk; `fapony plan PLAN-x.md` opens one chunk with just the facts it needs — the
+unchecked boxes, whether the last ticked chunk's commit really exists, and the notes the previous
+session left in fael — instead of dragging the old transcript along.
+
+**Lookups instead of whole-file reads.** `fapony review-seed --files <f>` gives exports with line
+numbers and every importer for roughly a thirtieth of the tokens reading those files costs.
+
+**Convention debt.** `fapony debt` answers the question nothing else does: *we decided this six
+months ago — how far along is the move?* ESLint says this line is wrong; nothing says 11 of 47
+files have migrated. Dead code and duplication it deliberately leaves to knip and friends —
+they already do that better.
+
+## What it cost — usage
+
+fapony reads the session logs Claude Code, Codex, OpenCode and ZCode already write, and puts them
+all on one yardstick — tokens, cost and time per model, per client, per workflow. Nothing to
+instrument: it runs on the history already sitting on your disk.
+
+<p align="center">
+  <img src="images/summary.webp" width="800" alt="fapony usage-web summary cards">
+</p>
+
+```bash
+npm install -g fapony       # needs Bun — https://bun.sh
+fapony usage-scan           # read the session logs already on your disk
+fapony price-scan           # fetch the price table (needed once, for cost)
+fapony usage-web            # every session you already have, all clients, one page
+```
+
+**Cost is the part your client probably isn't logging.** Of the four, only OpenCode writes a real
+dollar figure into its session log — the others record `0`. fapony prices those sessions at
+published list rates and labels the number `imputed`; a model it can't find a rate for stays
+`unpriced` — nothing is quietly counted as free.
+
+<details>
+<summary>full usage-web dashboard preview</summary>
+
+<p align="center">
+  <img src="images/sample.webp" width="800" alt="fapony usage-web dashboard">
+</p>
+
+</details>
+
+Raw facts from logs are hard to argue with — a vendor can dispute a verdict as unfair; they can't
+dispute their own token count. That is the whole measurement layer: tokens and cost, nothing
+self-graded.
 
 ## Quick start
 
@@ -172,14 +176,12 @@ Memory hooks and MCP tools are fael's (`fael install`); fapony has no MCP server
 
 `—` means not wired, not impossible.
 
-## The work side — conveniences, not the contract
+## Lookups, digest and skills
 
-Read-only, deterministic, none of it writes anything. Skip this side entirely and fapony still
-works. **Nothing here is a precondition for anything above.**
+Read-only and deterministic — none of it writes anything.
 
-- `fapony review-seed --files src/thing/` — exports, importers, untested, for roughly a thirtieth
-  of the tokens reading those files costs. Before touching an unfamiliar file, fire this and Read
-  only the line ranges it points at. Directories work too.
+- `fapony review-seed --files src/thing/` — exports, importers, untested. Before touching an
+  unfamiliar file, fire this and Read only the line ranges it points at. Directories work too.
 - `fapony digest` — decisions, open bugs, in-flight plans, cost, on one page, from what's already
   on disk.
 
@@ -241,7 +243,7 @@ fapony debt [--id a,b] [--where <path>]    # which files haven't migrated to a d
 fapony lint-baseline [--cmd ...] [--diff]  # separate "already red" from "I made it red"
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page summary from what's on disk
 
-# usage (day one)
+# usage — what it cost
 fapony usage-scan                          # scan session logs → cache (incremental, progress bar)
 fapony price-scan                          # fetch model price table → prices.json (cache; query never fetches)
 fapony usage-web [port]                    # usage comparison dashboard from cache
