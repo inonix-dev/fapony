@@ -32,40 +32,6 @@ export function withStateDir(fn: (dir: string) => void): void {
   }
 }
 
-/** Isolated FAPONY_STATE_DIR for the edit-track log; restored after. */
-export function withEditState(fn: () => void): void {
-  const state = mkdtempSync(join(tmpdir(), "fapony-eh-"));
-  const orig = process.env.FAPONY_STATE_DIR;
-  process.env.FAPONY_STATE_DIR = state;
-  try {
-    fn();
-  } finally {
-    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
-    else process.env.FAPONY_STATE_DIR = orig;
-    rmSync(state, { recursive: true, force: true });
-  }
-}
-
-export function editFixture(dir: string): {
-  lib: string;
-  top: string;
-  lone: string;
-} {
-  const lib = join(dir, "lib.ts");
-  writeFileSync(lib, "export const value = 1;\n");
-  writeFileSync(
-    join(dir, "mid.ts"),
-    'import { value } from "./lib.js";\nimport { top } from "./top.js";\nconsole.log(value, top);\n',
-  );
-  writeFileSync(
-    join(dir, "top.ts"),
-    'import { value } from "./lib.js";\nexport const top = value + 1;\n',
-  );
-  const lone = join(dir, "lone.ts");
-  writeFileSync(lone, "export const alone = 1;\n");
-  return { lib, top: join(dir, "top.ts"), lone };
-}
-
 export function writeTempMemRow(dir: string, ts: string): void {
   mkdirSync(join(dir, ".fapony/.memory"), { recursive: true });
   const row = JSON.stringify({

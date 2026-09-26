@@ -78,11 +78,6 @@ export const COMMANDS: CommandInfo[] = [
     summary: "write PLAN (+SPEC) with capped sections",
   },
   {
-    name: "hook-edit-hint",
-    group: "hooks",
-    summary: "importer count before editing shape",
-  },
-  {
     name: "hook-mv-guard",
     group: "hooks",
     summary: "deny raw git mv of plan files into done/",
@@ -91,7 +86,7 @@ export const COMMANDS: CommandInfo[] = [
   {
     name: "install",
     group: "setup",
-    summary: "wire skills + edit hint into clients",
+    summary: "wire skills + plan-mv guard into clients",
   },
   { name: "setup", group: "setup", summary: "interactive wizard" },
   { name: "update", group: "setup", summary: "self-update via git pull" },

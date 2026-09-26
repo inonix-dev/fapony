@@ -17,17 +17,6 @@ export {
 } from "../../core/hook-helpers.js";
 export { computeHintImpact } from "./compute-hint-impact.js";
 export {
-  type ContextLineData,
-  readContextData,
-} from "./context-data.js";
-export {
-  cmdHookEditHint,
-  type EditHintInput,
-  type EditTrackRow,
-  editHintFor,
-  editTrackPath,
-} from "./edit-hint.js";
-export {
   GIT_AUTONOMY_COMMIT_POLICY,
   GIT_AUTONOMY_PLUGIN_FILE,
   GIT_AUTONOMY_PLUGIN_NAME,

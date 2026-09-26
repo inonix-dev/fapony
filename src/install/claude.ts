@@ -19,12 +19,14 @@ export function cmdInstallClaude(
   installClaudeHooks(dryRun, deps);
 }
 
-/** Hook subcommands fapony used to register — memory now owned by fael. The
+/** Hook subcommands fapony used to register — memory hooks moved to fael,
+ *  the edit hint was cut 2026-09-26 (never moved an agent to migrate). The
  *  commands are gone, so a leftover entry would error on every tool call. */
 const RETIRED_SUBCOMMANDS = [
   "hook-read-hint",
   "hook-stop",
   "hook-session-start",
+  "hook-edit-hint",
 ];
 
 function isRetired(command: unknown): boolean {
@@ -76,13 +78,12 @@ function removeRetiredClaudeHooks(dryRun: boolean, deps: InstallDeps): void {
     }
   }
   console.error(
-    `  retired hooks: ${dryRun ? "would remove" : "removed"} ${removed} fapony entr${removed === 1 ? "y" : "ies"} (memory moved to fael)`,
+    `  retired hooks: ${dryRun ? "would remove" : "removed"} ${removed} fapony entr${removed === 1 ? "y" : "ies"}`,
   );
 }
 
 /**
- * Shared append-to-settings.json hook installer — one implementation, two
- * callers (edit hint, plan-mv guard).
+ * Append-to-settings.json hook installer (caller: plan-mv guard).
  * Never touch a hook someone else registered, never fail the install over it.
  */
 function ensureClaudeHook(
@@ -150,28 +151,9 @@ function ensureClaudeHook(
   );
 }
 
-/**
- * Wire every hook fapony owns: the Edit importer hint (annotate-only) and the
- * plan-mv guard. Idempotent and dry-run-safe.
- */
+/** Wire every hook fapony owns — the plan-mv guard. Idempotent and dry-run-safe. */
 function installClaudeHooks(dryRun: boolean, deps: InstallDeps): void {
-  installEditHintHook(dryRun, deps);
   installMvGuardHook(dryRun, deps);
-}
-
-/**
- * PreToolUse hook on Edit: annotates an edit with the file's importer count
- * plus the review-seed command that lists them, once per (session, file).
- * Annotate only — no permissionDecision is ever returned, the edit always
- * proceeds. The matcher "Edit" keeps the spawn off every other tool call.
- */
-function installEditHintHook(dryRun: boolean, deps: InstallDeps): void {
-  ensureClaudeHook(dryRun, deps, {
-    event: "PreToolUse",
-    matcher: "Edit",
-    subcommand: "hook-edit-hint",
-    label: "edit hint",
-  });
 }
 
 /**

@@ -6,10 +6,83 @@
 
 [![npm](https://img.shields.io/npm/v/fapony.svg)](https://www.npmjs.com/package/fapony) [![GitHub](https://img.shields.io/github/stars/inonix-dev/fapony.svg)](https://github.com/inonix-dev/fapony)
 
-**See what your coding agents actually cost.** fapony reads the session logs Claude Code, Codex,
-OpenCode and ZCode already write, and puts them all on one yardstick — tokens, cost and time per
-model, per client, per workflow. Nothing to instrument, no per-project setup: it runs on the
-history already sitting on your disk.
+**The dev workflow for writing code with agents** — plans cut into one-session chunks, lookups
+that cost a fraction of reading the files, convention debt you can count, and what it all cost in
+tokens. It is one developer's daily flow made into commands; adopting fapony means adopting that
+flow. Memory — decisions, bugs, notes — is [fael](https://github.com/inonix-dev/fael)'s, never
+fapony's.
+
+Why chunks: a long plan run in one unbroken session only accumulates context. Every chunk here is
+its own session that opens with just the facts it needs and stops when the chunk lands.
+
+## The workflow — fapony + fael
+
+Two tools, one loop, no overlap. **fapony is the workflow** — plans cut into chunks, convention
+debt, cheap lookups, what it all cost. **[fael](https://github.com/inonix-dev/fael) is the memory** — the
+decisions, bugs and notes the next session must see. Each is useful alone; together they close
+the loop: fapony says *what's next*, fael says *what the last session learned*.
+
+| | fapony — workflow | fael — memory |
+|---|---|---|
+| Owns | plans + chunk loop, `debt`, `lint-baseline`, `review-seed` / `analyze`, usage | decisions, issues, notes (`add` / `find` / `close`) |
+| Agent surface | plan-mv guard hook, skills — **no MCP server** | MCP tools + SessionStart / read / Stop hooks |
+| Writes | plan files, only when told (`plan sweep --apply`) | its log under `.fael/` in your repo |
+| Install | `npm i -g fapony && fapony install` | `npm i -g @inonix/fael && fael install` |
+
+One chunk, one session:
+
+```mermaid
+flowchart TD
+    S([new session]) --> K["fael kickoff — SessionStart hook<br/>open decisions + issues"]
+    K --> P["fapony plan PLAN-x.md<br/>unchecked chunks + handoff notes from fael"]
+    P --> L["fapony review-seed --files …<br/>exports + importers instead of whole-file reads"]
+    L --> E["edit<br/>fael read hook: rows about that file"]
+    E --> C["tick the chunk with its sha → commit"]
+    C --> N["fael add note 'what chunk N+1 must know'<br/>--files f1,f2,PLAN-x.md"]
+    N --> X([stop — don't drag the transcript along])
+    X -->|next chunk| S
+    C -->|last chunk| W["fapony plan sweep PLAN-x.md --apply<br/>git mv into .fapony/done/"]
+```
+
+Who reads what:
+
+```mermaid
+flowchart LR
+    CC[Claude Code] --> F[fapony]
+    OC[OpenCode] --> F
+    ZC[ZCode] --> F
+    CX[Codex] --> F
+    AG[Antigravity] --> F
+    F --> U[usage — tokens & cost]
+    F --> P[plans — next chunk, sweep, check]
+    F --> D[debt — how far the move has gone]
+    M[(fael — memory)] -. read-only .-> F
+    CC & OC & CX --> M
+```
+
+fapony is opinionated: the loop above is the product, and the commands exist to make each step
+cheap. Plans and debt are per-project (`fapony init`); usage needs no setup at all.
+
+## The pieces
+
+**Plans, one chunk at a time.** `fapony plan` shows every active plan, its progress and next
+unchecked chunk; `fapony plan PLAN-x.md` opens one chunk with just the facts it needs — the
+unchecked boxes, whether the last ticked chunk's commit really exists, and the notes the previous
+session left in fael — instead of dragging the old transcript along.
+
+**Lookups instead of whole-file reads.** `fapony review-seed --files <f>` gives exports with line
+numbers and every importer for roughly a thirtieth of the tokens reading those files costs.
+
+**Convention debt.** `fapony debt` answers the question nothing else does: *we decided this six
+months ago — how far along is the move?* ESLint says this line is wrong; nothing says 11 of 47
+files have migrated. Dead code and duplication it deliberately leaves to knip and friends —
+they already do that better.
+
+## What it cost — usage
+
+fapony reads the session logs Claude Code, Codex, OpenCode and ZCode already write, and puts them
+all on one yardstick — tokens, cost and time per model, per client, per workflow. Nothing to
+instrument: it runs on the history already sitting on your disk.
 
 <p align="center">
   <img src="images/summary.webp" width="800" alt="fapony usage-web summary cards">
@@ -39,75 +112,6 @@ published list rates and labels the number `imputed`; a model it can't find a ra
 Raw facts from logs are hard to argue with — a vendor can dispute a verdict as unfair; they can't
 dispute their own token count. That is the whole measurement layer: tokens and cost, nothing
 self-graded.
-
-## Past day one
-
-Two more layers, both optional, both compounding:
-
-**Plans, run one chunk at a time.** A long plan in one unbroken session only accumulates context.
-`fapony plan` shows every active plan, its progress and next unchecked chunk; `fapony plan PLAN-x.md`
-opens one chunk with just the facts it needs — the unchecked boxes, whether the last ticked chunk's
-commit really exists, and the notes the previous session left for it — instead of dragging the old
-transcript along.
-
-**Memory lives in [fael](https://github.com/inonix-dev/fael).** Decisions, bugs and notes that the
-next agent must see used to be fapony's mem log; since 2026-09-25 they are fael's — a single binary
-with its own MCP tools and hooks that push the rows about a file when an agent reads it. fapony
-reads fael (plan handoff notes, digest, debt recurrence) and never writes it.
-
-**Convention debt.** `fapony debt` answers the question nothing else does: *we decided this six
-months ago — how far along is the move?* ESLint says this line is wrong; nothing says 11 of 47
-files have migrated. Dead code and duplication it deliberately leaves to knip and friends —
-they already do that better.
-
-## The workflow — fapony + fael
-
-Two tools, one loop. **fapony is the workflow** — plans cut into chunks, convention debt, cheap
-lookups, what it all cost. **[fael](https://github.com/inonix-dev/fael) is the memory** — the
-decisions, bugs and notes the next session must see. Each is useful alone; together they close
-the loop: fapony says *what's next*, fael says *what the last session learned*.
-
-| | fapony — workflow | fael — memory |
-|---|---|---|
-| Owns | plans + chunk loop, `debt`, `lint-baseline`, `review-seed` / `analyze`, usage | decisions, issues, notes (`add` / `find` / `close`) |
-| Agent surface | edit hint + plan-mv guard hooks, skills — **no MCP server** | MCP tools + SessionStart / read / Stop hooks |
-| Writes | plan files, only when told (`plan sweep --apply`) | its log under `.fael/` in your repo |
-| Install | `npm i -g fapony && fapony install` | `npm i -g @inonix/fael && fael install` |
-
-One chunk, one session:
-
-```mermaid
-flowchart TD
-    S([new session]) --> K["fael kickoff — SessionStart hook<br/>open decisions + issues"]
-    K --> P["fapony plan PLAN-x.md<br/>unchecked chunks + handoff notes from fael"]
-    P --> L["fapony review-seed --files …<br/>exports + importers instead of whole-file reads"]
-    L --> E["edit<br/>fapony edit hint: importers + convention debt<br/>fael read hook: rows about that file"]
-    E --> C["tick the chunk with its sha → commit"]
-    C --> N["fael add note 'what chunk N+1 must know'<br/>--files f1,f2,PLAN-x.md"]
-    N --> X([stop — don't drag the transcript along])
-    X -->|next chunk| S
-    C -->|last chunk| W["fapony plan sweep PLAN-x.md --apply<br/>git mv into .fapony/done/"]
-```
-
-Who reads what:
-
-```mermaid
-flowchart LR
-    CC[Claude Code] --> F[fapony]
-    OC[OpenCode] --> F
-    ZC[ZCode] --> F
-    CX[Codex] --> F
-    AG[Antigravity] --> F
-    F --> U[usage — tokens & cost]
-    F --> P[plans — next chunk, sweep, check]
-    F --> D[debt — how far the move has gone]
-    M[(fael — memory)] -. read-only .-> F
-    CC & OC & CX --> M
-```
-
-Adopting it doesn't change your workflow: install it, point your agent at it, read the reports.
-Both layers above are per-project (`fapony init`) — plans and debt pay off from the first plan you
-cut into chunks and the first convention you declare.
 
 ## Quick start
 
@@ -152,20 +156,19 @@ Stated up front, because the gap between these two things is where most tooling 
 - **It checks conformance, not correctness** — that a claim lines up with git facts and that
   uncertainty was declared, not that the code works.
 - **Almost nothing blocks.** The one exception is the plan-mv guard on Claude Code, which denies a
-  raw `git mv` of a plan into done/ and points at `fapony plan sweep --apply`; everything else only
-  annotates.
+  raw `git mv` of a plan into done/ and points at `fapony plan sweep --apply`; nothing else touches a
+  tool call.
 - **Model attribution is inferred, not declared** — reports label it `inferred`; read it as such.
 
 ## What runs where
 
 `fapony install` wires five clients (Claude Code, OpenCode, ZCode, Codex, Antigravity) — skills
-everywhere, plus the edit hint where a client has an in-process hook. The hint arrives **before** the
-call on Claude Code but **after** it on OpenCode, whose only annotate channel is `tool.execute.after`.
+everywhere, plus the plan-mv guard on Claude Code. It also removes hooks fapony no longer ships (the
+edit hint, cut 2026-09-26: measured over two windows, it never moved an agent to migrate a file).
 Memory hooks and MCP tools are fael's (`fael install`); fapony has no MCP server.
 
 | | Claude Code | OpenCode | ZCode | Codex | Antigravity |
 |---|---|---|---|---|---|
-| Edit hint — importer count + convention debt before a shape change | ✅ before | ✅ after | — | — | — |
 | Plan-mv guard — deny raw `git mv` of a plan into done/ | ✅ | — | — | — | — |
 | Skills symlinked into `~/.claude/skills` | ✅ | ✅ | — | — | — |
 | Skills symlinked into `~/.agents/skills` | — | — | ✅ | ✅ | ✅ |
@@ -173,14 +176,12 @@ Memory hooks and MCP tools are fael's (`fael install`); fapony has no MCP server
 
 `—` means not wired, not impossible.
 
-## The work side — conveniences, not the contract
+## Lookups, digest and skills
 
-Read-only, deterministic, none of it writes anything. Skip this side entirely and fapony still
-works. **Nothing here is a precondition for anything above.**
+Read-only and deterministic — none of it writes anything.
 
-- `fapony review-seed --files src/thing/` — exports, importers, untested, for roughly a thirtieth
-  of the tokens reading those files costs. Before touching an unfamiliar file, fire this and Read
-  only the line ranges it points at. Directories work too.
+- `fapony review-seed --files src/thing/` — exports, importers, untested. Before touching an
+  unfamiliar file, fire this and Read only the line ranges it points at. Directories work too.
 - `fapony digest` — decisions, open bugs, in-flight plans, cost, on one page, from what's already
   on disk.
 
@@ -242,7 +243,7 @@ fapony debt [--id a,b] [--where <path>]    # which files haven't migrated to a d
 fapony lint-baseline [--cmd ...] [--diff]  # separate "already red" from "I made it red"
 fapony digest [--since 7d|YYYY-MM-DD] [--format text|html] [--json] [--out FILE]  # single-page summary from what's on disk
 
-# usage (day one)
+# usage — what it cost
 fapony usage-scan                          # scan session logs → cache (incremental, progress bar)
 fapony price-scan                          # fetch model price table → prices.json (cache; query never fetches)
 fapony usage-web [port]                    # usage comparison dashboard from cache
@@ -253,7 +254,6 @@ fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--
 fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...  # write PLAN (+SPEC): frontmatter, capped sections, prior-art list
 
 # hooks (wired by `fapony install`, not run by hand)
-fapony hook-edit-hint                      # importer count + convention debt before an edit
 fapony hook-mv-guard                       # deny raw git mv of plan files into done/
 
 # frozen ledger (reads history only — the grading tool left the MCP surface in 2026-09)
@@ -263,7 +263,7 @@ fapony report-web [file]                   # static HTML report page
 
 # setup & maintenance
 fapony init <path>                         # scaffold .fapony/ (plan/done/spec/evidence)
-fapony install [--all|--platform <name>|--dry-run]  # wire skills + edit hint into clients
+fapony install [--all|--platform <name>|--dry-run]  # wire skills + plan-mv guard into clients
 fapony setup                               # interactive wizard: config + scaffold in one step
 fapony update                              # self-update via git pull
 fapony telemetry show|send                 # opt-in only, default off — see TELEMETRY.md
@@ -294,8 +294,7 @@ vendor-neutral skills (anything that reads stdin) · opt-in telemetry, off by de
 ([TELEMETRY.md](https://github.com/inonix-dev/fapony/blob/main/TELEMETRY.md) lists exactly what
 leaves the machine) · Bun-only; run state in SQLite via `bun:sqlite` (WAL mode).
 
-**Not supported (yet):** the edit hint on ZCode, Codex or Antigravity — ZCode and Codex expose no
-in-process hook surface for it, and Antigravity's hook surface is still evolving. Memory of any
+**Not supported (yet):** the plan-mv guard outside Claude Code. Memory of any
 kind — that is [fael](https://github.com/inonix-dev/fael). A hosted or shared ledger —
 `FAPONY_STATE_DIR` on a synced folder works as an experiment only; SQLite's WAL mode does not
 tolerate concurrent writers over NFS/Dropbox/iCloud Drive and can corrupt the db under real
