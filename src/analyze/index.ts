@@ -6,7 +6,6 @@
 
 export * from "./barrels.js";
 export * from "./blast.js";
-export * from "./cache.js";
 export * from "./cli.js";
 export * from "./criteria.js";
 export * from "./diagnose.js";

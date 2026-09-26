@@ -1,46 +1,12 @@
 import { test } from "bun:test";
-// test/hook/context-data.test.ts — debt lines attached by the edit hint, and
-// the hint-impact precision that reads them back.
+// test/hook/compute-hint-impact.test.ts — hint-impact precision over the
+// hint-fire log (digest reads it).
 import assert from "node:assert";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  computeHintImpact,
-  readContextData,
-  recordHintFire,
-} from "../../src/hook.js";
+import { computeHintImpact, recordHintFire } from "../../src/hook.js";
 import { withTempRepo } from "./helpers.js";
-
-test("testContextShowsDebtBeforeFix", () => {
-  withTempRepo((dir) => {
-    mkdirSync(join(dir, ".fapony"), { recursive: true });
-    writeFileSync(
-      join(dir, ".fapony", "conventions.json"),
-      JSON.stringify({
-        conventions: [
-          {
-            id: "mutation-hooks",
-            rule: "use useAppForm instead of raw useMutation",
-            where: "src",
-            stale: "\\buseMutation\\(",
-            checker: null,
-          },
-        ],
-      }),
-    );
-    mkdirSync(join(dir, "src"), { recursive: true });
-    const p = join(dir, "src", "dirty.ts");
-    writeFileSync(p, "export const m = () => useMutation(fn);\n");
-    const lines = readContextData(p, dir)?.debtLines ?? [];
-    assert.equal(lines.length, 1);
-    assert.match(lines[0], /fapony debt: \[mutation-hooks\]/);
-    const clean = join(dir, "src", "clean.ts");
-    writeFileSync(clean, "export const ok = 1;\n");
-    assert.deepEqual(readContextData(clean, dir)?.debtLines, []);
-  });
-  console.log("  ✓ context → debt line before the fix, silence on clean files");
-});
 
 // --- Hint impact ---
 

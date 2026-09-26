@@ -31,7 +31,7 @@ const install = (home: string, dryRun = false): string =>
     cmdInstallClaude(dryRun, { exit: testExit, homedir: () => home }),
   );
 
-test("testInstallClaudeWiresEditAndMvGuardOnce", () => {
+test("testInstallClaudeWiresMvGuardOnce", () => {
   // A foreign PreToolUse entry must survive — Claude Code runs every entry.
   const home = homeWith({
     hooks: {
@@ -48,13 +48,9 @@ test("testInstallClaudeWiresEditAndMvGuardOnce", () => {
 
   const s = readSettings(home);
   const pre = s.hooks.PreToolUse;
-  assert.equal(pre.length, 3, "installing twice must not duplicate");
+  assert.equal(pre.length, 2, "installing twice must not duplicate");
   assert.ok(JSON.stringify(pre[0]).includes("/tmp/theirs"));
-  assert.ok(
-    JSON.stringify(pre.find((e) => e.matcher === "Edit")).includes(
-      "hook-edit-hint",
-    ),
-  );
+  assert.ok(!JSON.stringify(pre).includes("hook-edit-hint"));
   assert.ok(
     pre.some(
       (e) =>
@@ -100,7 +96,7 @@ test("testInstallClaudeRemovesRetiredFaponyHooks", () => {
   assert.equal(s.hooks.SessionStart, undefined);
   assert.deepStrictEqual(
     s.hooks.PreToolUse.map((g) => g.matcher),
-    ["Edit", "Bash"],
+    ["Bash"],
   );
 });
 
@@ -110,7 +106,7 @@ test("testCmdInstallDispatchesClaude", async () => {
     cmdInstall(["claude"], { exit: testExit, homedir: () => home }),
   );
   assert.ok(
-    JSON.stringify(readSettings(home)).includes("hook-edit-hint"),
+    JSON.stringify(readSettings(home)).includes("hook-mv-guard"),
     "--platform claude routes to the claude installer",
   );
 });

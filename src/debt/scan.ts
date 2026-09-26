@@ -187,7 +187,7 @@ export function debtScan(
   };
 }
 
-/** Per-file lookup (hook-edit-hint + --files): which conventions flag this file. */
+/** Per-file lookup (--files): which conventions flag this file. */
 export function debtForFile(
   worktree: string,
   absFile: string,

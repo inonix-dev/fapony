@@ -1,8 +1,7 @@
 // src/install.ts — `fapony install --platform antigravity|agy|opencode|claude|zcode|codex` command.
 // Every platform gets skill/<name>/ symlinked (claude/opencode → ~/.claude/skills,
-// zcode/codex/antigravity → ~/.agents/skills). claude + opencode also get the
-// edit hint (and claude the plan-mv guard). Memory — MCP, Stop, SessionStart —
-// moved to fael (`fael install`).
+// zcode/codex/antigravity → ~/.agents/skills). claude also gets the plan-mv
+// guard. Memory — MCP, Stop, SessionStart — moved to fael (`fael install`).
 // All platforms are idempotent + support --dry-run.
 
 import { createInterface } from "node:readline";
@@ -22,7 +21,6 @@ export { cmdInstallCodex } from "./install/codex.js";
 export { detectClients } from "./install/detect.js";
 export {
   cmdInstallOpencode,
-  editHintPluginSource,
   gitAutonomyPluginSource,
   type OpencodeInstallOpts,
   opencodePluginFiles,

@@ -70,7 +70,7 @@ the loop: fapony says *what's next*, fael says *what the last session learned*.
 | | fapony — workflow | fael — memory |
 |---|---|---|
 | Owns | plans + chunk loop, `debt`, `lint-baseline`, `review-seed` / `analyze`, usage | decisions, issues, notes (`add` / `find` / `close`) |
-| Agent surface | edit hint + plan-mv guard hooks, skills — **no MCP server** | MCP tools + SessionStart / read / Stop hooks |
+| Agent surface | plan-mv guard hook, skills — **no MCP server** | MCP tools + SessionStart / read / Stop hooks |
 | Writes | plan files, only when told (`plan sweep --apply`) | its log under `.fael/` in your repo |
 | Install | `npm i -g fapony && fapony install` | `npm i -g @inonix/fael && fael install` |
 
@@ -81,7 +81,7 @@ flowchart TD
     S([new session]) --> K["fael kickoff — SessionStart hook<br/>open decisions + issues"]
     K --> P["fapony plan PLAN-x.md<br/>unchecked chunks + handoff notes from fael"]
     P --> L["fapony review-seed --files …<br/>exports + importers instead of whole-file reads"]
-    L --> E["edit<br/>fapony edit hint: importers + convention debt<br/>fael read hook: rows about that file"]
+    L --> E["edit<br/>fael read hook: rows about that file"]
     E --> C["tick the chunk with its sha → commit"]
     C --> N["fael add note 'what chunk N+1 must know'<br/>--files f1,f2,PLAN-x.md"]
     N --> X([stop — don't drag the transcript along])
@@ -152,20 +152,19 @@ Stated up front, because the gap between these two things is where most tooling 
 - **It checks conformance, not correctness** — that a claim lines up with git facts and that
   uncertainty was declared, not that the code works.
 - **Almost nothing blocks.** The one exception is the plan-mv guard on Claude Code, which denies a
-  raw `git mv` of a plan into done/ and points at `fapony plan sweep --apply`; everything else only
-  annotates.
+  raw `git mv` of a plan into done/ and points at `fapony plan sweep --apply`; nothing else touches a
+  tool call.
 - **Model attribution is inferred, not declared** — reports label it `inferred`; read it as such.
 
 ## What runs where
 
 `fapony install` wires five clients (Claude Code, OpenCode, ZCode, Codex, Antigravity) — skills
-everywhere, plus the edit hint where a client has an in-process hook. The hint arrives **before** the
-call on Claude Code but **after** it on OpenCode, whose only annotate channel is `tool.execute.after`.
+everywhere, plus the plan-mv guard on Claude Code. It also removes hooks fapony no longer ships (the
+edit hint, cut 2026-09-26: measured over two windows, it never moved an agent to migrate a file).
 Memory hooks and MCP tools are fael's (`fael install`); fapony has no MCP server.
 
 | | Claude Code | OpenCode | ZCode | Codex | Antigravity |
 |---|---|---|---|---|---|
-| Edit hint — importer count + convention debt before a shape change | ✅ before | ✅ after | — | — | — |
 | Plan-mv guard — deny raw `git mv` of a plan into done/ | ✅ | — | — | — | — |
 | Skills symlinked into `~/.claude/skills` | ✅ | ✅ | — | — | — |
 | Skills symlinked into `~/.agents/skills` | — | — | ✅ | ✅ | ✅ |
@@ -253,7 +252,6 @@ fapony review-seed [--staged|--commit <sha>|--range <a...b>|--files f1,f2,dir|--
 fapony plan-seed <name> [--spec] [--scope <path>[,<path>]]...  # write PLAN (+SPEC): frontmatter, capped sections, prior-art list
 
 # hooks (wired by `fapony install`, not run by hand)
-fapony hook-edit-hint                      # importer count + convention debt before an edit
 fapony hook-mv-guard                       # deny raw git mv of plan files into done/
 
 # frozen ledger (reads history only — the grading tool left the MCP surface in 2026-09)
@@ -263,7 +261,7 @@ fapony report-web [file]                   # static HTML report page
 
 # setup & maintenance
 fapony init <path>                         # scaffold .fapony/ (plan/done/spec/evidence)
-fapony install [--all|--platform <name>|--dry-run]  # wire skills + edit hint into clients
+fapony install [--all|--platform <name>|--dry-run]  # wire skills + plan-mv guard into clients
 fapony setup                               # interactive wizard: config + scaffold in one step
 fapony update                              # self-update via git pull
 fapony telemetry show|send                 # opt-in only, default off — see TELEMETRY.md
@@ -294,8 +292,7 @@ vendor-neutral skills (anything that reads stdin) · opt-in telemetry, off by de
 ([TELEMETRY.md](https://github.com/inonix-dev/fapony/blob/main/TELEMETRY.md) lists exactly what
 leaves the machine) · Bun-only; run state in SQLite via `bun:sqlite` (WAL mode).
 
-**Not supported (yet):** the edit hint on ZCode, Codex or Antigravity — ZCode and Codex expose no
-in-process hook surface for it, and Antigravity's hook surface is still evolving. Memory of any
+**Not supported (yet):** the plan-mv guard outside Claude Code. Memory of any
 kind — that is [fael](https://github.com/inonix-dev/fael). A hosted or shared ledger —
 `FAPONY_STATE_DIR` on a synced folder works as an experiment only; SQLite's WAL mode does not
 tolerate concurrent writers over NFS/Dropbox/iCloud Drive and can corrupt the db under real

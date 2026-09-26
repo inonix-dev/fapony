@@ -45,7 +45,7 @@ fapony/
       defaults.ts / types.ts / getters.ts / load.ts  # shims re-exporting core/config.ts
     adapters/           # I/O boundary — thin framing only, no logic (PLAN-lib-layer chunk 3)
       cli.ts            # fapony.ts dispatch target
-      hooks/            # hook-edit-hint (importers + debt) / hook-mv-guard / git-autonomy · memory hooks moved to fael
+      hooks/            # hook-mv-guard / git-autonomy / compute-hint-impact (digest reads old fires) · memory hooks moved to fael
       mcp/              # no server (removed 2026-09-25) — collect/check/report engines for `fapony report`
     gates.ts          # per-round gate enrichment — model + session tokens per gate; carries `sessionId` so callers can dedupe
     parse.ts          # parseGateVerdict() + qualityScore()
@@ -72,7 +72,6 @@ fapony/
       python.ts         # .py import scan + resolution
       barrels.ts        # exportsThroughBarrels (star re-exports)
       graph.ts          # buildGraph() — live via Bun.Transpiler.scan(), never persisted
-      cache.ts          # buildGraphCached() — session-scoped, state dir only
       diagnose.ts       # diagnose() (hub/orphan/cycle/changed-untested)
       blast.ts          # blastRadius() / blastRadiusForWorktree()
       format.ts         # formatAnalyze()
@@ -89,7 +88,7 @@ fapony/
       fetch.ts          # fetchPricing() — HTTP fetch from upstream price table
       resolve.ts        # resolvePrice() — lookup per-model cost from cached data
       index.ts          # barrel re-export
-    debt/               # fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย": live convention scan, never persisted; callers: fapony debt, hook-edit-hint
+    debt/               # fapony debt — layer 3 "ไฟล์ไหนยังไม่ย้าย": live convention scan, never persisted; caller: fapony debt
       types.ts          # DebtReport/Convention/Promotion + caps (DEBT_FILE_CAP, PROMOTION_THRESHOLD, ZONE_*)
       load.ts           # resolveConventionsPath + loadConventions
       scan.ts           # compile + debtScan + debtForFile
@@ -122,8 +121,8 @@ fapony/
     setup.ts            # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
     install.ts          # barrel — re-exports src/install/ (fapony install --platform …)
     install/            # one file per client + shared pieces
-      claude.ts         # ~/.claude/settings.json hooks (edit hint, mv-guard) + removes retired fapony hooks
-      opencode.ts       # ~/.config/opencode/plugins (edit hint, opt-in git-autonomy) + removes retired plugins
+      claude.ts         # ~/.claude/settings.json hooks (mv-guard) + removes retired fapony hooks
+      opencode.ts       # ~/.config/opencode/plugins (opt-in git-autonomy) + removes retired plugins
       zcode.ts / codex.ts / antigravity.ts  # detect + skills symlink only
       detect.ts         # which clients exist on this machine
       skills.ts         # linkSkills() — symlinks skill/<name>/ into ~/.claude/skills, never overwrites

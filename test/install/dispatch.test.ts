@@ -175,7 +175,7 @@ test("testCmdInstallNoPlatformAllFlag", async () => {
     }
 
     assert.ok(
-      existsSync(join(ocDir, "plugins", "fapony-edit-hint.ts")),
+      existsSync(join(home, ".claude", "skills")),
       "detected opencode gets installed without a prompt",
     );
     console.log("  ✓ install --all → installs all detected without prompting");

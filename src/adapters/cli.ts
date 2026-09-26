@@ -21,7 +21,7 @@ import { cmdStats } from "../stats/index.js";
 import { cmdTelemetry } from "../telemetry.js";
 import { cmdUpdate } from "../update.js";
 import { cmdUsageScan, cmdUsageWeb } from "../usage/index.js";
-import { cmdHookEditHint, cmdHookMvGuard } from "./hooks/index.js";
+import { cmdHookMvGuard } from "./hooks/index.js";
 
 export async function cliMain(): Promise<void> {
   const [cmd, ...a] = process.argv.slice(2);
@@ -63,8 +63,6 @@ export async function cliMain(): Promise<void> {
     await cmdSetup();
   } else if (cmd === "update") {
     await cmdUpdate();
-  } else if (cmd === "hook-edit-hint") {
-    await cmdHookEditHint();
   } else if (cmd === "hook-mv-guard") {
     await cmdHookMvGuard();
   } else if (cmd === "report") {
